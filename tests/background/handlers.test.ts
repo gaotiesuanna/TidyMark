@@ -4,6 +4,7 @@ import { createFakeBookmarks } from '../fakes/fake-bookmarks'
 import { createFakeStorage } from '../fakes/fake-storage'
 import { saveSettings } from '@/storage/settings'
 import type { LlmClient } from '@/llm/client'
+import type { ProgressEvent } from '@/background/events'
 
 const tree = [
   { id: '0', title: '', children: [
@@ -202,6 +203,67 @@ describe('handle', () => {
     expect(created).not.toContain('01 前端')
     // 书签已经在正确目录里，第二次整理无事可做
     expect(second.plan.rows).toHaveLength(0)
+  })
+
+  it('分析过程中推送阶段进度与批次日志', async () => {
+    const bookmarks = Array.from({ length: 3 }, (_, i) => ({
+      id: `10${i}`, title: `站点${i}`, url: `https://site${i}.dev`,
+    }))
+    const fake = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: 'react', children: [] },
+          { id: '11', title: '杂项', children: bookmarks },
+        ]},
+      ]},
+    ])
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: false,
+      removeEmptyFolders: false,
+    })
+    const events: ProgressEvent[] = []
+    const complete = vi.fn().mockResolvedValue({
+      results: bookmarks.map((b) => ({
+        bookmark_id: b.id, target_category_id: '10', confidence: 0.9, reason: 'r',
+      })),
+    })
+    const deps = {
+      createClient: () => ({ complete }), now: () => 1, batchSize: 2,
+      onEvent: (event: ProgressEvent) => events.push(event),
+    }
+
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
+
+    // 进度事件按批推进，最后一条覆盖全部书签
+    const progress = events.filter((e) => e.message === '' && e.phase === 'classify')
+    expect(progress.at(-1)).toMatchObject({ done: 3, total: 3 })
+    // 每批都有一行日志
+    const batchLogs = events.filter((e) => e.message.startsWith('分类批次'))
+    expect(batchLogs).toHaveLength(2)
+    expect(events.at(-1)!.message).toContain('分析完成')
+  })
+
+  it('批次失败时推送 error 级别的日志', async () => {
+    const { ports } = setup()
+    await saveSettings(ports, {
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: false,
+      removeEmptyFolders: false,
+    })
+    const events: ProgressEvent[] = []
+    const complete = vi.fn().mockRejectedValue(
+      Object.assign(new Error('模型接口返回 400'), { retryable: false }),
+    )
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, {
+      createClient: () => ({ complete }), now: () => 1,
+      onEvent: (event: ProgressEvent) => events.push(event),
+    })
+
+    const errors = events.filter((e) => e.level === 'error')
+    expect(errors).toHaveLength(1)
+    expect(errors[0]!.message).toContain('400')
   })
 
   it('模型全部失败时返回 ok:false 并带上真实错误，而不是伪装成 0 条建议', async () => {

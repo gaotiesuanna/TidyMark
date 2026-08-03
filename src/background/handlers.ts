@@ -10,6 +10,7 @@ import { createLlmClient, type LlmClient, type LlmConfig } from '@/llm/client'
 import { classifyBookmarks } from '@/llm/classify'
 import { extractTags } from '@/llm/tags'
 import { loadCache, loadSettings, saveCache, saveSettings } from '@/storage/settings'
+import type { EmitProgress, ProgressPhase } from './events'
 import type { Request, Response } from './messages'
 
 export interface HandlerDeps {
@@ -17,6 +18,8 @@ export interface HandlerDeps {
   now?: () => number
   /** 仅供测试注入，生产环境使用 classifyBookmarks 的默认值。 */
   batchSize?: number
+  /** 把进度与日志推回侧栏。 */
+  onEvent?: EmitProgress
 }
 
 export async function handle(
@@ -26,6 +29,11 @@ export async function handle(
 ): Promise<Response> {
   const createClient = deps.createClient ?? ((config: LlmConfig) => createLlmClient(config))
   const now = deps.now ?? (() => Date.now())
+  const emit = deps.onEvent ?? ((): void => {})
+  const log = (phase: ProgressPhase, message: string, level: 'info' | 'warn' | 'error' = 'info'): void =>
+    emit({ phase, message, level })
+  const progress = (phase: ProgressPhase) => (done: number, total: number): void =>
+    emit({ phase, message: '', done, total })
 
   try {
     switch (request.kind) {
@@ -34,7 +42,9 @@ export async function handle(
 
       case 'scan': {
         const tree = await ports.bookmarks.getTree()
-        return { ok: true, kind: 'scan', scan: scanTree(tree, request.scopeRootIds) }
+        const scan = scanTree(tree, request.scopeRootIds)
+        log('scan', `扫描完成：${scan.stats.totalBookmarks} 个书签、${scan.stats.totalFolders} 个文件夹`)
+        return { ok: true, kind: 'scan', scan }
       }
 
       case 'analyze': {
@@ -53,23 +63,35 @@ export async function handle(
         if (settings.rebuildStructure) {
           const rootId = request.scopeRootIds[0]
           if (rootId === undefined) return { ok: false, error: '未选择任何范围。' }
-          const tags = await extractTags(scan.bookmarks, client)
+          log('tags', `开始为 ${scan.bookmarks.length} 个书签抽取主题标签`)
+          const tags = await extractTags(scan.bookmarks, client, {
+            onProgress: progress('tags'),
+            onLog: (message, level) => log('tags', message, level),
+          })
           const tree_ = buildCategoryTree({ tags, rootId, existingFolders: scan.folders })
           candidates = tree_.candidates
           newFolders = tree_.newFolders
           renameFolders = tree_.renameFolders
+          log(
+            'tree',
+            `目录设计完成：新建 ${tree_.newFolders.length} 个目录，` +
+              `复用 ${tree_.candidates.length - tree_.newFolders.length} 个已有目录`,
+          )
         }
 
         if (candidates.length === 0) {
           return { ok: false, error: '所选范围内没有可用的目标文件夹。请开启「重建结构」或先选择包含子文件夹的范围。' }
         }
         const cache = await loadCache(ports)
+        log('classify', `开始分类：${scan.bookmarks.length} 个书签，${candidates.length} 个候选目录`)
         const classifications = await classifyBookmarks({
           items: scan.bookmarks,
           candidates,
           client,
           cache,
           batchSize: deps.batchSize,
+          onProgress: progress('classify'),
+          onLog: (message, level) => log('classify', message, level),
         })
         await saveCache(ports, cache)
 
@@ -101,6 +123,8 @@ export async function handle(
           renameFolders,
           warnings,
         })
+        for (const warning of warnings) log('classify', warning, 'warn')
+        log('classify', `分析完成：${plan.rows.length} 条移动建议`)
         return { ok: true, kind: 'analyze', plan }
       }
 
@@ -108,12 +132,22 @@ export async function handle(
         const settings = await loadSettings(ports)
         const result = await applyPlan(ports, request.plan, new Set(request.accepted), {
           removeEmptyFolders: settings.removeEmptyFolders,
+          onProgress: progress('apply'),
         })
+        log(
+          'apply',
+          `整理${result.status === 'completed' ? '完成' : '中断'}：执行 ${result.executed} 步，` +
+            `清理空文件夹 ${result.removedFolders.length} 个`,
+          result.status === 'completed' ? 'info' : 'error',
+        )
         return { ok: true, kind: 'apply', result }
       }
 
-      case 'undo':
-        return { ok: true, kind: 'undo', result: await undoLast(ports) }
+      case 'undo': {
+        const result = await undoLast(ports, progress('undo'))
+        log('undo', `撤销完成：还原 ${result.restored} 项，删除新建目录 ${result.removedFolders} 个`)
+        return { ok: true, kind: 'undo', result }
+      }
 
       case 'get_settings':
         return { ok: true, kind: 'get_settings', settings: await loadSettings(ports) }

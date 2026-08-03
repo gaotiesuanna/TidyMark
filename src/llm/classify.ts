@@ -13,6 +13,7 @@ export interface ClassifyInput {
   batchSize?: number
   concurrency?: number
   onProgress?: (done: number, total: number) => void
+  onLog?: (message: string, level: 'info' | 'warn' | 'error') => void
 }
 
 const MAX_RETRIES = 2
@@ -171,10 +172,13 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
       const startedAt = Date.now()
       const results = await runBatch(batch, candidates, client)
       const ok = results.filter((r) => r.source === 'llm').length
-      console.log(
-        `[TidyMark] 分类批次 ${index + 1}/${batches.length}：${batch.length} 条，` +
-          `成功 ${ok} 条，耗时 ${Date.now() - startedAt}ms`,
-      )
+      const summary =
+        `分类批次 ${index + 1}/${batches.length}：${batch.length} 条，` +
+        `成功 ${ok} 条，耗时 ${Date.now() - startedAt}ms`
+      console.log(`[TidyMark] ${summary}`)
+      if (ok === batch.length) input.onLog?.(summary, 'info')
+      else if (ok === 0) input.onLog?.(`${summary}。${results[0]?.reason ?? ''}`, 'error')
+      else input.onLog?.(summary, 'warn')
       for (let i = 0; i < results.length; i++) {
         const result = results[i]!
         resolved.set(result.bookmarkId, result)

@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { collectDescendantFolderIds, toggleChecked } from '@/sidepanel/store'
+import {
+  appendLog, collectDescendantFolderIds, toggleChecked, useStore, MAX_LOGS, type LogLine,
+} from '@/sidepanel/store'
+import type { ProgressEvent } from '@/background/events'
 import type { BookmarkNode } from '@/core/ports'
 
 const tree: BookmarkNode[] = [
@@ -39,5 +42,48 @@ describe('toggleChecked', () => {
     expect(after.has('1')).toBe(true)
     expect(after.has('10')).toBe(false)
     expect(after.has('101')).toBe(false)
+  })
+})
+
+describe('appendLog', () => {
+  const event = (message: string, extra: Partial<ProgressEvent> = {}): ProgressEvent => ({
+    phase: 'classify', message, ...extra,
+  })
+
+  it('把带 message 的事件追加成一行日志', () => {
+    const logs = appendLog([], event('批次 1/2 完成'), 0)
+    expect(logs).toEqual([{ id: 0, phase: 'classify', level: 'info', message: '批次 1/2 完成' }])
+  })
+
+  it('纯进度事件不写日志', () => {
+    expect(appendLog([], event('', { done: 25, total: 100 }), 0)).toEqual([])
+  })
+
+  it('保留事件级别', () => {
+    expect(appendLog([], event('失败了', { level: 'error' }), 0)[0]!.level).toBe('error')
+  })
+
+  it('超过上限时丢弃最旧的几行', () => {
+    let logs: LogLine[] = []
+    for (let i = 0; i < MAX_LOGS + 5; i++) logs = appendLog(logs, event(`第 ${i} 行`), i)
+    expect(logs).toHaveLength(MAX_LOGS)
+    expect(logs[0]!.message).toBe('第 5 行')
+    expect(logs.at(-1)!.message).toBe(`第 ${MAX_LOGS + 4} 行`)
+  })
+})
+
+describe('store 的事件累积', () => {
+  it('进度事件更新进度条，日志事件追加日志', () => {
+    useStore.setState({ logs: [], logSeq: 0, progress: null })
+    useStore.getState().pushEvent({ phase: 'tags', message: '', done: 50, total: 100 })
+    useStore.getState().pushEvent({ phase: 'tags', message: '标签批次 2/4' })
+    expect(useStore.getState().progress).toEqual({ phase: 'tags', done: 50, total: 100 })
+    expect(useStore.getState().logs.map((l) => l.message)).toEqual(['标签批次 2/4'])
+  })
+
+  it('日志事件不会清掉已有进度', () => {
+    useStore.setState({ logs: [], logSeq: 0, progress: { phase: 'tags', done: 50, total: 100 } })
+    useStore.getState().pushEvent({ phase: 'tags', message: '某条日志' })
+    expect(useStore.getState().progress).toEqual({ phase: 'tags', done: 50, total: 100 })
   })
 })

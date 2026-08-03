@@ -54,6 +54,7 @@ export interface ExtractOptions {
   batchSize?: number
   concurrency?: number
   onProgress?: (done: number, total: number) => void
+  onLog?: (message: string, level: 'info' | 'warn' | 'error') => void
 }
 
 export async function extractTags(
@@ -73,7 +74,8 @@ export async function extractTags(
 
   async function worker(): Promise<void> {
     while (cursor < batches.length) {
-      const batch = batches[cursor++]!
+      const index = cursor++
+      const batch = batches[index]!
       try {
         const raw = (await client.complete(buildPrompt(batch), SCHEMA)) as {
           results?: Array<{ bookmark_id: string; primary_topic: string; secondary_topic: string | null }>
@@ -87,11 +89,16 @@ export async function extractTags(
             secondaryTopic: hit?.secondary_topic ?? null,
           })
         }
+        options.onLog?.(`标签批次 ${index + 1}/${batches.length}：${batch.length} 条`, 'info')
       } catch (error) {
         console.error('[TidyMark] 标签抽取失败：', error)
         for (const item of batch) {
           resolved.set(item.id, { bookmarkId: item.id, primaryTopic: '未分类', secondaryTopic: null })
         }
+        options.onLog?.(
+          `标签批次 ${index + 1}/${batches.length} 失败，这批书签归入「未分类」：${String(error)}`,
+          'error',
+        )
       }
       done += batch.length
       options.onProgress?.(done, items.length)

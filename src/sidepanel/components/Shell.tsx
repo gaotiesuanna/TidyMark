@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { useStore } from '../store'
+import { ProgressPanel } from './ProgressPanel'
 
 const STEPS = [
   { key: 'scope', label: '选范围' },
@@ -9,7 +10,7 @@ const STEPS = [
 ] as const
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { step, busy, error } = useStore()
+  const { step, busy, error, progress, logs } = useStore()
   return (
     <div className="flex h-screen flex-col bg-white text-neutral-800">
       <header className="border-b px-4 py-3">
@@ -35,18 +36,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <main className="flex-1 overflow-y-auto p-4">
         {children}
         {/* 紧跟在当前步骤的操作按钮下方，让状态出现在点击的地方 */}
-        {busy !== null && (
-          <div
-            role="status"
-            className="mt-3 flex items-center gap-2 rounded border bg-neutral-50 px-3 py-2 text-xs text-neutral-500"
-          >
-            <span
-              aria-hidden
-              className="h-3 w-3 shrink-0 animate-spin rounded-full border border-neutral-300 border-t-neutral-600"
-            />
-            {busy}
-          </div>
-        )}
+        <ProgressPanel busy={busy} progress={progress} logs={logs} />
       </main>
     </div>
   )

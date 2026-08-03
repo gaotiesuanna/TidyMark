@@ -1,4 +1,5 @@
 import { createChromePorts } from './chrome-ports'
+import { PROGRESS_PORT, type ProgressEvent } from './events'
 import { handle } from './handlers'
 import type { Request } from './messages'
 
@@ -11,8 +12,28 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error)
 })
 
+// 侧栏的进度长连接。连接期间 service worker 也不容易被空闲回收。
+let progressPort: chrome.runtime.Port | null = null
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== PROGRESS_PORT) return
+  progressPort = port
+  port.onDisconnect.addListener(() => {
+    if (progressPort === port) progressPort = null
+  })
+})
+
+function emit(event: ProgressEvent): void {
+  try {
+    progressPort?.postMessage(event)
+  } catch {
+    // 侧栏已关闭，进度无人接收，不影响正在进行的整理
+    progressPort = null
+  }
+}
+
 chrome.runtime.onMessage.addListener((request: Request, _sender, sendResponse) => {
-  handle(createChromePorts(), request)
+  handle(createChromePorts(), request, { onEvent: emit })
     .then(sendResponse)
     .catch((error: unknown) => sendResponse({ ok: false, error: String(error) }))
   return true // 保持消息通道开启以支持异步响应
