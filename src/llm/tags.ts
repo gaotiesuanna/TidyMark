@@ -22,11 +22,10 @@ const SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['bookmark_id', 'primary_topic', 'secondary_topic'],
+        required: ['bookmark_id', 'primary_topic'],
         properties: {
           bookmark_id: { type: 'string' },
           primary_topic: { type: 'string' },
-          secondary_topic: { type: ['string', 'null'] },
         },
       },
     },
@@ -48,13 +47,14 @@ function payloadOf(items: BookmarkItem[]): unknown[] {
 
 function buildPrompt(items: BookmarkItem[]): string {
   return [
-    '为每个书签抽取主题标签，用于后续统计并设计目录结构。',
+    '为每个书签抽取一个具体主题，供后续归并使用。',
     '',
     '规则：',
-    '1. primary_topic 是宽泛的一级主题，如「开发」「AI」「设计」「阅读」。',
-    '2. secondary_topic 是更具体的二级主题，如「React」「LLM」；无法确定时返回 null。',
-    '3. 主题名统一使用中文，除非是专有技术名词（React、TypeScript、LLM 等）。',
-    '4. 尽量复用已出现过的主题名，不要为同一概念创造多个说法。',
+    '1. 主题回答「这个书签讲什么、解决什么问题」，要具体。',
+    '2. 禁止使用这些宽泛词：AI、人工智能、开发、编程、技术、工具、学习、资源、其他。',
+    '3. 例如「Claude Code」「KV Cache」「终端工具」「提示工程」，而不是「AI」「开发」。',
+    '4. 主题名用中文，2 到 8 个字；专有技术名词（React、RAG、MCP）可直接用原文。',
+    '5. 尽量复用已出现过的主题名，不要为同一概念创造多个说法。',
     '',
     '书签列表：',
     JSON.stringify(payloadOf(items), null, 2),
@@ -80,7 +80,6 @@ function buildGroupPrompt(groupTitle: string): (items: BookmarkItem[]) => string
       '3. title 通常是「作者/仓库名: 一句话简介」，简介是判断用途最可靠的依据。',
       '4. 标签用中文，2 到 6 个字；专有技术名词（RAG、MCP、TTS）可直接用原文。',
       '5. 尽量复用已出现过的标签名，不要为同一概念创造多个说法。',
-      '6. secondary_topic 一律返回 null——组内只分一层。',
       '',
       '书签列表：',
       JSON.stringify(payloadOf(items), null, 2),
@@ -120,7 +119,7 @@ async function runExtraction(
       const batch = batches[index]!
       try {
         const raw = (await client.complete(buildOnePrompt(batch), SCHEMA)) as {
-          results?: Array<{ bookmark_id: string; primary_topic: string; secondary_topic: string | null }>
+          results?: Array<{ bookmark_id: string; primary_topic: string }>
         }
         const byId = new Map((raw.results ?? []).map((r) => [r.bookmark_id, r]))
         for (const item of batch) {
@@ -128,7 +127,7 @@ async function runExtraction(
           resolved.set(item.id, {
             bookmarkId: item.id,
             primaryTopic: hit?.primary_topic ?? NO_TOPIC,
-            secondaryTopic: hit?.secondary_topic ?? null,
+            secondaryTopic: null,
           })
         }
         options.onLog?.(`${label} ${index + 1}/${batches.length}：${batch.length} 条`, 'info')

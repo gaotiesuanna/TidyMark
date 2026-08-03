@@ -9,17 +9,27 @@ function item(id: string, url: string): BookmarkItem {
 describe('extractTags', () => {
   it('把模型返回的主题映射成 TagResult', async () => {
     const complete = vi.fn().mockResolvedValue({
-      results: [{ bookmark_id: '1', primary_topic: '前端', secondary_topic: 'React' }],
+      results: [{ bookmark_id: '1', primary_topic: 'React' }],
     })
     const results = await extractTags([item('1', 'https://react.dev')], { complete })
-    expect(results).toEqual([{ bookmarkId: '1', primaryTopic: '前端', secondaryTopic: 'React' }])
+    expect(results).toEqual([{ bookmarkId: '1', primaryTopic: 'React', secondaryTopic: null }])
   })
 
-  it('缺失 secondary_topic 时为 null', async () => {
+  it('不再向模型索要二级主题，层级由目录设计阶段决定', async () => {
     const complete = vi.fn().mockResolvedValue({
-      results: [{ bookmark_id: '1', primary_topic: '前端', secondary_topic: null }],
+      results: [{ bookmark_id: '1', primary_topic: 'React', secondary_topic: '组件' }],
     })
-    expect((await extractTags([item('1', 'https://x.dev')], { complete }))[0]!.secondaryTopic).toBeNull()
+    const results = await extractTags([item('1', 'https://react.dev')], { complete })
+    expect(results[0]!.secondaryTopic).toBeNull()
+    expect(JSON.stringify(complete.mock.calls[0]![1])).not.toContain('secondary_topic')
+  })
+
+  it('提示词要求具体主题并禁用宽泛词', async () => {
+    const complete = vi.fn().mockResolvedValue({ results: [] })
+    await extractTags([item('1', 'https://x.dev')], { complete })
+    const prompt = complete.mock.calls[0]![0] as string
+    expect(prompt).toContain('禁止使用')
+    expect(prompt).not.toContain('宽泛的一级主题')
   })
 
   it('分批调用', async () => {
