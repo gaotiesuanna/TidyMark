@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest'
-import { collectTopics, applyDesign, type FolderDesign } from '@/llm/folders'
+import { describe, it, expect, vi } from 'vitest'
+import { collectTopics, applyDesign, designFolders, type FolderDesign } from '@/llm/folders'
 import { NO_TOPIC } from '@/llm/tags'
 import type { TagResult } from '@/core/types'
+import { MAX_SIBLINGS } from '@/core/tree'
 
 function tag(bookmarkId: string, primaryTopic: string): TagResult {
   return { bookmarkId, primaryTopic, secondaryTopic: null }
@@ -63,5 +64,83 @@ describe('applyDesign', () => {
     const input = [tag('1', 'a'), tag('2', 'b'), tag('3', 'c')]
     const result = applyDesign(input, design([['b', ['B']]]))
     expect(result.map((t) => t.bookmarkId)).toEqual(['1', '2', '3'])
+  })
+})
+
+describe('designFolders', () => {
+  const topics = [{ topic: 'Claude Code', count: 3 }, { topic: 'CC 工作流', count: 1 }]
+
+  it('把模型返回的目录树转成 folders + mapping', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      folders: [{ title: 'Claude Code', topics: ['Claude Code', 'CC 工作流'], children: [] }],
+    })
+    const result = await designFolders(topics, { complete })
+    expect(result!.folders).toEqual([{ title: 'Claude Code', children: [] }])
+    expect(result!.mapping.get('claudecode')).toEqual(['Claude Code'])
+    expect(result!.mapping.get('cc工作流')).toEqual(['Claude Code'])
+  })
+
+  it('二级目录下的标签映射成两段路径', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      folders: [{
+        title: 'AI 工程', topics: [],
+        children: [{ title: 'RAG 检索', topics: ['rag'] }],
+      }],
+    })
+    const result = await designFolders([{ topic: 'rag', count: 2 }], { complete })
+    expect(result!.folders).toEqual([{ title: 'AI 工程', children: ['RAG 检索'] }])
+    expect(result!.mapping.get('rag')).toEqual(['AI 工程', 'RAG 检索'])
+  })
+
+  it('一级目录超过上限时截断，被截掉的标签不进 mapping', async () => {
+    const many = Array.from({ length: MAX_SIBLINGS + 3 }, (_, i) => ({
+      title: `目录${i}`, topics: [`标签${i}`], children: [],
+    }))
+    const complete = vi.fn().mockResolvedValue({ folders: many })
+    const result = await designFolders(topics, { complete })
+    expect(result!.folders).toHaveLength(MAX_SIBLINGS)
+    expect(result!.mapping.has(`标签${MAX_SIBLINGS + 1}`)).toBe(false)
+  })
+
+  it('oneLevel 时把子目录的标签并进父目录，不产生二级路径', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      folders: [{ title: '文档解析', topics: ['pdf'], children: [{ title: '深层', topics: ['ocr'] }] }],
+    })
+    const result = await designFolders([{ topic: 'pdf', count: 1 }], { complete }, { oneLevel: true })
+    expect(result!.folders).toEqual([{ title: '文档解析', children: [] }])
+    expect(result!.mapping.get('ocr')).toEqual(['文档解析'])
+  })
+
+  it('调用失败时返回 null，不抛错', async () => {
+    const complete = vi.fn().mockRejectedValue(Object.assign(new Error('x'), { retryable: false }))
+    expect(await designFolders(topics, { complete })).toBeNull()
+  })
+
+  it('模型没返回任何目录时也返回 null', async () => {
+    const complete = vi.fn().mockResolvedValue({ folders: [] })
+    expect(await designFolders(topics, { complete })).toBeNull()
+  })
+
+  it('标签清单为空时不发请求', async () => {
+    const complete = vi.fn()
+    expect(await designFolders([], { complete })).toBeNull()
+    expect(complete).not.toHaveBeenCalled()
+  })
+
+  it('提示词带上标签与书签数，并禁用宽泛词', async () => {
+    const complete = vi.fn().mockResolvedValue({ folders: [] })
+    await designFolders(topics, { complete })
+    const prompt = complete.mock.calls[0]![0] as string
+    expect(prompt).toContain('Claude Code')
+    expect(prompt).toContain('禁止')
+    expect(prompt).toContain(String(MAX_SIBLINGS))
+  })
+
+  it('oneLevel 时提示词点名父目录并要求只出一层', async () => {
+    const complete = vi.fn().mockResolvedValue({ folders: [] })
+    await designFolders(topics, { complete }, { oneLevel: true, parentTitle: 'GitHub' })
+    const prompt = complete.mock.calls[0]![0] as string
+    expect(prompt).toContain('GitHub')
+    expect(prompt).toContain('只输出一层')
   })
 })
