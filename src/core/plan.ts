@@ -1,4 +1,5 @@
 import { stripNumberPrefix } from './map'
+import type { TitleRewrite } from './titles'
 import type {
   BookmarkItem, BookmarkOperation, CategoryCandidate, Classification,
   OrganizePlan, PlanRow, PlanSummary, TagResult,
@@ -33,6 +34,8 @@ export interface BuildPlanInput {
   renameFolders?: RenameFolderSpec[]
   warnings?: string[]
   tags?: TagResult[]
+  /** GitHub 标题统一，与移动无关，由设置开关决定是否传入。 */
+  titleRewrites?: TitleRewrite[]
 }
 
 export function buildPlan(input: BuildPlanInput): OrganizePlan {
@@ -53,6 +56,13 @@ export function buildPlan(input: BuildPlanInput): OrganizePlan {
     folderId: f.folderId,
     oldTitle: f.oldTitle,
     newTitle: f.newTitle,
+  }))
+
+  const renameBookmarkOps: BookmarkOperation[] = (input.titleRewrites ?? []).map((r) => ({
+    type: 'rename_bookmark',
+    bookmarkId: r.bookmarkId,
+    oldTitle: r.oldTitle,
+    newTitle: r.newTitle,
   }))
 
   const moveOps: BookmarkOperation[] = []
@@ -88,7 +98,7 @@ export function buildPlan(input: BuildPlanInput): OrganizePlan {
     })
   }
 
-  const operations = [...createOps, ...renameOps, ...moveOps]
+  const operations = [...createOps, ...renameOps, ...renameBookmarkOps, ...moveOps]
   const plan: OrganizePlan = {
     id: input.id,
     createdAt: input.createdAt,
@@ -101,7 +111,7 @@ export function buildPlan(input: BuildPlanInput): OrganizePlan {
     tags: input.tags ?? [],
     summary: {
       totalBookmarks: 0, movedBookmarks: 0, unchangedBookmarks: 0,
-      createdFolders: 0, renamedFolders: 0, lowConfidenceItems: 0,
+      createdFolders: 0, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 0,
     },
   }
   plan.summary = summarize(plan, new Set(rows.map((r) => r.bookmarkId)), input.items.length)
@@ -247,6 +257,8 @@ export function renumberPlan(
       return title === null ? [operation] : [{ ...operation, title }]
     }),
     ...renameOps,
+    // 标题改写与编号无关，原样保留
+    ...plan.operations.filter((o) => o.type === 'rename_bookmark'),
     ...plan.operations.filter((o) => o.type === 'move_bookmark'),
   ]
 
@@ -276,6 +288,7 @@ export function summarize(
     unchangedBookmarks: total - moved,
     createdFolders: acceptedOps.filter((o) => o.type === 'create_folder').length,
     renamedFolders: acceptedOps.filter((o) => o.type === 'rename_folder').length,
+    renamedBookmarks: acceptedOps.filter((o) => o.type === 'rename_bookmark').length,
     lowConfidenceItems: plan.rows.filter(
       (r) => accepted.has(r.bookmarkId) && r.confidence < LOW_CONFIDENCE,
     ).length,
@@ -306,6 +319,9 @@ export function filterAccepted(plan: OrganizePlan, accepted: Set<string>): Bookm
   }
 
   const keptCreates = creates.filter((c) => needed.has(c.temporaryId))
-  const renames = plan.operations.filter((o) => o.type === 'rename_folder')
+  // 标题改写是设置开关的结果，与「是否接受某条移动建议」无关，一律保留
+  const renames = plan.operations.filter(
+    (o) => o.type === 'rename_folder' || o.type === 'rename_bookmark',
+  )
   return [...keptCreates, ...renames, ...moves]
 }

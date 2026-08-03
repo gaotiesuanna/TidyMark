@@ -21,6 +21,8 @@ export interface ApplyResult {
   removedFolders: EmptyFolder[]
   /** 按编号重新排位的目录数量。 */
   sortedFolders: number
+  /** 被统一了标题的书签 id。 */
+  renamedBookmarkIds: string[]
   failedAt: number | null
   error: string | null
 }
@@ -91,6 +93,7 @@ export async function applyPlan(
 
   const tempToReal = new Map<string, string>()
   const createdFolderIds: string[] = []
+  const renamedBookmarkIds: string[] = []
   const skipped: SkipRecord[] = []
   let executed = 0
 
@@ -123,14 +126,18 @@ export async function applyPlan(
             : operation.toCategoryId
         if (targetId === undefined) throw new Error(`无法解析目标目录 ${operation.toCategoryId}`)
         await ports.bookmarks.move(operation.bookmarkId, { parentId: targetId })
-      } else {
+      } else if (operation.type === 'rename_folder') {
         await ports.bookmarks.update(operation.folderId, { title: operation.newTitle })
+      } else {
+        await ports.bookmarks.update(operation.bookmarkId, { title: operation.newTitle })
+        // 记下来，撤销时才分得清标题是我们改的还是用户自己改的
+        renamedBookmarkIds.push(operation.bookmarkId)
       }
       executed++
       await ports.storage.set(PROGRESS_KEY, { planId: plan.id, executed, total: operations.length })
       onProgress?.(executed, operations.length)
     } catch (error) {
-      await saveSnapshot(ports, { ...snapshot, createdFolderIds })
+      await saveSnapshot(ports, { ...snapshot, createdFolderIds, renamedBookmarkIds })
       return {
         status: 'failed',
         executed,
@@ -138,6 +145,7 @@ export async function applyPlan(
         createdFolderIds,
         removedFolders: [],
         sortedFolders: 0,
+        renamedBookmarkIds,
         failedAt: i,
         error: String(error),
       }
@@ -155,10 +163,10 @@ export async function applyPlan(
     ? await sortFolders(ports, plan.scopeRootIds, skipped)
     : 0
 
-  await saveSnapshot(ports, { ...snapshot, createdFolderIds })
+  await saveSnapshot(ports, { ...snapshot, createdFolderIds, renamedBookmarkIds })
   await ports.storage.remove(PROGRESS_KEY)
   return {
     status: 'completed', executed, skipped, createdFolderIds, removedFolders, sortedFolders,
-    failedAt: null, error: null,
+    renamedBookmarkIds, failedAt: null, error: null,
   }
 }

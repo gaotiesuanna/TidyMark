@@ -98,6 +98,23 @@ export function PreferencesStep() {
           </span>
         </label>
 
+        <label className="mt-3 flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1 h-3.5 w-3.5"
+            checked={settings.rewriteGithubTitles}
+            onChange={(e) => void setSettings({ ...settings, rewriteGithubTitles: e.target.checked })}
+          />
+          <span>
+            统一 GitHub 书签标题
+            <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-400">
+              把标题按 URL 改写成 <code>仓库名 (作者)</code>，收藏具体文件时保留文件名。
+              这会改动书签本身的名字，不只是位置；可一键撤销。
+              与上面的勾选无关，开启后范围内所有 GitHub 书签都会改。
+            </span>
+          </span>
+        </label>
+
         <div className="mt-3 border-t pt-3">
           <p className="text-sm">
             单独聚合这些站点

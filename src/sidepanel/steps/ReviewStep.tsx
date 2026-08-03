@@ -28,6 +28,13 @@ export function ReviewStep() {
         </p>
       )}
 
+      {summary.renamedBookmarks > 0 && (
+        <p className="text-xs text-neutral-500">
+          另有 {summary.renamedBookmarks} 个 GitHub 书签的标题会被统一成「仓库名 (作者)」。
+          这一项由设置开关决定，不受下方勾选影响。
+        </p>
+      )}
+
       {settings.removeEmptyFolders && (
         <p className="text-xs text-neutral-500">整理后会清理范围内的空文件夹（可撤销）。</p>
       )}

@@ -18,6 +18,13 @@ export interface BookmarkSnapshot {
   nodes: SnapshotNode[]
   /** Apply 过程中新建的文件夹 id，撤销时若为空则删除。由 applyPlan 回填。 */
   createdFolderIds: string[]
+  /**
+   * Apply 过程中被我们改过标题的书签 id。由 applyPlan 回填。
+   *
+   * 撤销默认不覆盖书签标题——标题对不上通常意味着用户自己改过。
+   * 只有这个名单里的书签，标题才是我们改的，撤销时要还原。
+   */
+  renamedBookmarkIds: string[]
 }
 
 export async function captureSnapshot(
@@ -38,7 +45,10 @@ export async function captureSnapshot(
     })),
   ]
 
-  return { createdAt: Date.now(), planId, scopeRootIds, nodes, createdFolderIds: [] }
+  return {
+    createdAt: Date.now(), planId, scopeRootIds, nodes,
+    createdFolderIds: [], renamedBookmarkIds: [],
+  }
 }
 
 export async function saveSnapshot(ports: Ports, snapshot: BookmarkSnapshot): Promise<void> {

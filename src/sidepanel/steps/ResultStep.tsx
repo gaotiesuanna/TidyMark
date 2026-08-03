@@ -31,6 +31,7 @@ export function ResultStep() {
           <dt className="text-neutral-500">已执行操作</dt><dd>{applyResult.executed}</dd>
           <dt className="text-neutral-500">新建文件夹</dt><dd>{applyResult.createdFolderIds.length}</dd>
           <dt className="text-neutral-500">清理空文件夹</dt><dd>{applyResult.removedFolders.length}</dd>
+          <dt className="text-neutral-500">统一书签标题</dt><dd>{applyResult.renamedBookmarkIds.length}</dd>
           <dt className="text-neutral-500">跳过</dt><dd>{applyResult.skipped.length}</dd>
         </dl>
         {applyResult.removedFolders.length > 0 && (

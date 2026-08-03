@@ -70,6 +70,7 @@ describe('buildPlan', () => {
       unchangedBookmarks: 2,
       createdFolders: 0,
       renamedFolders: 0,
+      renamedBookmarks: 0,
       lowConfidenceItems: 1,
     })
   })

@@ -20,7 +20,7 @@ const plan: OrganizePlan = {
     { bookmarkId: '100', title: 'a', url: 'https://a', fromPath: ['书签栏'], toPath: ['AI', 'RAG'], confidence: 1, reason: '' },
     { bookmarkId: '101', title: 'b', url: 'https://b', fromPath: ['书签栏'], toPath: ['AI'], confidence: 1, reason: '' },
   ],
-  summary: { totalBookmarks: 2, movedBookmarks: 2, unchangedBookmarks: 0, createdFolders: 2, renamedFolders: 0, lowConfidenceItems: 0 },
+  summary: { totalBookmarks: 2, movedBookmarks: 2, unchangedBookmarks: 0, createdFolders: 2, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 0 },
   warnings: [],
   tags: [],
 }
@@ -28,7 +28,7 @@ const plan: OrganizePlan = {
 const applyResult: ApplyResult = {
   status: 'completed', executed: 4, skipped: [], createdFolderIds: ['20', '21'],
   removedFolders: [{ id: '30', title: '杂项', path: ['书签栏'] }],
-  sortedFolders: 0,
+  sortedFolders: 0, renamedBookmarkIds: [],
   failedAt: null, error: null,
 }
 

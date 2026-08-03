@@ -1,6 +1,7 @@
 import { buildCandidatesFromFolders } from '@/core/map'
 import { buildPlan, type NewFolderSpec, type RenameFolderSpec } from '@/core/plan'
 import { scanTree } from '@/core/scan'
+import { planTitleRewrites } from '@/core/titles'
 import { buildCategoryTree } from '@/core/tree'
 import type { Ports } from '@/core/ports'
 import type { Classification, TagResult } from '@/core/types'
@@ -143,6 +144,13 @@ export async function handle(
                   failed[0]!.reason.replace(/^分类失败，保持原位：/, ''),
               ]
             : []
+        // 标题统一与目录整理相互独立：它由自己的开关决定，不受移动建议的勾选影响
+        const titleRewrites = settings.rewriteGithubTitles
+          ? planTitleRewrites(scan.bookmarks)
+          : []
+        if (titleRewrites.length > 0) {
+          log('classify', `${titleRewrites.length} 个 GitHub 书签的标题会被统一`)
+        }
         const plan = buildPlan({
           id: `plan-${now()}`,
           createdAt: now(),
@@ -155,6 +163,7 @@ export async function handle(
           renameFolders,
           warnings,
           tags,
+          titleRewrites,
         })
         for (const warning of warnings) log('classify', warning, 'warn')
         log('classify', `分析完成：${plan.rows.length} 条移动建议`)

@@ -303,3 +303,61 @@ describe('applyPlan 按编号排列目录', () => {
     expect(await childTitles(ports, 'f-ai')).toEqual(['02 RAG', '01 dify'])
   })
 })
+
+describe('applyPlan 统一书签标题', () => {
+  const ghTree = [
+    { id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '10', title: '收件箱', children: [
+          { id: '100', title: 'GitHub - sst/opencode: The AI coding agent', url: 'https://github.com/sst/opencode' },
+          { id: '101', title: '手动改过的名字', url: 'https://example.com/x' },
+        ]},
+      ]},
+    ]},
+  ]
+
+  function renamePlan() {
+    return buildPlan({
+      id: 'p-title', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: false,
+      items: [], candidates: [], classifications: [], newFolders: [],
+      titleRewrites: [
+        { bookmarkId: '100', oldTitle: 'GitHub - sst/opencode: The AI coding agent', newTitle: 'opencode (sst)' },
+      ],
+    })
+  }
+
+  const titleOf = async (ports: { bookmarks: BookmarksApi }, id: string): Promise<string> =>
+    (await ports.bookmarks.get(id))!.title
+
+  it('改名落地到书签栏', async () => {
+    const fake = createFakeBookmarks(ghTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await applyPlan(ports, renamePlan(), new Set())
+    expect(await titleOf(ports, '100')).toBe('opencode (sst)')
+  })
+
+  it('一条移动建议都没勾选时改名照样执行——它由设置开关决定', async () => {
+    const fake = createFakeBookmarks(ghTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    const result = await applyPlan(ports, renamePlan(), new Set())
+    expect(result.renamedBookmarkIds).toEqual(['100'])
+  })
+
+  it('撤销后标题还原', async () => {
+    const fake = createFakeBookmarks(ghTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await applyPlan(ports, renamePlan(), new Set())
+    await undoLast(ports)
+    expect(await titleOf(ports, '100')).toBe('GitHub - sst/opencode: The AI coding agent')
+  })
+
+  it('用户自己改过的书签标题，撤销时仍然不覆盖', async () => {
+    const fake = createFakeBookmarks(ghTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await applyPlan(ports, renamePlan(), new Set())
+    // 应用之后用户自己动了另一个书签的名字
+    await ports.bookmarks.update('101', { title: '用户新起的名字' })
+    await undoLast(ports)
+    expect(await titleOf(ports, '101')).toBe('用户新起的名字')
+  })
+})

@@ -57,6 +57,7 @@ describe('handle', () => {
       rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
+      rewriteGithubTitles: false,
     })
     const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: { rows: unknown[] } }
     expect(res.plan.rows).toHaveLength(1)
@@ -73,6 +74,7 @@ describe('handle', () => {
       rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
+      rewriteGithubTitles: false,
     })
     const analyzed = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: { rows: Array<{ bookmarkId: string }> } }
     const res = await handle(
@@ -95,6 +97,7 @@ describe('handle', () => {
       rebuildStructure: false,
       removeEmptyFolders: true,
       domainGroups: [],
+      rewriteGithubTitles: false,
     })
     const analyzed = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: unknown }
     const res = await handle(
@@ -123,6 +126,7 @@ describe('handle', () => {
       rebuildStructure: true,
       removeEmptyFolders: false,
       domainGroups: [],
+      rewriteGithubTitles: false,
     }
     await handle(ports, { kind: 'save_settings', settings }, deps)
     const res = await handle(ports, { kind: 'get_settings' }, deps) as { settings: typeof settings }
@@ -148,6 +152,7 @@ describe('handle', () => {
       rebuildStructure: true,
       removeEmptyFolders: false,
       domainGroups: [],
+      rewriteGithubTitles: false,
     })
     const complete = vi.fn()
       .mockResolvedValueOnce({ results: [{ bookmark_id: '100', primary_topic: '前端', secondary_topic: 'React' }] })
@@ -174,6 +179,7 @@ describe('handle', () => {
       rebuildStructure: true,
       removeEmptyFolders: false,
       domainGroups: [],
+      rewriteGithubTitles: false,
     })
 
     // 标签固定为「前端」，分类时从 prompt 里读出「前端」目录的真实 id
@@ -230,6 +236,7 @@ describe('handle', () => {
       rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
+      rewriteGithubTitles: false,
     })
     const events: ProgressEvent[] = []
     const complete = vi.fn().mockResolvedValue({
@@ -260,6 +267,7 @@ describe('handle', () => {
       rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
+      rewriteGithubTitles: false,
     })
     const events: ProgressEvent[] = []
     const complete = vi.fn().mockRejectedValue(
@@ -293,6 +301,7 @@ describe('handle', () => {
       rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
+      rewriteGithubTitles: false,
     })
     let cancelled = false
     const complete = vi.fn().mockImplementation(async () => {
@@ -316,6 +325,7 @@ describe('handle', () => {
       rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
+      rewriteGithubTitles: false,
     })
     let cancelled = false
     const complete = vi.fn().mockImplementation(async () => {
@@ -338,6 +348,7 @@ describe('handle', () => {
       rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
+      rewriteGithubTitles: false,
     })
     const complete = vi.fn().mockRejectedValue(
       Object.assign(new Error('模型接口返回 400: This response_format type is unavailable now'), {
@@ -369,6 +380,7 @@ describe('handle', () => {
       rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
+      rewriteGithubTitles: false,
     })
     // 第一批成功、第二批失败
     const complete = vi.fn()
@@ -527,5 +539,36 @@ describe('analyze 对聚合组做细分抽取', () => {
     const prompts = (deps.createClient().complete as ReturnType<typeof vi.fn>).mock.calls
       .map((call) => call[0] as string)
     expect(prompts.some((p) => p.includes('功能域'))).toBe(false)
+  })
+})
+
+describe('analyze 统一 GitHub 书签标题', () => {
+  it('开关关闭时不产生改名操作', async () => {
+    const { ports, deps } = setupAnalyze({ g0: 'https://github.com/sst/opencode' })
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: false,
+    })
+    const plan = await analyzePlan(ports, deps)
+    expect(plan.operations.some((o) => o.type === 'rename_bookmark')).toBe(false)
+  })
+
+  it('开关开启时为 GitHub 书签生成改名，非 GitHub 的不动', async () => {
+    const { ports, deps } = setupAnalyze({
+      g0: 'https://github.com/sst/opencode',
+      n0: 'https://example.com/0',
+    })
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: false,
+      rewriteGithubTitles: true,
+    })
+    const plan = await analyzePlan(ports, deps)
+    const renames = plan.operations.flatMap((o) => (o.type === 'rename_bookmark' ? [o] : []))
+    expect(renames).toEqual([
+      { type: 'rename_bookmark', bookmarkId: 'g0', oldTitle: '书签 g0', newTitle: 'opencode (sst)' },
+    ])
   })
 })

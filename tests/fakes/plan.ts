@@ -51,7 +51,7 @@ export function makePlan(): OrganizePlan {
     candidates, operations, rows, warnings: [], tags,
     summary: {
       totalBookmarks: 5, movedBookmarks: 5, unchangedBookmarks: 0,
-      createdFolders: 5, renamedFolders: 0, lowConfidenceItems: 0,
+      createdFolders: 5, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 0,
     },
   }
 }

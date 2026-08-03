@@ -12,7 +12,7 @@ const plan: OrganizePlan = {
     { bookmarkId: '100', title: 'React 官网', url: 'https://react.dev', fromPath: ['书签栏', '杂项'], toPath: ['书签栏', 'react'], confidence: 0.95, reason: '官方文档' },
     { bookmarkId: '101', title: '不确定的', url: 'https://x.dev', fromPath: ['书签栏', '杂项'], toPath: ['书签栏', 'react'], confidence: 0.4, reason: '可能相关' },
   ],
-  summary: { totalBookmarks: 2, movedBookmarks: 2, unchangedBookmarks: 0, createdFolders: 0, renamedFolders: 0, lowConfidenceItems: 1 },
+  summary: { totalBookmarks: 2, movedBookmarks: 2, unchangedBookmarks: 0, createdFolders: 0, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 1 },
   warnings: [],
   tags: [],
 }

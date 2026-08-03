@@ -27,6 +27,7 @@ describe('设置存取', () => {
       rebuildStructure: true,
       removeEmptyFolders: false,
       domainGroups: [],
+      rewriteGithubTitles: false,
     })
     const settings = await loadSettings(p)
     expect(settings.llm.model).toBe('deepseek-chat')

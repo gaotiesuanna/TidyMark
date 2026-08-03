@@ -25,6 +25,8 @@ export async function undoLast(
 
   const skipped: UndoSkip[] = []
   const restorable: SnapshotNode[] = []
+  // 标题是我们改的，撤销时要还原；其余书签的标题一律不碰
+  const renamedByUs = new Set(snapshot.renamedBookmarkIds ?? [])
 
   // 第 0 趟：重建被「清理空文件夹」删掉的目录。
   // 快照里文件夹按先序排列，父目录必定排在子目录之前，因此顺序创建即可；
@@ -56,7 +58,7 @@ export async function undoLast(
     }
     const isFolder = node.url === undefined
     if (current.title !== node.title) {
-      if (isFolder) {
+      if (isFolder || renamedByUs.has(node.id)) {
         try {
           await ports.bookmarks.update(mapId(node.id), { title: node.title })
         } catch (error) {

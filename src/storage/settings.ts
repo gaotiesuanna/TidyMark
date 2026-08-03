@@ -12,6 +12,8 @@ export interface Settings {
   removeEmptyFolders: boolean
   /** 勾选的域名聚合组 key，见 core/domainGroups.ts。为空表示不聚合。 */
   domainGroups: string[]
+  /** 把 GitHub 书签的标题统一成 `repo (owner)`。 */
+  rewriteGithubTitles: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -19,6 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
   rebuildStructure: false,
   removeEmptyFolders: true,
   domainGroups: [],
+  rewriteGithubTitles: false,
 }
 
 export const PRESETS: Array<{ label: string; baseUrl: string; model: string }> = [
@@ -36,6 +39,7 @@ export async function loadSettings(ports: Ports): Promise<Settings> {
     rebuildStructure: stored?.rebuildStructure ?? DEFAULT_SETTINGS.rebuildStructure,
     removeEmptyFolders: stored?.removeEmptyFolders ?? DEFAULT_SETTINGS.removeEmptyFolders,
     domainGroups: stored?.domainGroups ?? DEFAULT_SETTINGS.domainGroups,
+    rewriteGithubTitles: stored?.rewriteGithubTitles ?? DEFAULT_SETTINGS.rewriteGithubTitles,
   }
 }
 

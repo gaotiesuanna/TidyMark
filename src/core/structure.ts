@@ -158,6 +158,8 @@ export function applyStructureEdits(plan: OrganizePlan, edits: StructureEdits): 
       if (removed.has(operation.folderId)) return []
       return [{ ...operation, newTitle: pathById.get(operation.folderId)?.at(-1) ?? operation.newTitle }]
     }
+    // 标题改写与目录结构无关，原样带过
+    if (operation.type === 'rename_bookmark') return [operation]
     const target = retarget.get(operation.bookmarkId) ?? null
     if (target === null) return []
     return [{
