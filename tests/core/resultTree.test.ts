@@ -1,68 +1,65 @@
 import { describe, it, expect } from 'vitest'
-import { buildPlan } from '@/core/plan'
 import { buildResultTree } from '@/core/resultTree'
-import type { BookmarkItem, CategoryCandidate, Classification, OrganizePlan } from '@/core/types'
+import type { BookmarkNode } from '@/core/ports'
 
-const candidates: CategoryCandidate[] = [
-  { id: 'tmp:1', path: ['AI'] },
-  { id: 'tmp:2', path: ['AI', 'RAG'] },
-  { id: '20', path: ['书签栏', '前端'] },
+const tree: BookmarkNode[] = [
+  { id: '0', title: '', children: [
+    { id: '1', title: '书签栏', children: [
+      { id: '10', title: '01 AI', children: [
+        { id: '100', title: 'a', url: 'https://a' },
+        { id: '11', title: '01.1 rag', children: [
+          { id: '101', title: 'b', url: 'https://b' },
+          { id: '102', title: 'c', url: 'https://c' },
+        ]},
+      ]},
+      { id: '12', title: '02 开发', children: [
+        { id: '103', title: 'd', url: 'https://d' },
+      ]},
+      // 未被接受的移动：书签还留在原来的目录里
+      { id: '13', title: 'fastapi', children: [
+        { id: '104', title: 'e', url: 'https://e' },
+      ]},
+    ]},
+  ]},
 ]
 
-const items: BookmarkItem[] = [
-  { id: '100', title: 'a', url: 'https://a', parentId: '1', index: 0, currentPath: ['书签栏'] },
-  { id: '101', title: 'b', url: 'https://b', parentId: '1', index: 1, currentPath: ['书签栏'] },
-  { id: '102', title: 'c', url: 'https://c', parentId: '1', index: 2, currentPath: ['书签栏'] },
-  { id: '103', title: 'd', url: 'https://d', parentId: '1', index: 3, currentPath: ['书签栏'] },
-]
-
-const classifications: Classification[] = [
-  { bookmarkId: '100', targetCategoryId: 'tmp:2', confidence: 1, reason: '', source: 'llm' },
-  { bookmarkId: '101', targetCategoryId: 'tmp:2', confidence: 1, reason: '', source: 'llm' },
-  { bookmarkId: '102', targetCategoryId: 'tmp:1', confidence: 1, reason: '', source: 'llm' },
-  { bookmarkId: '103', targetCategoryId: '20', confidence: 1, reason: '', source: 'llm' },
-]
-
-function plan(): OrganizePlan {
-  return buildPlan({
-    id: 'p1', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: true,
-    items, candidates, classifications,
-    newFolders: [
-      { temporaryId: 'tmp:1', parentId: '1', parentTemporaryId: null, title: 'AI' },
-      { temporaryId: 'tmp:2', parentId: null, parentTemporaryId: 'tmp:1', title: 'RAG' },
-    ],
-  })
-}
-
-const all = new Set(['100', '101', '102', '103'])
+const roots = (): ReturnType<typeof buildResultTree> => buildResultTree(tree, ['1'], ['10', '11'])
 
 describe('buildResultTree', () => {
-  it('按路径还原层级并统计书签数', () => {
-    const [ai] = buildResultTree(plan(), all)
-    expect(ai?.title).toBe('AI')
-    expect(ai?.count).toBe(1)
-    expect(ai?.total).toBe(3)
-    expect(ai?.children.map((c) => [c.title, c.total])).toEqual([['RAG', 2]])
+  it('按真实书签树还原层级', () => {
+    const bar = roots()[0]!
+    expect(bar.title).toBe('书签栏')
+    expect(bar.children.map((c) => c.title)).toEqual(['01 AI', '02 开发', 'fastapi'])
+  })
+
+  it('统计直接书签数与含子目录的总数', () => {
+    const ai = roots()[0]!.children.find((c) => c.title === '01 AI')!
+    expect(ai.count).toBe(1)
+    expect(ai.total).toBe(3)
   })
 
   it('标记本次新建的目录，已有目录不标记', () => {
-    const roots = buildResultTree(plan(), all)
-    const ai = roots.find((r) => r.title === 'AI')
-    expect(ai?.isNew).toBe(true)
-    expect(ai?.children[0]?.isNew).toBe(true)
-    const bar = roots.find((r) => r.title === '书签栏')
-    expect(bar?.isNew).toBe(false)
-    expect(bar?.children[0]?.isNew).toBe(false)
+    const bar = roots()[0]!
+    expect(bar.children.find((c) => c.title === '01 AI')!.isNew).toBe(true)
+    expect(bar.children.find((c) => c.title === 'fastapi')!.isNew).toBe(false)
   })
 
-  it('未接受的书签不计入，空目录不出现', () => {
-    const roots = buildResultTree(plan(), new Set(['103']))
-    expect(roots.map((r) => r.title)).toEqual(['书签栏'])
-    expect(roots[0]?.children.map((c) => c.total)).toEqual([1])
+  it('留有未接受书签的旧目录照样出现在树里', () => {
+    const stale = roots()[0]!.children.find((c) => c.title === 'fastapi')!
+    expect(stale.total).toBe(1)
   })
 
-  it('按书签总数从多到少排序', () => {
-    const roots = buildResultTree(plan(), all)
-    expect(roots.map((r) => r.title)).toEqual(['AI', '书签栏'])
+  it('同层按书签总数从多到少排序', () => {
+    const totals = roots()[0]!.children.map((c) => c.total)
+    expect(totals).toEqual([...totals].sort((a, b) => b - a))
+  })
+
+  it('级联勾选的范围只展开最外层的根，不重复', () => {
+    const cascaded = buildResultTree(tree, ['1', '10', '11', '12', '13'])
+    expect(cascaded.map((r) => r.title)).toEqual(['书签栏'])
+  })
+
+  it('范围外的书签不出现', () => {
+    expect(buildResultTree(tree, ['12']).map((r) => r.title)).toEqual(['02 开发'])
   })
 })

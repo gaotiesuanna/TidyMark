@@ -4,15 +4,19 @@ import { ResultTree } from '../components/ResultTree'
 import { useStore } from '../store'
 
 export function ResultStep() {
-  const { applyResult, undoResult, undoAvailable, undo, reset, busy, plan, accepted } = useStore()
+  const { applyResult, undoResult, undoAvailable, undo, reset, busy, plan, tree: bookmarks } = useStore()
+  // 用整理后重新读取的书签树，而不是从方案推导——未接受的书签仍在原处，
+  // 只看方案会画出一棵与实际不符的树
   const tree = useMemo(
-    () => (plan === null ? [] : buildResultTree(plan, accepted)),
-    [plan, accepted],
+    () =>
+      plan === null || applyResult === null
+        ? []
+        : buildResultTree(bookmarks, plan.scopeRootIds, applyResult.createdFolderIds),
+    [bookmarks, plan, applyResult],
   )
   if (applyResult === null) return null
 
-  // 撤销之后树里的结构已经不存在了，不再展示
-  const showTree = tree.length > 0 && undoResult === null
+  const showTree = tree.length > 0
 
   return (
     <div className="space-y-4 text-sm">
@@ -53,11 +57,12 @@ export function ResultStep() {
 
       {showTree && (
         <section className="rounded border p-3">
-          <h2 className="mb-1 font-medium">整理后的结构</h2>
+          <h2 className="mb-1 font-medium">
+            {undoResult === null ? '整理后的结构' : '撤销后的结构'}
+          </h2>
           <p className="mb-2 text-xs text-neutral-500">
-            {applyResult.status === 'completed'
-              ? '右侧数字为该目录下本次归入的书签数。'
-              : '整理在中途失败，以下是原计划的结构，实际只完成了前 ' + applyResult.executed + ' 步。'}
+            书签栏的真实结构，右侧数字为该目录下的书签数（含子目录）。
+            未勾选的移动建议不会执行，那些书签仍留在原目录里。
           </p>
           <ResultTree nodes={tree} />
         </section>

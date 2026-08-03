@@ -71,3 +71,23 @@ describe('findEmptyFolders', () => {
     expect(findEmptyFolders(tree, ['1', '2']).map((f) => f.id)).toContain('20')
   })
 })
+
+describe('findEmptyFolders 与级联勾选的范围', () => {
+  // 勾选界面会把子文件夹一并勾上，scopeRootIds 因此同时包含父与子
+  const cascaded = ['1', '10', '11', '12', '120', '121', '1210', '13', '130']
+
+  it('同一个空目录只返回一次，不会重复删除', () => {
+    const ids = findEmptyFolders(tree, cascaded).map((f) => f.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('被级联勾中的子目录仍然会被清理', () => {
+    expect(findEmptyFolders(tree, cascaded).map((f) => f.id)).toContain('120')
+  })
+
+  it('只有最外层的范围根受保护', () => {
+    const ids = findEmptyFolders(tree, cascaded).map((f) => f.id)
+    expect(ids).not.toContain('1')
+    expect(ids).toEqual(expect.arrayContaining(['10', '12']))
+  })
+})

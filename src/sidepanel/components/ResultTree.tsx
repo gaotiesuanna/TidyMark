@@ -19,7 +19,7 @@ function Row({ node, depth }: { node: ResultTreeNode; depth: number }) {
         <span className="ml-auto shrink-0 text-neutral-400">{node.total}</span>
       </div>
       {node.children.map((child) => (
-        <Row key={child.path.join('/')} node={child} depth={depth + 1} />
+        <Row key={child.id} node={child} depth={depth + 1} />
       ))}
     </div>
   )
@@ -30,7 +30,7 @@ export function ResultTree({ nodes }: Props) {
   return (
     <div>
       {nodes.map((node) => (
-        <Row key={node.path.join('/')} node={node} depth={0} />
+        <Row key={node.id} node={node} depth={0} />
       ))}
     </div>
   )

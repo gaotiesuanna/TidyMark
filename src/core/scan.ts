@@ -12,6 +12,26 @@ function findNodes(tree: BookmarkNode[], ids: Set<string>): BookmarkNode[] {
   return found
 }
 
+/**
+ * 把 scopeRootIds 解释成互不包含的若干棵子树的根。
+ *
+ * 勾选界面会级联勾上所有子文件夹，因此 scopeRootIds 往往同时包含父与子。
+ * 若不去重，同一棵子树会被重复遍历，调用方拿到重复节点。
+ */
+export function findScopeRoots(tree: BookmarkNode[], scopeRootIds: string[]): BookmarkNode[] {
+  const wanted = new Set(scopeRootIds)
+  const roots: BookmarkNode[] = []
+
+  function walk(node: BookmarkNode, insideRoot: boolean): void {
+    const isRoot = !insideRoot && wanted.has(node.id)
+    if (isRoot) roots.push(node)
+    for (const child of node.children ?? []) walk(child, insideRoot || isRoot)
+  }
+  for (const node of tree) walk(node, false)
+
+  return roots
+}
+
 export function scanTree(tree: BookmarkNode[], scopeRootIds: string[]): ScanResult {
   const bookmarks: BookmarkItem[] = []
   const folders: FolderItem[] = []

@@ -4,6 +4,7 @@ import { ResultStep } from '@/sidepanel/steps/ResultStep'
 import { useStore } from '@/sidepanel/store'
 import type { OrganizePlan } from '@/core/types'
 import type { ApplyResult } from '@/engine/apply'
+import type { BookmarkNode } from '@/core/ports'
 
 const plan: OrganizePlan = {
   id: 'p1', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: true,
@@ -23,30 +24,53 @@ const plan: OrganizePlan = {
 }
 
 const applyResult: ApplyResult = {
-  status: 'completed', executed: 4, skipped: [], createdFolderIds: ['10', '11'],
+  status: 'completed', executed: 4, skipped: [], createdFolderIds: ['20', '21'],
   removedFolders: [{ id: '30', title: '杂项', path: ['书签栏'] }],
   failedAt: null, error: null,
 }
 
+// 整理完成后重新读到的真实书签树：'20' 是本次新建的，'21' 里还留着未接受的书签
+const tree: BookmarkNode[] = [
+  { id: '0', title: '', children: [
+    { id: '1', title: '书签栏', children: [
+      { id: '20', title: '01 AI', children: [
+        { id: '100', title: 'a', url: 'https://a' },
+        { id: '21', title: '01.1 RAG', children: [
+          { id: '101', title: 'b', url: 'https://b' },
+        ]},
+      ]},
+      { id: '22', title: 'fastapi', children: [
+        { id: '102', title: 'c', url: 'https://c' },
+      ]},
+    ]},
+  ]},
+]
+
 beforeEach(() => {
   useStore.setState({
-    plan, accepted: new Set(['100', '101']), applyResult,
+    plan, accepted: new Set(['100', '101']), applyResult, tree,
     undoResult: null, undoAvailable: true, busy: null, error: null,
   })
 })
 
 describe('ResultStep', () => {
-  it('用树状结构展示整理后的目录与书签数', () => {
+  it('按整理后的真实书签树展示结构与书签数', () => {
     render(<ResultStep />)
-    expect(screen.getByText('整理后的结构')).toBeDefined()
     const section = screen.getByText('整理后的结构').parentElement!
-    expect(within(section).getByText('AI')).toBeDefined()
-    expect(within(section).getByText('RAG')).toBeDefined()
-    // AI 含子目录共 2 条，其中 RAG 1 条
-    expect(within(section).getAllByText(/^[0-9]+$/).map((el) => el.textContent)).toEqual(['2', '1'])
+    expect(within(section).getByText('01 AI')).toBeDefined()
+    expect(within(section).getByText('01.1 RAG')).toBeDefined()
+    // 书签栏 3 条；01 AI 含子目录 2 条，其中 RAG 1 条；fastapi 1 条
+    expect(within(section).getAllByText(/^[0-9]+$/).map((el) => el.textContent))
+      .toEqual(['3', '2', '1', '1'])
   })
 
-  it('标出本次新建的目录', () => {
+  it('留有未接受书签的旧目录照样显示，不假装它已经空了', () => {
+    render(<ResultStep />)
+    const section = screen.getByText('整理后的结构').parentElement!
+    expect(within(section).getByText('fastapi')).toBeDefined()
+  })
+
+  it('只标出本次新建的目录', () => {
     render(<ResultStep />)
     expect(screen.getAllByText('新建').length).toBe(2)
   })
@@ -57,9 +81,10 @@ describe('ResultStep', () => {
     expect(screen.getByText('书签栏 / 杂项')).toBeDefined()
   })
 
-  it('撤销之后不再展示结构树', () => {
+  it('撤销之后展示撤销后的结构', () => {
     useStore.setState({ undoResult: { status: 'completed', restored: 2, removedFolders: 2, skipped: [] } })
     render(<ResultStep />)
+    expect(screen.getByText('撤销后的结构')).toBeDefined()
     expect(screen.queryByText('整理后的结构')).toBeNull()
   })
 })

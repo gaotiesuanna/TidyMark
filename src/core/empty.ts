@@ -1,3 +1,4 @@
+import { findScopeRoots } from './scan'
 import type { BookmarkNode } from './ports'
 
 export interface EmptyFolder {
@@ -7,21 +8,10 @@ export interface EmptyFolder {
   path: string[]
 }
 
-function findRoots(tree: BookmarkNode[], ids: Set<string>): BookmarkNode[] {
-  const found: BookmarkNode[] = []
-  const stack = [...tree]
-  while (stack.length > 0) {
-    const node = stack.pop()!
-    if (ids.has(node.id)) found.push(node)
-    for (const child of node.children ?? []) stack.push(child)
-  }
-  return found
-}
-
 /**
  * 找出范围内整个子树都不含书签的文件夹。
  * 返回顺序保证子目录在父目录之前，调用方按顺序删除即可。
- * 范围根本身不会被返回。
+ * 范围根本身不会被返回，同一个目录也不会返回两次。
  */
 export function findEmptyFolders(tree: BookmarkNode[], scopeRootIds: string[]): EmptyFolder[] {
   const empty: EmptyFolder[] = []
@@ -38,6 +28,6 @@ export function findEmptyFolders(tree: BookmarkNode[], scopeRootIds: string[]): 
     return hasBookmark
   }
 
-  for (const root of findRoots(tree, new Set(scopeRootIds))) walk(root, [], true)
+  for (const root of findScopeRoots(tree, scopeRootIds)) walk(root, [], true)
   return empty
 }

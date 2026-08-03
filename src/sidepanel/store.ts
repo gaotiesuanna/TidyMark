@@ -113,6 +113,7 @@ interface State {
   logSeq: number
 
   init(): Promise<void>
+  refreshTree(): Promise<void>
   pushEvent(event: ProgressEvent): void
   cancel(): Promise<void>
   toggle(id: string): void
@@ -145,6 +146,12 @@ export const useStore = create<State>((set, get) => ({
   progress: null,
   logs: [],
   logSeq: 0,
+
+  /** 整理或撤销之后重新读一次书签树，结果页据此展示真实结构。 */
+  async refreshTree() {
+    const res = await send({ kind: 'get_tree' })
+    if (res.ok && res.kind === 'get_tree') set({ tree: res.tree })
+  },
 
   pushEvent(event) {
     const { logs, logSeq } = get()
@@ -260,6 +267,7 @@ export const useStore = create<State>((set, get) => ({
     if (!res.ok) return set({ busy: null, busyKind: null, error: res.error })
     if (res.kind !== 'apply') return set({ busy: null, busyKind: null })
     set({ applyResult: res.result, undoAvailable: true, step: 'result', busy: null, busyKind: null })
+    await get().refreshTree()
   },
 
   async undo() {
@@ -268,6 +276,7 @@ export const useStore = create<State>((set, get) => ({
     if (!res.ok) return set({ busy: null, busyKind: null, error: res.error })
     if (res.kind !== 'undo') return set({ busy: null, busyKind: null })
     set({ undoResult: res.result, undoAvailable: false, busy: null, busyKind: null })
+    await get().refreshTree()
   },
 
   reset() {
