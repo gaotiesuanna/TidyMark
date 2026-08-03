@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  appendLog, collectDescendantFolderIds, toggleChecked, useStore, MAX_LOGS, type LogLine,
+  appendLog, collectDescendantFolderIds, toggleChecked, useStore, MAX_LOGS, MAX_LOG_LENGTH, type LogLine,
 } from '@/sidepanel/store'
 import type { ProgressEvent } from '@/background/events'
 import type { BookmarkNode } from '@/core/ports'
@@ -85,5 +85,14 @@ describe('store 的事件累积', () => {
     useStore.setState({ logs: [], logSeq: 0, progress: { phase: 'tags', done: 50, total: 100 } })
     useStore.getState().pushEvent({ phase: 'tags', message: '某条日志' })
     expect(useStore.getState().progress).toEqual({ phase: 'tags', done: 50, total: 100 })
+  })
+})
+
+describe('日志长度截断', () => {
+  it('过长的接口错误体被截断，界面不会被撑爆', () => {
+    const long = 'x'.repeat(MAX_LOG_LENGTH + 50)
+    const logs = appendLog([], { phase: 'classify', message: long, level: 'error' }, 0)
+    expect(logs[0]!.message).toHaveLength(MAX_LOG_LENGTH + 1) // 含省略号
+    expect(logs[0]!.message.endsWith('…')).toBe(true)
   })
 })

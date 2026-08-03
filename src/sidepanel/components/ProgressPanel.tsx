@@ -96,7 +96,7 @@ export function ProgressPanel({ busy, progress, logs, onCancel }: Props) {
           {expanded && (
             <ul className="mt-1 max-h-40 space-y-0.5 overflow-y-auto">
               {logs.map((line) => (
-                <li key={line.id} className={LEVEL_CLASS[line.level]}>
+                <li key={line.id} className={`break-all ${LEVEL_CLASS[line.level]}`}>
                   <span className="text-neutral-400">[{PHASE_LABELS[line.phase]}] </span>
                   {line.message}
                 </li>

@@ -27,13 +27,17 @@ export interface Progress {
 
 /** 日志上限，超出后丢弃最旧的几行。 */
 export const MAX_LOGS = 200
+/** 单行长度上限——接口返回的错误体可能是整段 JSON，完整内容仍在后台 console 里。 */
+export const MAX_LOG_LENGTH = 200
 
 /** 只有带 message 的事件才写日志；纯进度事件不写。 */
 export function appendLog(logs: LogLine[], event: ProgressEvent, id: number): LogLine[] {
   if (event.message === '') return logs
-  const next = [...logs, {
-    id, phase: event.phase, level: event.level ?? 'info', message: event.message,
-  }]
+  const message =
+    event.message.length > MAX_LOG_LENGTH
+      ? `${event.message.slice(0, MAX_LOG_LENGTH)}…`
+      : event.message
+  const next = [...logs, { id, phase: event.phase, level: event.level ?? 'info', message }]
   return next.length > MAX_LOGS ? next.slice(next.length - MAX_LOGS) : next
 }
 
