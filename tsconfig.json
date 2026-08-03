@@ -9,6 +9,8 @@
     "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,
     "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "types": ["chrome", "vitest/globals"],
     "baseUrl": ".",
     "paths": { "@/*": ["src/*"] }
