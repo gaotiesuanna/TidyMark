@@ -4,6 +4,13 @@ import type { LlmClient } from './client'
 
 export type { TagResult }
 
+/**
+ * 抽取失败或模型漏返回时使用的空主题。
+ * 空字符串会被 buildCategoryTree 跳过，这些书签因此不参与目录设计，
+ * 既不会凑出一个假目录，也不会污染主题统计。分类阶段仍会正常处理它们。
+ */
+export const NO_TOPIC = ''
+
 const SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -88,7 +95,7 @@ export async function extractTags(
           const hit = byId.get(item.id)
           resolved.set(item.id, {
             bookmarkId: item.id,
-            primaryTopic: hit?.primary_topic ?? '未分类',
+            primaryTopic: hit?.primary_topic ?? NO_TOPIC,
             secondaryTopic: hit?.secondary_topic ?? null,
           })
         }
@@ -96,10 +103,10 @@ export async function extractTags(
       } catch (error) {
         console.error('[TidyMark] 标签抽取失败：', error)
         for (const item of batch) {
-          resolved.set(item.id, { bookmarkId: item.id, primaryTopic: '未分类', secondaryTopic: null })
+          resolved.set(item.id, { bookmarkId: item.id, primaryTopic: NO_TOPIC, secondaryTopic: null })
         }
         options.onLog?.(
-          `标签批次 ${index + 1}/${batches.length} 失败，这批书签归入「未分类」：${String(error)}`,
+          `标签批次 ${index + 1}/${batches.length} 失败，这批书签不参与目录设计：${String(error)}`,
           'error',
         )
       }
@@ -112,6 +119,6 @@ export async function extractTags(
 
   return items.map(
     (item) =>
-      resolved.get(item.id) ?? { bookmarkId: item.id, primaryTopic: '未分类', secondaryTopic: null },
+      resolved.get(item.id) ?? { bookmarkId: item.id, primaryTopic: NO_TOPIC, secondaryTopic: null },
   )
 }

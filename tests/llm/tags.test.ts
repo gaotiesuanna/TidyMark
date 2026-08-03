@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { extractTags } from '@/llm/tags'
+import { extractTags, NO_TOPIC } from '@/llm/tags'
 import type { BookmarkItem } from '@/core/types'
 
 function item(id: string, url: string): BookmarkItem {
@@ -29,10 +29,16 @@ describe('extractTags', () => {
     expect(complete).toHaveBeenCalledTimes(3)
   })
 
-  it('失败的批次降级为「未分类」主题，不抛错', async () => {
+  it('失败的批次不抛错，主题留空，不参与目录设计', async () => {
     const complete = vi.fn().mockRejectedValue(Object.assign(new Error('x'), { retryable: false }))
     const results = await extractTags([item('1', 'https://x.dev')], { complete })
-    expect(results[0]!.primaryTopic).toBe('未分类')
+    expect(results[0]!.primaryTopic).toBe(NO_TOPIC)
+  })
+
+  it('模型漏返回某个书签时同样留空，而不是编一个主题出来', async () => {
+    const complete = vi.fn().mockResolvedValue({ results: [] })
+    const results = await extractTags([item('1', 'https://x.dev')], { complete })
+    expect(results[0]!.primaryTopic).toBe(NO_TOPIC)
   })
 
   it('提示词中不含 URL 参数', async () => {

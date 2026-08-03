@@ -169,3 +169,15 @@ describe('buildCategoryTree 编号前缀', () => {
     expect(stripNumberPrefix('AI')).toBe('AI')
   })
 })
+
+describe('buildCategoryTree 忽略空主题', () => {
+  it('主题为空的书签不参与建树，不会凑出一个假目录', () => {
+    const spec: Array<[string, string, string | null]> = [
+      ...Array.from({ length: 6 }, (_, i) => ['a' + i, '', null] as [string, string, null]),
+      ...Array.from({ length: 6 }, (_, i) => ['b' + i, '前端', null] as [string, string, null]),
+    ]
+    const { candidates } = buildCategoryTree({ tags: tags(spec), rootId, existingFolders: [] })
+    // 只剩「前端」与兜底的「其他」
+    expect(candidates.map((c) => base(c.path[0]!))).toEqual(['前端', '其他'])
+  })
+})
