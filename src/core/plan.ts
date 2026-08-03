@@ -13,6 +13,13 @@ export interface NewFolderSpec {
   title: string
 }
 
+/** 复用已有目录时，把它改名成带编号的新名字。 */
+export interface RenameFolderSpec {
+  folderId: string
+  oldTitle: string
+  newTitle: string
+}
+
 export interface BuildPlanInput {
   id: string
   createdAt: number
@@ -22,6 +29,7 @@ export interface BuildPlanInput {
   candidates: CategoryCandidate[]
   classifications: Classification[]
   newFolders: NewFolderSpec[]
+  renameFolders?: RenameFolderSpec[]
   warnings?: string[]
 }
 
@@ -36,6 +44,13 @@ export function buildPlan(input: BuildPlanInput): OrganizePlan {
     parentId: f.parentId,
     parentTemporaryId: f.parentTemporaryId,
     title: f.title,
+  }))
+
+  const renameOps: BookmarkOperation[] = (input.renameFolders ?? []).map((f) => ({
+    type: 'rename_folder',
+    folderId: f.folderId,
+    oldTitle: f.oldTitle,
+    newTitle: f.newTitle,
   }))
 
   const moveOps: BookmarkOperation[] = []
@@ -71,7 +86,7 @@ export function buildPlan(input: BuildPlanInput): OrganizePlan {
     })
   }
 
-  const operations = [...createOps, ...moveOps]
+  const operations = [...createOps, ...renameOps, ...moveOps]
   const plan: OrganizePlan = {
     id: input.id,
     createdAt: input.createdAt,

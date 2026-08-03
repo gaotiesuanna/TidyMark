@@ -1,15 +1,27 @@
-import { LOW_CONFIDENCE } from '@/core/plan'
+import { useMemo } from 'react'
+import { LOW_CONFIDENCE, summarize } from '@/core/plan'
 import { useStore } from '../store'
 
 export function ReviewStep() {
   const { plan, accepted, toggleAccepted, acceptAll, acceptHighConfidence, rejectAll, apply, busy, reset } = useStore()
-  if (plan === null) return null
+  const summary = useMemo(() => (plan === null ? null : summarize(plan, accepted)), [plan, accepted])
+  if (plan === null || summary === null) return null
 
   return (
     <div className="space-y-3">
       <p className="text-xs text-neutral-500">
         共 {plan.rows.length} 条移动建议，已选中 {accepted.size} 条。未选中的书签保持原位。
       </p>
+
+      {(summary.createdFolders > 0 || summary.renamedFolders > 0) && (
+        <p className="text-xs text-neutral-500">
+          将新建 {summary.createdFolders} 个目录
+          {summary.renamedFolders > 0 && (
+            <>，并给 {summary.renamedFolders} 个已有目录加上编号前缀（可一键撤销）</>
+          )}
+          。
+        </p>
+      )}
 
       {plan.warnings.length > 0 && (
         <ul className="space-y-1 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">

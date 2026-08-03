@@ -6,6 +6,15 @@ export function normalizeName(name: string): string {
   return name.toLowerCase().replace(/[\s_\-]+/g, '')
 }
 
+/**
+ * 去掉「01 」「01.2 」这类编号前缀。
+ * 匹配和展示都用去掉编号后的名字，再次整理时编号才不会层层叠加。
+ */
+export function stripNumberPrefix(title: string): string {
+  const stripped = title.replace(/^\d{1,3}(?:\.\d{1,3})*[\s.、_-]+/, '').trim()
+  return stripped === '' ? title : stripped
+}
+
 export function buildCandidatesFromFolders(
   folders: FolderItem[],
   scopeRootIds: string[],
@@ -27,7 +36,10 @@ export function resolveByRules(
 ): Classification | null {
   for (let i = rule.tags.length - 1; i >= 0; i--) {
     const tag = normalizeName(rule.tags[i]!)
-    const hit = candidates.find((c) => normalizeName(c.path[c.path.length - 1]!) === tag)
+    // 候选目录名可能带「01.2 」这样的编号前缀，比较时先去掉
+    const hit = candidates.find(
+      (c) => normalizeName(stripNumberPrefix(c.path[c.path.length - 1]!)) === tag,
+    )
     if (hit) {
       return {
         bookmarkId: item.id,

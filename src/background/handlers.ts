@@ -1,5 +1,5 @@
 import { buildCandidatesFromFolders } from '@/core/map'
-import { buildPlan, type NewFolderSpec } from '@/core/plan'
+import { buildPlan, type NewFolderSpec, type RenameFolderSpec } from '@/core/plan'
 import { scanTree } from '@/core/scan'
 import { buildCategoryTree } from '@/core/tree'
 import type { Ports } from '@/core/ports'
@@ -48,18 +48,16 @@ export async function handle(
         const client = createClient(settings.llm)
         let candidates = buildCandidatesFromFolders(scan.folders, request.scopeRootIds)
         let newFolders: NewFolderSpec[] = []
+        let renameFolders: RenameFolderSpec[] = []
 
         if (settings.rebuildStructure) {
           const rootId = request.scopeRootIds[0]
           if (rootId === undefined) return { ok: false, error: '未选择任何范围。' }
           const tags = await extractTags(scan.bookmarks, client)
-          const tree_ = buildCategoryTree({
-            tags,
-            rootId,
-            existingFolders: scan.folders.map((f) => f.title),
-          })
+          const tree_ = buildCategoryTree({ tags, rootId, existingFolders: scan.folders })
           candidates = tree_.candidates
           newFolders = tree_.newFolders
+          renameFolders = tree_.renameFolders
         }
 
         if (candidates.length === 0) {
@@ -100,6 +98,7 @@ export async function handle(
           candidates,
           classifications,
           newFolders,
+          renameFolders,
           warnings,
         })
         return { ok: true, kind: 'analyze', plan }

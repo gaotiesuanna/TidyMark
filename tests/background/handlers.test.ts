@@ -123,6 +123,57 @@ describe('handle', () => {
     expect(res.plan.operations.some((o) => o.type === 'create_folder')).toBe(true)
   })
 
+  it('推翻模式重复整理时复用已有目录，不再新建同名目录', async () => {
+    const bookmarks = Array.from({ length: 6 }, (_, i) => ({
+      id: `10${i}`, title: `站点${i}`, url: `https://site${i}.dev`,
+    }))
+    const fake = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [{ id: '11', title: '杂项', children: bookmarks }] },
+      ]},
+    ])
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: true,
+    })
+
+    // 标签固定为「前端」，分类时从 prompt 里读出「前端」目录的真实 id
+    const complete = vi.fn(async (prompt: string) => {
+      const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)]
+      if (ids.length === 0) {
+        return { results: bookmarks.map((b) => ({ bookmark_id: b.id, primary_topic: '前端', secondary_topic: null })) }
+      }
+      const target = ids.find((m) => m[2]!.includes('前端'))![1]!
+      return {
+        results: bookmarks.map((b) => ({
+          bookmark_id: b.id, target_category_id: target, confidence: 0.9, reason: 'r',
+        })),
+      }
+    })
+    const deps = { createClient: () => ({ complete }), now: () => 1 }
+
+    const first = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as {
+      plan: { operations: Array<{ type: string; title?: string }> }
+    }
+    await handle(
+      ports,
+      { kind: 'apply', plan: first.plan as never, accepted: bookmarks.map((b) => b.id) },
+      deps,
+    )
+    expect(fake.structure()).toContain('书签栏/01 前端/站点0')
+
+    const second = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as {
+      plan: { operations: Array<{ type: string; title?: string }>; rows: unknown[] }
+    }
+    const created = second.plan.operations
+      .filter((o) => o.type === 'create_folder')
+      .map((o) => o.title)
+    expect(created).not.toContain('01 前端')
+    // 书签已经在正确目录里，第二次整理无事可做
+    expect(second.plan.rows).toHaveLength(0)
+  })
+
   it('模型全部失败时返回 ok:false 并带上真实错误，而不是伪装成 0 条建议', async () => {
     const { ports, fake } = setup()
     void fake
