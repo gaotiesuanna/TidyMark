@@ -306,7 +306,7 @@ export const useStore = create<State>((set, get) => ({
     // 按实际会落地的目录重排编号，避免出现 01、02、04 这样的空号
     const res = await send({
       kind: 'apply',
-      plan: renumberPlan(plan, get().accepted),
+      plan: renumberPlan(plan, get().accepted, get().scan?.folders ?? []),
       accepted: [...get().accepted],
     })
       .finally(stopKeepalive)

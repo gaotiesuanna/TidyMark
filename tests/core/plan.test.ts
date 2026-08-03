@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildPlan, filterAccepted, renumberPlan, summarize, LOW_CONFIDENCE } from '@/core/plan'
-import type { BookmarkItem, CategoryCandidate, Classification } from '@/core/types'
+import type { BookmarkItem, BookmarkOperation, CategoryCandidate, Classification } from '@/core/types'
 
 const candidates: CategoryCandidate[] = [
   { id: '10', path: ['书签栏', 'react'] },
@@ -214,13 +214,100 @@ describe('renumberPlan', () => {
       ],
     })
     const renames = renumberPlan(base, allAccepted).operations.filter((o) => o.type === 'rename_folder')
-    expect(renames).toEqual([
+    // 学习没收到书签、名字也没有编号，是用户自己的目录，不该动
+    expect(renames.some((o) => o.type === 'rename_folder' && o.folderId === 'tmp:4')).toBe(false)
+    expect(renames).toContainEqual(
       { type: 'rename_folder', folderId: 'tmp:3', oldTitle: '开发', newTitle: '02 开发' },
-    ])
+    )
+    // 金融是已有目录且带着旧编号，重排后号码变了就必须真的改名，否则磁盘上会留着 04
+    expect(renames).toContainEqual(
+      { type: 'rename_folder', folderId: 'tmp:5', oldTitle: '04 金融', newTitle: '03 金融' },
+    )
   })
 
   it('非推翻模式原样返回，不动用户自己的目录名', () => {
     const untouched = plan()
     expect(renumberPlan(untouched, new Set(['100']))).toBe(untouched)
+  })
+})
+
+/**
+ * 多轮整理场景：上一轮留下的编号目录本轮没被设计到，
+ * 如果不管它们，就会和本轮的新号撞车（04 金融 与 04 其他并存）。
+ */
+describe('renumberPlan 重排上一轮遗留的编号目录', () => {
+  const scopeFolders = [
+    { id: '1', parentId: '0', title: '书签栏' },
+    { id: 'f-github', parentId: '1', title: '01 GitHub' },
+    { id: 'f-ai', parentId: '1', title: '02 AI' },
+    { id: 'f-dify', parentId: 'f-ai', title: '02.1 dify' },
+    { id: 'f-avatar', parentId: 'f-ai', title: '01.6 数字人' },
+    { id: 'f-finance', parentId: '1', title: '03 金融' },
+    { id: 'f-fastapi', parentId: '1', title: 'fastapi' },
+  ]
+
+  // 本轮只设计了 GitHub、AI（含子目录 dify）和兜底的「其他」
+  const designed: CategoryCandidate[] = [
+    { id: 'f-github', path: ['01 GitHub'] },
+    { id: 'f-ai', path: ['02 AI'] },
+    { id: 'f-dify', path: ['02 AI', '01 dify'] },
+    { id: 'tmp:1', path: ['03 其他'] },
+  ]
+
+  function multiRoundPlan() {
+    return buildPlan({
+      id: 'p', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: true,
+      items: [
+        { id: '200', title: 'dify 文档', url: 'https://dify.ai', parentId: '1', index: 0, currentPath: ['书签栏'] },
+        { id: '201', title: '杂项', url: 'https://misc.dev', parentId: '1', index: 1, currentPath: ['书签栏'] },
+      ],
+      candidates: designed,
+      classifications: [
+        { bookmarkId: '200', targetCategoryId: 'f-dify', confidence: 1, reason: '', source: 'llm' },
+        { bookmarkId: '201', targetCategoryId: 'tmp:1', confidence: 1, reason: '', source: 'llm' },
+      ],
+      newFolders: [{ temporaryId: 'tmp:1', parentId: '1', parentTemporaryId: null, title: '03 其他' }],
+      renameFolders: [{ folderId: 'f-dify', oldTitle: '02.1 dify', newTitle: '01 dify' }],
+    })
+  }
+
+  const titleOf = (ops: BookmarkOperation[], folderId: string): string | undefined =>
+    ops.flatMap((o) => (o.type === 'rename_folder' && o.folderId === folderId ? [o.newTitle] : []))[0]
+
+  it('本轮没设计到但带编号的顶级目录接在后面重排，不再撞号', () => {
+    const ops = renumberPlan(multiRoundPlan(), new Set(['200', '201']), scopeFolders).operations
+    // 设计的三个占 01-03，遗留的金融顺延到 04
+    expect(titleOf(ops, 'f-finance')).toBe('04 金融')
+  })
+
+  it('本轮没设计到但带编号的子目录跟着父级一起重排', () => {
+    const ops = renumberPlan(multiRoundPlan(), new Set(['200', '201']), scopeFolders).operations
+    // dify 是本轮设计的子目录占 01，遗留的数字人顺延到 02
+    expect(titleOf(ops, 'f-dify')).toBe('01 dify')
+    expect(titleOf(ops, 'f-avatar')).toBe('02 数字人')
+  })
+
+  it('没带编号的用户自建目录不参与重排，也不被改名', () => {
+    const ops = renumberPlan(multiRoundPlan(), new Set(['200', '201']), scopeFolders).operations
+    expect(titleOf(ops, 'f-fastapi')).toBeUndefined()
+  })
+
+  it('范围根本身不参与编号', () => {
+    const ops = renumberPlan(multiRoundPlan(), new Set(['200', '201']), scopeFolders).operations
+    expect(titleOf(ops, '1')).toBeUndefined()
+  })
+
+  it('给编号已经正确的目录不产生多余的改名操作', () => {
+    const ops = renumberPlan(multiRoundPlan(), new Set(['200', '201']), scopeFolders).operations
+    // GitHub 本来就是 01，AI 本来就是 02，不必改名
+    expect(titleOf(ops, 'f-github')).toBeUndefined()
+    expect(titleOf(ops, 'f-ai')).toBeUndefined()
+  })
+
+  it('不传 scopeFolders 时行为与改动前一致，只重排候选目录', () => {
+    const ops = renumberPlan(multiRoundPlan(), new Set(['200', '201'])).operations
+    expect(titleOf(ops, 'f-finance')).toBeUndefined()
+    expect(titleOf(ops, 'f-avatar')).toBeUndefined()
+    expect(titleOf(ops, 'f-dify')).toBe('01 dify')
   })
 })
