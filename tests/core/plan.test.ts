@@ -234,14 +234,14 @@ describe('renumberPlan', () => {
  */
 describe('renumberPlan 重排上一轮遗留的编号目录', () => {
   const scopeFolders = [
-    { id: '1', parentId: '0', title: '书签栏' },
-    { id: 'f-github', parentId: '1', title: '01 GitHub' },
-    { id: 'f-ai', parentId: '1', title: '02 AI' },
-    { id: 'f-dify', parentId: 'f-ai', title: '02.1 dify' },
-    { id: 'f-avatar', parentId: 'f-ai', title: '01.6 数字人' },
-    { id: 'f-finance', parentId: '1', title: '03 金融' },
-    { id: 'f-fastapi', parentId: '1', title: 'fastapi' },
-    { id: 'f-notes', parentId: 'f-ai', title: '我的笔记' },
+    { id: '1', parentId: '0', title: '书签栏', depth: 0 },
+    { id: 'f-github', parentId: '1', title: '01 GitHub', depth: 1 },
+    { id: 'f-ai', parentId: '1', title: '02 AI', depth: 1 },
+    { id: 'f-dify', parentId: 'f-ai', title: '02.1 dify', depth: 2 },
+    { id: 'f-avatar', parentId: 'f-ai', title: '01.6 数字人', depth: 2 },
+    { id: 'f-finance', parentId: '1', title: '03 金融', depth: 1 },
+    { id: 'f-fastapi', parentId: '1', title: 'fastapi', depth: 1 },
+    { id: 'f-notes', parentId: 'f-ai', title: '我的笔记', depth: 2 },
   ]
 
   // 本轮只设计了 GitHub、AI（含子目录 dify）和兜底的「其他」
@@ -294,6 +294,15 @@ describe('renumberPlan 重排上一轮遗留的编号目录', () => {
   it('二级里用户自建的目录不编号，保持原样', () => {
     const ops = renumberPlan(multiRoundPlan(), new Set(['200', '201']), scopeFolders).operations
     expect(titleOf(ops, 'f-notes')).toBeUndefined()
+  })
+
+  it('勾选是级联的，scopeRootIds 里装着全部子目录也不影响重排', () => {
+    // 用户勾一个文件夹，ScopeStep 会连它的所有子文件夹一起勾上，
+    // 于是 scopeRootIds 里几乎装着范围内的每个目录。层级只能靠 depth 判断。
+    const cascaded = { ...multiRoundPlan(), scopeRootIds: scopeFolders.map((f) => f.id) }
+    const ops = renumberPlan(cascaded, new Set(['200', '201']), scopeFolders).operations
+    expect(titleOf(ops, 'f-fastapi')).toBe('05 fastapi')
+    expect(titleOf(ops, 'f-avatar')).toBe('02 数字人')
   })
 
   it('范围根本身不参与编号', () => {

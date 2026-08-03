@@ -1,17 +1,6 @@
 import type { BookmarkNode } from './ports'
 import type { BookmarkItem, FolderItem, ScanResult, ScanStats } from './types'
 
-function findNodes(tree: BookmarkNode[], ids: Set<string>): BookmarkNode[] {
-  const found: BookmarkNode[] = []
-  const stack = [...tree]
-  while (stack.length > 0) {
-    const node = stack.pop()!
-    if (ids.has(node.id)) found.push(node)
-    for (const child of node.children ?? []) stack.push(child)
-  }
-  return found
-}
-
 /**
  * 把 scopeRootIds 解释成互不包含的若干棵子树的根。
  *
@@ -35,7 +24,8 @@ export function findScopeRoots(tree: BookmarkNode[], scopeRootIds: string[]): Bo
 export function scanTree(tree: BookmarkNode[], scopeRootIds: string[]): ScanResult {
   const bookmarks: BookmarkItem[] = []
   const folders: FolderItem[] = []
-  const roots = findNodes(tree, new Set(scopeRootIds))
+  // 必须先去重：勾选界面级联勾上所有子文件夹，父子同时在列时子树会被遍历两遍
+  const roots = findScopeRoots(tree, scopeRootIds)
 
   function walk(node: BookmarkNode, path: string[], depth: number): void {
     if (node.url !== undefined) {

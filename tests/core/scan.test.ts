@@ -69,3 +69,30 @@ describe('scanTree', () => {
     expect(result.stats.totalBookmarks).toBe(0)
   })
 })
+
+describe('scanTree 去重', () => {
+  const nested = [
+    { id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '10', title: 'fastapi', children: [
+          { id: '100', title: 'A', url: 'https://a.dev' },
+        ]},
+      ]},
+    ]},
+  ]
+
+  it('父子同时被勾选时不重复遍历同一棵子树', () => {
+    // ScopeStep 的勾选是级联的，父与子必定同时出现在 scopeRootIds 里
+    const scan = scanTree(nested, ['1', '10'])
+    expect(scan.folders.map((f) => f.id)).toEqual(['1', '10'])
+    expect(scan.bookmarks.map((b) => b.id)).toEqual(['100'])
+    expect(scan.stats.totalFolders).toBe(2)
+    expect(scan.stats.totalBookmarks).toBe(1)
+  })
+
+  it('层级相对扫描根计算，一级目录 depth 为 1', () => {
+    const scan = scanTree(nested, ['1', '10'])
+    expect(scan.folders.find((f) => f.id === '1')!.depth).toBe(0)
+    expect(scan.folders.find((f) => f.id === '10')!.depth).toBe(1)
+  })
+})
