@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import { collectTopics, applyDesign, designFolders, type FolderDesign } from '@/llm/folders'
+import { collectTopics, applyDesign, designFolders, designTagFolders, type FolderDesign } from '@/llm/folders'
 import { NO_TOPIC } from '@/llm/tags'
-import type { TagResult } from '@/core/types'
+import type { BookmarkItem, TagResult } from '@/core/types'
 import { MAX_SIBLINGS } from '@/core/tree'
 
 function tag(bookmarkId: string, primaryTopic: string): TagResult {
@@ -142,5 +142,73 @@ describe('designFolders', () => {
     const prompt = complete.mock.calls[0]![0] as string
     expect(prompt).toContain('GitHub')
     expect(prompt).toContain('只输出一层')
+  })
+})
+
+describe('designTagFolders', () => {
+  const item = (id: string, url: string): BookmarkItem => ({
+    id, title: 'T' + id, url, parentId: '1', index: 0, currentPath: ['书签栏'],
+  })
+  const gh = (id: string) => item(id, `https://github.com/o/r${id}`)
+  const blog = (id: string) => item(id, `https://example.com/${id}`)
+
+  it('没勾选聚合组时，全部标签走一次设计', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      folders: [{ title: 'LLM 原理', topics: ['KV Cache', '注意力机制'], children: [] }],
+    })
+    const result = await designTagFolders(
+      [tag('1', 'KV Cache'), tag('2', '注意力机制')],
+      [blog('1'), blog('2')], [], { complete },
+    )
+    expect(complete).toHaveBeenCalledTimes(1)
+    expect(result.map((t) => t.primaryTopic)).toEqual(['LLM 原理', 'LLM 原理'])
+  })
+
+  it('命中聚合组的书签单独设计，且不进一级目录那次请求', async () => {
+    const complete = vi.fn()
+      .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
+      .mockResolvedValueOnce({ folders: [{ title: 'Agent 框架', topics: ['智能体框架'], children: [] }] })
+    const result = await designTagFolders(
+      [tag('1', 'KV Cache'), tag('2', '智能体框架')],
+      [blog('1'), gh('2')], ['github'], { complete },
+    )
+    expect(complete).toHaveBeenCalledTimes(2)
+    expect(complete.mock.calls[0]![0]).not.toContain('智能体框架')
+    expect(result[0]!.primaryTopic).toBe('LLM 原理')
+    expect(result[1]!.primaryTopic).toBe('Agent 框架')
+  })
+
+  it('聚合组那次调用限一层', async () => {
+    const complete = vi.fn().mockResolvedValue({ folders: [] })
+    await designTagFolders([tag('2', '智能体框架')], [gh('2')], ['github'], { complete })
+    expect(complete.mock.calls[0]![0]).toContain('只输出一层')
+    expect(complete.mock.calls[0]![0]).toContain('GitHub')
+  })
+
+  it('某一次设计失败时，该批标签原样保留，其余照常归并', async () => {
+    const complete = vi.fn()
+      .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
+      .mockRejectedValueOnce(Object.assign(new Error('x'), { retryable: false }))
+    const result = await designTagFolders(
+      [tag('1', 'KV Cache'), tag('2', '智能体框架')],
+      [blog('1'), gh('2')], ['github'], { complete },
+    )
+    expect(result[0]!.primaryTopic).toBe('LLM 原理')
+    expect(result[1]!.primaryTopic).toBe('智能体框架')
+  })
+
+  it('保持输入顺序与条数', async () => {
+    const complete = vi.fn().mockResolvedValue({ folders: [] })
+    const result = await designTagFolders(
+      [tag('1', 'a'), tag('2', 'b')], [blog('1'), gh('2')], ['github'], { complete },
+    )
+    expect(result.map((t) => t.bookmarkId)).toEqual(['1', '2'])
+  })
+
+  it('标签全空时不发请求', async () => {
+    const complete = vi.fn()
+    const result = await designTagFolders([tag('1', NO_TOPIC)], [blog('1')], [], { complete })
+    expect(complete).not.toHaveBeenCalled()
+    expect(result[0]!.primaryTopic).toBe(NO_TOPIC)
   })
 })

@@ -1,5 +1,6 @@
 import { normalizeName } from '@/core/map'
-import type { TagResult } from '@/core/types'
+import { matchDomainGroup } from '@/core/domainGroups'
+import type { BookmarkItem, TagResult } from '@/core/types'
 import { MAX_SIBLINGS } from '@/core/tree'
 import { NO_TOPIC } from './tags'
 import type { LlmClient } from './client'
@@ -189,4 +190,51 @@ export async function designFolders(
   if (folders.length === 0) return null
   options.onLog?.(`目录设计完成：${folders.length} 个目录，归并 ${mapping.size} 个标签`, 'info')
   return { folders, mapping }
+}
+
+/**
+ * 把标签分成「主题」与「各聚合组」几摊，每摊各设计一次目录。
+ *
+ * 命中聚合组的书签已经确定落在组目录下，它们的功能域标签（「文档解析」「RAG 检索」）
+ * 只该决定组内的子目录。混进一级目录那次请求，顶层会被 GitHub 仓库的细粒度标签淹没。
+ *
+ * 任何一摊设计失败，只有那一摊退回原始标签，其余照常归并。
+ */
+export async function designTagFolders(
+  tags: TagResult[],
+  bookmarks: BookmarkItem[],
+  domainGroups: string[],
+  client: LlmClient,
+  options: DesignOptions = {},
+): Promise<TagResult[]> {
+  const bookmarkById = new Map(bookmarks.map((b) => [b.id, b]))
+  const topicTags: TagResult[] = []
+  const byGroup = new Map<string, { title: string; tags: TagResult[] }>()
+
+  for (const tag of tags) {
+    const bookmark = domainGroups.length === 0 ? undefined : bookmarkById.get(tag.bookmarkId)
+    const group = bookmark === undefined ? null : matchDomainGroup(bookmark, domainGroups)
+    if (group === null) {
+      topicTags.push(tag)
+      continue
+    }
+    const bucket = byGroup.get(group.key) ?? { title: group.folderTitle, tags: [] }
+    bucket.tags.push(tag)
+    byGroup.set(group.key, bucket)
+  }
+
+  const resolved = new Map<string, TagResult>()
+  const run = async (batch: TagResult[], batchOptions: DesignOptions): Promise<void> => {
+    const design = await designFolders(collectTopics(batch), client, batchOptions)
+    // 设计失败就保留原始标签：碎片化的目录也好过整摊书签失去归属
+    const next = design === null ? batch : applyDesign(batch, design)
+    for (const tag of next) resolved.set(tag.bookmarkId, tag)
+  }
+
+  await run(topicTags, options)
+  for (const { title, tags: batch } of byGroup.values()) {
+    await run(batch, { ...options, oneLevel: true, parentTitle: title })
+  }
+
+  return tags.map((tag) => resolved.get(tag.bookmarkId) ?? tag)
 }
