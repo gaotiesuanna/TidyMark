@@ -12,6 +12,9 @@ export type { TagResult }
  */
 export const NO_TOPIC = ''
 
+/** 提示词共用的宽泛词黑名单，三处提示词（本文件两处、folders.ts 一处）都从这里引用，避免各自维护一份字面量而漂移。 */
+export const BROAD_WORDS = 'AI、人工智能、开发、编程、技术、工具、学习、资源、其他'
+
 const SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -51,7 +54,7 @@ function buildPrompt(items: BookmarkItem[]): string {
     '',
     '规则：',
     '1. 主题回答「这个书签讲什么、解决什么问题」，要具体。',
-    '2. 禁止使用这些宽泛词：AI、人工智能、开发、编程、技术、工具、学习、资源、其他。',
+    `2. 禁止使用这些宽泛词：${BROAD_WORDS}。`,
     '3. 例如「Claude Code」「KV Cache」「终端工具」「提示工程」，而不是「AI」「开发」。',
     '4. 主题名用中文，2 到 8 个字；专有技术名词（React、RAG、MCP）可直接用原文。',
     '5. 尽量复用已出现过的主题名，不要为同一概念创造多个说法。',
@@ -75,7 +78,7 @@ function buildGroupPrompt(groupTitle: string): (items: BookmarkItem[]) => string
       '为每个书签抽取一个「功能域」标签，回答「它解决什么问题」。',
       '',
       '规则：',
-      '1. 禁止使用这些宽泛词：AI、人工智能、开发、编程、技术、工具、学习、资源、其他。',
+      `1. 禁止使用这些宽泛词：${BROAD_WORDS}。`,
       '2. 用具体的问题域，例如「文档解析」「RAG 检索」「模型微调」「语音合成」「Agent 框架」「可观测性」。',
       '3. title 通常是「作者/仓库名: 一句话简介」，简介是判断用途最可靠的依据。',
       '4. 标签用中文，2 到 6 个字；专有技术名词（RAG、MCP、TTS）可直接用原文。',

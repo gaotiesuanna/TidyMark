@@ -168,6 +168,31 @@ describe('designFolders', () => {
     expect(prompt).toContain('GitHub')
     expect(prompt).toContain('只输出一层')
   })
+
+  it('标签被多个目录同时声明时取最后一个，并汇总一条警告日志', async () => {
+    const onLog = vi.fn()
+    const complete = vi.fn().mockResolvedValue({
+      folders: [
+        { title: 'A', topics: ['x'], children: [] },
+        { title: 'B', topics: ['x'], children: [] },
+      ],
+    })
+    const result = await designFolders(topics, { complete }, { onLog })
+    expect(result!.mapping.get('x')).toEqual(['B'])
+    const warnCalls = onLog.mock.calls.filter(([, level]) => level === 'warn')
+    expect(warnCalls).toHaveLength(1)
+    expect(warnCalls[0]![0]).toContain('x')
+    expect(warnCalls[0]![0]).toContain('2')
+  })
+
+  it('没有重复声明时不产生警告日志', async () => {
+    const onLog = vi.fn()
+    const complete = vi.fn().mockResolvedValue({
+      folders: [{ title: 'A', topics: ['x'], children: [] }],
+    })
+    await designFolders(topics, { complete }, { onLog })
+    expect(onLog.mock.calls.some(([, level]) => level === 'warn')).toBe(false)
+  })
 })
 
 describe('designTagFolders', () => {
@@ -256,5 +281,19 @@ describe('designTagFolders', () => {
     expect(complete).toHaveBeenCalledTimes(1)
     expect(result[0]!.primaryTopic).toBe('LLM 原理')
     expect(result[1]!.primaryTopic).toBe('智能体框架')
+  })
+
+  it('同一个 bookmarkId 出现两次时，两条各自独立映射，不互相覆盖', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      folders: [
+        { title: 'A', topics: ['a'], children: [] },
+        { title: 'B', topics: ['b'], children: [] },
+      ],
+    })
+    const result = await designTagFolders(
+      [tag('1', 'a'), tag('1', 'b')], [blog('1')], [], { complete },
+    )
+    expect(result[0]!.primaryTopic).toBe('A')
+    expect(result[1]!.primaryTopic).toBe('B')
   })
 })

@@ -2,7 +2,7 @@ import { normalizeName } from '@/core/map'
 import { matchDomainGroup } from '@/core/domainGroups'
 import type { BookmarkItem, TagResult } from '@/core/types'
 import { MAX_SIBLINGS } from '@/core/tree'
-import { NO_TOPIC } from './tags'
+import { NO_TOPIC, BROAD_WORDS } from './tags'
 import type { LlmClient } from './client'
 
 export interface TopicCount {
@@ -11,6 +11,7 @@ export interface TopicCount {
 }
 
 export interface FolderDesign {
+  /** 目录树的展示形态，真正驱动建树的是下面的 mapping；folders 只用于日志计数与测试观测，tree.ts 不读它。 */
   folders: Array<{ title: string; children: string[] }>
   /** normalizeName(原始标签) → 目录路径，长度 1 或 2。查不到的标签视为未映射。 */
   mapping: Map<string, string[]>
@@ -98,8 +99,6 @@ export interface DesignOptions {
   isCancelled?: () => boolean
 }
 
-const BROAD_WORDS = 'AI、人工智能、开发、编程、技术、工具、学习、资源、其他'
-
 function buildDesignPrompt(topics: TopicCount[], options: DesignOptions): string {
   const total = topics.reduce((sum, t) => sum + t.count, 0)
   const head =
@@ -168,6 +167,17 @@ export async function designFolders(
     const limit = options.oneLevel === true ? MAX_SIBLINGS : MAX_SIBLINGS - 1
     const folders: FolderDesign['folders'] = []
     const mapping = new Map<string, string[]>()
+    // 标签归一化后 → 声明过它的目录标题集合，用于检测提示词第 5 条要求的
+    // 「每个标签只能出现在一个目录的 topics 里」是否被模型违反
+    const declaredBy = new Map<string, { display: string; owners: Set<string> }>()
+    const setMapping = (topic: string, ownerLabel: string, path: string[]): void => {
+      const key = normalizeName(topic)
+      const entry = declaredBy.get(key) ?? { display: topic, owners: new Set<string>() }
+      entry.owners.add(ownerLabel)
+      declaredBy.set(key, entry)
+      // 同一标签被多个目录声明时，保留最后一个（现有行为不变，见下方汇总警告）
+      mapping.set(key, path)
+    }
     // 超出上限的目录整个丢弃，它吸收的标签一并视为未映射，落进「其他」
     for (const folder of raw.slice(0, limit)) {
       if (typeof folder !== 'object' || folder === null || typeof folder.title !== 'string') {
@@ -177,24 +187,34 @@ export async function designFolders(
       const children = options.oneLevel === true ? [] : (folder.children ?? [])
       if (!Array.isArray(children)) throw new Error('模型返回的 children 不是数组')
       for (const topic of folder.topics) {
-        mapping.set(normalizeName(topic), [folder.title])
+        setMapping(topic, folder.title, [folder.title])
       }
       // oneLevel 下模型仍可能给出 children，把它们的标签并进父目录而不是丢掉
       if (options.oneLevel === true) {
         for (const child of folder.children ?? []) {
-          for (const topic of child.topics ?? []) mapping.set(normalizeName(topic), [folder.title])
+          for (const topic of child.topics ?? []) setMapping(topic, folder.title, [folder.title])
         }
       }
       const kept = children.slice(0, MAX_SIBLINGS)
       for (const child of kept) {
         for (const topic of child.topics ?? []) {
-          mapping.set(normalizeName(topic), [folder.title, child.title])
+          setMapping(topic, `${folder.title}/${child.title}`, [folder.title, child.title])
         }
       }
       folders.push({ title: folder.title, children: kept.map((c) => c.title) })
     }
 
     if (folders.length === 0) return null
+
+    // 同一标签被多个目录同时声明：不抛错、取最后一个，但汇总成一条警告方便排查
+    const duplicated = [...declaredBy.values()].filter((entry) => entry.owners.size > 1)
+    if (duplicated.length > 0) {
+      const detail = duplicated
+        .map((entry) => `「${entry.display}」被 ${entry.owners.size} 个目录同时声明`)
+        .join('；')
+      options.onLog?.(`模型返回的目录设计中标签重复声明，已保留最后一个：${detail}`, 'warn')
+    }
+
     options.onLog?.(`目录设计完成：${folders.length} 个目录，归并 ${mapping.size} 个标签`, 'info')
     return { folders, mapping }
   } catch (error) {
@@ -220,37 +240,46 @@ export async function designTagFolders(
   options: DesignOptions = {},
 ): Promise<TagResult[]> {
   const bookmarkById = new Map(bookmarks.map((b) => [b.id, b]))
-  const topicTags: TagResult[] = []
-  const byGroup = new Map<string, { title: string; tags: TagResult[] }>()
+  // 按下标（而非 bookmarkId）分摊、回填：同一个 bookmarkId 出现两次时两条各自独立映射，
+  // 不会因为共用同一个 key 而互相覆盖
+  const topicEntries: Array<{ index: number; tag: TagResult }> = []
+  const byGroup = new Map<string, { title: string; entries: Array<{ index: number; tag: TagResult }> }>()
 
-  for (const tag of tags) {
+  tags.forEach((tag, index) => {
     const bookmark = domainGroups.length === 0 ? undefined : bookmarkById.get(tag.bookmarkId)
     const group = bookmark === undefined ? null : matchDomainGroup(bookmark, domainGroups)
     if (group === null) {
-      topicTags.push(tag)
-      continue
+      topicEntries.push({ index, tag })
+      return
     }
-    const bucket = byGroup.get(group.key) ?? { title: group.folderTitle, tags: [] }
-    bucket.tags.push(tag)
+    const bucket = byGroup.get(group.key) ?? { title: group.folderTitle, entries: [] }
+    bucket.entries.push({ index, tag })
     byGroup.set(group.key, bucket)
-  }
+  })
 
-  const resolved = new Map<string, TagResult>()
-  const run = async (batch: TagResult[], batchOptions: DesignOptions): Promise<void> => {
+  // 每个下标默认落回原始标签；每摊各自按位写回，等长同序与「每条各自映射」两条承诺都成立
+  const result: TagResult[] = tags.slice()
+  const run = async (
+    entries: Array<{ index: number; tag: TagResult }>,
+    batchOptions: DesignOptions,
+  ): Promise<void> => {
+    const batch = entries.map((entry) => entry.tag)
     const design = await designFolders(collectTopics(batch), client, batchOptions)
     // 设计失败就保留原始标签：碎片化的目录也好过整摊书签失去归属
     const next = design === null ? batch : applyDesign(batch, design)
-    for (const tag of next) resolved.set(tag.bookmarkId, tag)
+    next.forEach((tag, i) => {
+      result[entries[i]!.index] = tag
+    })
   }
 
   // 每摊开始前查一次取消：命中就跳过剩余摊子，已经在跑的这次请求不中途打断
   if (options.isCancelled?.() !== true) {
-    await run(topicTags, options)
-    for (const { title, tags: batch } of byGroup.values()) {
+    await run(topicEntries, options)
+    for (const { title, entries } of byGroup.values()) {
       if (options.isCancelled?.() === true) break
-      await run(batch, { ...options, oneLevel: true, parentTitle: title })
+      await run(entries, { ...options, oneLevel: true, parentTitle: title })
     }
   }
 
-  return tags.map((tag) => resolved.get(tag.bookmarkId) ?? tag)
+  return result
 }

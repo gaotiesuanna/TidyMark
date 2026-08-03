@@ -66,12 +66,14 @@ describe('buildCategoryTree', () => {
   })
 
   it('同一层目录数量不超过上限，超出部分并入「其他」', () => {
+    // MAX_SIBLINGS + 4 个各 1 条书签、互不相同的主题：主题目录只取前 MAX_SIBLINGS - 1 个
+    // （留一个位置给兜底的「其他」），加上兜底目录本身，顶层目录数恰好等于 MAX_SIBLINGS。
     const spec = Array.from({ length: MAX_SIBLINGS + 4 }, (_, i) => [
       String(i), `主题${i}`, null,
     ] as [string, string, null])
     const { newFolders } = buildCategoryTree({ tags: tags(spec), rootId, existingFolders: [] })
     const topLevel = newFolders.filter((f) => f.parentTemporaryId === null)
-    expect(topLevel.length).toBeLessThanOrEqual(MAX_SIBLINGS)
+    expect(topLevel.length).toBe(MAX_SIBLINGS)
   })
 
   it('一级目录挂在指定的范围根下', () => {
@@ -296,6 +298,26 @@ describe('buildCategoryTree 域名聚合', () => {
     const githubTop = candidates.find((c) => base(c.path[0]!) === 'GitHub' && c.path.length === 1)!
     expect(candidates.filter((c) => c.path.length === 2)).toEqual([])
     expect(pinned.every((p) => p.targetCategoryId === githubTop.id)).toBe(true)
+  })
+
+  it('组内不同主题数超过上限时，排在后面的主题平铺在组根，不建子目录', () => {
+    // MAX_SIBLINGS + 3 个各 1 条书签、互不相同的主题：前 MAX_SIBLINGS 个各自拿到子目录，
+    // 排在后面的 3 个没有子目录名额，书签直接 pin 到组根。
+    const n = MAX_SIBLINGS + 3
+    const spec = Array.from({ length: n }, (_, i) => [`g${i}`, `主题${i}`, null] as [string, string, null])
+    const bookmarks = items(spec.map(([id]) => [id, `https://github.com/o/${id}`]))
+    const { candidates, pinned } = buildCategoryTree({
+      tags: tags(spec), rootId, existingFolders: [],
+      bookmarks, domainGroups: ['github'],
+    })
+    const githubTop = candidates.find((c) => base(c.path[0]!) === 'GitHub' && c.path.length === 1)!
+    const children = candidates.filter((c) => c.path.length === 2)
+    expect(children).toHaveLength(MAX_SIBLINGS)
+
+    const overflowIds = spec.slice(MAX_SIBLINGS).map(([id]) => id)
+    const overflowPins = pinned.filter((p) => overflowIds.includes(p.bookmarkId))
+    expect(overflowPins).toHaveLength(overflowIds.length)
+    expect(overflowPins.every((p) => p.targetCategoryId === githubTop.id)).toBe(true)
   })
 
   it('pinned 覆盖全部命中书签，且指向二级目录', () => {
