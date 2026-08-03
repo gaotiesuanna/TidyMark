@@ -154,7 +154,8 @@ export function renumberPlan(plan: OrganizePlan, accepted: Set<string>): Organiz
     for (const child of plan.candidates) {
       if (child.path.length !== 2 || child.path[0] !== candidate.path[0] || !used.has(child.id)) continue
       childIndex++
-      renumbered.set(child.id, [title, `${prefix}.${childIndex} ${stripNumberPrefix(child.path[1]!)}`])
+      const childPrefix = String(childIndex).padStart(2, '0')
+      renumbered.set(child.id, [title, `${childPrefix} ${stripNumberPrefix(child.path[1]!)}`])
     }
   }
 

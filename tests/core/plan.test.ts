@@ -145,7 +145,7 @@ describe('summarize', () => {
 describe('renumberPlan', () => {
   const candidates3: CategoryCandidate[] = [
     { id: 'tmp:1', path: ['01 AI'] },
-    { id: 'tmp:2', path: ['01 AI', '01.1 rag'] },
+    { id: 'tmp:2', path: ['01 AI', '01 rag'] },
     { id: 'tmp:3', path: ['02 开发'] },
     { id: 'tmp:4', path: ['03 学习'] },
     { id: 'tmp:5', path: ['04 金融'] },
@@ -181,7 +181,7 @@ describe('renumberPlan', () => {
 
   it('子目录跟着父级前缀一起重排', () => {
     const plan = renumberPlan(rebuildPlan(), allAccepted)
-    expect(plan.candidates.find((c) => c.id === 'tmp:2')!.path).toEqual(['01 AI', '01.1 rag'])
+    expect(plan.candidates.find((c) => c.id === 'tmp:2')!.path).toEqual(['01 AI', '01 rag'])
   })
 
   it('取消勾选导致某个目录空掉时，后面的目录顶上来', () => {

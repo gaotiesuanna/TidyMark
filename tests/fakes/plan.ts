@@ -3,17 +3,17 @@ import type { BookmarkOperation, OrganizePlan, PlanRow, TagResult } from '@/core
 /**
  * 造一个推翻模式的 plan：
  *   01 GitHub（聚合组）
- *     01.1 AI 工具   ← g0 g1
+ *     01 AI 工具   ← g0 g1
  *   02 前端          ← f0
- *     02.1 React     ← r0
+ *     01 React     ← r0
  *   03 其他          ← o0
  */
 export function makePlan(): OrganizePlan {
   const candidates = [
     { id: 'tmp:1', path: ['01 GitHub'], domainGroup: 'github' },
-    { id: 'tmp:2', path: ['01 GitHub', '01.1 AI 工具'], domainGroup: 'github' },
+    { id: 'tmp:2', path: ['01 GitHub', '01 AI 工具'], domainGroup: 'github' },
     { id: 'tmp:3', path: ['02 前端'] },
-    { id: 'tmp:4', path: ['02 前端', '02.1 React'] },
+    { id: 'tmp:4', path: ['02 前端', '01 React'] },
     { id: 'tmp:5', path: ['03 其他'] },
   ]
   const moves: Array<[string, string]> = [

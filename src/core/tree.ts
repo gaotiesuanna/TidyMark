@@ -54,7 +54,7 @@ interface TopicGroup {
   children: Map<string, { title: string; count: number }>
 }
 
-/** 顶层 `01`，子层 `01.1`。 */
+/** 每层各自从 `01` 开始编号，子层不带父级前缀。 */
 function numbered(prefix: string, title: string): string {
   return `${prefix} ${title}`
 }
@@ -232,7 +232,7 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
     pin(section.ownBookmarkIds, sectionId, section.title)
 
     section.children.forEach((child, childIndex) => {
-      const childTitle = numbered(`${prefix}.${childIndex + 1}`, child.title)
+      const childTitle = numbered(String(childIndex + 1).padStart(2, '0'), child.title)
       // 父目录是新建的，它下面不可能有已存在的子目录
       const existingChild = parentRealId === null ? null : findChild(parentRealId, child.title)
       if (existingChild !== null) {

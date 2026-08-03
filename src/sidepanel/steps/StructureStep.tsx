@@ -52,7 +52,7 @@ export function StructureStep() {
                   {node.children.map((child, childIndex) => (
                     <li key={child.id} className="flex items-center gap-2 text-xs">
                       <span className="w-10 shrink-0 text-neutral-400">
-                        {`${prefix}.${childIndex + 1}`}
+                        {String(childIndex + 1).padStart(2, '0')}
                       </span>
                       <input
                         className="min-w-0 flex-1 rounded border px-2 py-1"

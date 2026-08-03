@@ -153,8 +153,8 @@ describe('buildCategoryTree 编号前缀', () => {
     const { candidates } = buildCategoryTree({ tags: tags(spec), rootId, existingFolders: [] })
     const paths = candidates.map((c) => c.path.join('/'))
     expect(paths).toContain('01 AI')
-    expect(paths).toContain('01 AI/01.1 rag')
-    expect(paths).toContain('01 AI/01.2 LLM')
+    expect(paths).toContain('01 AI/01 rag')
+    expect(paths).toContain('01 AI/02 LLM')
     expect(paths).toContain('02 开发')
   })
 

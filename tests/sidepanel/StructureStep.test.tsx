@@ -13,8 +13,7 @@ describe('StructureStep', () => {
 
   it('按层级展示目录，编号由位置算出', () => {
     render(<StructureStep />)
-    expect(screen.getByText('01')).toBeTruthy()
-    expect(screen.getByText('01.1')).toBeTruthy()
+    expect(screen.getAllByText('01')).toHaveLength(3) // 01 GitHub、其下 01 AI 工具、02 前端 下的 01 React
     expect(screen.getByText('02')).toBeTruthy()
   })
 
