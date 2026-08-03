@@ -10,7 +10,7 @@ const STEPS = [
 ] as const
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { step, busy, error, progress, logs } = useStore()
+  const { step, busy, busyKind, error, progress, logs, cancel } = useStore()
   return (
     <div className="flex h-screen flex-col bg-white text-neutral-800">
       <header className="border-b px-4 py-3">
@@ -36,7 +36,12 @@ export function Shell({ children }: { children: ReactNode }) {
       <main className="flex-1 overflow-y-auto p-4">
         {children}
         {/* 紧跟在当前步骤的操作按钮下方，让状态出现在点击的地方 */}
-        <ProgressPanel busy={busy} progress={progress} logs={logs} />
+        <ProgressPanel
+          busy={busy}
+          progress={progress}
+          logs={logs}
+          {...(busyKind === 'analyze' ? { onCancel: () => void cancel() } : {})}
+        />
       </main>
     </div>
   )

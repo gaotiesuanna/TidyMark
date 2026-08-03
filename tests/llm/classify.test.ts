@@ -161,3 +161,34 @@ describe('classifyBookmarks', () => {
     expect(results.map((r) => r.bookmarkId).sort()).toEqual(['0', '1', '2'])
   })
 })
+
+describe('classifyBookmarks 取消', () => {
+  it('取消后不再派发新批次', async () => {
+    let cancelled = false
+    const complete = vi.fn().mockImplementation(async () => {
+      cancelled = true // 第一批跑完就点了取消
+      return { results: [] }
+    })
+    const items = Array.from({ length: 6 }, (_, i) => item(String(i), `https://s${i}.dev/x`))
+    await classifyBookmarks({
+      items, candidates, client: { complete }, cache: new Map(),
+      batchSize: 2, concurrency: 1, isCancelled: () => cancelled,
+    })
+    expect(complete).toHaveBeenCalledTimes(1)
+  })
+
+  it('已跑完的批次结果仍然保留', async () => {
+    let cancelled = false
+    const complete = vi.fn().mockImplementation(async () => {
+      cancelled = true
+      return { results: [{ bookmark_id: '0', target_category_id: '10', confidence: 0.9, reason: 'r' }] }
+    })
+    const items = Array.from({ length: 4 }, (_, i) => item(String(i), `https://s${i}.dev/x`))
+    const results = await classifyBookmarks({
+      items, candidates, client: { complete }, cache: new Map(),
+      batchSize: 1, concurrency: 1, isCancelled: () => cancelled,
+    })
+    expect(results.find((r) => r.bookmarkId === '0')!.targetCategoryId).toBe('10')
+    expect(results).toHaveLength(4)
+  })
+})

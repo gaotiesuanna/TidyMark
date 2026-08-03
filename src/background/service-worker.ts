@@ -32,8 +32,20 @@ function emit(event: ProgressEvent): void {
   }
 }
 
+// 取消标记由 worker 持有：analyze 开始时清零，收到 cancel 时置位，
+// 分析在批次之间读取它。
+let cancelled = false
+
 chrome.runtime.onMessage.addListener((request: Request, _sender, sendResponse) => {
-  handle(createChromePorts(), request, { onEvent: emit })
+  if (request.kind === 'cancel') {
+    cancelled = true
+    emit({ phase: 'classify', message: '已请求取消，正在结束当前批次…', level: 'warn' })
+    sendResponse({ ok: true, kind: 'cancel' })
+    return false
+  }
+  if (request.kind === 'analyze') cancelled = false
+
+  handle(createChromePorts(), request, { onEvent: emit, isCancelled: () => cancelled })
     .then(sendResponse)
     .catch((error: unknown) => sendResponse({ ok: false, error: String(error) }))
   return true // 保持消息通道开启以支持异步响应

@@ -98,6 +98,8 @@ interface State {
   undoResult: UndoResult | null
   undoAvailable: boolean
   busy: string | null
+  /** 当前在跑哪一步，决定能不能取消。 */
+  busyKind: 'init' | 'scan' | 'analyze' | 'apply' | 'undo' | null
   error: string | null
   progress: Progress | null
   logs: LogLine[]
@@ -105,6 +107,7 @@ interface State {
 
   init(): Promise<void>
   pushEvent(event: ProgressEvent): void
+  cancel(): Promise<void>
   toggle(id: string): void
   goScan(): Promise<void>
   setSettings(settings: Settings): Promise<void>
@@ -130,6 +133,7 @@ export const useStore = create<State>((set, get) => ({
   undoResult: null,
   undoAvailable: false,
   busy: null,
+  busyKind: null,
   error: null,
   progress: null,
   logs: [],
@@ -147,15 +151,21 @@ export const useStore = create<State>((set, get) => ({
     })
   },
 
+  async cancel() {
+    // 只标记取消，真正的收尾由正在进行的 analyze 自己完成
+    set({ busy: '正在取消，等当前批次结束…', busyKind: null })
+    await send({ kind: 'cancel' })
+  },
+
   async init() {
     connectProgress({
       onEvent: (event) => get().pushEvent(event),
       onDisconnect: () => {
         if (get().busy === null) return
-        set({ busy: null, error: '后台已被浏览器回收，本次操作中断，请重试。' })
+        set({ busy: null, busyKind: null, error: '后台已被浏览器回收，本次操作中断，请重试。' })
       },
     })
-    set({ busy: '正在读取书签…', error: null })
+    set({ busy: '正在读取书签…', busyKind: 'init', error: null })
     const treeRes = await send({ kind: 'get_tree' })
     const settingsRes = await send({ kind: 'get_settings' })
     const undoRes = await send({ kind: 'get_undo_state' })
@@ -164,6 +174,7 @@ export const useStore = create<State>((set, get) => ({
       settings: settingsRes.ok && settingsRes.kind === 'get_settings' ? settingsRes.settings : DEFAULT_SETTINGS,
       undoAvailable: undoRes.ok && undoRes.kind === 'get_undo_state' ? undoRes.available : false,
       busy: null,
+      busyKind: null,
     })
   },
 
@@ -172,11 +183,11 @@ export const useStore = create<State>((set, get) => ({
   },
 
   async goScan() {
-    set({ busy: '正在扫描…', error: null, progress: null, logs: [] })
+    set({ busy: '正在扫描…', busyKind: 'scan', error: null, progress: null, logs: [] })
     const res = await send({ kind: 'scan', scopeRootIds: [...get().checkedIds] })
-    if (!res.ok) return set({ busy: null, error: res.error })
-    if (res.kind !== 'scan') return set({ busy: null })
-    set({ scan: res.scan, step: 'preferences', busy: null })
+    if (!res.ok) return set({ busy: null, busyKind: null, error: res.error })
+    if (res.kind !== 'scan') return set({ busy: null, busyKind: null })
+    set({ scan: res.scan, step: 'preferences', busy: null, busyKind: null })
   },
 
   async setSettings(settings) {
@@ -189,15 +200,20 @@ export const useStore = create<State>((set, get) => ({
     if (!granted) {
       return set({ error: '需要授权访问模型接口所在的域名才能继续分析。请重试并允许该权限。' })
     }
-    set({ busy: '正在分析…', error: null, progress: null, logs: [] })
+    set({ busy: '正在分析…', busyKind: 'analyze', error: null, progress: null, logs: [] })
     const res = await send({ kind: 'analyze', scopeRootIds: [...get().checkedIds] })
-    if (!res.ok) return set({ busy: null, error: res.error })
-    if (res.kind !== 'analyze') return set({ busy: null })
+    // 主动取消不是错误，日志里已经有记录，不弹红条
+    if (!res.ok && res.cancelled === true) {
+      return set({ busy: null, busyKind: null, error: null })
+    }
+    if (!res.ok) return set({ busy: null, busyKind: null, error: res.error })
+    if (res.kind !== 'analyze') return set({ busy: null, busyKind: null })
     set({
       plan: res.plan,
       accepted: new Set(res.plan.rows.filter((r) => r.confidence >= 0.7).map((r) => r.bookmarkId)),
       step: 'review',
       busy: null,
+      busyKind: null,
     })
   },
 
@@ -227,19 +243,19 @@ export const useStore = create<State>((set, get) => ({
   async apply() {
     const plan = get().plan
     if (plan === null) return
-    set({ busy: '正在应用…', error: null, progress: null, logs: [] })
+    set({ busy: '正在应用…', busyKind: 'apply', error: null, progress: null, logs: [] })
     const res = await send({ kind: 'apply', plan, accepted: [...get().accepted] })
-    if (!res.ok) return set({ busy: null, error: res.error })
-    if (res.kind !== 'apply') return set({ busy: null })
-    set({ applyResult: res.result, undoAvailable: true, step: 'result', busy: null })
+    if (!res.ok) return set({ busy: null, busyKind: null, error: res.error })
+    if (res.kind !== 'apply') return set({ busy: null, busyKind: null })
+    set({ applyResult: res.result, undoAvailable: true, step: 'result', busy: null, busyKind: null })
   },
 
   async undo() {
-    set({ busy: '正在撤销…', error: null, progress: null, logs: [] })
+    set({ busy: '正在撤销…', busyKind: 'undo', error: null, progress: null, logs: [] })
     const res = await send({ kind: 'undo' })
-    if (!res.ok) return set({ busy: null, error: res.error })
-    if (res.kind !== 'undo') return set({ busy: null })
-    set({ undoResult: res.result, undoAvailable: false, busy: null })
+    if (!res.ok) return set({ busy: null, busyKind: null, error: res.error })
+    if (res.kind !== 'undo') return set({ busy: null, busyKind: null })
+    set({ undoResult: res.result, undoAvailable: false, busy: null, busyKind: null })
   },
 
   reset() {

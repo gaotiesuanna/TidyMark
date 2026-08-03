@@ -55,6 +55,8 @@ export interface ExtractOptions {
   concurrency?: number
   onProgress?: (done: number, total: number) => void
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => void
+  /** 每批开始前检查一次，返回 true 就停止派发后续批次。 */
+  isCancelled?: () => boolean
 }
 
 export async function extractTags(
@@ -74,6 +76,7 @@ export async function extractTags(
 
   async function worker(): Promise<void> {
     while (cursor < batches.length) {
+      if (options.isCancelled?.() === true) return
       const index = cursor++
       const batch = batches[index]!
       try {

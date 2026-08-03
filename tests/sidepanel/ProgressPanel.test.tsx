@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ProgressPanel } from '@/sidepanel/components/ProgressPanel'
@@ -49,6 +49,18 @@ describe('ProgressPanel', () => {
       />,
     )
     expect(screen.getByText(/标签批次 1\/2/)).toBeDefined()
+  })
+
+  it('传入 onCancel 时显示取消按钮并回调', async () => {
+    const onCancel = vi.fn()
+    render(<ProgressPanel busy="正在分析…" progress={null} logs={logs} onCancel={onCancel} />)
+    await userEvent.click(screen.getByRole('button', { name: '取消' }))
+    expect(onCancel).toHaveBeenCalled()
+  })
+
+  it('不可取消的步骤没有取消按钮', () => {
+    render(<ProgressPanel busy="正在应用…" progress={null} logs={logs} />)
+    expect(screen.queryByRole('button', { name: '取消' })).toBeNull()
   })
 
   it('分析结束后日志仍然保留', () => {

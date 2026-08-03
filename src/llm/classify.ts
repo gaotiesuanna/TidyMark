@@ -14,6 +14,8 @@ export interface ClassifyInput {
   concurrency?: number
   onProgress?: (done: number, total: number) => void
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => void
+  /** 每批开始前检查一次，返回 true 就停止派发后续批次。 */
+  isCancelled?: () => boolean
 }
 
 const MAX_RETRIES = 2
@@ -167,6 +169,7 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
   let cursor = 0
   async function worker(): Promise<void> {
     while (cursor < batches.length) {
+      if (input.isCancelled?.() === true) return
       const index = cursor++
       const batch = batches[index]!
       const startedAt = Date.now()

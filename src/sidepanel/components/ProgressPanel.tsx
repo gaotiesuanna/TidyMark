@@ -6,6 +6,8 @@ interface Props {
   busy: string | null
   progress: Progress | null
   logs: LogLine[]
+  /** 传入时显示取消按钮；只有可中断的步骤才传。 */
+  onCancel?: () => void
 }
 
 const LEVEL_CLASS = {
@@ -14,7 +16,7 @@ const LEVEL_CLASS = {
   error: 'text-red-700',
 } as const
 
-export function ProgressPanel({ busy, progress, logs }: Props) {
+export function ProgressPanel({ busy, progress, logs, onCancel }: Props) {
   const [expanded, setExpanded] = useState(false)
   const autoExpanded = useRef(false)
   const bottom = useRef<HTMLDivElement>(null)
@@ -55,6 +57,16 @@ export function ProgressPanel({ busy, progress, logs }: Props) {
             <span className="ml-auto shrink-0 text-neutral-500">
               {PHASE_LABELS[progress.phase]} {progress.done}/{progress.total}
             </span>
+          )}
+          {onCancel !== undefined && (
+            <button
+              className={`shrink-0 rounded border px-2 py-0.5 text-neutral-600 hover:bg-white ${
+                progress !== null && progress.total > 0 ? '' : 'ml-auto'
+              }`}
+              onClick={onCancel}
+            >
+              取消
+            </button>
           )}
         </div>
       )}

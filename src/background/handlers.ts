@@ -20,7 +20,11 @@ export interface HandlerDeps {
   batchSize?: number
   /** 把进度与日志推回侧栏。 */
   onEvent?: EmitProgress
+  /** 用户是否点了取消。分析在批次之间检查它。 */
+  isCancelled?: () => boolean
 }
+
+const CANCELLED: Response = { ok: false, error: '分析已取消。', cancelled: true }
 
 export async function handle(
   ports: Ports,
@@ -34,6 +38,7 @@ export async function handle(
     emit({ phase, message, level })
   const progress = (phase: ProgressPhase) => (done: number, total: number): void =>
     emit({ phase, message: '', done, total })
+  const isCancelled = deps.isCancelled ?? ((): boolean => false)
 
   try {
     switch (request.kind) {
@@ -67,7 +72,9 @@ export async function handle(
           const tags = await extractTags(scan.bookmarks, client, {
             onProgress: progress('tags'),
             onLog: (message, level) => log('tags', message, level),
+            isCancelled,
           })
+          if (isCancelled()) return CANCELLED
           const tree_ = buildCategoryTree({ tags, rootId, existingFolders: scan.folders })
           candidates = tree_.candidates
           newFolders = tree_.newFolders
@@ -92,8 +99,11 @@ export async function handle(
           batchSize: deps.batchSize,
           onProgress: progress('classify'),
           onLog: (message, level) => log('classify', message, level),
+          isCancelled,
         })
+        // 已经跑完的批次仍然写进缓存，重来时不必再花一次钱
         await saveCache(ports, cache)
+        if (isCancelled()) return CANCELLED
 
         // source === 'none' 只在请求失败或模型漏返回时出现——模型判定"无合适目录"
         // 走的是 source === 'llm' + targetCategoryId === null 这条路。
@@ -155,6 +165,10 @@ export async function handle(
       case 'save_settings':
         await saveSettings(ports, request.settings)
         return { ok: true, kind: 'save_settings' }
+
+      // 取消标记由 service worker 持有，这里只是让消息类型闭合
+      case 'cancel':
+        return { ok: true, kind: 'cancel' }
 
       case 'get_undo_state': {
         const snapshot = await loadSnapshot(ports)

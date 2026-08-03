@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { handle } from '@/background/handlers'
 import { createFakeBookmarks } from '../fakes/fake-bookmarks'
 import { createFakeStorage } from '../fakes/fake-storage'
-import { saveSettings } from '@/storage/settings'
+import { loadCache, saveSettings } from '@/storage/settings'
 import type { LlmClient } from '@/llm/client'
 import type { ProgressEvent } from '@/background/events'
 
@@ -264,6 +264,59 @@ describe('handle', () => {
     const errors = events.filter((e) => e.level === 'error')
     expect(errors).toHaveLength(1)
     expect(errors[0]!.message).toContain('400')
+  })
+
+  it('取消后停止分析并返回 cancelled 标记', async () => {
+    const bookmarks = Array.from({ length: 6 }, (_, i) => ({
+      id: `10${i}`, title: `站点${i}`, url: `https://site${i}.dev`,
+    }))
+    const fake = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: 'react', children: [] },
+          { id: '11', title: '杂项', children: bookmarks },
+        ]},
+      ]},
+    ])
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: false,
+      removeEmptyFolders: false,
+    })
+    let cancelled = false
+    const complete = vi.fn().mockImplementation(async () => {
+      cancelled = true // 第一批返回后用户点了取消
+      return { results: [] }
+    })
+
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, {
+      createClient: () => ({ complete }), now: () => 1, batchSize: 1,
+      isCancelled: () => cancelled,
+    })
+
+    expect(res).toMatchObject({ ok: false, cancelled: true })
+    expect(complete).toHaveBeenCalledTimes(1)
+  })
+
+  it('取消前已完成的批次写进缓存，重来时不必再花钱', async () => {
+    const { ports } = setup()
+    await saveSettings(ports, {
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: false,
+      removeEmptyFolders: false,
+    })
+    let cancelled = false
+    const complete = vi.fn().mockImplementation(async () => {
+      cancelled = true
+      return {
+        results: [{ bookmark_id: '100', target_category_id: '10', confidence: 0.9, reason: 'r' }],
+      }
+    })
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, {
+      createClient: () => ({ complete }), now: () => 1, isCancelled: () => cancelled,
+    })
+    expect(await loadCache(ports)).not.toEqual(new Map())
   })
 
   it('模型全部失败时返回 ok:false 并带上真实错误，而不是伪装成 0 条建议', async () => {
