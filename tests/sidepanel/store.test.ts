@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
-  appendLog, collectDescendantFolderIds, toggleChecked, useStore, MAX_LOGS, MAX_LOG_LENGTH, type LogLine,
+  appendLog, collectDescendantFolderIds, nextStepAfterAnalyze, toggleChecked, useStore,
+  MAX_LOGS, MAX_LOG_LENGTH, type LogLine,
 } from '@/sidepanel/store'
+import { makePlan } from '../fakes/plan'
 import type { ProgressEvent } from '@/background/events'
 import type { BookmarkNode } from '@/core/ports'
 
@@ -94,5 +96,58 @@ describe('日志长度截断', () => {
     const logs = appendLog([], { phase: 'classify', message: long, level: 'error' }, 0)
     expect(logs[0]!.message).toHaveLength(MAX_LOG_LENGTH + 1) // 含省略号
     expect(logs[0]!.message.endsWith('…')).toBe(true)
+  })
+})
+
+describe('nextStepAfterAnalyze', () => {
+  it('推翻模式先进结构确认页', () => {
+    expect(nextStepAfterAnalyze(true)).toBe('structure')
+  })
+
+  it('非推翻模式直接进移动清单页', () => {
+    expect(nextStepAfterAnalyze(false)).toBe('review')
+  })
+})
+
+describe('结构确认步骤', () => {
+  it('renameNode 与 removeNode 累积到 structureEdits', () => {
+    useStore.setState({ plan: makePlan(), structureEdits: { renames: {}, removed: [] } })
+    useStore.getState().renameNode('tmp:1', '代码仓库')
+    useStore.getState().removeNode('tmp:3')
+    expect(useStore.getState().structureEdits).toEqual({
+      renames: { 'tmp:1': '代码仓库' }, removed: ['tmp:3'],
+    })
+  })
+
+  it('confirmStructure 把编辑写进 plan 并进入 review', () => {
+    useStore.setState({
+      plan: makePlan(),
+      structureEdits: { renames: { 'tmp:1': '代码仓库' }, removed: [] },
+      step: 'structure',
+    })
+    useStore.getState().confirmStructure()
+    const state = useStore.getState()
+    expect(state.step).toBe('review')
+    expect(state.plan!.candidates.find((c) => c.id === 'tmp:1')!.path).toEqual(['代码仓库'])
+  })
+
+  it('confirmStructure 后按置信度重新预选', () => {
+    const plan = makePlan()
+    plan.rows[0]!.confidence = 0.3
+    useStore.setState({ plan, structureEdits: { renames: {}, removed: [] }, accepted: new Set() })
+    useStore.getState().confirmStructure()
+    const accepted = useStore.getState().accepted
+    expect(accepted.has(plan.rows[0]!.bookmarkId)).toBe(false)
+    expect(accepted.has(plan.rows[1]!.bookmarkId)).toBe(true)
+  })
+
+  it('backToPreferences 回到偏好页并清空结构编辑', () => {
+    useStore.setState({
+      step: 'structure',
+      structureEdits: { renames: { 'tmp:1': 'x' }, removed: [] },
+    })
+    useStore.getState().backToPreferences()
+    expect(useStore.getState().step).toBe('preferences')
+    expect(useStore.getState().structureEdits).toEqual({ renames: {}, removed: [] })
   })
 })

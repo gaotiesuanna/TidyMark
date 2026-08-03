@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import type { ProgressEvent, ProgressPhase } from '@/background/events'
 import type { BookmarkNode } from '@/core/ports'
-import { renumberPlan } from '@/core/plan'
+import { LOW_CONFIDENCE, renumberPlan } from '@/core/plan'
+import { applyStructureEdits, EMPTY_EDITS, type StructureEdits } from '@/core/structure'
 import type { OrganizePlan, ScanResult } from '@/core/types'
 import type { ApplyResult } from '@/engine/apply'
 import type { UndoResult } from '@/engine/undo'
@@ -11,7 +12,12 @@ import { send } from './lib/send'
 import { ensureHostPermission } from './lib/permissions'
 import { connectProgress, startKeepalive, type ProgressConnection } from './lib/progress'
 
-export type Step = 'scope' | 'preferences' | 'review' | 'result'
+export type Step = 'scope' | 'preferences' | 'structure' | 'review' | 'result'
+
+/** 分析完成后去哪一步：只有推翻模式才有新目录结构可确认。 */
+export function nextStepAfterAnalyze(rebuildStructure: boolean): Step {
+  return rebuildStructure ? 'structure' : 'review'
+}
 
 export interface LogLine {
   id: number
@@ -112,6 +118,8 @@ interface State {
   progress: Progress | null
   logs: LogLine[]
   logSeq: number
+  /** 结构确认页的草稿态编辑，不写进 Settings，每次 analyze 重置。 */
+  structureEdits: StructureEdits
 
   init(): Promise<void>
   refreshTree(): Promise<void>
@@ -121,6 +129,10 @@ interface State {
   goScan(): Promise<void>
   setSettings(settings: Settings): Promise<void>
   analyze(): Promise<void>
+  renameNode(id: string, title: string): void
+  removeNode(id: string): void
+  confirmStructure(): void
+  backToPreferences(): void
   toggleAccepted(bookmarkId: string): void
   acceptAll(): void
   acceptHighConfidence(threshold: number): void
@@ -147,6 +159,7 @@ export const useStore = create<State>((set, get) => ({
   progress: null,
   logs: [],
   logSeq: 0,
+  structureEdits: EMPTY_EDITS,
 
   /** 整理或撤销之后重新读一次书签树，结果页据此展示真实结构。 */
   async refreshTree() {
@@ -228,11 +241,38 @@ export const useStore = create<State>((set, get) => ({
     if (res.kind !== 'analyze') return set({ busy: null, busyKind: null })
     set({
       plan: res.plan,
-      accepted: new Set(res.plan.rows.filter((r) => r.confidence >= 0.7).map((r) => r.bookmarkId)),
-      step: 'review',
+      accepted: new Set(res.plan.rows.filter((r) => r.confidence >= LOW_CONFIDENCE).map((r) => r.bookmarkId)),
+      structureEdits: EMPTY_EDITS,
+      step: nextStepAfterAnalyze(get().settings.rebuildStructure),
       busy: null,
       busyKind: null,
     })
+  },
+
+  renameNode(id, title) {
+    const edits = get().structureEdits
+    set({ structureEdits: { ...edits, renames: { ...edits.renames, [id]: title } } })
+  },
+
+  removeNode(id) {
+    const edits = get().structureEdits
+    if (edits.removed.includes(id)) return
+    set({ structureEdits: { ...edits, removed: [...edits.removed, id] } })
+  },
+
+  confirmStructure() {
+    const plan = get().plan
+    if (plan === null) return
+    const next = applyStructureEdits(plan, get().structureEdits)
+    set({
+      plan: next,
+      accepted: new Set(next.rows.filter((r) => r.confidence >= LOW_CONFIDENCE).map((r) => r.bookmarkId)),
+      step: 'review',
+    })
+  },
+
+  backToPreferences() {
+    set({ step: 'preferences', structureEdits: EMPTY_EDITS })
   },
 
   toggleAccepted(bookmarkId) {
@@ -288,6 +328,7 @@ export const useStore = create<State>((set, get) => ({
   reset() {
     set({
       step: 'scope', scan: null, plan: null, accepted: new Set(),
+      structureEdits: EMPTY_EDITS,
       applyResult: null, undoResult: null, error: null,
     })
   },
