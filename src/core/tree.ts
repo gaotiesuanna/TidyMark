@@ -137,7 +137,8 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
       title: preferredName(groupTitleByKey.get(key)!),
       domainGroup: key,
       children,
-      // 不足门槛的主题不建子目录，直接平铺在组根下
+      // primaryTopic 归一化后为空、或因超过 MAX_SIBLINGS 阈值未获得子目录的书签，
+      // 不建子目录，直接平铺在组根下
       ownBookmarkIds: bucket.map((t) => t.bookmarkId).filter((id) => !placed.has(id)),
     })
   }

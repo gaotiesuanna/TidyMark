@@ -199,7 +199,7 @@ export async function designFolders(
     return { folders, mapping }
   } catch (error) {
     console.error('[TidyMark] 目录设计失败：', error)
-    options.onLog?.(`目录设计失败，按标签数量退回旧方案：${String(error)}`, 'error')
+    options.onLog?.(`目录设计失败，保留原始标签进入建树：${String(error)}`, 'error')
     return null
   }
 }
