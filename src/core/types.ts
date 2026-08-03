@@ -84,6 +84,8 @@ export interface OrganizePlan {
   operations: BookmarkOperation[]
   rows: PlanRow[]
   summary: PlanSummary
+  /** 部分失败时的提示，例如某些书签因模型报错未能分类。 */
+  warnings: string[]
 }
 
 /** 推翻模式下由模型抽取的主题标签，供 core/tree.ts 聚合成目录树。 */

@@ -13,6 +13,7 @@ const plan: OrganizePlan = {
     { bookmarkId: '101', title: '不确定的', url: 'https://x.dev', fromPath: ['书签栏', '杂项'], toPath: ['书签栏', 'react'], confidence: 0.4, reason: '可能相关' },
   ],
   summary: { totalBookmarks: 2, movedBookmarks: 2, unchangedBookmarks: 0, createdFolders: 0, renamedFolders: 0, lowConfidenceItems: 1 },
+  warnings: [],
 }
 
 beforeEach(() => {

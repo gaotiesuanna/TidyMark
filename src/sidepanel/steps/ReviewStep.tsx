@@ -11,6 +11,21 @@ export function ReviewStep() {
         共 {plan.rows.length} 条移动建议，已选中 {accepted.size} 条。未选中的书签保持原位。
       </p>
 
+      {plan.warnings.length > 0 && (
+        <ul className="space-y-1 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+          {plan.warnings.map((warning) => (
+            <li key={warning}>{warning}</li>
+          ))}
+        </ul>
+      )}
+
+      {plan.rows.length === 0 && (
+        <p className="rounded border bg-neutral-50 p-3 text-xs leading-relaxed text-neutral-500">
+          AI 认为所选范围内的书签都已在合适的位置，没有需要移动的。
+          可以试试换一个更乱的文件夹，或开启「推翻现有文件夹结构」重新设计目录。
+        </p>
+      )}
+
       <div className="flex gap-1 text-xs">
         <button className="rounded border px-2 py-1 hover:bg-neutral-50" onClick={acceptAll}>全部接受</button>
         <button className="rounded border px-2 py-1 hover:bg-neutral-50" onClick={() => acceptHighConfidence(LOW_CONFIDENCE)}>仅高置信度</button>

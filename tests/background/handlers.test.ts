@@ -122,4 +122,59 @@ describe('handle', () => {
     expect(complete).toHaveBeenCalledTimes(2)
     expect(res.plan.operations.some((o) => o.type === 'create_folder')).toBe(true)
   })
+
+  it('模型全部失败时返回 ok:false 并带上真实错误，而不是伪装成 0 条建议', async () => {
+    const { ports, fake } = setup()
+    void fake
+    await saveSettings(ports, {
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: false,
+    })
+    const complete = vi.fn().mockRejectedValue(
+      Object.assign(new Error('模型接口返回 400: This response_format type is unavailable now'), {
+        retryable: false,
+      }),
+    )
+    const deps = { createClient: () => ({ complete }), now: () => 1 }
+
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
+    expect(res.ok).toBe(false)
+    expect((res as { error: string }).error).toContain('response_format')
+  })
+
+  it('部分书签分类失败时仍返回 Plan，但带上警告', async () => {
+    const fake = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: 'react', children: [] },
+          { id: '11', title: '杂项', children: [
+            { id: '100', title: 'React 官网', url: 'https://react.dev' },
+            { id: '101', title: '另一个', url: 'https://other.dev' },
+          ]},
+        ]},
+      ]},
+    ])
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: false,
+    })
+    // 第一批成功、第二批失败
+    const complete = vi.fn()
+      .mockResolvedValueOnce({
+        results: [{ bookmark_id: '100', target_category_id: '10', confidence: 0.9, reason: 'r' }],
+      })
+      .mockRejectedValue(Object.assign(new Error('boom'), { retryable: false }))
+    const deps = { createClient: () => ({ complete }), now: () => 1 }
+
+    const res = await handle(
+      ports,
+      { kind: 'analyze', scopeRootIds: ['1'] },
+      { ...deps, batchSize: 1 },
+    ) as { ok: true; plan: { warnings: string[]; rows: unknown[] } }
+
+    expect(res.ok).toBe(true)
+    expect(res.plan.rows.length).toBeGreaterThan(0)
+    expect(res.plan.warnings.join()).toContain('1')
+  })
 })

@@ -15,6 +15,8 @@ import type { Request, Response } from './messages'
 export interface HandlerDeps {
   createClient?: (config: LlmConfig) => LlmClient
   now?: () => number
+  /** 仅供测试注入，生产环境使用 classifyBookmarks 的默认值。 */
+  batchSize?: number
 }
 
 export async function handle(
@@ -69,8 +71,23 @@ export async function handle(
           candidates,
           client,
           cache,
+          batchSize: deps.batchSize,
         })
         await saveCache(ports, cache)
+
+        // source === 'none' 只在请求失败或模型漏返回时出现——模型判定"无合适目录"
+        // 走的是 source === 'llm' + targetCategoryId === null 这条路。
+        const failed = classifications.filter((c) => c.source === 'none')
+        if (scan.bookmarks.length > 0 && failed.length === scan.bookmarks.length) {
+          return {
+            ok: false,
+            error: `AI 分析失败，没有任何书签完成分类。\n${failed[0]!.reason}`,
+          }
+        }
+        const warnings =
+          failed.length > 0
+            ? [`${failed.length} 个书签分类失败，已保持原位：${failed[0]!.reason}`]
+            : []
         const plan = buildPlan({
           id: `plan-${now()}`,
           createdAt: now(),
@@ -80,6 +97,7 @@ export async function handle(
           candidates,
           classifications,
           newFolders,
+          warnings,
         })
         return { ok: true, kind: 'analyze', plan }
       }

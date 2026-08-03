@@ -22,6 +22,7 @@ export interface BuildPlanInput {
   candidates: CategoryCandidate[]
   classifications: Classification[]
   newFolders: NewFolderSpec[]
+  warnings?: string[]
 }
 
 export function buildPlan(input: BuildPlanInput): OrganizePlan {
@@ -79,6 +80,7 @@ export function buildPlan(input: BuildPlanInput): OrganizePlan {
     candidates: input.candidates,
     operations,
     rows,
+    warnings: input.warnings ?? [],
     summary: {
       totalBookmarks: 0, movedBookmarks: 0, unchangedBookmarks: 0,
       createdFolders: 0, renamedFolders: 0, lowConfidenceItems: 0,

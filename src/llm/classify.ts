@@ -123,6 +123,7 @@ async function runBatch(
       })
     } catch (error) {
       lastError = String(error)
+      console.error('[TidyMark] 分类请求失败：', error)
       const retryable = (error as { retryable?: boolean }).retryable === true
       if (!retryable) break
       if (attempt < MAX_RETRIES) {

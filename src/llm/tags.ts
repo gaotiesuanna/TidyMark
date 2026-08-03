@@ -87,7 +87,8 @@ export async function extractTags(
             secondaryTopic: hit?.secondary_topic ?? null,
           })
         }
-      } catch {
+      } catch (error) {
+        console.error('[TidyMark] 标签抽取失败：', error)
         for (const item of batch) {
           resolved.set(item.id, { bookmarkId: item.id, primaryTopic: '未分类', secondaryTopic: null })
         }
