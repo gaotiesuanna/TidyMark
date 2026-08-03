@@ -94,6 +94,8 @@ export interface DesignOptions {
   /** 只出一层时，把父目录名告诉模型，避免它把组名再当分类依据。 */
   parentTitle?: string
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => void
+  /** 每摊设计开始前检查一次，返回 true 就跳过剩余摊子。 */
+  isCancelled?: () => boolean
 }
 
 const BROAD_WORDS = 'AI、人工智能、开发、编程、技术、工具、学习、资源、其他'
@@ -118,7 +120,9 @@ function buildDesignPrompt(topics: TopicCount[], options: DesignOptions): string
         ]
       : [
           '1. 合并同义或高度重叠的标签，用一个目录容纳它们。',
-          `2. 一级目录不超过 ${MAX_SIBLINGS} 个。`,
+          // tree.ts 建树时会再留一个位置给「其他」，这里的上限要和它对齐，否则模型给满
+          // MAX_SIBLINGS 个时最小的那个会被建树阶段静默丢弃
+          `2. 一级目录不超过 ${MAX_SIBLINGS - 1} 个。`,
           '3. 书签少时只给一层目录，不要硬凑二级目录；只有当某个一级目录下确实存在多个清晰的子主题、书签数量也撑得起来时，才用 children 分出二级。',
           `4. 一级目录名要具体，禁止使用这些宽泛词：${BROAD_WORDS}。「Claude Code」「LLM 原理」「终端工具」是好名字，「AI」「开发」不是。`,
         ]
@@ -152,44 +156,52 @@ export async function designFolders(
 ): Promise<FolderDesign | null> {
   if (topics.length === 0) return null
 
-  let raw: RawFolder[]
   try {
     const response = (await client.complete(buildDesignPrompt(topics, options), DESIGN_SCHEMA)) as {
       folders?: RawFolder[]
     }
-    raw = response.folders ?? []
+    const raw = response.folders ?? []
+    if (!Array.isArray(raw)) throw new Error('模型返回的 folders 不是数组')
+
+    // 非 oneLevel 时留一个位置给 tree.ts 建树时补的「其他」，避免第 MAX_SIBLINGS 个目录
+    // 在这里放行、却在建树阶段被静默截掉
+    const limit = options.oneLevel === true ? MAX_SIBLINGS : MAX_SIBLINGS - 1
+    const folders: FolderDesign['folders'] = []
+    const mapping = new Map<string, string[]>()
+    // 超出上限的目录整个丢弃，它吸收的标签一并视为未映射，落进「其他」
+    for (const folder of raw.slice(0, limit)) {
+      if (typeof folder !== 'object' || folder === null || typeof folder.title !== 'string') {
+        throw new Error('模型返回的目录形状非法')
+      }
+      if (!Array.isArray(folder.topics)) throw new Error('模型返回的 topics 不是数组')
+      const children = options.oneLevel === true ? [] : (folder.children ?? [])
+      if (!Array.isArray(children)) throw new Error('模型返回的 children 不是数组')
+      for (const topic of folder.topics) {
+        mapping.set(normalizeName(topic), [folder.title])
+      }
+      // oneLevel 下模型仍可能给出 children，把它们的标签并进父目录而不是丢掉
+      if (options.oneLevel === true) {
+        for (const child of folder.children ?? []) {
+          for (const topic of child.topics ?? []) mapping.set(normalizeName(topic), [folder.title])
+        }
+      }
+      const kept = children.slice(0, MAX_SIBLINGS)
+      for (const child of kept) {
+        for (const topic of child.topics ?? []) {
+          mapping.set(normalizeName(topic), [folder.title, child.title])
+        }
+      }
+      folders.push({ title: folder.title, children: kept.map((c) => c.title) })
+    }
+
+    if (folders.length === 0) return null
+    options.onLog?.(`目录设计完成：${folders.length} 个目录，归并 ${mapping.size} 个标签`, 'info')
+    return { folders, mapping }
   } catch (error) {
     console.error('[TidyMark] 目录设计失败：', error)
     options.onLog?.(`目录设计失败，按标签数量退回旧方案：${String(error)}`, 'error')
     return null
   }
-
-  const folders: FolderDesign['folders'] = []
-  const mapping = new Map<string, string[]>()
-  // 超出上限的目录整个丢弃，它吸收的标签一并视为未映射，落进「其他」
-  for (const folder of raw.slice(0, MAX_SIBLINGS)) {
-    const children = options.oneLevel === true ? [] : (folder.children ?? [])
-    for (const topic of folder.topics ?? []) {
-      mapping.set(normalizeName(topic), [folder.title])
-    }
-    // oneLevel 下模型仍可能给出 children，把它们的标签并进父目录而不是丢掉
-    if (options.oneLevel === true) {
-      for (const child of folder.children ?? []) {
-        for (const topic of child.topics ?? []) mapping.set(normalizeName(topic), [folder.title])
-      }
-    }
-    const kept = children.slice(0, MAX_SIBLINGS)
-    for (const child of kept) {
-      for (const topic of child.topics ?? []) {
-        mapping.set(normalizeName(topic), [folder.title, child.title])
-      }
-    }
-    folders.push({ title: folder.title, children: kept.map((c) => c.title) })
-  }
-
-  if (folders.length === 0) return null
-  options.onLog?.(`目录设计完成：${folders.length} 个目录，归并 ${mapping.size} 个标签`, 'info')
-  return { folders, mapping }
 }
 
 /**
@@ -231,9 +243,13 @@ export async function designTagFolders(
     for (const tag of next) resolved.set(tag.bookmarkId, tag)
   }
 
-  await run(topicTags, options)
-  for (const { title, tags: batch } of byGroup.values()) {
-    await run(batch, { ...options, oneLevel: true, parentTitle: title })
+  // 每摊开始前查一次取消：命中就跳过剩余摊子，已经在跑的这次请求不中途打断
+  if (options.isCancelled?.() !== true) {
+    await run(topicTags, options)
+    for (const { title, tags: batch } of byGroup.values()) {
+      if (options.isCancelled?.() === true) break
+      await run(batch, { ...options, oneLevel: true, parentTitle: title })
+    }
   }
 
   return tags.map((tag) => resolved.get(tag.bookmarkId) ?? tag)

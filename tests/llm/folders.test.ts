@@ -92,14 +92,39 @@ describe('designFolders', () => {
     expect(result!.mapping.get('rag')).toEqual(['AI 工程', 'RAG 检索'])
   })
 
-  it('一级目录超过上限时截断，被截掉的标签不进 mapping', async () => {
+  it('非 oneLevel 时一级目录超过上限截断到 MAX_SIBLINGS - 1，给「其他」留位', async () => {
     const many = Array.from({ length: MAX_SIBLINGS + 3 }, (_, i) => ({
       title: `目录${i}`, topics: [`标签${i}`], children: [],
     }))
     const complete = vi.fn().mockResolvedValue({ folders: many })
     const result = await designFolders(topics, { complete })
+    expect(result!.folders).toHaveLength(MAX_SIBLINGS - 1)
+    expect(result!.mapping.has(`标签${MAX_SIBLINGS - 1}`)).toBe(false)
+  })
+
+  it('oneLevel 时子目录超过上限仍按 MAX_SIBLINGS 截断，不留「其他」位', async () => {
+    const many = Array.from({ length: MAX_SIBLINGS + 3 }, (_, i) => ({
+      title: `目录${i}`, topics: [`标签${i}`], children: [],
+    }))
+    const complete = vi.fn().mockResolvedValue({ folders: many })
+    const result = await designFolders(topics, { complete }, { oneLevel: true })
     expect(result!.folders).toHaveLength(MAX_SIBLINGS)
     expect(result!.mapping.has(`标签${MAX_SIBLINGS + 1}`)).toBe(false)
+  })
+
+  it('folders 不是数组时返回 null，不抛错', async () => {
+    const complete = vi.fn().mockResolvedValue({ folders: { oops: true } })
+    await expect(designFolders(topics, { complete })).resolves.toBeNull()
+  })
+
+  it('folder 元素为 null 时返回 null，不抛错', async () => {
+    const complete = vi.fn().mockResolvedValue({ folders: [null] })
+    await expect(designFolders(topics, { complete })).resolves.toBeNull()
+  })
+
+  it('folder 缺少 title 或 topics 不是数组时返回 null，不抛错', async () => {
+    const complete = vi.fn().mockResolvedValue({ folders: [{ topics: 'oops', children: [] }] })
+    await expect(designFolders(topics, { complete })).resolves.toBeNull()
   })
 
   it('oneLevel 时把子目录的标签并进父目录，不产生二级路径', async () => {
@@ -133,7 +158,7 @@ describe('designFolders', () => {
     const prompt = complete.mock.calls[0]![0] as string
     expect(prompt).toContain('Claude Code')
     expect(prompt).toContain('禁止')
-    expect(prompt).toContain(String(MAX_SIBLINGS))
+    expect(prompt).toContain(String(MAX_SIBLINGS - 1))
   })
 
   it('oneLevel 时提示词点名父目录并要求只出一层', async () => {
@@ -210,5 +235,26 @@ describe('designTagFolders', () => {
     const result = await designTagFolders([tag('1', NO_TOPIC)], [blog('1')], [], { complete })
     expect(complete).not.toHaveBeenCalled()
     expect(result[0]!.primaryTopic).toBe(NO_TOPIC)
+  })
+
+  it('取消后跳过剩余摊子，已发出的那摊结果仍然生效，未处理的摊子原样保留', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }],
+    })
+    let cancelled = false
+    const result = await designTagFolders(
+      [tag('1', 'KV Cache'), tag('2', '智能体框架')],
+      [blog('1'), gh('2')], ['github'], { complete },
+      {
+        isCancelled: () => {
+          const value = cancelled
+          cancelled = true
+          return value
+        },
+      },
+    )
+    expect(complete).toHaveBeenCalledTimes(1)
+    expect(result[0]!.primaryTopic).toBe('LLM 原理')
+    expect(result[1]!.primaryTopic).toBe('智能体框架')
   })
 })

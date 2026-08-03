@@ -92,6 +92,7 @@ export async function handle(
           log('tree', `开始设计目录：${scan.bookmarks.length} 个书签的标签`)
           tags = await designTagFolders(tags, scan.bookmarks, settings.domainGroups, client, {
             onLog: (message, level) => log('tree', message, level),
+            isCancelled,
           })
           if (isCancelled()) return CANCELLED
           const tree_ = buildCategoryTree({
