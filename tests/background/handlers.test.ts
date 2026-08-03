@@ -156,11 +156,12 @@ describe('handle', () => {
     })
     const complete = vi.fn()
       .mockResolvedValueOnce({ results: [{ bookmark_id: '100', primary_topic: '前端', secondary_topic: 'React' }] })
+      .mockResolvedValueOnce({ folders: [{ title: '前端', topics: ['前端'], children: [] }] })
       .mockResolvedValueOnce({ results: [{ bookmark_id: '100', target_category_id: 'tmp:1', confidence: 0.9, reason: 'r' }] })
     const deps = { createClient: () => ({ complete }), now: () => 1 }
 
     const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: { operations: Array<{ type: string }> } }
-    expect(complete).toHaveBeenCalledTimes(2)
+    expect(complete).toHaveBeenCalledTimes(3)
     expect(res.plan.operations.some((o) => o.type === 'create_folder')).toBe(true)
   })
 
@@ -216,6 +217,53 @@ describe('handle', () => {
     expect(created).not.toContain('01 前端')
     // 书签已经在正确目录里，第二次整理无事可做
     expect(second.plan.rows).toHaveLength(0)
+  })
+
+  it('analyze 在建树前先做一次全局目录设计', async () => {
+    const complete = vi.fn(async (prompt: string) => {
+      if (prompt.includes('抽取一个具体主题')) {
+        return { results: [{ bookmark_id: '100', primary_topic: 'React 生态' }] }
+      }
+      if (prompt.includes('设计目录结构')) {
+        return { folders: [{ title: '前端框架', topics: ['React 生态'], children: [] }] }
+      }
+      return { results: [{ bookmark_id: '100', target_category_id: 'tmp:1', confidence: 0.9, reason: 'r' }] }
+    })
+    const { ports, deps } = setup({ complete })
+    await saveSettings(ports, {
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: true,
+      removeEmptyFolders: false,
+      domainGroups: [],
+      rewriteGithubTitles: false,
+    })
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: OrganizePlan }
+    const tops = res.plan.candidates.filter((c) => c.path.length === 1).map((c) => c.path[0]!)
+    expect(tops).toContain('01 前端框架')
+    expect(res.plan.tags[0]!.primaryTopic).toBe('前端框架')
+  })
+
+  it('目录设计失败时整次分析仍然完成，退回原始标签', async () => {
+    const complete = vi.fn(async (prompt: string) => {
+      if (prompt.includes('抽取一个具体主题')) {
+        return { results: [{ bookmark_id: '100', primary_topic: 'React 生态' }] }
+      }
+      if (prompt.includes('设计目录结构')) {
+        throw Object.assign(new Error('boom'), { retryable: false })
+      }
+      return { results: [{ bookmark_id: '100', target_category_id: 'tmp:1', confidence: 0.9, reason: 'r' }] }
+    })
+    const { ports, deps } = setup({ complete })
+    await saveSettings(ports, {
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: true,
+      removeEmptyFolders: false,
+      domainGroups: [],
+      rewriteGithubTitles: false,
+    })
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
+    expect(res).toMatchObject({ ok: true })
+    expect((res as { plan: OrganizePlan }).plan.tags[0]!.primaryTopic).toBe('React 生态')
   })
 
   it('分析过程中推送阶段进度与批次日志', async () => {

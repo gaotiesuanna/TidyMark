@@ -10,6 +10,7 @@ import { loadSnapshot } from '@/engine/snapshot'
 import { undoLast } from '@/engine/undo'
 import { createLlmClient, type LlmClient, type LlmConfig } from '@/llm/client'
 import { classifyBookmarks } from '@/llm/classify'
+import { designTagFolders } from '@/llm/folders'
 import { extractTags, refineGroupTags } from '@/llm/tags'
 import { loadCache, loadSettings, saveCache, saveSettings } from '@/storage/settings'
 import type { EmitProgress, ProgressPhase } from './events'
@@ -87,6 +88,12 @@ export async function handle(
             })
             if (isCancelled()) return CANCELLED
           }
+          // 分批抽标签的模型看不到全局，同义碎片只能在这里归并
+          log('tree', `开始设计目录：${scan.bookmarks.length} 个书签的标签`)
+          tags = await designTagFolders(tags, scan.bookmarks, settings.domainGroups, client, {
+            onLog: (message, level) => log('tree', message, level),
+          })
+          if (isCancelled()) return CANCELLED
           const tree_ = buildCategoryTree({
             tags, rootId, existingFolders: scan.folders,
             bookmarks: scan.bookmarks, domainGroups: settings.domainGroups,
