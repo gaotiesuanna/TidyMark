@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { ResultStep } from '@/sidepanel/steps/ResultStep'
 import { useStore } from '@/sidepanel/store'
 import type { OrganizePlan } from '@/core/types'
@@ -88,5 +89,24 @@ describe('ResultStep', () => {
     render(<ResultStep />)
     expect(screen.getByText('撤销后的结构')).toBeDefined()
     expect(screen.queryByText('整理后的结构')).toBeNull()
+  })
+})
+
+describe('ResultStep 结束整理', () => {
+  it('点击后关闭侧栏', async () => {
+    const close = vi.spyOn(window, 'close').mockImplementation(() => {})
+    useStore.setState({ applyResult, plan, tree, undoResult: null, undoAvailable: true, busy: null })
+    render(<ResultStep />)
+    await userEvent.click(screen.getByRole('button', { name: '结束整理' }))
+    expect(close).toHaveBeenCalledOnce()
+    close.mockRestore()
+  })
+
+  it('三个动作都在，撤销与再整理不受影响', () => {
+    useStore.setState({ applyResult, plan, tree, undoResult: null, undoAvailable: true, busy: null })
+    render(<ResultStep />)
+    expect(screen.getByRole('button', { name: '撤销本次整理' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '再整理一次' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '结束整理' })).toBeTruthy()
   })
 })

@@ -17,6 +17,9 @@ export function ResultStep() {
   if (applyResult === null) return null
 
   const showTree = tree.length > 0
+  // 侧栏本身是一个独立文档，关掉它就结束了本次整理；
+  // 状态不必手动清，下次打开是全新的页面。
+  const finish = (): void => window.close()
 
   return (
     <div className="space-y-4 text-sm">
@@ -81,16 +84,27 @@ export function ResultStep() {
         </section>
       )}
 
-      <div className="flex gap-2">
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <button
+            className="flex-1 rounded border border-red-300 py-2 text-sm text-red-700 disabled:opacity-40"
+            disabled={!undoAvailable || busy !== null}
+            onClick={() => void undo()}
+          >
+            撤销本次整理
+          </button>
+          <button
+            className="flex-1 rounded border py-2 text-sm hover:bg-neutral-50"
+            onClick={reset}
+          >
+            再整理一次
+          </button>
+        </div>
         <button
-          className="flex-1 rounded border border-red-300 py-2 text-sm text-red-700 disabled:opacity-40"
-          disabled={!undoAvailable || busy !== null}
-          onClick={() => void undo()}
+          className="w-full rounded bg-neutral-800 py-2 text-sm text-white"
+          onClick={finish}
         >
-          撤销本次整理
-        </button>
-        <button className="flex-1 rounded bg-neutral-800 py-2 text-sm text-white" onClick={reset}>
-          再整理一次
+          结束整理
         </button>
       </div>
     </div>
