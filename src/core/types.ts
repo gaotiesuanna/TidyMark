@@ -88,6 +88,8 @@ export interface OrganizePlan {
   summary: PlanSummary
   /** 部分失败时的提示，例如某些书签因模型报错未能分类。 */
   warnings: string[]
+  /** 推翻模式下抽取的主题标签。删除聚合目录时据此决定书签回落到哪个主题目录。 */
+  tags: TagResult[]
 }
 
 /** 推翻模式下由模型抽取的主题标签，供 core/tree.ts 聚合成目录树。 */

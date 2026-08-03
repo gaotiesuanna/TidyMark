@@ -2,8 +2,9 @@ import { describe, it, expect, vi } from 'vitest'
 import { handle } from '@/background/handlers'
 import { createFakeBookmarks } from '../fakes/fake-bookmarks'
 import { createFakeStorage } from '../fakes/fake-storage'
-import { loadCache, saveSettings, type Settings } from '@/storage/settings'
+import { DEFAULT_SETTINGS, loadCache, saveSettings, type Settings } from '@/storage/settings'
 import type { LlmClient } from '@/llm/client'
+import type { OrganizePlan } from '@/core/types'
 import type { ProgressEvent } from '@/background/events'
 
 const tree = [
@@ -386,5 +387,115 @@ describe('handle', () => {
     expect(res.ok).toBe(true)
     expect(res.plan.rows.length).toBeGreaterThan(0)
     expect(res.plan.warnings.join()).toContain('1')
+  })
+})
+
+/**
+ * 造一棵只有「书签栏 / 收件箱」的树，收件箱里放指定的书签。
+ * 标签阶段与分类阶段共用一个 fake client：按 prompt 里的关键字区分。
+ */
+function setupAnalyze(urls: Record<string, string>) {
+  const fake = createFakeBookmarks([
+    { id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '11', title: '收件箱', children: Object.entries(urls).map(([id, url]) => ({
+          id, title: `书签 ${id}`, url,
+        })) },
+      ]},
+    ]},
+  ])
+  const classifyPrompts: string[] = []
+  const complete = vi.fn(async (prompt: string) => {
+    if (prompt.includes('抽取主题标签')) {
+      return {
+        results: Object.keys(urls).map((id) => ({
+          bookmark_id: id, primary_topic: '工具', secondary_topic: null,
+        })),
+      }
+    }
+    classifyPrompts.push(prompt)
+    // 返回 null 目标而不是空数组：空数组会被判成「模型漏返回」，触发全量失败的短路
+    return {
+      results: Object.keys(urls).map((id) => ({
+        bookmark_id: id, target_category_id: null, confidence: 0, reason: '无合适目录',
+      })),
+    }
+  })
+  return {
+    ports: { bookmarks: fake.api, storage: createFakeStorage() },
+    deps: { createClient: () => ({ complete } as unknown as LlmClient), now: () => 1 },
+    classifyPrompts,
+  }
+}
+
+async function analyzePlan(
+  ports: { bookmarks: unknown; storage: unknown },
+  deps: unknown,
+): Promise<OrganizePlan> {
+  const res = await handle(ports as never, { kind: 'analyze', scopeRootIds: ['1'] }, deps as never)
+  if (!res.ok || res.kind !== 'analyze') throw new Error(`analyze 应当成功：${JSON.stringify(res)}`)
+  return res.plan
+}
+
+describe('analyze 的域名聚合', () => {
+  const githubUrls = Object.fromEntries(
+    Array.from({ length: 3 }, (_, i) => [`g${i}`, `https://github.com/o/r${i}`]),
+  )
+
+  it('命中聚合组的书签不进入分类请求', async () => {
+    const { ports, deps, classifyPrompts } = setupAnalyze({
+      ...githubUrls,
+      ...Object.fromEntries(Array.from({ length: 3 }, (_, i) => [`n${i}`, `https://example.com/${i}`])),
+    })
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: true,
+      domainGroups: ['github'],
+    })
+    await analyzePlan(ports, deps)
+
+    expect(classifyPrompts.length).toBeGreaterThan(0)
+    for (const prompt of classifyPrompts) {
+      for (const id of Object.keys(githubUrls)) expect(prompt).not.toContain(`"${id}"`)
+      // 未命中的书签仍要进分类
+      expect(prompt).toContain('"n0"')
+    }
+  })
+
+  it('pinned 的书签进入 plan 且置信度为 1', async () => {
+    const { ports, deps } = setupAnalyze(githubUrls)
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: true,
+      domainGroups: ['github'],
+    })
+    const plan = await analyzePlan(ports, deps)
+    expect(plan.rows).toHaveLength(3)
+    expect(plan.rows.every((r) => r.confidence === 1)).toBe(true)
+    expect(plan.rows.every((r) => r.toPath[0]!.endsWith('GitHub'))).toBe(true)
+  })
+
+  it('推翻模式下 plan 带上 tags', async () => {
+    const { ports, deps } = setupAnalyze({ n0: 'https://a.com/0', n1: 'https://b.com/1' })
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: true,
+    })
+    const plan = await analyzePlan(ports, deps)
+    expect(plan.tags.map((t) => t.bookmarkId).sort()).toEqual(['n0', 'n1'])
+  })
+
+  it('非推翻模式下 plan.tags 为空数组', async () => {
+    const { ports, deps } = setupAnalyze({ n0: 'https://a.com/0' })
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: false,
+    })
+    const plan = await analyzePlan(ports, deps)
+    expect(plan.tags).toEqual([])
   })
 })

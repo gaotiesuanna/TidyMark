@@ -1,7 +1,7 @@
 import { stripNumberPrefix } from './map'
 import type {
   BookmarkItem, BookmarkOperation, CategoryCandidate, Classification,
-  OrganizePlan, PlanRow, PlanSummary,
+  OrganizePlan, PlanRow, PlanSummary, TagResult,
 } from './types'
 
 export const LOW_CONFIDENCE = 0.7
@@ -32,6 +32,7 @@ export interface BuildPlanInput {
   newFolders: NewFolderSpec[]
   renameFolders?: RenameFolderSpec[]
   warnings?: string[]
+  tags?: TagResult[]
 }
 
 export function buildPlan(input: BuildPlanInput): OrganizePlan {
@@ -97,6 +98,7 @@ export function buildPlan(input: BuildPlanInput): OrganizePlan {
     operations,
     rows,
     warnings: input.warnings ?? [],
+    tags: input.tags ?? [],
     summary: {
       totalBookmarks: 0, movedBookmarks: 0, unchangedBookmarks: 0,
       createdFolders: 0, renamedFolders: 0, lowConfidenceItems: 0,

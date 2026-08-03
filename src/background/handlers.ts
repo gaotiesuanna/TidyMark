@@ -3,6 +3,7 @@ import { buildPlan, type NewFolderSpec, type RenameFolderSpec } from '@/core/pla
 import { scanTree } from '@/core/scan'
 import { buildCategoryTree } from '@/core/tree'
 import type { Ports } from '@/core/ports'
+import type { Classification, TagResult } from '@/core/types'
 import { applyPlan } from '@/engine/apply'
 import { loadSnapshot } from '@/engine/snapshot'
 import { undoLast } from '@/engine/undo'
@@ -64,35 +65,47 @@ export async function handle(
         let candidates = buildCandidatesFromFolders(scan.folders, request.scopeRootIds)
         let newFolders: NewFolderSpec[] = []
         let renameFolders: RenameFolderSpec[] = []
+        let pinned: Classification[] = []
+        let tags: TagResult[] = []
 
         if (settings.rebuildStructure) {
           const rootId = request.scopeRootIds[0]
           if (rootId === undefined) return { ok: false, error: '未选择任何范围。' }
           log('tags', `开始为 ${scan.bookmarks.length} 个书签抽取主题标签`)
-          const tags = await extractTags(scan.bookmarks, client, {
+          tags = await extractTags(scan.bookmarks, client, {
             onProgress: progress('tags'),
             onLog: (message, level) => log('tags', message, level),
             isCancelled,
           })
           if (isCancelled()) return CANCELLED
-          const tree_ = buildCategoryTree({ tags, rootId, existingFolders: scan.folders })
+          const tree_ = buildCategoryTree({
+            tags, rootId, existingFolders: scan.folders,
+            bookmarks: scan.bookmarks, domainGroups: settings.domainGroups,
+          })
           candidates = tree_.candidates
           newFolders = tree_.newFolders
           renameFolders = tree_.renameFolders
+          pinned = tree_.pinned
           log(
             'tree',
             `目录设计完成：新建 ${tree_.newFolders.length} 个目录，` +
               `复用 ${tree_.candidates.length - tree_.newFolders.length} 个已有目录`,
           )
+          if (pinned.length > 0) {
+            log('tree', `${pinned.length} 个书签按域名聚合，跳过 AI 分类`)
+          }
         }
 
         if (candidates.length === 0) {
           return { ok: false, error: '所选范围内没有可用的目标文件夹。请开启「重建结构」或先选择包含子文件夹的范围。' }
         }
         const cache = await loadCache(ports)
-        log('classify', `开始分类：${scan.bookmarks.length} 个书签，${candidates.length} 个候选目录`)
-        const classifications = await classifyBookmarks({
-          items: scan.bookmarks,
+        // 已按域名确定归属的书签不必再花一次分类调用
+        const pinnedIds = new Set(pinned.map((p) => p.bookmarkId))
+        const toClassify = scan.bookmarks.filter((b) => !pinnedIds.has(b.id))
+        log('classify', `开始分类：${toClassify.length} 个书签，${candidates.length} 个候选目录`)
+        const llmResults = await classifyBookmarks({
+          items: toClassify,
           candidates,
           client,
           cache,
@@ -101,14 +114,15 @@ export async function handle(
           onLog: (message, level) => log('classify', message, level),
           isCancelled,
         })
+        const classifications = [...pinned, ...llmResults]
         // 已经跑完的批次仍然写进缓存，重来时不必再花一次钱
         await saveCache(ports, cache)
         if (isCancelled()) return CANCELLED
 
         // source === 'none' 只在请求失败或模型漏返回时出现——模型判定"无合适目录"
         // 走的是 source === 'llm' + targetCategoryId === null 这条路。
-        const failed = classifications.filter((c) => c.source === 'none')
-        if (scan.bookmarks.length > 0 && failed.length === scan.bookmarks.length) {
+        const failed = llmResults.filter((c) => c.source === 'none')
+        if (toClassify.length > 0 && failed.length === toClassify.length) {
           return {
             ok: false,
             error: `AI 分析失败，没有任何书签完成分类。\n${failed[0]!.reason}`,
@@ -132,6 +146,7 @@ export async function handle(
           newFolders,
           renameFolders,
           warnings,
+          tags,
         })
         for (const warning of warnings) log('classify', warning, 'warn')
         log('classify', `分析完成：${plan.rows.length} 条移动建议`)
