@@ -1,6 +1,7 @@
+import { DOMAIN_GROUPS, matchDomainGroup } from './domainGroups'
 import { normalizeName, stripNumberPrefix } from './map'
 import type { NewFolderSpec, RenameFolderSpec } from './plan'
-import type { CategoryCandidate, TagResult } from './types'
+import type { BookmarkItem, CategoryCandidate, Classification, TagResult } from './types'
 
 /** 一个主题至少要有这么多书签，才值得拥有独立目录。 */
 export const MIN_FOLDER_SIZE = 5
@@ -23,27 +24,51 @@ export interface BuildTreeInput {
   rootId: string
   /** 范围内已存在的文件夹，用于复用而不是重复新建同名目录。 */
   existingFolders: ExistingFolder[]
+  /** 域名匹配需要 URL，TagResult 只有 bookmarkId。省略时不做聚合。 */
+  bookmarks?: BookmarkItem[]
+  /** 已勾选的聚合组 key。省略或为空时不做聚合。 */
+  domainGroups?: string[]
 }
 
 export interface BuildTreeOutput {
   candidates: CategoryCandidate[]
   newFolders: NewFolderSpec[]
   renameFolders: RenameFolderSpec[]
+  /** 命中聚合组的书签，归属已确定，无需再走 LLM 分类。 */
+  pinned: Classification[]
 }
 
-interface Group {
+/** 建树时的中间形态：聚合组与主题组归一成同一种结构，交给同一个发射循环。 */
+interface Section {
+  title: string
+  /** 属于哪个聚合组；主题组为 null。 */
+  domainGroup: string | null
+  children: Array<{ title: string; bookmarkIds: string[] }>
+  /** 直接落在本节点下的书签；主题组恒为空（归属由分类阶段决定）。 */
+  ownBookmarkIds: string[]
+}
+
+interface TopicGroup {
   title: string
   count: number
   children: Map<string, { title: string; count: number }>
 }
 
-/** 顶层 `01`，子层 `01.1`，同层按书签数从多到少编号。 */
+/** 顶层 `01`，子层 `01.1`。 */
 function numbered(prefix: string, title: string): string {
   return `${prefix} ${title}`
 }
 
+/** 聚合组的排列顺序取自 DOMAIN_GROUPS 的声明顺序，不受用户勾选顺序影响。 */
+function domainGroupOrder(key: string): number {
+  const index = DOMAIN_GROUPS.findIndex((g) => g.key === key)
+  return index === -1 ? Number.MAX_SAFE_INTEGER : index
+}
+
 export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
-  if (input.tags.length === 0) return { candidates: [], newFolders: [], renameFolders: [] }
+  if (input.tags.length === 0) {
+    return { candidates: [], newFolders: [], renameFolders: [], pinned: [] }
+  }
 
   const baseTitle = (folder: ExistingFolder): string => stripNumberPrefix(folder.title)
   const lookupKey = (parentId: string, title: string): string =>
@@ -61,23 +86,76 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
   }
   const findChild = (parentId: string, title: string): ExistingFolder | null =>
     existingByParent.get(lookupKey(parentId, title)) ?? null
+  const preferredName = (title: string): string =>
+    existingByName.get(normalizeName(title)) ?? title
 
-  const groups = new Map<string, Group>()
+  // ---- 第一步：把命中聚合组的书签分流出去 ----
+
+  const bookmarkById = new Map((input.bookmarks ?? []).map((b) => [b.id, b]))
+  const enabled = input.domainGroups ?? []
+  /** 聚合组 key → 该组的标签；顺序沿用 tags 的顺序。 */
+  const byDomainGroup = new Map<string, TagResult[]>()
+  const groupTitleByKey = new Map<string, string>()
+  const domainOf = new Map<string, string>()
+  const topicTags: TagResult[] = []
+
   for (const tag of input.tags) {
+    const bookmark = enabled.length === 0 ? undefined : bookmarkById.get(tag.bookmarkId)
+    const group = bookmark === undefined ? null : matchDomainGroup(bookmark, enabled)
+    if (group === null) {
+      topicTags.push(tag)
+      continue
+    }
+    const bucket = byDomainGroup.get(group.key) ?? []
+    bucket.push(tag)
+    byDomainGroup.set(group.key, bucket)
+    groupTitleByKey.set(group.key, group.folderTitle)
+    // sanitizeUrl 已在 matchDomainGroup 内部成功解析过，这里必定拿得到 host
+    domainOf.set(tag.bookmarkId, new URL(bookmark!.url).hostname.toLowerCase().replace(/^www\./, ''))
+  }
+
+  // ---- 第二步：聚合组的 Section，按 DOMAIN_GROUPS 声明顺序 ----
+
+  const domainSections: Section[] = []
+  for (const key of enabled.slice().sort(
+    (a, b) => domainGroupOrder(a) - domainGroupOrder(b),
+  )) {
+    const bucket = byDomainGroup.get(key)
+    if (bucket === undefined || bucket.length === 0) continue
+
+    const byTopic = new Map<string, { title: string; bookmarkIds: string[] }>()
+    for (const tag of bucket) {
+      const topicKey = normalizeName(tag.primaryTopic)
+      if (topicKey === '') continue
+      const child = byTopic.get(topicKey) ?? { title: preferredName(tag.primaryTopic), bookmarkIds: [] }
+      child.bookmarkIds.push(tag.bookmarkId)
+      byTopic.set(topicKey, child)
+    }
+    const children = [...byTopic.values()]
+      .filter((c) => c.bookmarkIds.length >= MIN_FOLDER_SIZE)
+      .sort((a, b) => b.bookmarkIds.length - a.bookmarkIds.length)
+      .slice(0, MAX_SIBLINGS)
+    const placed = new Set(children.flatMap((c) => c.bookmarkIds))
+    domainSections.push({
+      title: preferredName(groupTitleByKey.get(key)!),
+      domainGroup: key,
+      children,
+      // 不足门槛的主题不建子目录，直接平铺在组根下
+      ownBookmarkIds: bucket.map((t) => t.bookmarkId).filter((id) => !placed.has(id)),
+    })
+  }
+
+  // ---- 第三步：主题组的 Section，逻辑与聚合前完全一致 ----
+
+  const groups = new Map<string, TopicGroup>()
+  for (const tag of topicTags) {
     const key = normalizeName(tag.primaryTopic)
     if (key === '') continue
-    const group = groups.get(key) ?? {
-      title: existingByName.get(key) ?? tag.primaryTopic,
-      count: 0,
-      children: new Map(),
-    }
+    const group = groups.get(key) ?? { title: preferredName(tag.primaryTopic), count: 0, children: new Map() }
     group.count++
     if (tag.secondaryTopic !== null && normalizeName(tag.secondaryTopic) !== '') {
       const childKey = normalizeName(tag.secondaryTopic)
-      const child = group.children.get(childKey) ?? {
-        title: existingByName.get(childKey) ?? tag.secondaryTopic,
-        count: 0,
-      }
+      const child = group.children.get(childKey) ?? { title: preferredName(tag.secondaryTopic), count: 0 }
       child.count++
       group.children.set(childKey, child)
     }
@@ -89,63 +167,92 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
     .sort((a, b) => b.count - a.count)
     .slice(0, MAX_SIBLINGS - 1) // 留一个位置给「其他」
 
-  // 兜底目录，接住所有没能形成独立目录的书签
   const hasFallback = ranked.some((g) => normalizeName(g.title) === normalizeName(FALLBACK_TITLE))
-  const ordered = hasFallback
+  const orderedTopics = hasFallback
     ? ranked
-    : [...ranked, { title: FALLBACK_TITLE, count: 0, children: new Map() } satisfies Group]
+    : [...ranked, { title: FALLBACK_TITLE, count: 0, children: new Map() } satisfies TopicGroup]
+
+  const topicSections: Section[] = orderedTopics.map((group) => ({
+    title: group.title,
+    domainGroup: null,
+    children: [...group.children.values()]
+      .filter((c) => c.count >= MIN_FOLDER_SIZE)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, MAX_SIBLINGS)
+      .map((c) => ({ title: c.title, bookmarkIds: [] })),
+    ownBookmarkIds: [],
+  }))
+
+  // ---- 第四步：统一发射 ----
 
   const candidates: CategoryCandidate[] = []
   const newFolders: NewFolderSpec[] = []
   const renameFolders: RenameFolderSpec[] = []
+  const pinned: Classification[] = []
   let counter = 0
   const nextId = (): string => `tmp:${++counter}`
 
-  ordered.forEach((group, groupIndex) => {
-    const prefix = String(groupIndex + 1).padStart(2, '0')
-    const title = numbered(prefix, group.title)
-    const existing = findChild(input.rootId, group.title)
+  // 理由说明的是「为什么进这个聚合组」，因此落到子目录时也报组名而不是子目录名
+  const pin = (bookmarkIds: string[], categoryId: string, groupTitle: string): void => {
+    for (const bookmarkId of bookmarkIds) {
+      pinned.push({
+        bookmarkId,
+        targetCategoryId: categoryId,
+        confidence: 1,
+        reason: `域名 ${domainOf.get(bookmarkId) ?? ''} 命中「${groupTitle}」聚合`,
+        source: 'rule',
+      })
+    }
+  }
+
+  ;[...domainSections, ...topicSections].forEach((section, sectionIndex) => {
+    const prefix = String(sectionIndex + 1).padStart(2, '0')
+    const title = numbered(prefix, section.title)
+    const existing = findChild(input.rootId, section.title)
+    const mark = section.domainGroup === null ? {} : { domainGroup: section.domainGroup }
 
     let parentRealId: string | null = null
     let parentTemporaryId: string | null = null
+    let sectionId: string
     if (existing !== null) {
       parentRealId = existing.id
-      candidates.push({ id: existing.id, path: [title] })
+      sectionId = existing.id
+      candidates.push({ id: existing.id, path: [title], ...mark })
       if (existing.title !== title) {
         renameFolders.push({ folderId: existing.id, oldTitle: existing.title, newTitle: title })
       }
     } else {
       parentTemporaryId = nextId()
+      sectionId = parentTemporaryId
       newFolders.push({
         temporaryId: parentTemporaryId, parentId: input.rootId, parentTemporaryId: null, title,
       })
-      candidates.push({ id: parentTemporaryId, path: [title] })
+      candidates.push({ id: parentTemporaryId, path: [title], ...mark })
     }
+    pin(section.ownBookmarkIds, sectionId, section.title)
 
-    const children = [...group.children.values()]
-      .filter((c) => c.count >= MIN_FOLDER_SIZE)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, MAX_SIBLINGS)
-    children.forEach((child, childIndex) => {
+    section.children.forEach((child, childIndex) => {
       const childTitle = numbered(`${prefix}.${childIndex + 1}`, child.title)
       // 父目录是新建的，它下面不可能有已存在的子目录
       const existingChild = parentRealId === null ? null : findChild(parentRealId, child.title)
       if (existingChild !== null) {
-        candidates.push({ id: existingChild.id, path: [title, childTitle] })
+        candidates.push({ id: existingChild.id, path: [title, childTitle], ...mark })
         if (existingChild.title !== childTitle) {
           renameFolders.push({
             folderId: existingChild.id, oldTitle: existingChild.title, newTitle: childTitle,
           })
         }
+        pin(child.bookmarkIds, existingChild.id, section.title)
         return
       }
       const childId = nextId()
       newFolders.push({
         temporaryId: childId, parentId: parentRealId, parentTemporaryId, title: childTitle,
       })
-      candidates.push({ id: childId, path: [title, childTitle] })
+      candidates.push({ id: childId, path: [title, childTitle], ...mark })
+      pin(child.bookmarkIds, childId, section.title)
     })
   })
 
-  return { candidates, newFolders, renameFolders }
+  return { candidates, newFolders, renameFolders, pinned }
 }

@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { buildCategoryTree, stripNumberPrefix, MIN_FOLDER_SIZE, MAX_SIBLINGS } from '@/core/tree'
 import type { ExistingFolder } from '@/core/tree'
-import type { TagResult } from '@/core/types'
+import type { BookmarkItem, TagResult } from '@/core/types'
+import { DOMAIN_GROUPS } from '@/core/domainGroups'
 
 function tags(spec: Array<[string, string, string | null]>): TagResult[] {
   return spec.map(([bookmarkId, primaryTopic, secondaryTopic]) => ({
@@ -90,7 +91,7 @@ describe('buildCategoryTree', () => {
 
   it('无标签输入时返回空结果', () => {
     expect(buildCategoryTree({ tags: [], rootId, existingFolders: [] }))
-      .toEqual({ candidates: [], newFolders: [], renameFolders: [] })
+      .toEqual({ candidates: [], newFolders: [], renameFolders: [], pinned: [] })
   })
 })
 
@@ -179,5 +180,183 @@ describe('buildCategoryTree 忽略空主题', () => {
     const { candidates } = buildCategoryTree({ tags: tags(spec), rootId, existingFolders: [] })
     // 只剩「前端」与兜底的「其他」
     expect(candidates.map((c) => base(c.path[0]!))).toEqual(['前端', '其他'])
+  })
+})
+
+function items(spec: Array<[string, string]>): BookmarkItem[] {
+  return spec.map(([id, url]) => ({
+    id, title: `书签 ${id}`, url, parentId: '0', index: 0, currentPath: [],
+  }))
+}
+
+/** 造 n 个 github 书签，id 为 g0…g(n-1)，主题统一为 topic。 */
+function githubFixture(n: number, topic: string, offset = 0): {
+  tags: TagResult[]
+  bookmarks: BookmarkItem[]
+} {
+  const spec = Array.from({ length: n }, (_, i) => `g${offset + i}`)
+  return {
+    tags: spec.map((id) => ({ bookmarkId: id, primaryTopic: topic, secondaryTopic: null })),
+    bookmarks: items(spec.map((id) => [id, `https://github.com/owner/${id}`])),
+  }
+}
+
+describe('buildCategoryTree 域名聚合', () => {
+  it('不传 domainGroups 时行为与聚合前完全一致', () => {
+    const many = Array.from({ length: 6 }, (_, i) => [String(i), '前端', null] as [string, string, null])
+    const withoutGroups = buildCategoryTree({ tags: tags(many), rootId, existingFolders: [] })
+    const withEmptyGroups = buildCategoryTree({
+      tags: tags(many), rootId, existingFolders: [],
+      bookmarks: items(many.map(([id]) => [id, `https://github.com/o/${id}`])),
+      domainGroups: [],
+    })
+    expect(withEmptyGroups).toEqual(withoutGroups)
+    expect(withoutGroups.pinned).toEqual([])
+  })
+
+  it('只有 2 条也建聚合目录——不受 MIN_FOLDER_SIZE 限制', () => {
+    const gh = githubFixture(2, '工具')
+    const { candidates } = buildCategoryTree({
+      tags: gh.tags, rootId, existingFolders: [],
+      bookmarks: gh.bookmarks, domainGroups: ['github'],
+    })
+    expect(candidates.map((c) => base(c.path[0]!))).toContain('GitHub')
+  })
+
+  it('聚合目录排在主题目录之前，占最小的编号', () => {
+    const gh = githubFixture(2, '工具')
+    const topic = Array.from({ length: 6 }, (_, i) => ['t' + i, '前端', null] as [string, string, null])
+    const { candidates } = buildCategoryTree({
+      tags: [...gh.tags, ...tags(topic)], rootId, existingFolders: [],
+      bookmarks: [...gh.bookmarks, ...items(topic.map(([id]) => [id, `https://example.com/${id}`]))],
+      domainGroups: ['github'],
+    })
+    const tops = candidates.filter((c) => c.path.length === 1).map((c) => c.path[0]!)
+    expect(tops[0]).toBe('01 GitHub')
+    expect(tops).toContain('02 前端')
+  })
+
+  it('多个聚合组按 DOMAIN_GROUPS 声明顺序排列，与勾选顺序无关', () => {
+    const gh = githubFixture(2, '工具')
+    const papers = {
+      tags: ['p0', 'p1'].map((id) => ({ bookmarkId: id, primaryTopic: '研究', secondaryTopic: null })),
+      bookmarks: items([['p0', 'https://arxiv.org/abs/1'], ['p1', 'https://arxiv.org/abs/2']]),
+    }
+    const build = (domainGroups: string[]): string[] =>
+      buildCategoryTree({
+        tags: [...gh.tags, ...papers.tags], rootId, existingFolders: [],
+        bookmarks: [...gh.bookmarks, ...papers.bookmarks], domainGroups,
+      }).candidates.filter((c) => c.path.length === 1).map((c) => base(c.path[0]!))
+
+    expect(build(['github', 'paper']).slice(0, 2)).toEqual(['GitHub', '论文'])
+    expect(build(['paper', 'github']).slice(0, 2)).toEqual(['GitHub', '论文'])
+  })
+
+  it('没有命中书签的组不建目录', () => {
+    const gh = githubFixture(2, '工具')
+    const { candidates } = buildCategoryTree({
+      tags: gh.tags, rootId, existingFolders: [],
+      bookmarks: gh.bookmarks, domainGroups: ['github', 'paper'],
+    })
+    expect(candidates.map((c) => base(c.path[0]!))).not.toContain('论文')
+  })
+
+  it('聚合目录不占主题目录的 MAX_SIBLINGS 名额', () => {
+    const gh = githubFixture(2, '工具')
+    const topicSpec = Array.from({ length: (MAX_SIBLINGS + 4) * MIN_FOLDER_SIZE }, (_, i) => [
+      't' + i, `主题${Math.floor(i / MIN_FOLDER_SIZE)}`, null,
+    ] as [string, string, null])
+    const { candidates } = buildCategoryTree({
+      tags: [...gh.tags, ...tags(topicSpec)], rootId, existingFolders: [],
+      bookmarks: [...gh.bookmarks, ...items(topicSpec.map(([id]) => [id, `https://example.com/${id}`]))],
+      domainGroups: ['github'],
+    })
+    const tops = candidates.filter((c) => c.path.length === 1)
+    const topicTops = tops.filter((c) => c.domainGroup === undefined)
+    expect(topicTops).toHaveLength(MAX_SIBLINGS)
+    expect(tops).toHaveLength(MAX_SIBLINGS + 1)
+  })
+
+  it('组内主题达到 MIN_FOLDER_SIZE 时生成二级目录', () => {
+    const gh = githubFixture(MIN_FOLDER_SIZE, 'AI 工具')
+    const { candidates } = buildCategoryTree({
+      tags: gh.tags, rootId, existingFolders: [],
+      bookmarks: gh.bookmarks, domainGroups: ['github'],
+    })
+    expect(candidates.map((c) => c.path.map(base).join('/'))).toContain('GitHub/AI 工具')
+  })
+
+  it('组内主题不足 MIN_FOLDER_SIZE 时平铺在组根，不建「其他」子目录', () => {
+    const gh = githubFixture(MIN_FOLDER_SIZE - 1, 'AI 工具')
+    const { candidates, pinned } = buildCategoryTree({
+      tags: gh.tags, rootId, existingFolders: [],
+      bookmarks: gh.bookmarks, domainGroups: ['github'],
+    })
+    const githubTop = candidates.find((c) => base(c.path[0]!) === 'GitHub' && c.path.length === 1)!
+    expect(candidates.filter((c) => c.path.length === 2 && base(c.path[0]!) === 'GitHub')).toEqual([])
+    expect(pinned.every((p) => p.targetCategoryId === githubTop.id)).toBe(true)
+  })
+
+  it('pinned 覆盖全部命中书签，且指向二级目录', () => {
+    const gh = githubFixture(MIN_FOLDER_SIZE, 'AI 工具')
+    const { candidates, pinned } = buildCategoryTree({
+      tags: gh.tags, rootId, existingFolders: [],
+      bookmarks: gh.bookmarks, domainGroups: ['github'],
+    })
+    const child = candidates.find((c) => c.path.length === 2)!
+    expect(pinned).toHaveLength(MIN_FOLDER_SIZE)
+    expect(pinned.map((p) => p.bookmarkId).sort()).toEqual(gh.bookmarks.map((b) => b.id).sort())
+    expect(pinned.every((p) => p.targetCategoryId === child.id)).toBe(true)
+    expect(pinned.every((p) => p.confidence === 1 && p.source === 'rule')).toBe(true)
+    expect(pinned[0]!.reason).toContain('github.com')
+    expect(pinned[0]!.reason).toContain('GitHub')
+  })
+
+  it('聚合目录的 candidate 带 domainGroup 标记，主题目录不带', () => {
+    const gh = githubFixture(2, '工具')
+    const topic = Array.from({ length: 6 }, (_, i) => ['t' + i, '前端', null] as [string, string, null])
+    const { candidates } = buildCategoryTree({
+      tags: [...gh.tags, ...tags(topic)], rootId, existingFolders: [],
+      bookmarks: [...gh.bookmarks, ...items(topic.map(([id]) => [id, `https://example.com/${id}`]))],
+      domainGroups: ['github'],
+    })
+    expect(candidates.find((c) => base(c.path[0]!) === 'GitHub')!.domainGroup).toBe('github')
+    expect(candidates.find((c) => base(c.path[0]!) === '前端')!.domainGroup).toBeUndefined()
+  })
+
+  it('命中聚合组的书签不再参与主题分组', () => {
+    const gh = githubFixture(MIN_FOLDER_SIZE + 1, '前端')
+    const { candidates } = buildCategoryTree({
+      tags: gh.tags, rootId, existingFolders: [],
+      bookmarks: gh.bookmarks, domainGroups: ['github'],
+    })
+    const tops = candidates.filter((c) => c.path.length === 1).map((c) => base(c.path[0]!))
+    expect(tops).toContain('GitHub')
+    expect(tops).not.toContain('前端')
+  })
+
+  it('范围根下已有同名目录时聚合目录也复用它', () => {
+    const gh = githubFixture(2, '工具')
+    const { candidates, newFolders, renameFolders } = buildCategoryTree({
+      tags: gh.tags, rootId, existingFolders: [folder('70', 'GitHub')],
+      bookmarks: gh.bookmarks, domainGroups: ['github'],
+    })
+    expect(newFolders.some((f) => base(f.title) === 'GitHub')).toBe(false)
+    expect(candidates.find((c) => base(c.path[0]!) === 'GitHub')?.id).toBe('70')
+    expect(renameFolders).toContainEqual({ folderId: '70', oldTitle: 'GitHub', newTitle: '01 GitHub' })
+  })
+
+  it('DOMAIN_GROUPS 的每个组都能建出目录', () => {
+    for (const group of DOMAIN_GROUPS) {
+      const url = { github: 'https://github.com/a/b', gitlab: 'https://gitlab.com/a/b',
+        video: 'https://youtube.com/watch', paper: 'https://arxiv.org/abs/1',
+        qa: 'https://stackoverflow.com/q/1', docs: 'https://docs.python.org/3/' }[group.key]!
+      const { candidates } = buildCategoryTree({
+        tags: [{ bookmarkId: 'x', primaryTopic: '主题', secondaryTopic: null }],
+        rootId, existingFolders: [],
+        bookmarks: items([['x', url]]), domainGroups: [group.key],
+      })
+      expect(candidates.map((c) => base(c.path[0]!))).toContain(group.folderTitle)
+    }
   })
 })
