@@ -73,8 +73,11 @@ export function PreferencesStep() {
           <span>
             推翻现有文件夹结构
             <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-400">
+              开启后会重新设计整棵目录树，并给范围内<b className="font-medium text-neutral-500">每一个</b>
+              一级文件夹加上编号前缀（01、02…），包括你自己建的、以及本次一个书签都没移入的。
+              二级只重排本来就带编号的目录。整理可一键撤销。
+              <br />
               关闭时只把书签移进已有文件夹，绝不改名、合并或删除任何现有文件夹。
-              开启时允许重新设计整棵目录树。
             </span>
           </span>
         </label>
