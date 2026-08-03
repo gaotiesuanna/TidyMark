@@ -86,7 +86,10 @@ export async function handle(
         }
         const warnings =
           failed.length > 0
-            ? [`${failed.length} 个书签分类失败，已保持原位：${failed[0]!.reason}`]
+            ? [
+                `${failed.length} 个书签分类失败，已保持原位。原因：` +
+                  failed[0]!.reason.replace(/^分类失败，保持原位：/, ''),
+              ]
             : []
         const plan = buildPlan({
           id: `plan-${now()}`,

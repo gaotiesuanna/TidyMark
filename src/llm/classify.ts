@@ -166,8 +166,15 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
   let cursor = 0
   async function worker(): Promise<void> {
     while (cursor < batches.length) {
-      const batch = batches[cursor++]!
+      const index = cursor++
+      const batch = batches[index]!
+      const startedAt = Date.now()
       const results = await runBatch(batch, candidates, client)
+      const ok = results.filter((r) => r.source === 'llm').length
+      console.log(
+        `[TidyMark] 分类批次 ${index + 1}/${batches.length}：${batch.length} 条，` +
+          `成功 ${ok} 条，耗时 ${Date.now() - startedAt}ms`,
+      )
       for (let i = 0; i < results.length; i++) {
         const result = results[i]!
         resolved.set(result.bookmarkId, result)

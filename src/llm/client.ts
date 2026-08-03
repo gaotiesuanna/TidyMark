@@ -59,6 +59,7 @@ export function createLlmClient(config: LlmConfig, fetchImpl: typeof fetch = fet
   }
 
   async function post(prompt: string, schema: object, signal?: AbortSignal): Promise<Response> {
+    const startedAt = Date.now()
     try {
       return await fetchImpl(endpoint, {
         method: 'POST',
@@ -70,7 +71,9 @@ export function createLlmClient(config: LlmConfig, fetchImpl: typeof fetch = fet
         body: buildBody(prompt, schema),
       })
     } catch (error) {
-      throw new LlmError(`网络请求失败: ${String(error)}`, true)
+      const elapsed = Date.now() - startedAt
+      console.error(`[TidyMark] fetch 失败（耗时 ${elapsed}ms）：`, error)
+      throw new LlmError(`网络请求失败（耗时 ${elapsed}ms）: ${String(error)}`, true)
     }
   }
 

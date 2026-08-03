@@ -1,8 +1,18 @@
+import { useMemo } from 'react'
+import { buildResultTree } from '@/core/resultTree'
+import { ResultTree } from '../components/ResultTree'
 import { useStore } from '../store'
 
 export function ResultStep() {
-  const { applyResult, undoResult, undoAvailable, undo, reset, busy } = useStore()
+  const { applyResult, undoResult, undoAvailable, undo, reset, busy, plan, accepted } = useStore()
+  const tree = useMemo(
+    () => (plan === null ? [] : buildResultTree(plan, accepted)),
+    [plan, accepted],
+  )
   if (applyResult === null) return null
+
+  // 撤销之后树里的结构已经不存在了，不再展示
+  const showTree = tree.length > 0 && undoResult === null
 
   return (
     <div className="space-y-4 text-sm">
@@ -29,6 +39,18 @@ export function ResultStep() {
           </ul>
         )}
       </section>
+
+      {showTree && (
+        <section className="rounded border p-3">
+          <h2 className="mb-1 font-medium">整理后的结构</h2>
+          <p className="mb-2 text-xs text-neutral-500">
+            {applyResult.status === 'completed'
+              ? '右侧数字为该目录下本次归入的书签数。'
+              : '整理在中途失败，以下是原计划的结构，实际只完成了前 ' + applyResult.executed + ' 步。'}
+          </p>
+          <ResultTree nodes={tree} />
+        </section>
+      )}
 
       {undoResult !== null && (
         <section className="rounded border border-green-200 bg-green-50 p-3 text-xs">
