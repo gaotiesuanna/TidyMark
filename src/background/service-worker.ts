@@ -18,6 +18,8 @@ let progressPort: chrome.runtime.Port | null = null
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== PROGRESS_PORT) return
   progressPort = port
+  // 侧栏的 keepalive ping：收到消息本身就会重置空闲计时，不需要回应
+  port.onMessage.addListener(() => {})
   port.onDisconnect.addListener(() => {
     if (progressPort === port) progressPort = null
   })

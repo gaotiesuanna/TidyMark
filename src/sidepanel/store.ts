@@ -8,7 +8,7 @@ import type { Settings } from '@/storage/settings'
 import { DEFAULT_SETTINGS } from '@/storage/settings'
 import { send } from './lib/send'
 import { ensureHostPermission } from './lib/permissions'
-import { connectProgress } from './lib/progress'
+import { connectProgress, startKeepalive, type ProgressConnection } from './lib/progress'
 
 export type Step = 'scope' | 'preferences' | 'review' | 'result'
 
@@ -40,6 +40,9 @@ export function appendLog(logs: LogLine[], event: ProgressEvent, id: number): Lo
   const next = [...logs, { id, phase: event.phase, level: event.level ?? 'info', message }]
   return next.length > MAX_LOGS ? next.slice(next.length - MAX_LOGS) : next
 }
+
+/** 与后台的进度长连接，整个侧栏共用一条。 */
+let connection: ProgressConnection | null = null
 
 function findNode(tree: BookmarkNode[], id: string): BookmarkNode | null {
   const stack = [...tree]
@@ -162,7 +165,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   async init() {
-    connectProgress({
+    connection = connectProgress({
       onEvent: (event) => get().pushEvent(event),
       onDisconnect: () => {
         if (get().busy === null) return
@@ -205,7 +208,10 @@ export const useStore = create<State>((set, get) => ({
       return set({ error: '需要授权访问模型接口所在的域名才能继续分析。请重试并允许该权限。' })
     }
     set({ busy: '正在分析…', busyKind: 'analyze', error: null, progress: null, logs: [] })
+    // 分析可能跑好几分钟，期间持续 ping，别让后台因空闲被回收
+    const stopKeepalive = startKeepalive(connection)
     const res = await send({ kind: 'analyze', scopeRootIds: [...get().checkedIds] })
+      .finally(stopKeepalive)
     // 主动取消不是错误，日志里已经有记录，不弹红条
     if (!res.ok && res.cancelled === true) {
       return set({ busy: null, busyKind: null, error: null })
@@ -248,7 +254,9 @@ export const useStore = create<State>((set, get) => ({
     const plan = get().plan
     if (plan === null) return
     set({ busy: '正在应用…', busyKind: 'apply', error: null, progress: null, logs: [] })
+    const stopKeepalive = startKeepalive(connection)
     const res = await send({ kind: 'apply', plan, accepted: [...get().accepted] })
+      .finally(stopKeepalive)
     if (!res.ok) return set({ busy: null, busyKind: null, error: res.error })
     if (res.kind !== 'apply') return set({ busy: null, busyKind: null })
     set({ applyResult: res.result, undoAvailable: true, step: 'result', busy: null, busyKind: null })
