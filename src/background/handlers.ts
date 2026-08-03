@@ -105,7 +105,10 @@ export async function handle(
       }
 
       case 'apply': {
-        const result = await applyPlan(ports, request.plan, new Set(request.accepted))
+        const settings = await loadSettings(ports)
+        const result = await applyPlan(ports, request.plan, new Set(request.accepted), {
+          removeEmptyFolders: settings.removeEmptyFolders,
+        })
         return { ok: true, kind: 'apply', result }
       }
 

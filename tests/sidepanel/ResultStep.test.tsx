@@ -24,6 +24,7 @@ const plan: OrganizePlan = {
 
 const applyResult: ApplyResult = {
   status: 'completed', executed: 4, skipped: [], createdFolderIds: ['10', '11'],
+  removedFolders: [{ id: '30', title: '杂项', path: ['书签栏'] }],
   failedAt: null, error: null,
 }
 
@@ -48,6 +49,12 @@ describe('ResultStep', () => {
   it('标出本次新建的目录', () => {
     render(<ResultStep />)
     expect(screen.getAllByText('新建').length).toBe(2)
+  })
+
+  it('展示清理掉的空文件夹数量与完整路径', () => {
+    render(<ResultStep />)
+    expect(screen.getByText('清理空文件夹')).toBeDefined()
+    expect(screen.getByText('书签栏 / 杂项')).toBeDefined()
   })
 
   it('撤销之后不再展示结构树', () => {

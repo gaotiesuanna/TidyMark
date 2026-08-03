@@ -25,6 +25,53 @@ function setup() {
   return { fake, storage, ports }
 }
 
+describe('undoLast 重建被删掉的文件夹', () => {
+  it('文件夹被删掉后重建，书签回到里面', async () => {
+    const { ports, fake } = setup()
+    await saveSnapshot(ports, await captureSnapshot(ports, 'p1', ['1']))
+    // 模拟清理：先把书签搬走，再删掉空目录
+    for (const id of ['100', '101', '102']) await fake.api.move(id, { parentId: '10' })
+    await fake.api.remove('11')
+
+    const result = await undoLast(ports)
+    expect(result.skipped).toEqual([])
+    expect(fake.structure()).toContain('书签栏/杂项/A')
+    expect(fake.structure()).toContain('书签栏/杂项/C')
+  })
+
+  it('嵌套目录被整串删掉也能重建，层级不乱', async () => {
+    const fake = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: '外层', children: [
+            { id: '11', title: '内层', children: [
+              { id: '100', title: 'A', url: 'https://a.dev' },
+            ]},
+          ]},
+        ]},
+      ]},
+    ])
+    const ports: Ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSnapshot(ports, await captureSnapshot(ports, 'p1', ['1']))
+    await fake.api.move('100', { parentId: '1' })
+    await fake.api.remove('11')
+    await fake.api.remove('10')
+
+    await undoLast(ports)
+    expect(fake.structure()).toContain('书签栏/外层/内层/A')
+  })
+
+  it('被用户删掉的书签不会被重新创建', async () => {
+    const { ports, fake } = setup()
+    await saveSnapshot(ports, await captureSnapshot(ports, 'p1', ['1']))
+    await fake.api.remove('100')
+
+    const result = await undoLast(ports)
+    expect(result.skipped.some((s) => s.id === '100')).toBe(true)
+    expect(fake.structure()).not.toContain('杂项/A')
+  })
+})
+
 describe('undoLast', () => {
   it('无快照时返回 no_snapshot', async () => {
     const { ports } = setup()

@@ -16,11 +16,16 @@ describe('设置存取', () => {
     expect(settings.llm.apiKey).toBe('')
   })
 
+  it('默认开启整理后清理空文件夹', async () => {
+    expect((await loadSettings(ports())).removeEmptyFolders).toBe(true)
+  })
+
   it('保存后能读回', async () => {
     const p = ports()
     await saveSettings(p, {
       llm: { baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-x', model: 'deepseek-chat' },
       rebuildStructure: true,
+      removeEmptyFolders: false,
     })
     const settings = await loadSettings(p)
     expect(settings.llm.model).toBe('deepseek-chat')

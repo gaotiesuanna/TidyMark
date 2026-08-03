@@ -112,6 +112,33 @@ describe('Apply → Undo 往返一致性', () => {
     expect(fake.structure()).toBe(before)
   })
 
+  it('清理空文件夹后撤销，被删的目录连同结构一起还原', async () => {
+    const fake = createFakeBookmarks(messyTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    const before = fake.structure()
+
+    // 全部书签集中到 react，其余目录（含本来就空的「空的」）都会被清理
+    const scan = scanTree(await fake.api.getTree(), ['1'])
+    const plan = buildPlan({
+      id: 'rt3', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: false,
+      items: scan.bookmarks,
+      candidates: buildCandidatesFromFolders(scan.folders, ['1']),
+      classifications: scan.bookmarks.map((b) => ({
+        bookmarkId: b.id, targetCategoryId: '10', confidence: 0.9, reason: 'r', source: 'llm' as const,
+      })),
+      newFolders: [],
+    })
+    const result = await applyPlan(ports, plan, new Set(plan.rows.map((r) => r.bookmarkId)), {
+      removeEmptyFolders: true,
+    })
+    expect(result.removedFolders.length).toBeGreaterThan(0)
+    expect(fake.structure()).not.toBe(before)
+
+    const undoResult = await undoLast(ports)
+    expect(undoResult.skipped).toEqual([])
+    expect(fake.structure()).toBe(before)
+  })
+
   it('Apply 中途失败后撤销，已执行的部分被完整回滚', async () => {
     const fake = createFakeBookmarks(messyTree)
     let calls = 0

@@ -26,11 +26,30 @@ export async function undoLast(
   const skipped: UndoSkip[] = []
   const restorable: SnapshotNode[] = []
 
+  // 第 0 趟：重建被「清理空文件夹」删掉的目录。
+  // 快照里文件夹按先序排列，父目录必定排在子目录之前，因此顺序创建即可；
+  // 重建出来的目录是新 id，用 idMap 把快照里的旧 id 映射过去。
+  const idMap = new Map<string, string>()
+  const mapId = (id: string): string => idMap.get(id) ?? id
+  for (const node of snapshot.nodes) {
+    if (node.url !== undefined) continue
+    if ((await ports.bookmarks.get(node.id)) !== null) continue
+    try {
+      const created = await ports.bookmarks.create({
+        parentId: mapId(node.parentId),
+        title: node.title,
+      })
+      idMap.set(node.id, created.id)
+    } catch (error) {
+      skipped.push({ id: node.id, title: node.title, reason: `目录重建失败：${String(error)}` })
+    }
+  }
+
   // 校验：只还原仍然存在的节点。
   // 文件夹标题属于结构信息，若被 Apply 之后的操作改动，强制恢复；
   // 书签（带 url）的标题若被用户手动改过，视为用户的有意修改，跳过以免覆盖。
   for (const node of snapshot.nodes) {
-    const current = await ports.bookmarks.get(node.id)
+    const current = await ports.bookmarks.get(mapId(node.id))
     if (current === null) {
       skipped.push({ id: node.id, title: node.title, reason: '节点已不存在' })
       continue
@@ -39,7 +58,7 @@ export async function undoLast(
     if (current.title !== node.title) {
       if (isFolder) {
         try {
-          await ports.bookmarks.update(node.id, { title: node.title })
+          await ports.bookmarks.update(mapId(node.id), { title: node.title })
         } catch (error) {
           skipped.push({ id: node.id, title: node.title, reason: `标题恢复失败：${String(error)}` })
           continue
@@ -62,13 +81,13 @@ export async function undoLast(
   // 若当前 parent 已经正确，跳过多余的 move 调用。
   const parentRestored: SnapshotNode[] = []
   for (const node of restorable) {
-    const current = await ports.bookmarks.get(node.id)
-    if (current !== null && current.parentId === node.parentId) {
+    const current = await ports.bookmarks.get(mapId(node.id))
+    if (current !== null && current.parentId === mapId(node.parentId)) {
       parentRestored.push(node)
       continue
     }
     try {
-      await ports.bookmarks.move(node.id, { parentId: node.parentId })
+      await ports.bookmarks.move(mapId(node.id), { parentId: mapId(node.parentId) })
       parentRestored.push(node)
     } catch (error) {
       skipped.push({ id: node.id, title: node.title, reason: `归位失败：${String(error)}` })
@@ -79,16 +98,17 @@ export async function undoLast(
   // 必须升序 —— 乱序插入会把已就位的节点挤走。
   const byParent = new Map<string, SnapshotNode[]>()
   for (const node of parentRestored) {
-    const group = byParent.get(node.parentId) ?? []
+    const parentId = mapId(node.parentId)
+    const group = byParent.get(parentId) ?? []
     group.push(node)
-    byParent.set(node.parentId, group)
+    byParent.set(parentId, group)
   }
 
-  for (const group of byParent.values()) {
+  for (const [parentId, group] of byParent) {
     group.sort((a, b) => a.index - b.index)
     for (const node of group) {
       try {
-        await ports.bookmarks.move(node.id, { parentId: node.parentId, index: node.index })
+        await ports.bookmarks.move(mapId(node.id), { parentId, index: node.index })
         done++
         onProgress?.(done, total)
       } catch (error) {

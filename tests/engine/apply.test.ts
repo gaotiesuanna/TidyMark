@@ -170,7 +170,53 @@ describe('applyPlan', () => {
   it('回报进度', async () => {
     const { ports } = setup()
     const onProgress = vi.fn()
-    await applyPlan(ports, makePlan(), new Set(['100', '101']), onProgress)
+    await applyPlan(ports, makePlan(), new Set(['100', '101']), { onProgress })
     expect(onProgress).toHaveBeenLastCalledWith(2, 2)
+  })
+})
+
+describe('applyPlan 清理空文件夹', () => {
+  it('开启时删掉被搬空的目录', async () => {
+    const { ports, fake } = setup()
+    const result = await applyPlan(ports, makePlan(), new Set(['100', '101']), {
+      removeEmptyFolders: true,
+    })
+    expect(result.removedFolders.map((f) => f.title)).toEqual(['杂项'])
+    expect(fake.structure()).not.toContain('杂项')
+  })
+
+  it('默认不清理', async () => {
+    const { ports, fake } = setup()
+    const result = await applyPlan(ports, makePlan(), new Set(['100', '101']))
+    expect(result.removedFolders).toEqual([])
+    expect(fake.structure()).toContain('杂项')
+  })
+
+  it('还有书签的目录不删', async () => {
+    const { ports, fake } = setup()
+    await applyPlan(ports, makePlan(), new Set(['100']), { removeEmptyFolders: true })
+    expect(fake.structure()).toContain('书签栏/杂项/Router')
+  })
+
+  it('删除失败不影响整体结果，记进 skipped', async () => {
+    const { ports } = setup({ remove: async () => { throw new Error('boom') } })
+    const result = await applyPlan(ports, makePlan(), new Set(['100', '101']), {
+      removeEmptyFolders: true,
+    })
+    expect(result.status).toBe('completed')
+    expect(result.removedFolders).toEqual([])
+    expect(result.skipped.some((s) => s.reason.includes('boom'))).toBe(true)
+  })
+
+  it('整理中途失败时不做清理', async () => {
+    const { ports, fake } = setup({
+      move: async () => { throw new Error('move 挂了') },
+    })
+    const result = await applyPlan(ports, makePlan(), new Set(['100', '101']), {
+      removeEmptyFolders: true,
+    })
+    expect(result.status).toBe('failed')
+    expect(result.removedFolders).toEqual([])
+    expect(fake.structure()).toContain('书签栏/react')
   })
 })

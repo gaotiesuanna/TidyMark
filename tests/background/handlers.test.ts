@@ -53,6 +53,7 @@ describe('handle', () => {
     await saveSettings(ports, {
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
+      removeEmptyFolders: false,
     })
     const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: { rows: unknown[] } }
     expect(res.plan.rows).toHaveLength(1)
@@ -67,6 +68,7 @@ describe('handle', () => {
     await saveSettings(ports, {
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
+      removeEmptyFolders: false,
     })
     const analyzed = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: { rows: Array<{ bookmarkId: string }> } }
     const res = await handle(
@@ -76,6 +78,31 @@ describe('handle', () => {
     )
     expect(res).toMatchObject({ ok: true, kind: 'apply' })
     expect(fake.structure()).toContain('书签栏/react/React 官网')
+  })
+
+  it('apply 按设置清理搬空的目录，撤销后目录回来', async () => {
+    const { ports, deps, fake } = setup({
+      complete: vi.fn().mockResolvedValue({
+        results: [{ bookmark_id: '100', target_category_id: '10', confidence: 0.9, reason: 'r' }],
+      }),
+    })
+    await saveSettings(ports, {
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: false,
+      removeEmptyFolders: true,
+    })
+    const analyzed = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: unknown }
+    const res = await handle(
+      ports,
+      { kind: 'apply', plan: analyzed.plan as never, accepted: ['100'] },
+      deps,
+    ) as { result: { removedFolders: Array<{ title: string }> } }
+
+    expect(res.result.removedFolders.map((f) => f.title)).toEqual(['杂项'])
+    expect(fake.structure()).not.toContain('杂项')
+
+    await handle(ports, { kind: 'undo' }, deps)
+    expect(fake.structure()).toContain('书签栏/杂项/React 官网')
   })
 
   it('get_undo_state 在无快照时返回不可撤销', async () => {
@@ -89,6 +116,7 @@ describe('handle', () => {
     const settings = {
       llm: { baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-d', model: 'deepseek-chat' },
       rebuildStructure: true,
+      removeEmptyFolders: false,
     }
     await handle(ports, { kind: 'save_settings', settings }, deps)
     const res = await handle(ports, { kind: 'get_settings' }, deps) as { settings: typeof settings }
@@ -112,6 +140,7 @@ describe('handle', () => {
     await saveSettings(ports, {
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: true,
+      removeEmptyFolders: false,
     })
     const complete = vi.fn()
       .mockResolvedValueOnce({ results: [{ bookmark_id: '100', primary_topic: '前端', secondary_topic: 'React' }] })
@@ -136,6 +165,7 @@ describe('handle', () => {
     await saveSettings(ports, {
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: true,
+      removeEmptyFolders: false,
     })
 
     // 标签固定为「前端」，分类时从 prompt 里读出「前端」目录的真实 id
@@ -180,6 +210,7 @@ describe('handle', () => {
     await saveSettings(ports, {
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
+      removeEmptyFolders: false,
     })
     const complete = vi.fn().mockRejectedValue(
       Object.assign(new Error('模型接口返回 400: This response_format type is unavailable now'), {
@@ -209,6 +240,7 @@ describe('handle', () => {
     await saveSettings(ports, {
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
+      removeEmptyFolders: false,
     })
     // 第一批成功、第二批失败
     const complete = vi.fn()

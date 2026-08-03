@@ -8,11 +8,14 @@ export const CACHE_KEY = 'tidymark:classify-cache'
 export interface Settings {
   llm: LlmConfig
   rebuildStructure: boolean
+  /** 整理完成后清理范围内不含任何书签的目录。 */
+  removeEmptyFolders: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   llm: { baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-4o-mini' },
   rebuildStructure: false,
+  removeEmptyFolders: true,
 }
 
 export const PRESETS: Array<{ label: string; baseUrl: string; model: string }> = [
@@ -28,6 +31,7 @@ export async function loadSettings(ports: Ports): Promise<Settings> {
   return {
     llm: { ...DEFAULT_SETTINGS.llm, ...(stored?.llm ?? {}) },
     rebuildStructure: stored?.rebuildStructure ?? DEFAULT_SETTINGS.rebuildStructure,
+    removeEmptyFolders: stored?.removeEmptyFolders ?? DEFAULT_SETTINGS.removeEmptyFolders,
   }
 }
 

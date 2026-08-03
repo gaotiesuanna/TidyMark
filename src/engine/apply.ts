@@ -1,3 +1,4 @@
+import { findEmptyFolders, type EmptyFolder } from '@/core/empty'
 import { filterAccepted } from '@/core/plan'
 import type { Ports } from '@/core/ports'
 import type { OrganizePlan } from '@/core/types'
@@ -15,16 +16,47 @@ export interface ApplyResult {
   executed: number
   skipped: SkipRecord[]
   createdFolderIds: string[]
+  /** 移动完成后被清理掉的空目录，撤销时会重建。 */
+  removedFolders: EmptyFolder[]
   failedAt: number | null
   error: string | null
+}
+
+export interface ApplyOptions {
+  onProgress?: (done: number, total: number) => void
+  /** 移动完成后清理范围内不含任何书签的目录。 */
+  removeEmptyFolders?: boolean
+}
+
+/**
+ * 清理范围内的空目录。子目录先于父目录删除，单个失败不影响其余。
+ * 必须在所有移动执行完之后调用——判空依据的是移动后的真实书签树。
+ */
+async function removeEmpty(
+  ports: Ports,
+  scopeRootIds: string[],
+  skipped: SkipRecord[],
+): Promise<EmptyFolder[]> {
+  const tree = await ports.bookmarks.getTree()
+  const removed: EmptyFolder[] = []
+  for (const folder of findEmptyFolders(tree, scopeRootIds)) {
+    try {
+      await ports.bookmarks.remove(folder.id)
+      removed.push(folder)
+    } catch (error) {
+      skipped.push({ bookmarkId: folder.id, reason: `空文件夹删除失败：${String(error)}` })
+    }
+  }
+  return removed
 }
 
 export async function applyPlan(
   ports: Ports,
   plan: OrganizePlan,
   accepted: Set<string>,
-  onProgress?: (done: number, total: number) => void,
+  options: ApplyOptions = {},
 ): Promise<ApplyResult> {
+  const onProgress = options.onProgress
   const operations = filterAccepted(plan, accepted)
 
   const snapshot = await captureSnapshot(ports, plan.id, plan.scopeRootIds)
@@ -77,13 +109,23 @@ export async function applyPlan(
         executed,
         skipped,
         createdFolderIds,
+        removedFolders: [],
         failedAt: i,
         error: String(error),
       }
     }
   }
 
+  // 只有整批操作都成功才清理——中途失败时结构还没落定，删目录只会添乱
+  const removedFolders =
+    options.removeEmptyFolders === true
+      ? await removeEmpty(ports, plan.scopeRootIds, skipped)
+      : []
+
   await saveSnapshot(ports, { ...snapshot, createdFolderIds })
   await ports.storage.remove(PROGRESS_KEY)
-  return { status: 'completed', executed, skipped, createdFolderIds, failedAt: null, error: null }
+  return {
+    status: 'completed', executed, skipped, createdFolderIds, removedFolders,
+    failedAt: null, error: null,
+  }
 }

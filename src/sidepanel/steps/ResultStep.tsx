@@ -23,8 +23,19 @@ export function ResultStep() {
         <dl className="grid grid-cols-2 gap-y-1 text-xs">
           <dt className="text-neutral-500">已执行操作</dt><dd>{applyResult.executed}</dd>
           <dt className="text-neutral-500">新建文件夹</dt><dd>{applyResult.createdFolderIds.length}</dd>
+          <dt className="text-neutral-500">清理空文件夹</dt><dd>{applyResult.removedFolders.length}</dd>
           <dt className="text-neutral-500">跳过</dt><dd>{applyResult.skipped.length}</dd>
         </dl>
+        {applyResult.removedFolders.length > 0 && (
+          <details className="mt-2 text-xs text-neutral-500">
+            <summary className="cursor-pointer">查看被清理的空文件夹</summary>
+            <ul className="mt-1 space-y-0.5">
+              {applyResult.removedFolders.map((folder) => (
+                <li key={folder.id}>{[...folder.path, folder.title].join(' / ')}</li>
+              ))}
+            </ul>
+          </details>
+        )}
         {applyResult.error !== null && (
           <p className="mt-2 rounded bg-red-50 p-2 text-xs text-red-700">
             在第 {(applyResult.failedAt ?? 0) + 1} 步失败：{applyResult.error}

@@ -77,6 +77,22 @@ export function PreferencesStep() {
             </span>
           </span>
         </label>
+
+        <label className="mt-3 flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1 h-3.5 w-3.5"
+            checked={settings.removeEmptyFolders}
+            onChange={(e) => void setSettings({ ...settings, removeEmptyFolders: e.target.checked })}
+          />
+          <span>
+            整理后清理空文件夹
+            <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-400">
+              删除范围内不含任何书签的文件夹，包括子目录清空后变空的父目录。
+              范围根目录不会被删除，撤销时会连同目录一起还原。
+            </span>
+          </span>
+        </label>
       </section>
 
       <div className="flex gap-2">

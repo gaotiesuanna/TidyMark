@@ -3,7 +3,7 @@ import { LOW_CONFIDENCE, summarize } from '@/core/plan'
 import { useStore } from '../store'
 
 export function ReviewStep() {
-  const { plan, accepted, toggleAccepted, acceptAll, acceptHighConfidence, rejectAll, apply, busy, reset } = useStore()
+  const { plan, accepted, toggleAccepted, acceptAll, acceptHighConfidence, rejectAll, apply, busy, reset, settings } = useStore()
   const summary = useMemo(() => (plan === null ? null : summarize(plan, accepted)), [plan, accepted])
   if (plan === null || summary === null) return null
 
@@ -21,6 +21,10 @@ export function ReviewStep() {
           )}
           。
         </p>
+      )}
+
+      {settings.removeEmptyFolders && (
+        <p className="text-xs text-neutral-500">整理后会清理范围内的空文件夹（可撤销）。</p>
       )}
 
       {plan.warnings.length > 0 && (
