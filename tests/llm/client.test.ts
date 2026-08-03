@@ -182,3 +182,39 @@ describe('不带 response_format 时仍能解析被代码块包住的输出', ()
     expect(await client.complete('hi', schema)).toEqual({ ok: true })
   })
 })
+
+describe('并发请求共享降级状态时不会互相把台阶踩没', () => {
+  /** 只接受完全不带 response_format 的请求，其余一律 400。 */
+  function onlyPlainFetch() {
+    return vi.fn(async (_url: string, init: { body: string }) => {
+      const body = JSON.parse(init.body) as { response_format?: unknown }
+      if (body.response_format !== undefined) {
+        return new Response(
+          JSON.stringify({ error: { message: 'This response_format type is unavailable now' } }),
+          { status: 400 },
+        )
+      }
+      return okResponse({ ok: true })
+    })
+  }
+
+  it('四个并发请求全部成功降到底，没有一个被判定为无级可降', async () => {
+    const fetchImpl = onlyPlainFetch()
+    const client = createLlmClient(config, fetchImpl as unknown as typeof fetch)
+
+    const results = await Promise.all(
+      Array.from({ length: 4 }, (_, i) => client.complete(`第 ${i} 批`, schema)),
+    )
+    expect(results).toEqual([{ ok: true }, { ok: true }, { ok: true }, { ok: true }])
+  })
+
+  it('探明之后的请求直接用可用方式，不再浪费 400', async () => {
+    const fetchImpl = onlyPlainFetch()
+    const client = createLlmClient(config, fetchImpl as unknown as typeof fetch)
+
+    await Promise.all(Array.from({ length: 4 }, () => client.complete('并发', schema)))
+    const before = fetchImpl.mock.calls.length
+    await client.complete('后续', schema)
+    expect(fetchImpl.mock.calls.length - before).toBe(1)
+  })
+})

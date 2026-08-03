@@ -58,24 +58,29 @@ export function createLlmClient(config: LlmConfig, fetchImpl: typeof fetch = fet
   // 一旦探明厂商不支持 json_schema 就记住，后续请求不再浪费一次 400。
   let mode: StructuredMode = 'json_schema'
 
-  function buildBody(prompt: string, schema: object): string {
+  function buildBody(prompt: string, schema: object, attempt: StructuredMode): string {
     const body: Record<string, unknown> = {
       model: config.model,
       temperature: 0,
       messages: [
-        { role: 'user', content: mode === 'json_schema' ? prompt : withSchemaInPrompt(prompt, schema) },
+        { role: 'user', content: attempt === 'json_schema' ? prompt : withSchemaInPrompt(prompt, schema) },
       ],
     }
-    // mode === 'none' 的厂商连 response_format 字段都不认，只能靠提示词约束
-    if (mode === 'json_schema') {
+    // attempt === 'none' 的厂商连 response_format 字段都不认，只能靠提示词约束
+    if (attempt === 'json_schema') {
       body.response_format = { type: 'json_schema', json_schema: { name: 'result', strict: true, schema } }
-    } else if (mode === 'json_object') {
+    } else if (attempt === 'json_object') {
       body.response_format = { type: 'json_object' }
     }
     return JSON.stringify(body)
   }
 
-  async function post(prompt: string, schema: object, signal?: AbortSignal): Promise<Response> {
+  async function post(
+    prompt: string,
+    schema: object,
+    attempt: StructuredMode,
+    signal?: AbortSignal,
+  ): Promise<Response> {
     const startedAt = Date.now()
     try {
       return await fetchImpl(endpoint, {
@@ -85,7 +90,7 @@ export function createLlmClient(config: LlmConfig, fetchImpl: typeof fetch = fet
           'Content-Type': 'application/json',
           Authorization: `Bearer ${config.apiKey}`,
         },
-        body: buildBody(prompt, schema),
+        body: buildBody(prompt, schema, attempt),
       })
     } catch (error) {
       const elapsed = Date.now() - startedAt
@@ -96,16 +101,23 @@ export function createLlmClient(config: LlmConfig, fetchImpl: typeof fetch = fet
 
   return {
     async complete(prompt, schema, signal) {
-      // 每次 400 都沿着 MODES 往下降一级，降到底还不行才报错
+      // 降级判断必须基于「这次请求实际用的那一级」。并发请求共享 mode，
+      // 若按共享值往下推，别的请求刚推过的一步会被重复消耗，
+      // 后发的请求会误以为已经无级可降而直接失败。
+      let attempt = mode
+
       for (;;) {
-        const response = await post(prompt, schema, signal)
+        const response = await post(prompt, schema, attempt, signal)
 
         if (!response.ok) {
           const body = await response.text()
-          const next = MODES[MODES.indexOf(mode) + 1]
+          const next = MODES[MODES.indexOf(attempt) + 1]
           if (isUnsupportedResponseFormat(response.status, body) && next !== undefined) {
-            console.warn(`[TidyMark] 厂商不支持 ${mode}，降级为 ${next} 重试`)
-            mode = next
+            console.warn(`[TidyMark] 厂商不支持 ${attempt}，降级为 ${next} 重试`)
+            // mode 只前进不后退，作为后续请求的起点
+            if (MODES.indexOf(next) > MODES.indexOf(mode)) mode = next
+            // 别的请求可能已经探到更低的一级，直接从那里接着试
+            attempt = MODES.indexOf(mode) > MODES.indexOf(next) ? mode : next
             continue
           }
           const retryable = response.status === 429 || response.status >= 500
