@@ -3,9 +3,7 @@ import { normalizeName, stripNumberPrefix } from './map'
 import type { NewFolderSpec, RenameFolderSpec } from './plan'
 import type { BookmarkItem, CategoryCandidate, Classification, TagResult } from './types'
 
-/** 一个主题至少要有这么多书签，才值得拥有独立目录。 */
-export const MIN_FOLDER_SIZE = 5
-/** 同一层最多允许的目录数量。 */
+/** 同一层最多允许的目录数量。目录集合由 llm/folders.ts 设计，这里只做兜底截断。 */
 export const MAX_SIBLINGS = 12
 export const FALLBACK_TITLE = '其他'
 
@@ -132,7 +130,6 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
       byTopic.set(topicKey, child)
     }
     const children = [...byTopic.values()]
-      .filter((c) => c.bookmarkIds.length >= MIN_FOLDER_SIZE)
       .sort((a, b) => b.bookmarkIds.length - a.bookmarkIds.length)
       .slice(0, MAX_SIBLINGS)
     const placed = new Set(children.flatMap((c) => c.bookmarkIds))
@@ -163,7 +160,6 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
   }
 
   const ranked = [...groups.values()]
-    .filter((g) => g.count >= MIN_FOLDER_SIZE)
     .sort((a, b) => b.count - a.count)
     .slice(0, MAX_SIBLINGS - 1) // 留一个位置给「其他」
 
@@ -176,7 +172,6 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
     title: group.title,
     domainGroup: null,
     children: [...group.children.values()]
-      .filter((c) => c.count >= MIN_FOLDER_SIZE)
       .sort((a, b) => b.count - a.count)
       .slice(0, MAX_SIBLINGS)
       .map((c) => ({ title: c.title, bookmarkIds: [] })),

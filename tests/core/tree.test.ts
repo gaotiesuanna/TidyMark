@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildCategoryTree, stripNumberPrefix, MIN_FOLDER_SIZE, MAX_SIBLINGS } from '@/core/tree'
+import { buildCategoryTree, stripNumberPrefix, MAX_SIBLINGS } from '@/core/tree'
 import type { ExistingFolder } from '@/core/tree'
 import type { BookmarkItem, TagResult } from '@/core/types'
 import { DOMAIN_GROUPS } from '@/core/domainGroups'
@@ -27,13 +27,14 @@ describe('buildCategoryTree', () => {
     expect(candidates.some((c) => base(c.path.at(-1)!) === '前端')).toBe(true)
   })
 
-  it('数量不足的主题合并进「其他」', () => {
+  it('每个主题都建目录，不再按数量筛选', () => {
     const { newFolders } = buildCategoryTree({
       tags: tags([['1', '冷门主题', null], ['2', '另一个冷门', null]]),
       rootId, existingFolders: [],
     })
+    expect(newFolders.map((f) => base(f.title))).toContain('冷门主题')
+    expect(newFolders.map((f) => base(f.title))).toContain('另一个冷门')
     expect(newFolders.map((f) => base(f.title))).toContain('其他')
-    expect(newFolders.some((f) => base(f.title) === '冷门主题')).toBe(false)
   })
 
   it('二级主题数量达标时生成子目录', () => {
@@ -65,8 +66,8 @@ describe('buildCategoryTree', () => {
   })
 
   it('同一层目录数量不超过上限，超出部分并入「其他」', () => {
-    const spec = Array.from({ length: (MAX_SIBLINGS + 4) * MIN_FOLDER_SIZE }, (_, i) => [
-      String(i), `主题${Math.floor(i / MIN_FOLDER_SIZE)}`, null,
+    const spec = Array.from({ length: MAX_SIBLINGS + 4 }, (_, i) => [
+      String(i), `主题${i}`, null,
     ] as [string, string, null])
     const { newFolders } = buildCategoryTree({ tags: tags(spec), rootId, existingFolders: [] })
     const topLevel = newFolders.filter((f) => f.parentTemporaryId === null)
@@ -214,7 +215,7 @@ describe('buildCategoryTree 域名聚合', () => {
     expect(withoutGroups.pinned).toEqual([])
   })
 
-  it('只有 2 条也建聚合目录——不受 MIN_FOLDER_SIZE 限制', () => {
+  it('只有 2 条也建聚合目录', () => {
     const gh = githubFixture(2, '工具')
     const { candidates } = buildCategoryTree({
       tags: gh.tags, rootId, existingFolders: [],
@@ -263,8 +264,8 @@ describe('buildCategoryTree 域名聚合', () => {
 
   it('聚合目录不占主题目录的 MAX_SIBLINGS 名额', () => {
     const gh = githubFixture(2, '工具')
-    const topicSpec = Array.from({ length: (MAX_SIBLINGS + 4) * MIN_FOLDER_SIZE }, (_, i) => [
-      't' + i, `主题${Math.floor(i / MIN_FOLDER_SIZE)}`, null,
+    const topicSpec = Array.from({ length: MAX_SIBLINGS + 4 }, (_, i) => [
+      't' + i, `主题${i}`, null,
     ] as [string, string, null])
     const { candidates } = buildCategoryTree({
       tags: [...gh.tags, ...tags(topicSpec)], rootId, existingFolders: [],
@@ -277,8 +278,8 @@ describe('buildCategoryTree 域名聚合', () => {
     expect(tops).toHaveLength(MAX_SIBLINGS + 1)
   })
 
-  it('组内主题达到 MIN_FOLDER_SIZE 时生成二级目录', () => {
-    const gh = githubFixture(MIN_FOLDER_SIZE, 'AI 工具')
+  it('组内每个主题都生成二级目录', () => {
+    const gh = githubFixture(2, 'AI 工具')
     const { candidates } = buildCategoryTree({
       tags: gh.tags, rootId, existingFolders: [],
       bookmarks: gh.bookmarks, domainGroups: ['github'],
@@ -286,25 +287,25 @@ describe('buildCategoryTree 域名聚合', () => {
     expect(candidates.map((c) => c.path.map(base).join('/'))).toContain('GitHub/AI 工具')
   })
 
-  it('组内主题不足 MIN_FOLDER_SIZE 时平铺在组根，不建「其他」子目录', () => {
-    const gh = githubFixture(MIN_FOLDER_SIZE - 1, 'AI 工具')
+  it('主题为空的组内书签平铺在组根，不建子目录', () => {
+    const gh = githubFixture(2, '')
     const { candidates, pinned } = buildCategoryTree({
       tags: gh.tags, rootId, existingFolders: [],
       bookmarks: gh.bookmarks, domainGroups: ['github'],
     })
     const githubTop = candidates.find((c) => base(c.path[0]!) === 'GitHub' && c.path.length === 1)!
-    expect(candidates.filter((c) => c.path.length === 2 && base(c.path[0]!) === 'GitHub')).toEqual([])
+    expect(candidates.filter((c) => c.path.length === 2)).toEqual([])
     expect(pinned.every((p) => p.targetCategoryId === githubTop.id)).toBe(true)
   })
 
   it('pinned 覆盖全部命中书签，且指向二级目录', () => {
-    const gh = githubFixture(MIN_FOLDER_SIZE, 'AI 工具')
+    const gh = githubFixture(3, 'AI 工具')
     const { candidates, pinned } = buildCategoryTree({
       tags: gh.tags, rootId, existingFolders: [],
       bookmarks: gh.bookmarks, domainGroups: ['github'],
     })
     const child = candidates.find((c) => c.path.length === 2)!
-    expect(pinned).toHaveLength(MIN_FOLDER_SIZE)
+    expect(pinned).toHaveLength(3)
     expect(pinned.map((p) => p.bookmarkId).sort()).toEqual(gh.bookmarks.map((b) => b.id).sort())
     expect(pinned.every((p) => p.targetCategoryId === child.id)).toBe(true)
     expect(pinned.every((p) => p.confidence === 1 && p.source === 'rule')).toBe(true)
@@ -325,7 +326,7 @@ describe('buildCategoryTree 域名聚合', () => {
   })
 
   it('命中聚合组的书签不再参与主题分组', () => {
-    const gh = githubFixture(MIN_FOLDER_SIZE + 1, '前端')
+    const gh = githubFixture(2, '前端')
     const { candidates } = buildCategoryTree({
       tags: gh.tags, rootId, existingFolders: [],
       bookmarks: gh.bookmarks, domainGroups: ['github'],
