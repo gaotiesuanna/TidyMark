@@ -34,6 +34,19 @@ export function collectDescendantFolderIds(tree: BookmarkNode[], id: string): st
   return ids
 }
 
+/** 树里所有文件夹的 id，供「全部展开」使用。 */
+export function collectAllFolderIds(tree: BookmarkNode[]): string[] {
+  const ids: string[] = []
+  const stack = [...tree]
+  while (stack.length > 0) {
+    const node = stack.pop()!
+    if (node.url !== undefined) continue
+    ids.push(node.id)
+    for (const child of node.children ?? []) stack.push(child)
+  }
+  return ids
+}
+
 export function toggleChecked(
   checked: Set<string>,
   id: string,
