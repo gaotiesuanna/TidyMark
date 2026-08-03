@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { ProgressEvent, ProgressPhase } from '@/background/events'
 import type { BookmarkNode } from '@/core/ports'
+import { renumberPlan } from '@/core/plan'
 import type { OrganizePlan, ScanResult } from '@/core/types'
 import type { ApplyResult } from '@/engine/apply'
 import type { UndoResult } from '@/engine/undo'
@@ -262,7 +263,12 @@ export const useStore = create<State>((set, get) => ({
     if (plan === null) return
     set({ busy: '正在应用…', busyKind: 'apply', error: null, progress: null, logs: [] })
     const stopKeepalive = startKeepalive(connection)
-    const res = await send({ kind: 'apply', plan, accepted: [...get().accepted] })
+    // 按实际会落地的目录重排编号，避免出现 01、02、04 这样的空号
+    const res = await send({
+      kind: 'apply',
+      plan: renumberPlan(plan, get().accepted),
+      accepted: [...get().accepted],
+    })
       .finally(stopKeepalive)
     if (!res.ok) return set({ busy: null, busyKind: null, error: res.error })
     if (res.kind !== 'apply') return set({ busy: null, busyKind: null })

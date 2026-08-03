@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildPlan, filterAccepted, summarize, LOW_CONFIDENCE } from '@/core/plan'
+import { buildPlan, filterAccepted, renumberPlan, summarize, LOW_CONFIDENCE } from '@/core/plan'
 import type { BookmarkItem, CategoryCandidate, Classification } from '@/core/types'
 
 const candidates: CategoryCandidate[] = [
@@ -139,5 +139,88 @@ describe('summarize', () => {
   it('按已接受的集合重新统计', () => {
     expect(summarize(plan(), new Set(['100'])).movedBookmarks).toBe(1)
     expect(summarize(plan(), new Set(['100'])).unchangedBookmarks).toBe(3)
+  })
+})
+
+describe('renumberPlan', () => {
+  const candidates3: CategoryCandidate[] = [
+    { id: 'tmp:1', path: ['01 AI'] },
+    { id: 'tmp:2', path: ['01 AI', '01.1 rag'] },
+    { id: 'tmp:3', path: ['02 开发'] },
+    { id: 'tmp:4', path: ['03 学习'] },
+    { id: 'tmp:5', path: ['04 金融'] },
+  ]
+  const items3: BookmarkItem[] = ['100', '101', '102'].map((id, i) => ({
+    id, title: `T${i}`, url: `https://s${i}.dev`, parentId: '1', index: i, currentPath: ['书签栏'],
+  }))
+  // 没有任何书签被分到「03 学习」
+  const classifications3: Classification[] = [
+    { bookmarkId: '100', targetCategoryId: 'tmp:2', confidence: 1, reason: '', source: 'llm' },
+    { bookmarkId: '101', targetCategoryId: 'tmp:3', confidence: 1, reason: '', source: 'llm' },
+    { bookmarkId: '102', targetCategoryId: 'tmp:5', confidence: 1, reason: '', source: 'llm' },
+  ]
+
+  function rebuildPlan() {
+    return buildPlan({
+      id: 'p', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: true,
+      items: items3, candidates: candidates3, classifications: classifications3,
+      newFolders: candidates3.map((c) => ({
+        temporaryId: c.id, parentId: '1', parentTemporaryId: null, title: c.path.at(-1)!,
+      })),
+    })
+  }
+
+  const allAccepted = new Set(['100', '101', '102'])
+
+  it('没收到书签的目录不占号，编号保持连续', () => {
+    const plan = renumberPlan(rebuildPlan(), allAccepted)
+    const tops = plan.candidates.filter((c) => c.path.length === 1).map((c) => c.path[0])
+    // 学习没收到书签，不参与编号，也不再顶着一个不会存在的号码
+    expect(tops).toEqual(['01 AI', '02 开发', '学习', '03 金融'])
+  })
+
+  it('子目录跟着父级前缀一起重排', () => {
+    const plan = renumberPlan(rebuildPlan(), allAccepted)
+    expect(plan.candidates.find((c) => c.id === 'tmp:2')!.path).toEqual(['01 AI', '01.1 rag'])
+  })
+
+  it('取消勾选导致某个目录空掉时，后面的目录顶上来', () => {
+    const plan = renumberPlan(rebuildPlan(), new Set(['101', '102']))
+    const numbered = plan.candidates
+      .filter((c) => c.path.length === 1 && /^\d/.test(c.path[0]!))
+      .map((c) => c.path[0])
+    expect(numbered).toEqual(['01 开发', '02 金融'])
+  })
+
+  it('create_folder 的标题与候选目录同步更新', () => {
+    const plan = renumberPlan(rebuildPlan(), new Set(['102']))
+    const created = plan.operations.find((o) => o.type === 'create_folder' && o.temporaryId === 'tmp:5')
+    expect((created as { title: string }).title).toBe('01 金融')
+  })
+
+  it('rows 的目标路径同步更新，预览与最终一致', () => {
+    const plan = renumberPlan(rebuildPlan(), allAccepted)
+    expect(plan.rows.find((r) => r.bookmarkId === '102')!.toPath).toEqual(['03 金融'])
+  })
+
+  it('本次没派上用场的已有目录不会被改名', () => {
+    const base = buildPlan({
+      id: 'p', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: true,
+      items: items3, candidates: candidates3, classifications: classifications3,
+      newFolders: [],
+      renameFolders: [
+        { folderId: 'tmp:4', oldTitle: '学习', newTitle: '03 学习' },
+        { folderId: 'tmp:3', oldTitle: '开发', newTitle: '02 开发' },
+      ],
+    })
+    const renames = renumberPlan(base, allAccepted).operations.filter((o) => o.type === 'rename_folder')
+    expect(renames).toEqual([
+      { type: 'rename_folder', folderId: 'tmp:3', oldTitle: '开发', newTitle: '02 开发' },
+    ])
+  })
+
+  it('非推翻模式原样返回，不动用户自己的目录名', () => {
+    const untouched = plan()
+    expect(renumberPlan(untouched, new Set(['100']))).toBe(untouched)
   })
 })

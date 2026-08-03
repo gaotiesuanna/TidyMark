@@ -1,9 +1,14 @@
 import { useMemo } from 'react'
-import { LOW_CONFIDENCE, summarize } from '@/core/plan'
+import { LOW_CONFIDENCE, renumberPlan, summarize } from '@/core/plan'
 import { useStore } from '../store'
 
 export function ReviewStep() {
-  const { plan, accepted, toggleAccepted, acceptAll, acceptHighConfidence, rejectAll, apply, busy, reset, settings } = useStore()
+  const { plan: rawPlan, accepted, toggleAccepted, acceptAll, acceptHighConfidence, rejectAll, apply, busy, reset, settings } = useStore()
+  // 显示的编号必须和真正会写进书签栏的一致，所以这里用同一个重排函数
+  const plan = useMemo(
+    () => (rawPlan === null ? null : renumberPlan(rawPlan, accepted)),
+    [rawPlan, accepted],
+  )
   const summary = useMemo(() => (plan === null ? null : summarize(plan, accepted)), [plan, accepted])
   if (plan === null || summary === null) return null
 

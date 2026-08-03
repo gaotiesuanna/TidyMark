@@ -1,3 +1,4 @@
+import { stripNumberPrefix } from './map'
 import type {
   BookmarkItem, BookmarkOperation, CategoryCandidate, Classification,
   OrganizePlan, PlanRow, PlanSummary,
@@ -103,6 +104,86 @@ export function buildPlan(input: BuildPlanInput): OrganizePlan {
   }
   plan.summary = summarize(plan, new Set(rows.map((r) => r.bookmarkId)), input.items.length)
   return plan
+}
+
+/**
+ * 按「真正会落地的目录」重新连续编号。
+ *
+ * 编号是建树阶段按主题统计分配的，但目录只有收到书签才会被创建：
+ * 分类模型没往某个目录放书签、或用户没勾选那些建议时，这个目录不会出现，
+ * 它占用的号码就会变成空号（01、02、04…）。这里在应用前重排一遍。
+ *
+ * 只对推翻模式生效——非推翻模式的目录名是用户自己的，不该改动。
+ */
+export function renumberPlan(plan: OrganizePlan, accepted: Set<string>): OrganizePlan {
+  if (!plan.rebuildStructure) return plan
+
+  const byId = new Map(plan.candidates.map((c) => [c.id, c]))
+  const topByTitle = new Map<string, CategoryCandidate>()
+  for (const candidate of plan.candidates) {
+    if (candidate.path.length === 1) topByTitle.set(candidate.path[0]!, candidate)
+  }
+
+  const used = new Set<string>()
+  const targetOf = new Map<string, string>()
+  for (const operation of plan.operations) {
+    if (operation.type !== 'move_bookmark' || !accepted.has(operation.bookmarkId)) continue
+    used.add(operation.toCategoryId)
+    targetOf.set(operation.bookmarkId, operation.toCategoryId)
+  }
+  // 子目录被用到时，它的父目录也必须保留
+  for (const id of [...used]) {
+    const candidate = byId.get(id)
+    if (candidate === undefined || candidate.path.length < 2) continue
+    const parent = topByTitle.get(candidate.path[0]!)
+    if (parent !== undefined) used.add(parent.id)
+  }
+
+  const renumbered = new Map<string, string[]>()
+  let topIndex = 0
+  for (const candidate of plan.candidates) {
+    if (candidate.path.length !== 1 || !used.has(candidate.id)) continue
+    topIndex++
+    const prefix = String(topIndex).padStart(2, '0')
+    const title = `${prefix} ${stripNumberPrefix(candidate.path[0]!)}`
+    renumbered.set(candidate.id, [title])
+
+    let childIndex = 0
+    for (const child of plan.candidates) {
+      if (child.path.length !== 2 || child.path[0] !== candidate.path[0] || !used.has(child.id)) continue
+      childIndex++
+      renumbered.set(child.id, [title, `${prefix}.${childIndex} ${stripNumberPrefix(child.path[1]!)}`])
+    }
+  }
+
+  const leaf = (id: string): string | null => renumbered.get(id)?.at(-1) ?? null
+  // 没派上用场的目录不该顶着一个不会存在的号码，显示裸名字
+  const pathFor = (candidate: CategoryCandidate): string[] =>
+    renumbered.get(candidate.id) ?? candidate.path.map(stripNumberPrefix)
+
+  const operations = plan.operations.flatMap((operation): BookmarkOperation[] => {
+    if (operation.type === 'create_folder') {
+      const title = leaf(operation.temporaryId)
+      return title === null ? [operation] : [{ ...operation, title }]
+    }
+    if (operation.type === 'rename_folder') {
+      const title = leaf(operation.folderId)
+      // 这个目录本次没派上用场，就别改人家的名字
+      return title === null ? [] : [{ ...operation, newTitle: title }]
+    }
+    return [operation]
+  })
+
+  return {
+    ...plan,
+    operations,
+    candidates: plan.candidates.map((c) => ({ ...c, path: pathFor(c) })),
+    rows: plan.rows.map((row) => {
+      const path = row.toPath.map(stripNumberPrefix)
+      const numbered = renumbered.get(targetOf.get(row.bookmarkId) ?? '')
+      return { ...row, toPath: numbered ?? path }
+    }),
+  }
 }
 
 export function summarize(
