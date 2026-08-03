@@ -203,7 +203,7 @@ describe('renumberPlan', () => {
     expect(plan.rows.find((r) => r.bookmarkId === '102')!.toPath).toEqual(['03 金融'])
   })
 
-  it('本次没派上用场的已有目录不会被改名', () => {
+  it('一级目录一律编号，本轮没收到书签的已有目录也不例外', () => {
     const base = buildPlan({
       id: 'p', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: true,
       items: items3, candidates: candidates3, classifications: classifications3,
@@ -213,15 +213,12 @@ describe('renumberPlan', () => {
         { folderId: 'tmp:3', oldTitle: '开发', newTitle: '02 开发' },
       ],
     })
-    const renames = renumberPlan(base, allAccepted).operations.filter((o) => o.type === 'rename_folder')
-    // 学习没收到书签、名字也没有编号，是用户自己的目录，不该动
-    expect(renames.some((o) => o.type === 'rename_folder' && o.folderId === 'tmp:4')).toBe(false)
-    expect(renames).toContainEqual(
-      { type: 'rename_folder', folderId: 'tmp:3', oldTitle: '开发', newTitle: '02 开发' },
-    )
-    // 金融是已有目录且带着旧编号，重排后号码变了就必须真的改名，否则磁盘上会留着 04
-    expect(renames).toContainEqual(
-      { type: 'rename_folder', folderId: 'tmp:5', oldTitle: '04 金融', newTitle: '03 金融' },
+    const renumbered = renumberPlan(base, allAccepted)
+    const tops = renumbered.candidates.filter((c) => c.path.length === 1).map((c) => c.path[0])
+    // 学习没收到书签，但它是范围内真实存在的一级目录，照样占号
+    expect(tops).toEqual(['01 AI', '02 开发', '03 学习', '04 金融'])
+    expect(renumbered.operations).toContainEqual(
+      { type: 'rename_folder', folderId: 'tmp:4', oldTitle: '学习', newTitle: '03 学习' },
     )
   })
 
@@ -244,6 +241,7 @@ describe('renumberPlan 重排上一轮遗留的编号目录', () => {
     { id: 'f-avatar', parentId: 'f-ai', title: '01.6 数字人' },
     { id: 'f-finance', parentId: '1', title: '03 金融' },
     { id: 'f-fastapi', parentId: '1', title: 'fastapi' },
+    { id: 'f-notes', parentId: 'f-ai', title: '我的笔记' },
   ]
 
   // 本轮只设计了 GitHub、AI（含子目录 dify）和兜底的「其他」
@@ -287,9 +285,15 @@ describe('renumberPlan 重排上一轮遗留的编号目录', () => {
     expect(titleOf(ops, 'f-avatar')).toBe('02 数字人')
   })
 
-  it('没带编号的用户自建目录不参与重排，也不被改名', () => {
+  it('用户自建的一级目录也必须编号', () => {
     const ops = renumberPlan(multiRoundPlan(), new Set(['200', '201']), scopeFolders).operations
-    expect(titleOf(ops, 'f-fastapi')).toBeUndefined()
+    // 设计的三个占 01-03，遗留的金融 04，用户自建的 fastapi 顺延到 05
+    expect(titleOf(ops, 'f-fastapi')).toBe('05 fastapi')
+  })
+
+  it('二级里用户自建的目录不编号，保持原样', () => {
+    const ops = renumberPlan(multiRoundPlan(), new Set(['200', '201']), scopeFolders).operations
+    expect(titleOf(ops, 'f-notes')).toBeUndefined()
   })
 
   it('范围根本身不参与编号', () => {

@@ -182,20 +182,28 @@ export function renumberPlan(
   const bareName = (id: string): string =>
     stripNumberPrefix(byId.get(id)?.path.at(-1) ?? folderById.get(id)?.title ?? '')
 
-  // 本轮没收到书签、但已经带着上一轮编号的真实目录也要重排，否则会和新号撞车
-  const participates = (id: string): boolean =>
-    used.has(id) || (!newFolderIds.has(id) && hasNumberPrefix(currentTitle(id)))
+  /**
+   * 一级目录一律编号：范围内每个真实存在的一级目录都参与重排，包括用户自建的。
+   * 二级只重排已经带编号的——用户在某个目录下自己整理的子目录保持原样。
+   * 两级都排除本轮新建但没收到书签的目录，它们根本不会被创建，不该占号。
+   */
+  const participates = (id: string, topLevel: boolean): boolean =>
+    used.has(id) || (!newFolderIds.has(id) && (topLevel || hasNumberPrefix(currentTitle(id))))
 
-  /** 本轮没进候选、但带着旧编号的遗留目录，接在设计好的目录后面。 */
-  const strays = (isChildOf: (folder: ScopeFolder) => boolean): string[] =>
+  /** 本轮没进候选的已有目录，接在设计好的目录后面。 */
+  const strays = (isChildOf: (folder: ScopeFolder) => boolean, topLevel: boolean): string[] =>
     scopeFolders
-      .filter((f) => !candidateIds.has(f.id) && !rootIds.has(f.id) && isChildOf(f) && hasNumberPrefix(f.title))
+      .filter(
+        (f) =>
+          !candidateIds.has(f.id) && !rootIds.has(f.id) && isChildOf(f) &&
+          (topLevel || hasNumberPrefix(f.title)),
+      )
       .map((f) => f.id)
 
   const renumbered = new Map<string, string[]>()
   const topIds = [
-    ...plan.candidates.filter((c) => c.path.length === 1 && participates(c.id)).map((c) => c.id),
-    ...strays((f) => f.parentId !== null && rootIds.has(f.parentId)),
+    ...plan.candidates.filter((c) => c.path.length === 1 && participates(c.id, true)).map((c) => c.id),
+    ...strays((f) => f.parentId !== null && rootIds.has(f.parentId), true),
   ]
 
   topIds.forEach((topId, index) => {
@@ -205,9 +213,9 @@ export function renumberPlan(
     const designedPath = byId.get(topId)?.path[0]
     const childIds = [
       ...plan.candidates
-        .filter((c) => c.path.length === 2 && c.path[0] === designedPath && participates(c.id))
+        .filter((c) => c.path.length === 2 && c.path[0] === designedPath && participates(c.id, false))
         .map((c) => c.id),
-      ...strays((f) => f.parentId === topId),
+      ...strays((f) => f.parentId === topId, false),
     ]
     childIds.forEach((childId, childIndex) => {
       const childTitle = `${String(childIndex + 1).padStart(2, '0')} ${bareName(childId)}`
