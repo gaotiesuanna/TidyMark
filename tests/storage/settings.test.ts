@@ -26,6 +26,7 @@ describe('设置存取', () => {
       llm: { baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-x', model: 'deepseek-chat' },
       rebuildStructure: true,
       removeEmptyFolders: false,
+      domainGroups: [],
     })
     const settings = await loadSettings(p)
     expect(settings.llm.model).toBe('deepseek-chat')
@@ -56,5 +57,23 @@ describe('分类缓存存取', () => {
     await saveCache(p, new Map([['k1', entry]]))
     const cache = await loadCache(p)
     expect(cache.get('k1')).toEqual(entry)
+  })
+})
+
+describe('domainGroups 设置', () => {
+  it('默认为空数组', async () => {
+    expect((await loadSettings(ports())).domainGroups).toEqual([])
+  })
+
+  it('旧版本存档缺少该字段时补上默认值', async () => {
+    const p = ports()
+    await p.storage.set('tidymark:settings', { rebuildStructure: true })
+    expect((await loadSettings(p)).domainGroups).toEqual([])
+  })
+
+  it('保存后能读回', async () => {
+    const p = ports()
+    await saveSettings(p, { ...DEFAULT_SETTINGS, domainGroups: ['github', 'paper'] })
+    expect((await loadSettings(p)).domainGroups).toEqual(['github', 'paper'])
   })
 })

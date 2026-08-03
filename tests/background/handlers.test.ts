@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { handle } from '@/background/handlers'
 import { createFakeBookmarks } from '../fakes/fake-bookmarks'
 import { createFakeStorage } from '../fakes/fake-storage'
-import { loadCache, saveSettings } from '@/storage/settings'
+import { loadCache, saveSettings, type Settings } from '@/storage/settings'
 import type { LlmClient } from '@/llm/client'
 import type { ProgressEvent } from '@/background/events'
 
@@ -55,6 +55,7 @@ describe('handle', () => {
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
       removeEmptyFolders: false,
+      domainGroups: [],
     })
     const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: { rows: unknown[] } }
     expect(res.plan.rows).toHaveLength(1)
@@ -70,6 +71,7 @@ describe('handle', () => {
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
       removeEmptyFolders: false,
+      domainGroups: [],
     })
     const analyzed = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: { rows: Array<{ bookmarkId: string }> } }
     const res = await handle(
@@ -91,6 +93,7 @@ describe('handle', () => {
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
       removeEmptyFolders: true,
+      domainGroups: [],
     })
     const analyzed = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: unknown }
     const res = await handle(
@@ -114,10 +117,11 @@ describe('handle', () => {
 
   it('设置可保存并读回', async () => {
     const { ports, deps } = setup()
-    const settings = {
+    const settings: Settings = {
       llm: { baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-d', model: 'deepseek-chat' },
       rebuildStructure: true,
       removeEmptyFolders: false,
+      domainGroups: [],
     }
     await handle(ports, { kind: 'save_settings', settings }, deps)
     const res = await handle(ports, { kind: 'get_settings' }, deps) as { settings: typeof settings }
@@ -142,6 +146,7 @@ describe('handle', () => {
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: true,
       removeEmptyFolders: false,
+      domainGroups: [],
     })
     const complete = vi.fn()
       .mockResolvedValueOnce({ results: [{ bookmark_id: '100', primary_topic: '前端', secondary_topic: 'React' }] })
@@ -167,6 +172,7 @@ describe('handle', () => {
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: true,
       removeEmptyFolders: false,
+      domainGroups: [],
     })
 
     // 标签固定为「前端」，分类时从 prompt 里读出「前端」目录的真实 id
@@ -222,6 +228,7 @@ describe('handle', () => {
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
       removeEmptyFolders: false,
+      domainGroups: [],
     })
     const events: ProgressEvent[] = []
     const complete = vi.fn().mockResolvedValue({
@@ -251,6 +258,7 @@ describe('handle', () => {
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
       removeEmptyFolders: false,
+      domainGroups: [],
     })
     const events: ProgressEvent[] = []
     const complete = vi.fn().mockRejectedValue(
@@ -283,6 +291,7 @@ describe('handle', () => {
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
       removeEmptyFolders: false,
+      domainGroups: [],
     })
     let cancelled = false
     const complete = vi.fn().mockImplementation(async () => {
@@ -305,6 +314,7 @@ describe('handle', () => {
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
       removeEmptyFolders: false,
+      domainGroups: [],
     })
     let cancelled = false
     const complete = vi.fn().mockImplementation(async () => {
@@ -326,6 +336,7 @@ describe('handle', () => {
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
       removeEmptyFolders: false,
+      domainGroups: [],
     })
     const complete = vi.fn().mockRejectedValue(
       Object.assign(new Error('模型接口返回 400: This response_format type is unavailable now'), {
@@ -356,6 +367,7 @@ describe('handle', () => {
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
       removeEmptyFolders: false,
+      domainGroups: [],
     })
     // 第一批成功、第二批失败
     const complete = vi.fn()

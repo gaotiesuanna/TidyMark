@@ -10,12 +10,15 @@ export interface Settings {
   rebuildStructure: boolean
   /** 整理完成后清理范围内不含任何书签的目录。 */
   removeEmptyFolders: boolean
+  /** 勾选的域名聚合组 key，见 core/domainGroups.ts。为空表示不聚合。 */
+  domainGroups: string[]
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   llm: { baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-4o-mini' },
   rebuildStructure: false,
   removeEmptyFolders: true,
+  domainGroups: [],
 }
 
 export const PRESETS: Array<{ label: string; baseUrl: string; model: string }> = [
@@ -32,6 +35,7 @@ export async function loadSettings(ports: Ports): Promise<Settings> {
     llm: { ...DEFAULT_SETTINGS.llm, ...(stored?.llm ?? {}) },
     rebuildStructure: stored?.rebuildStructure ?? DEFAULT_SETTINGS.rebuildStructure,
     removeEmptyFolders: stored?.removeEmptyFolders ?? DEFAULT_SETTINGS.removeEmptyFolders,
+    domainGroups: stored?.domainGroups ?? DEFAULT_SETTINGS.domainGroups,
   }
 }
 

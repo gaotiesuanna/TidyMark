@@ -1,4 +1,5 @@
 import { PRESETS } from '@/storage/settings'
+import { DOMAIN_GROUPS } from '@/core/domainGroups'
 import { useStore } from '../store'
 
 export function PreferencesStep() {
@@ -93,6 +94,41 @@ export function PreferencesStep() {
             </span>
           </span>
         </label>
+
+        <div className="mt-3 border-t pt-3">
+          <p className="text-sm">
+            单独聚合这些站点
+            <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-400">
+              勾选的站点会各自成为一个顶级目录，目录内再按主题细分。
+              只在「推翻现有文件夹结构」开启时生效。
+            </span>
+          </p>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            {DOMAIN_GROUPS.map((group) => (
+              <label
+                key={group.key}
+                className={`flex items-center gap-1.5 text-xs ${
+                  settings.rebuildStructure ? '' : 'text-neutral-300'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  aria-label={group.folderTitle}
+                  className="h-3.5 w-3.5"
+                  disabled={!settings.rebuildStructure}
+                  checked={settings.domainGroups.includes(group.key)}
+                  onChange={(e) => void setSettings({
+                    ...settings,
+                    domainGroups: e.target.checked
+                      ? [...settings.domainGroups, group.key]
+                      : settings.domainGroups.filter((key) => key !== group.key),
+                  })}
+                />
+                {group.folderTitle}
+              </label>
+            ))}
+          </div>
+        </div>
       </section>
 
       <div className="flex gap-2">
