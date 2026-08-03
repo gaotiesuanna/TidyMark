@@ -162,7 +162,8 @@ export async function handle(
         log(
           'apply',
           `整理${result.status === 'completed' ? '完成' : '中断'}：执行 ${result.executed} 步，` +
-            `清理空文件夹 ${result.removedFolders.length} 个`,
+            `清理空文件夹 ${result.removedFolders.length} 个，` +
+            `按编号排位 ${result.sortedFolders} 个目录`,
           result.status === 'completed' ? 'info' : 'error',
         )
         return { ok: true, kind: 'apply', result }

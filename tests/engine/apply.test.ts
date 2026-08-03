@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { applyPlan, PROGRESS_KEY } from '@/engine/apply'
 import { loadSnapshot } from '@/engine/snapshot'
+import { undoLast } from '@/engine/undo'
 import { buildPlan } from '@/core/plan'
 import { createFakeBookmarks } from '../fakes/fake-bookmarks'
 import { createFakeStorage } from '../fakes/fake-storage'
@@ -218,5 +219,87 @@ describe('applyPlan 清理空文件夹', () => {
     expect(result.status).toBe('failed')
     expect(result.removedFolders).toEqual([])
     expect(fake.structure()).toContain('书签栏/react')
+  })
+})
+
+describe('applyPlan 按编号排列目录', () => {
+  // 编号顺序与实际排列不一致：01 在最后，未编号的在最前
+  const messy = [
+    { id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: 'f-fastapi', title: 'fastapi', children: [] },
+        { id: 'f-ai', title: '02 AI', children: [
+          { id: 'f-rag', title: '02 RAG', children: [] },
+          { id: 'f-dify', title: '01 dify', children: [] },
+        ]},
+        { id: 'f-github', title: '01 GitHub', children: [
+          { id: '100', title: 'React 文档', url: 'https://react.dev' },
+        ]},
+      ]},
+    ]},
+  ]
+
+  function messyPlan(rebuildStructure: boolean) {
+    return buildPlan({
+      id: 'p-order', createdAt: 1, scopeRootIds: ['1'], rebuildStructure,
+      items: [{
+        id: '100', title: 'React 文档', url: 'https://react.dev',
+        parentId: 'f-github', index: 0, currentPath: ['书签栏', '01 GitHub'],
+      }],
+      candidates: [{ id: 'f-ai', path: ['书签栏', '02 AI'] }],
+      classifications: [
+        { bookmarkId: '100', targetCategoryId: 'f-ai', confidence: 1, reason: 'r', source: 'llm' },
+      ],
+      newFolders: [],
+    })
+  }
+
+  /** get() 不返回 children，只能从整棵树里找。 */
+  const childTitles = async (ports: { bookmarks: BookmarksApi }, id: string): Promise<string[]> => {
+    const stack = [...(await ports.bookmarks.getTree())]
+    while (stack.length > 0) {
+      const node = stack.pop()!
+      if (node.id === id) return (node.children ?? []).map((c) => c.title)
+      for (const child of node.children ?? []) stack.push(child)
+    }
+    throw new Error(`找不到目录 ${id}`)
+  }
+
+  it('推翻模式下带编号的目录按编号升序排到最前', async () => {
+    const fake = createFakeBookmarks(messy)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await applyPlan(ports, messyPlan(true), new Set(['100']))
+    expect(await childTitles(ports, '1')).toEqual(['01 GitHub', '02 AI', 'fastapi'])
+  })
+
+  it('子目录同样按编号排列', async () => {
+    const fake = createFakeBookmarks(messy)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await applyPlan(ports, messyPlan(true), new Set(['100']))
+    expect(await childTitles(ports, 'f-ai')).toEqual(['01 dify', '02 RAG', 'React 文档'])
+  })
+
+  it('结果里记录排序过的目录数量', async () => {
+    const fake = createFakeBookmarks(messy)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    const result = await applyPlan(ports, messyPlan(true), new Set(['100']))
+    expect(result.sortedFolders).toBe(4)
+  })
+
+  it('非推翻模式不动用户自己的排列', async () => {
+    const fake = createFakeBookmarks(messy)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    const result = await applyPlan(ports, messyPlan(false), new Set(['100']))
+    expect(result.sortedFolders).toBe(0)
+    expect(await childTitles(ports, '1')).toEqual(['fastapi', '02 AI', '01 GitHub'])
+  })
+
+  it('撤销后目录顺序还原', async () => {
+    const fake = createFakeBookmarks(messy)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await applyPlan(ports, messyPlan(true), new Set(['100']))
+    await undoLast(ports)
+    expect(await childTitles(ports, '1')).toEqual(['fastapi', '02 AI', '01 GitHub'])
+    expect(await childTitles(ports, 'f-ai')).toEqual(['02 RAG', '01 dify'])
   })
 })

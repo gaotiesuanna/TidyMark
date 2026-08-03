@@ -1,4 +1,5 @@
 import { findEmptyFolders, type EmptyFolder } from '@/core/empty'
+import { planFolderOrder } from '@/core/order'
 import { filterAccepted } from '@/core/plan'
 import type { Ports } from '@/core/ports'
 import type { OrganizePlan } from '@/core/types'
@@ -18,6 +19,8 @@ export interface ApplyResult {
   createdFolderIds: string[]
   /** 移动完成后被清理掉的空目录，撤销时会重建。 */
   removedFolders: EmptyFolder[]
+  /** 按编号重新排位的目录数量。 */
+  sortedFolders: number
   failedAt: number | null
   error: string | null
 }
@@ -48,6 +51,30 @@ async function removeEmpty(
     }
   }
   return removed
+}
+
+/**
+ * 让带编号的目录在书签栏里真的按编号排列。
+ *
+ * 必须在移动与清理都结束之后调用——依据的是最终的真实书签树。
+ * 单个目录排序失败不影响其余，最多是它留在原位。
+ */
+async function sortFolders(
+  ports: Ports,
+  scopeRootIds: string[],
+  skipped: SkipRecord[],
+): Promise<number> {
+  const tree = await ports.bookmarks.getTree()
+  let sorted = 0
+  for (const move of planFolderOrder(tree, scopeRootIds)) {
+    try {
+      await ports.bookmarks.move(move.id, { parentId: move.parentId, index: move.index })
+      sorted++
+    } catch (error) {
+      skipped.push({ bookmarkId: move.id, reason: `目录排序失败：${String(error)}` })
+    }
+  }
+  return sorted
 }
 
 export async function applyPlan(
@@ -110,6 +137,7 @@ export async function applyPlan(
         skipped,
         createdFolderIds,
         removedFolders: [],
+        sortedFolders: 0,
         failedAt: i,
         error: String(error),
       }
@@ -122,10 +150,15 @@ export async function applyPlan(
       ? await removeEmpty(ports, plan.scopeRootIds, skipped)
       : []
 
+  // 非推翻模式不产生编号，也就没有需要排序的目录，不该动用户自己的排列
+  const sortedFolders = plan.rebuildStructure
+    ? await sortFolders(ports, plan.scopeRootIds, skipped)
+    : 0
+
   await saveSnapshot(ports, { ...snapshot, createdFolderIds })
   await ports.storage.remove(PROGRESS_KEY)
   return {
-    status: 'completed', executed, skipped, createdFolderIds, removedFolders,
+    status: 'completed', executed, skipped, createdFolderIds, removedFolders, sortedFolders,
     failedAt: null, error: null,
   }
 }
