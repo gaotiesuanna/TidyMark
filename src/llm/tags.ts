@@ -1,3 +1,4 @@
+import { matchDomainGroup } from '@/core/domainGroups'
 import { sanitizeUrl } from '@/core/sanitize'
 import type { BookmarkItem, TagResult } from '@/core/types'
 import type { LlmClient } from './client'
@@ -32,8 +33,8 @@ const SCHEMA = {
   },
 }
 
-function buildPrompt(items: BookmarkItem[]): string {
-  const payload = items.map((item) => {
+function payloadOf(items: BookmarkItem[]): unknown[] {
+  return items.map((item) => {
     const url = sanitizeUrl(item.url)
     return {
       bookmark_id: item.id,
@@ -43,6 +44,9 @@ function buildPrompt(items: BookmarkItem[]): string {
       current_folder: item.currentPath.join(' / '),
     }
   })
+}
+
+function buildPrompt(items: BookmarkItem[]): string {
   return [
     '为每个书签抽取主题标签，用于后续统计并设计目录结构。',
     '',
@@ -53,8 +57,34 @@ function buildPrompt(items: BookmarkItem[]): string {
     '4. 尽量复用已出现过的主题名，不要为同一概念创造多个说法。',
     '',
     '书签列表：',
-    JSON.stringify(payload, null, 2),
+    JSON.stringify(payloadOf(items), null, 2),
   ].join('\n')
+}
+
+/**
+ * 聚合组内部的细分提示词。
+ *
+ * 通用提示词要的是「宽泛的一级主题」，可这批书签的共同点已经写在组名上了：
+ * 再抽一次「AI」「开发」毫无区分度，105 个 GitHub 仓库会挤进三四个目录。
+ * 这里换成问「它解决什么问题」，并明令禁止那些宽泛词。
+ */
+function buildGroupPrompt(groupTitle: string): (items: BookmarkItem[]) => string {
+  return (items) =>
+    [
+      `下面这些书签全部来自「${groupTitle}」。这个共同点已经体现在目录名上，不要再拿它当分类依据。`,
+      '为每个书签抽取一个「功能域」标签，回答「它解决什么问题」。',
+      '',
+      '规则：',
+      '1. 禁止使用这些宽泛词：AI、人工智能、开发、编程、技术、工具、学习、资源、其他。',
+      '2. 用具体的问题域，例如「文档解析」「RAG 检索」「模型微调」「语音合成」「Agent 框架」「可观测性」。',
+      '3. title 通常是「作者/仓库名: 一句话简介」，简介是判断用途最可靠的依据。',
+      '4. 标签用中文，2 到 6 个字；专有技术名词（RAG、MCP、TTS）可直接用原文。',
+      '5. 尽量复用已出现过的标签名，不要为同一概念创造多个说法。',
+      '6. secondary_topic 一律返回 null——组内只分一层。',
+      '',
+      '书签列表：',
+      JSON.stringify(payloadOf(items), null, 2),
+    ].join('\n')
 }
 
 export interface ExtractOptions {
@@ -66,10 +96,12 @@ export interface ExtractOptions {
   isCancelled?: () => boolean
 }
 
-export async function extractTags(
+async function runExtraction(
   items: BookmarkItem[],
   client: LlmClient,
-  options: ExtractOptions = {},
+  buildOnePrompt: (batch: BookmarkItem[]) => string,
+  options: ExtractOptions,
+  label: string,
 ): Promise<TagResult[]> {
   const batchSize = options.batchSize ?? 25
   const concurrency = options.concurrency ?? 4
@@ -87,7 +119,7 @@ export async function extractTags(
       const index = cursor++
       const batch = batches[index]!
       try {
-        const raw = (await client.complete(buildPrompt(batch), SCHEMA)) as {
+        const raw = (await client.complete(buildOnePrompt(batch), SCHEMA)) as {
           results?: Array<{ bookmark_id: string; primary_topic: string; secondary_topic: string | null }>
         }
         const byId = new Map((raw.results ?? []).map((r) => [r.bookmark_id, r]))
@@ -99,14 +131,14 @@ export async function extractTags(
             secondaryTopic: hit?.secondary_topic ?? null,
           })
         }
-        options.onLog?.(`标签批次 ${index + 1}/${batches.length}：${batch.length} 条`, 'info')
+        options.onLog?.(`${label} ${index + 1}/${batches.length}：${batch.length} 条`, 'info')
       } catch (error) {
         console.error('[TidyMark] 标签抽取失败：', error)
         for (const item of batch) {
           resolved.set(item.id, { bookmarkId: item.id, primaryTopic: NO_TOPIC, secondaryTopic: null })
         }
         options.onLog?.(
-          `标签批次 ${index + 1}/${batches.length} 失败，这批书签不参与目录设计：${String(error)}`,
+          `${label} ${index + 1}/${batches.length} 失败，这批书签不参与目录设计：${String(error)}`,
           'error',
         )
       }
@@ -121,4 +153,50 @@ export async function extractTags(
     (item) =>
       resolved.get(item.id) ?? { bookmarkId: item.id, primaryTopic: NO_TOPIC, secondaryTopic: null },
   )
+}
+
+export async function extractTags(
+  items: BookmarkItem[],
+  client: LlmClient,
+  options: ExtractOptions = {},
+): Promise<TagResult[]> {
+  return runExtraction(items, client, buildPrompt, options, '标签批次')
+}
+
+/**
+ * 命中聚合组的书签换一套更细的标签重抽一次。
+ *
+ * 抽取失败的书签保留原来的宽泛标签——好过让它们彻底失去归属。
+ */
+export async function refineGroupTags(
+  tags: TagResult[],
+  bookmarks: BookmarkItem[],
+  domainGroups: string[],
+  client: LlmClient,
+  options: ExtractOptions = {},
+): Promise<TagResult[]> {
+  if (domainGroups.length === 0) return tags
+
+  const byGroup = new Map<string, { title: string; items: BookmarkItem[] }>()
+  for (const item of bookmarks) {
+    const group = matchDomainGroup(item, domainGroups)
+    if (group === null) continue
+    const bucket = byGroup.get(group.key) ?? { title: group.folderTitle, items: [] }
+    bucket.items.push(item)
+    byGroup.set(group.key, bucket)
+  }
+  if (byGroup.size === 0) return tags
+
+  const refined = new Map<string, TagResult>()
+  for (const { title, items } of byGroup.values()) {
+    if (options.isCancelled?.() === true) break
+    const results = await runExtraction(
+      items, client, buildGroupPrompt(title), options, `${title} 功能域`,
+    )
+    for (const result of results) {
+      if (result.primaryTopic !== NO_TOPIC) refined.set(result.bookmarkId, result)
+    }
+  }
+
+  return tags.map((tag) => refined.get(tag.bookmarkId) ?? tag)
 }

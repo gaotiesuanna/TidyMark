@@ -9,7 +9,7 @@ import { loadSnapshot } from '@/engine/snapshot'
 import { undoLast } from '@/engine/undo'
 import { createLlmClient, type LlmClient, type LlmConfig } from '@/llm/client'
 import { classifyBookmarks } from '@/llm/classify'
-import { extractTags } from '@/llm/tags'
+import { extractTags, refineGroupTags } from '@/llm/tags'
 import { loadCache, loadSettings, saveCache, saveSettings } from '@/storage/settings'
 import type { EmitProgress, ProgressPhase } from './events'
 import type { Request, Response } from './messages'
@@ -78,6 +78,14 @@ export async function handle(
             isCancelled,
           })
           if (isCancelled()) return CANCELLED
+          // 组内的共同点已经写在目录名上，通用标签在这里没有区分度，换一套细的重抽
+          if (settings.domainGroups.length > 0) {
+            tags = await refineGroupTags(tags, scan.bookmarks, settings.domainGroups, client, {
+              onLog: (message, level) => log('tags', message, level),
+              isCancelled,
+            })
+            if (isCancelled()) return CANCELLED
+          }
           const tree_ = buildCategoryTree({
             tags, rootId, existingFolders: scan.folders,
             bookmarks: scan.bookmarks, domainGroups: settings.domainGroups,

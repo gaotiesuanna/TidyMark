@@ -405,8 +405,9 @@ function setupAnalyze(urls: Record<string, string>) {
     ]},
   ])
   const classifyPrompts: string[] = []
+  // 标签阶段有两种提示词（通用抽取 + 聚合组细分），分类阶段只有一种，正向识别它
   const complete = vi.fn(async (prompt: string) => {
-    if (prompt.includes('抽取主题标签')) {
+    if (!prompt.includes('候选目录')) {
       return {
         results: Object.keys(urls).map((id) => ({
           bookmark_id: id, primary_topic: '工具', secondary_topic: null,
@@ -497,5 +498,34 @@ describe('analyze 的域名聚合', () => {
     })
     const plan = await analyzePlan(ports, deps)
     expect(plan.tags).toEqual([])
+  })
+})
+
+describe('analyze 对聚合组做细分抽取', () => {
+  it('勾选聚合组时会为组内书签单独跑一次功能域抽取', async () => {
+    const { ports, deps } = setupAnalyze({ g0: 'https://github.com/o/r0' })
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: true,
+      domainGroups: ['github'],
+    })
+    await analyzePlan(ports, deps)
+    const prompts = (deps.createClient().complete as ReturnType<typeof vi.fn>).mock.calls
+      .map((call) => call[0] as string)
+    expect(prompts.some((p) => p.includes('功能域'))).toBe(true)
+  })
+
+  it('没勾选聚合组时不多花这次调用', async () => {
+    const { ports, deps } = setupAnalyze({ n0: 'https://example.com/0' })
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: true,
+    })
+    await analyzePlan(ports, deps)
+    const prompts = (deps.createClient().complete as ReturnType<typeof vi.fn>).mock.calls
+      .map((call) => call[0] as string)
+    expect(prompts.some((p) => p.includes('功能域'))).toBe(false)
   })
 })

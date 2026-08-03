@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { extractTags, NO_TOPIC } from '@/llm/tags'
+import { extractTags, refineGroupTags, NO_TOPIC } from '@/llm/tags'
 import type { BookmarkItem } from '@/core/types'
 
 function item(id: string, url: string): BookmarkItem {
@@ -45,5 +45,61 @@ describe('extractTags', () => {
     const complete = vi.fn().mockResolvedValue({ results: [] })
     await extractTags([item('1', 'https://x.dev/a?token=SECRET')], { complete })
     expect(complete.mock.calls[0]![0]).not.toContain('SECRET')
+  })
+})
+
+describe('refineGroupTags', () => {
+  const gh = (id: string) => item(id, `https://github.com/o/r${id}`)
+  const other = (id: string) => item(id, `https://example.com/${id}`)
+  const broad = (id: string) => ({ bookmarkId: id, primaryTopic: 'AI', secondaryTopic: null })
+
+  it('聚合组内的书签换成更细的功能域标签', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      results: [{ bookmark_id: '1', primary_topic: '文档解析', secondary_topic: null }],
+    })
+    const result = await refineGroupTags(
+      [broad('1')], [gh('1')], ['github'], { complete },
+    )
+    expect(result).toEqual([{ bookmarkId: '1', primaryTopic: '文档解析', secondaryTopic: null }])
+  })
+
+  it('没命中聚合组的书签保持原标签，也不进请求', async () => {
+    const complete = vi.fn().mockResolvedValue({ results: [] })
+    const result = await refineGroupTags(
+      [broad('1'), broad('2')], [gh('1'), other('2')], ['github'], { complete },
+    )
+    expect(result[1]).toEqual(broad('2'))
+    expect(complete.mock.calls[0]![0]).not.toContain('"2"')
+  })
+
+  it('没勾选任何聚合组时原样返回，不发请求', async () => {
+    const complete = vi.fn()
+    expect(await refineGroupTags([broad('1')], [gh('1')], [], { complete })).toEqual([broad('1')])
+    expect(complete).not.toHaveBeenCalled()
+  })
+
+  it('细分失败时保留原来的宽泛标签，不让书签失去归属', async () => {
+    const complete = vi.fn().mockRejectedValue(Object.assign(new Error('x'), { retryable: false }))
+    const result = await refineGroupTags([broad('1')], [gh('1')], ['github'], { complete })
+    expect(result).toEqual([broad('1')])
+  })
+
+  it('提示词点名组名并禁用宽泛词', async () => {
+    const complete = vi.fn().mockResolvedValue({ results: [] })
+    await refineGroupTags([broad('1')], [gh('1')], ['github'], { complete })
+    const prompt = complete.mock.calls[0]![0] as string
+    expect(prompt).toContain('GitHub')
+    expect(prompt).toContain('禁止使用')
+  })
+
+  it('多个聚合组各自单独抽取', async () => {
+    const complete = vi.fn().mockResolvedValue({ results: [] })
+    await refineGroupTags(
+      [broad('1'), broad('2')],
+      [gh('1'), item('2', 'https://arxiv.org/abs/1')],
+      ['github', 'paper'],
+      { complete },
+    )
+    expect(complete).toHaveBeenCalledTimes(2)
   })
 })
