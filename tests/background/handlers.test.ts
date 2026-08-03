@@ -105,4 +105,21 @@ describe('handle', () => {
     expect(res).toMatchObject({ ok: false })
     expect((res as { error: string }).error).toContain('boom')
   })
+
+  it('推翻模式下先抽标签建树，再把书签分到新目录', async () => {
+    const fake = createFakeBookmarks(tree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: true,
+    })
+    const complete = vi.fn()
+      .mockResolvedValueOnce({ results: [{ bookmark_id: '100', primary_topic: '前端', secondary_topic: 'React' }] })
+      .mockResolvedValueOnce({ results: [{ bookmark_id: '100', target_category_id: 'tmp:1', confidence: 0.9, reason: 'r' }] })
+    const deps = { createClient: () => ({ complete }), now: () => 1 }
+
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: { operations: Array<{ type: string }> } }
+    expect(complete).toHaveBeenCalledTimes(2)
+    expect(res.plan.operations.some((o) => o.type === 'create_folder')).toBe(true)
+  })
 })

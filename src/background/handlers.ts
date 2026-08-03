@@ -1,12 +1,14 @@
 import { buildCandidatesFromFolders } from '@/core/map'
-import { buildPlan } from '@/core/plan'
+import { buildPlan, type NewFolderSpec } from '@/core/plan'
 import { scanTree } from '@/core/scan'
+import { buildCategoryTree } from '@/core/tree'
 import type { Ports } from '@/core/ports'
 import { applyPlan } from '@/engine/apply'
 import { loadSnapshot } from '@/engine/snapshot'
 import { undoLast } from '@/engine/undo'
 import { createLlmClient, type LlmClient, type LlmConfig } from '@/llm/client'
 import { classifyBookmarks } from '@/llm/classify'
+import { extractTags } from '@/llm/tags'
 import { loadCache, loadSettings, saveCache, saveSettings } from '@/storage/settings'
 import type { Request, Response } from './messages'
 
@@ -40,7 +42,24 @@ export async function handle(
         }
         const tree = await ports.bookmarks.getTree()
         const scan = scanTree(tree, request.scopeRootIds)
-        const candidates = buildCandidatesFromFolders(scan.folders, request.scopeRootIds)
+
+        const client = createClient(settings.llm)
+        let candidates = buildCandidatesFromFolders(scan.folders, request.scopeRootIds)
+        let newFolders: NewFolderSpec[] = []
+
+        if (settings.rebuildStructure) {
+          const rootId = request.scopeRootIds[0]
+          if (rootId === undefined) return { ok: false, error: '未选择任何范围。' }
+          const tags = await extractTags(scan.bookmarks, client)
+          const tree_ = buildCategoryTree({
+            tags,
+            rootId,
+            existingFolders: scan.folders.map((f) => f.title),
+          })
+          candidates = tree_.candidates
+          newFolders = tree_.newFolders
+        }
+
         if (candidates.length === 0) {
           return { ok: false, error: '所选范围内没有可用的目标文件夹。请开启「重建结构」或先选择包含子文件夹的范围。' }
         }
@@ -48,7 +67,7 @@ export async function handle(
         const classifications = await classifyBookmarks({
           items: scan.bookmarks,
           candidates,
-          client: createClient(settings.llm),
+          client,
           cache,
         })
         await saveCache(ports, cache)
@@ -60,7 +79,7 @@ export async function handle(
           items: scan.bookmarks,
           candidates,
           classifications,
-          newFolders: [],
+          newFolders,
         })
         return { ok: true, kind: 'analyze', plan }
       }

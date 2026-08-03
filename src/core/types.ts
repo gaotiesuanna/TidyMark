@@ -85,3 +85,10 @@ export interface OrganizePlan {
   rows: PlanRow[]
   summary: PlanSummary
 }
+
+/** 推翻模式下由模型抽取的主题标签，供 core/tree.ts 聚合成目录树。 */
+export interface TagResult {
+  bookmarkId: string
+  primaryTopic: string
+  secondaryTopic: string | null
+}
