@@ -64,3 +64,11 @@ describe('ScopeStep 目录展开', () => {
     expect([...useStore.getState().checkedIds].sort()).toEqual(['10', '100', '1000'])
   })
 })
+
+describe('ScopeStep 导出入口', () => {
+  it('选范围页上挂着导出面板', () => {
+    render(<ScopeStep />)
+    expect(screen.getByRole('button', { name: '带文件夹结构' })).toBeDefined()
+    expect(screen.getByRole('button', { name: '纯链接清单' })).toBeDefined()
+  })
+})

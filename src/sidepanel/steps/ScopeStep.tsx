@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { BookmarkTree, topLevelNodes } from '../components/BookmarkTree'
+import { ExportPanel } from '../components/ExportPanel'
 import { collectAllFolderIds, useStore } from '../store'
 
 export function ScopeStep() {
@@ -57,6 +58,7 @@ export function ScopeStep() {
       >
         扫描选中的 {checkedIds.size} 个文件夹
       </button>
+      <ExportPanel />
     </div>
   )
 }
