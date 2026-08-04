@@ -10,6 +10,7 @@ export function downloadJson(filename: string, data: unknown): void {
   anchor.href = url
   anchor.download = filename
   anchor.click()
-  // 立刻 revoke 有可能赶在下载真正启动之前把 URL 抽掉，推迟到本轮任务结束再回收
-  setTimeout(() => URL.revokeObjectURL(url), 0)
+  // 延迟 0 只让出一个宏任务，余量太薄：大 Blob 下下载启动与 revoke 存在竞态
+  // （FileSaver.js 等成熟实现用的是数十秒量级），这里用 1000ms 换取更充分的安全余量
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

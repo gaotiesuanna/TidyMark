@@ -24,6 +24,10 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
+  // createObjectURL / revokeObjectURL 是直接赋值上去的（jsdom 没实现），
+  // vi.restoreAllMocks() 只能恢复 spy，恢复不了直接赋值，得手动删掉
+  Reflect.deleteProperty(URL, 'createObjectURL')
+  Reflect.deleteProperty(URL, 'revokeObjectURL')
 })
 
 describe('downloadJson', () => {

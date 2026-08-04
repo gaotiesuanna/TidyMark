@@ -17,14 +17,14 @@ export interface ExportLink {
 }
 
 export interface TreeExport {
-  format: string
+  format: typeof EXPORT_FORMAT
   kind: 'tree'
   exportedAt: string
   roots: ExportNode[]
 }
 
 export interface LinksExport {
-  format: string
+  format: typeof EXPORT_FORMAT
   kind: 'links'
   exportedAt: string
   bookmarks: ExportLink[]

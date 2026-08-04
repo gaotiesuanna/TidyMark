@@ -9,7 +9,7 @@ import { downloadJson } from '../lib/download'
 import { useStore } from '../store'
 
 export function ExportPanel() {
-  const { tree, checkedIds } = useStore()
+  const { tree, checkedIds, busy } = useStore()
   const scopeRootIds = useMemo(() => [...checkedIds], [checkedIds])
   const count = useMemo(() => countScopedBookmarks(tree, scopeRootIds), [tree, scopeRootIds])
 
@@ -29,14 +29,14 @@ export function ExportPanel() {
       <div className="flex gap-1 text-xs">
         <button
           className="flex-1 rounded border py-1.5 hover:bg-neutral-50 disabled:opacity-40"
-          disabled={checkedIds.size === 0}
+          disabled={checkedIds.size === 0 || busy !== null}
           onClick={exportTree}
         >
           带文件夹结构
         </button>
         <button
           className="flex-1 rounded border py-1.5 hover:bg-neutral-50 disabled:opacity-40"
-          disabled={checkedIds.size === 0}
+          disabled={checkedIds.size === 0 || busy !== null}
           onClick={exportLinks}
         >
           纯链接清单

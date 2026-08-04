@@ -4,6 +4,9 @@ import { fileURLToPath, URL } from 'node:url'
 export default defineConfig({
   test: {
     globals: true,
+    // 钉死时区：exportFileName 用本地日期、exportedAt 用 UTC，两者故意不同源，
+    // 测试机时区不固定的话这条契约测不出来（比如把实现悄悄换成 UTC 也能全绿）。
+    env: { TZ: 'Asia/Shanghai' },
     projects: [
       {
         extends: true,
