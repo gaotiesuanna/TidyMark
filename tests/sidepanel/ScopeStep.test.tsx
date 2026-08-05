@@ -19,7 +19,10 @@ const tree: BookmarkNode[] = [
 ]
 
 beforeEach(() => {
-  useStore.setState({ tree, checkedIds: new Set(), busy: null, error: null })
+  useStore.setState({
+    tree, checkedIds: new Set(), busy: null, error: null,
+    importFile: null, importError: null, importDone: null,
+  })
 })
 
 describe('ScopeStep 目录展开', () => {
@@ -70,5 +73,12 @@ describe('ScopeStep 导出入口', () => {
     render(<ScopeStep />)
     expect(screen.getByRole('button', { name: '带文件夹结构' })).toBeDefined()
     expect(screen.getByRole('button', { name: '纯链接清单' })).toBeDefined()
+  })
+})
+
+describe('ScopeStep 导入入口', () => {
+  it('选范围页上挂着导入面板', () => {
+    render(<ScopeStep />)
+    expect(screen.getByText('导入书签文件…')).toBeDefined()
   })
 })
