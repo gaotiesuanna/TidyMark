@@ -88,7 +88,8 @@ export function countScopedBookmarks(tree: BookmarkNode[], scopeRootIds: string[
   return scopedLinks(tree, scopeRootIds).length
 }
 
-function localDate(at: Date): string {
+/** 本地日期串，形如 2026-08-04。导出的文件名和导入的目标文件夹名共用它。 */
+export function localDate(at: Date): string {
   const pad = (n: number): string => String(n).padStart(2, '0')
   return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`
 }
