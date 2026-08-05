@@ -52,16 +52,24 @@ export function ScopeStep() {
           onToggleExpand={toggleExpand}
         />
       </div>
-      <button
-        className="w-full rounded bg-neutral-800 py-2 text-sm text-white disabled:opacity-40"
-        disabled={checkedIds.size === 0 || busy !== null}
-        onClick={() => void goScan()}
-      >
-        扫描选中的 {checkedIds.size} 个文件夹
-      </button>
-      <div className="space-y-4 border-t pt-3">
-        <ExportPanel />
-        <ImportPanel />
+      {/* 操作区钉在底部：书签上千条时目录树很长，扫描按钮不该被推到要滚半天才看得见的地方。
+          负的左右外边距抵掉 <main> 的 p-4，让顶边线和白底铺满整宽——否则树滚到下面会从两侧透出来；
+          负的下外边距让它贴住窗口底边，pb-4 把内边距补回来。 */}
+      <div className="sticky bottom-0 -mx-4 -mb-4 space-y-3 border-t border-neutral-200 bg-white px-4 pb-4 pt-3">
+        <button
+          className="w-full cursor-pointer rounded-md bg-neutral-800 py-2 text-sm font-medium text-white transition-colors duration-150 hover:enabled:bg-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
+          disabled={checkedIds.size === 0 || busy !== null}
+          onClick={() => void goScan()}
+        >
+          扫描选中的 {checkedIds.size} 个文件夹
+        </button>
+        {/* 灰底成组：把「分享书签」这条支线整体降一级，不跟上面的主操作抢注意力。
+            组内再用一条分隔线把导出和导入切开。 */}
+        <section className="space-y-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+          <ExportPanel />
+          <div className="border-t border-neutral-200" />
+          <ImportPanel />
+        </section>
       </div>
     </div>
   )

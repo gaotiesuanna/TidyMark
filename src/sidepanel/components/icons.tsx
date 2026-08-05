@@ -1,0 +1,89 @@
+import type { ReactNode } from 'react'
+
+/**
+ * 一套 24×24、stroke 1.75 的线性图标（Lucide 画法），统一描边宽度与圆角。
+ * 一律 aria-hidden：图标只是文字标签的视觉补充，读屏读文字就够了，
+ * 也保证按钮的可访问名仍然只有中文标签。
+ */
+function Icon({ className, children }: { className?: string; children: ReactNode }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      className={className ?? 'h-3.5 w-3.5'}
+    >
+      {children}
+    </svg>
+  )
+}
+
+export function DownloadIcon({ className }: { className?: string }) {
+  return (
+    <Icon {...(className === undefined ? {} : { className })}>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M12 15V3" />
+    </Icon>
+  )
+}
+
+export function UploadIcon({ className }: { className?: string }) {
+  return (
+    <Icon {...(className === undefined ? {} : { className })}>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="m17 8-5-5-5 5" />
+      <path d="M12 3v12" />
+    </Icon>
+  )
+}
+
+export function FileIcon({ className }: { className?: string }) {
+  return (
+    <Icon {...(className === undefined ? {} : { className })}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+    </Icon>
+  )
+}
+
+export function FolderIcon({ className }: { className?: string }) {
+  return (
+    <Icon {...(className === undefined ? {} : { className })}>
+      <path d="M4 20a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2z" />
+    </Icon>
+  )
+}
+
+export function LinkIcon({ className }: { className?: string }) {
+  return (
+    <Icon {...(className === undefined ? {} : { className })}>
+      <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
+      <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
+    </Icon>
+  )
+}
+
+export function CheckCircleIcon({ className }: { className?: string }) {
+  return (
+    <Icon {...(className === undefined ? {} : { className })}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8.5 12.5 2.5 2.5 4.5-5" />
+    </Icon>
+  )
+}
+
+export function AlertIcon({ className }: { className?: string }) {
+  return (
+    <Icon {...(className === undefined ? {} : { className })}>
+      <path d="M10.3 3.9 1.9 18a2 2 0 0 0 1.7 3h16.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </Icon>
+  )
+}
