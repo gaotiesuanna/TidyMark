@@ -450,6 +450,56 @@ describe('handle', () => {
   })
 })
 
+describe('handle import', () => {
+  it('把节点建到书签栏下的目标文件夹里', async () => {
+    const { fake, ports, deps } = setup()
+    const res = await handle(ports, {
+      kind: 'import',
+      targetName: '导入 2026-08-04',
+      nodes: [
+        { name: 'NiceG', children: [{ name: 'shadcn/ui', url: 'https://ui.shadcn.com' }] },
+        { name: 'Figma', url: 'https://figma.com' },
+      ],
+    }, deps)
+
+    expect(res).toMatchObject({ ok: true, kind: 'import' })
+    expect(fake.structure()).toContain('书签栏/导入 2026-08-04/NiceG/shadcn/ui')
+    expect(fake.structure()).toContain('书签栏/导入 2026-08-04/Figma')
+  })
+
+  it('返回导入的统计', async () => {
+    const { ports, deps } = setup()
+    const res = await handle(ports, {
+      kind: 'import',
+      targetName: '导入',
+      nodes: [{ name: 'A', children: [{ name: 'B', url: 'https://b.dev' }] }],
+    }, deps) as { result: { bookmarks: number; folders: number; folderId: string } }
+
+    expect(res.result.bookmarks).toBe(1)
+    expect(res.result.folders).toBe(1)
+    expect(res.result.folderId).toBeDefined()
+  })
+
+  it('找不到书签栏时报错而不是乱建', async () => {
+    const empty = createFakeBookmarks([{ id: '0', title: '', children: [] }])
+    const ports = { bookmarks: empty.api, storage: createFakeStorage() }
+    const res = await handle(ports, { kind: 'import', targetName: '导入', nodes: [] }, { now: () => 1 })
+    expect(res).toEqual({ ok: false, error: '找不到书签栏，无法导入。' })
+  })
+
+  it('导入完成后写一条日志', async () => {
+    const { ports, deps } = setup()
+    const events: ProgressEvent[] = []
+    await handle(ports, {
+      kind: 'import', targetName: '导入', nodes: [{ name: 'A', url: 'https://a.dev' }],
+    }, { ...deps, onEvent: (e) => events.push(e) })
+
+    const line = events.find((e) => e.phase === 'import')
+    expect(line).toBeDefined()
+    expect(line!.message).toContain('1')
+  })
+})
+
 /**
  * 造一棵只有「书签栏 / 收件箱」的树，收件箱里放指定的书签。
  * 标签阶段与分类阶段共用一个 fake client：按 prompt 里的关键字区分。

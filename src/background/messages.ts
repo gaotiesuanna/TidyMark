@@ -3,6 +3,8 @@ import type { ApplyResult } from '@/engine/apply'
 import type { UndoResult } from '@/engine/undo'
 import type { BookmarkNode } from '@/core/ports'
 import type { Settings } from '@/storage/settings'
+import type { ExportNode } from '@/core/export'
+import type { ImportResult } from '@/engine/importTree'
 
 export type Request =
   | { kind: 'get_tree' }
@@ -13,6 +15,7 @@ export type Request =
   | { kind: 'get_settings' }
   | { kind: 'save_settings'; settings: Settings }
   | { kind: 'get_undo_state' }
+  | { kind: 'import'; nodes: ExportNode[]; targetName: string }
   | { kind: 'cancel' }
 
 export type Response =
@@ -24,6 +27,7 @@ export type Response =
   | { ok: true; kind: 'get_settings'; settings: Settings }
   | { ok: true; kind: 'save_settings' }
   | { ok: true; kind: 'get_undo_state'; available: boolean; createdAt: number | null }
+  | { ok: true; kind: 'import'; result: ImportResult }
   | { ok: true; kind: 'cancel' }
   /** cancelled 为 true 表示用户主动取消，不是出错。 */
   | { ok: false; error: string; cancelled?: boolean }

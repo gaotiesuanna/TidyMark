@@ -13,6 +13,8 @@ import { classifyBookmarks } from '@/llm/classify'
 import { designTagFolders } from '@/llm/folders'
 import { extractTags, refineGroupTags } from '@/llm/tags'
 import { loadCache, loadSettings, saveCache, saveSettings } from '@/storage/settings'
+import { findBookmarksBar } from '@/core/import'
+import { importTree } from '@/engine/importTree'
 import type { EmitProgress, ProgressPhase } from './events'
 import type { Request, Response } from './messages'
 
@@ -206,6 +208,17 @@ export async function handle(
       case 'save_settings':
         await saveSettings(ports, request.settings)
         return { ok: true, kind: 'save_settings' }
+
+      case 'import': {
+        // 用自己新读的树查书签栏，不接受侧栏传来的 id——那份树可能已经过期
+        const tree = await ports.bookmarks.getTree()
+        const bar = findBookmarksBar(tree)
+        if (bar === null) return { ok: false, error: '找不到书签栏，无法导入。' }
+
+        const result = await importTree(ports, request.nodes, request.targetName, bar.id)
+        log('import', `导入完成：${result.bookmarks} 条书签、${result.folders} 个文件夹`)
+        return { ok: true, kind: 'import', result }
+      }
 
       // 取消标记由 service worker 持有，这里只是让消息类型闭合
       case 'cancel':
