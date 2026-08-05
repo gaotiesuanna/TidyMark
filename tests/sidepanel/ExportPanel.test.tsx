@@ -35,7 +35,7 @@ describe('ExportPanel', () => {
     render(<ExportPanel />)
     expect(screen.getByRole('button', { name: '带文件夹结构' })).toHaveProperty('disabled', true)
     expect(screen.getByRole('button', { name: '纯链接清单' })).toHaveProperty('disabled', true)
-    expect(screen.getByText('导出选中的 0 条书签')).toBeDefined()
+    expect(screen.getByText(/导出选中的 0 条书签/)).toBeDefined()
   })
 
   it('busy 非 null 时按钮禁用，即使已勾选——整页锁定态下导出也不该可点', () => {
@@ -48,7 +48,7 @@ describe('ExportPanel', () => {
   it('提示的条数与勾选范围一致', () => {
     useStore.setState({ checkedIds: new Set(['10', '100']) })
     render(<ExportPanel />)
-    expect(screen.getByText('导出选中的 2 条书签')).toBeDefined()
+    expect(screen.getByText(/导出选中的 2 条书签/)).toBeDefined()
   })
 
   it('勾选后按钮启用', () => {

@@ -59,7 +59,7 @@ export function ScopeStep() {
       >
         扫描选中的 {checkedIds.size} 个文件夹
       </button>
-      <div className="space-y-2 border-t pt-3">
+      <div className="space-y-4 border-t pt-3">
         <ExportPanel />
         <ImportPanel />
       </div>

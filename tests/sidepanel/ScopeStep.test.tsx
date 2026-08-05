@@ -79,6 +79,6 @@ describe('ScopeStep 导出入口', () => {
 describe('ScopeStep 导入入口', () => {
   it('选范围页上挂着导入面板', () => {
     render(<ScopeStep />)
-    expect(screen.getByText('导入书签文件…')).toBeDefined()
+    expect(screen.getByText('选择文件…')).toBeDefined()
   })
 })

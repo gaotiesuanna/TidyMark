@@ -139,14 +139,18 @@ export function ImportPanel() {
   }
 
   return (
-    <div className="text-xs">
+    <div className="space-y-1 text-xs">
       {picker}
+      {/* 标题带方向箭头，与上方导出组区分开；否则三个按钮长得一样，导入会被当成第三个导出选项 */}
+      <p className="text-neutral-500">
+        <span aria-hidden="true">↑ </span>导入别人分享的书签
+      </p>
       <button
         className="w-full rounded border py-1.5 hover:bg-neutral-50 disabled:opacity-40"
         disabled={busy !== null}
         onClick={() => inputRef.current?.click()}
       >
-        导入书签文件…
+        选择文件…
       </button>
     </div>
   )

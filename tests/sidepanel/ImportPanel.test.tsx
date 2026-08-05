@@ -44,14 +44,19 @@ beforeEach(() => {
 describe('ImportPanel 待选态', () => {
   it('只显示一个导入按钮', () => {
     render(<ImportPanel />)
-    expect(screen.getByText('导入书签文件…')).toBeDefined()
+    expect(screen.getByText('选择文件…')).toBeDefined()
     expect(screen.queryByText('确认导入')).toBeNull()
   })
 
   it('busy 时按钮禁用', () => {
     useStore.setState({ busy: '正在扫描…' })
     render(<ImportPanel />)
-    expect(screen.getByRole('button', { name: '导入书签文件…' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: '选择文件…' })).toHaveProperty('disabled', true)
+  })
+
+  it('带分组标题，与上方的导出组区分开', () => {
+    render(<ImportPanel />)
+    expect(screen.getByText(/导入别人分享的书签/)).toBeDefined()
   })
 })
 
@@ -69,7 +74,7 @@ describe('ImportPanel 出错态', () => {
     render(<ImportPanel />)
     await userEvent.click(screen.getByText('重新选择'))
     expect(screen.queryByText('这个文件不是有效的 JSON。')).toBeNull()
-    expect(screen.getByText('导入书签文件…')).toBeDefined()
+    expect(screen.getByText('选择文件…')).toBeDefined()
   })
 })
 
@@ -160,7 +165,7 @@ describe('ImportPanel 预览态', () => {
     render(<ImportPanel />)
     await userEvent.click(screen.getByText('取消'))
     expect(send).not.toHaveBeenCalled()
-    expect(screen.getByText('导入书签文件…')).toBeDefined()
+    expect(screen.getByText('选择文件…')).toBeDefined()
   })
 
   it('没有可导入内容时确认按钮禁用', () => {
@@ -209,7 +214,7 @@ describe('ImportPanel 结果态', () => {
   it('点完成回到待选态', async () => {
     render(<ImportPanel />)
     await userEvent.click(screen.getByText('完成'))
-    expect(screen.getByText('导入书签文件…')).toBeDefined()
+    expect(screen.getByText('选择文件…')).toBeDefined()
   })
 
   it('一条都没跳过时不显示清单', () => {
