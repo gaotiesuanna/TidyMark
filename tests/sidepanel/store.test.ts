@@ -151,3 +151,57 @@ describe('结构确认步骤', () => {
     expect(useStore.getState().structureEdits).toEqual({ renames: {}, removed: [] })
   })
 })
+
+describe('readImportFile', () => {
+  const good = JSON.stringify({
+    format: 'tidymark/v1', kind: 'tree', exportedAt: '',
+    roots: [{ name: 'A', children: [{ name: 'a', url: 'https://a.dev' }] }],
+  })
+
+  it('解析成功时存下文件名与预览，并清掉旧错误', () => {
+    useStore.setState({ tree, importError: '上一次的错误', importFile: null })
+    useStore.getState().readImportFile('x.json', good)
+
+    const state = useStore.getState()
+    expect(state.importError).toBeNull()
+    expect(state.importFile!.name).toBe('x.json')
+    expect(state.importFile!.preview.bookmarkCount).toBe(1)
+    expect(state.importFile!.preview.folderCount).toBe(1)
+  })
+
+  it('解析失败时存下错误，并清掉旧预览', () => {
+    useStore.setState({ tree, importError: null })
+    useStore.getState().readImportFile('x.json', good)
+    useStore.getState().readImportFile('bad.json', '不是 json')
+
+    const state = useStore.getState()
+    expect(state.importError).toBe('这个文件不是有效的 JSON。')
+    expect(state.importFile).toBeNull()
+  })
+
+  it('重复计数用的是 store 里的书签树', () => {
+    // 上面的 tree fixture 里有 https://a.dev
+    useStore.setState({ tree, importError: null, importFile: null })
+    useStore.getState().readImportFile('x.json', good)
+    expect(useStore.getState().importFile!.preview.duplicateCount).toBe(1)
+  })
+})
+
+describe('resetImport', () => {
+  it('三段状态一起清空', () => {
+    useStore.setState({
+      importError: '错误',
+      importFile: null,
+      importDone: {
+        result: { folderId: '1', bookmarks: 1, folders: 0, skipped: [] },
+        blocked: [], targetName: '导入', barTitle: '书签栏',
+      },
+    })
+    useStore.getState().resetImport()
+
+    const state = useStore.getState()
+    expect(state.importError).toBeNull()
+    expect(state.importFile).toBeNull()
+    expect(state.importDone).toBeNull()
+  })
+})

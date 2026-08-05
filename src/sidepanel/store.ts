@@ -4,7 +4,12 @@ import type { BookmarkNode } from '@/core/ports'
 import { LOW_CONFIDENCE, renumberPlan } from '@/core/plan'
 import { applyStructureEdits, EMPTY_EDITS, type StructureEdits } from '@/core/structure'
 import type { OrganizePlan, ScanResult } from '@/core/types'
+import {
+  buildImportPreview, parseImportFile,
+  type BlockedLink, type ImportPreview,
+} from '@/core/import'
 import type { ApplyResult } from '@/engine/apply'
+import type { ImportResult } from '@/engine/importTree'
 import type { UndoResult } from '@/engine/undo'
 import type { Settings } from '@/storage/settings'
 import { DEFAULT_SETTINGS } from '@/storage/settings'
@@ -120,6 +125,17 @@ interface State {
   logSeq: number
   /** 结构确认页的草稿态编辑，不写进 Settings，每次 analyze 重置。 */
   structureEdits: StructureEdits
+  /** 已选中并解析成功的导入文件。 */
+  importFile: { name: string; preview: ImportPreview } | null
+  /** 文件级校验没过的原因，与 importFile 互斥。 */
+  importError: string | null
+  /** 导入完成后的结果，blocked 来自归一阶段，与 result.skipped 分开存但一起展示。 */
+  importDone: {
+    result: ImportResult
+    blocked: BlockedLink[]
+    targetName: string
+    barTitle: string
+  } | null
 
   init(): Promise<void>
   refreshTree(): Promise<void>
@@ -139,6 +155,9 @@ interface State {
   rejectAll(): void
   apply(): Promise<void>
   undo(): Promise<void>
+  readImportFile(name: string, text: string): void
+  confirmImport(): Promise<void>
+  resetImport(): void
   reset(): void
 }
 
@@ -160,6 +179,9 @@ export const useStore = create<State>((set, get) => ({
   logs: [],
   logSeq: 0,
   structureEdits: EMPTY_EDITS,
+  importFile: null,
+  importError: null,
+  importDone: null,
 
   /** 整理或撤销之后重新读一次书签树，结果页据此展示真实结构。 */
   async refreshTree() {
@@ -323,6 +345,52 @@ export const useStore = create<State>((set, get) => ({
     if (res.kind !== 'undo') return set({ busy: null, busyKind: null })
     set({ undoResult: res.result, undoAvailable: false, busy: null, busyKind: null })
     await get().refreshTree()
+  },
+
+  readImportFile(name, text) {
+    const parsed = parseImportFile(text)
+    if (!parsed.ok) {
+      return set({ importError: parsed.error, importFile: null, importDone: null })
+    }
+    set({
+      importError: null,
+      importDone: null,
+      importFile: {
+        name,
+        preview: buildImportPreview(parsed.doc, get().tree, new Date()),
+      },
+    })
+  },
+
+  async confirmImport() {
+    const file = get().importFile
+    if (file === null) return
+    set({ busy: '正在导入…', busyKind: null, error: null })
+
+    const res = await send({
+      kind: 'import',
+      nodes: file.preview.nodes,
+      targetName: file.preview.targetName,
+    })
+    if (!res.ok) return set({ busy: null, error: res.error })
+    if (res.kind !== 'import') return set({ busy: null })
+
+    set({
+      importDone: {
+        result: res.result,
+        blocked: file.preview.blocked,
+        targetName: file.preview.targetName,
+        barTitle: file.preview.barTitle,
+      },
+      importFile: null,
+      busy: null,
+    })
+    // 新文件夹要立刻出现在上面的勾选树里，用户可以接着勾上做整理
+    await get().refreshTree()
+  },
+
+  resetImport() {
+    set({ importFile: null, importError: null, importDone: null })
   },
 
   reset() {
