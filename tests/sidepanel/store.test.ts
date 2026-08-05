@@ -185,6 +185,22 @@ describe('readImportFile', () => {
     useStore.getState().readImportFile('x.json', good)
     expect(useStore.getState().importFile!.preview.duplicateCount).toBe(1)
   })
+
+  it('归一过程意外抛异常时落到「文件结构损坏。」而不是抛出去（白屏兜底）', () => {
+    // 构造一棵 children getter 会抛异常的书签树，模拟解析/归一阶段任何未预见的运行时异常
+    const explosiveTree = [{
+      id: '0', title: '',
+      get children(): BookmarkNode[] { throw new Error('boom') },
+    }] as unknown as BookmarkNode[]
+    useStore.setState({ tree: explosiveTree, importError: null, importFile: null, importDone: null })
+
+    expect(() => useStore.getState().readImportFile('x.json', good)).not.toThrow()
+
+    const state = useStore.getState()
+    expect(state.importError).toBe('文件结构损坏。')
+    expect(state.importFile).toBeNull()
+    expect(state.importDone).toBeNull()
+  })
 })
 
 describe('resetImport', () => {

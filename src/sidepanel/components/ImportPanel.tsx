@@ -121,13 +121,14 @@ export function ImportPanel() {
         <div className="flex gap-1">
           <button
             className="flex-1 rounded bg-neutral-800 py-1.5 text-white disabled:opacity-40"
-            disabled={preview.bookmarkCount === 0 && preview.folderCount === 0}
+            disabled={(preview.bookmarkCount === 0 && preview.folderCount === 0) || busy !== null}
             onClick={() => void confirmImport()}
           >
             确认导入
           </button>
           <button
-            className="flex-1 rounded border py-1.5 hover:bg-neutral-50"
+            className="flex-1 rounded border py-1.5 hover:bg-neutral-50 disabled:opacity-40"
+            disabled={busy !== null}
             onClick={resetImport}
           >
             取消

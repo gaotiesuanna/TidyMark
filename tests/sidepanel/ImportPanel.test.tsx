@@ -127,6 +127,35 @@ describe('ImportPanel 预览态', () => {
     ])
   })
 
+  it('导入成功后 importDone.blocked 带上预览阶段拦下的条目，且 importFile 被清空', async () => {
+    // confirmImport 成功后还会 refreshTree()，也就是再发一次 get_tree 请求，按 kind 分派两次调用
+    vi.mocked(send).mockImplementation(async (message: { kind: string }) => {
+      if (message.kind === 'import') {
+        return {
+          ok: true, kind: 'import',
+          result: { folderId: '99', bookmarks: 1, folders: 1, skipped: [] },
+        }
+      }
+      return { ok: true, kind: 'get_tree', tree }
+    })
+    render(<ImportPanel />)
+    await userEvent.click(screen.getByText('确认导入'))
+
+    const state = useStore.getState()
+    expect(state.importFile).toBeNull()
+    expect(state.importDone).not.toBeNull()
+    expect(state.importDone!.blocked).toEqual([
+      { name: '坏的', url: 'javascript:alert(1)', reason: '不安全的链接类型（javascript:）' },
+    ])
+  })
+
+  it('busy 时确认导入与取消按钮都禁用', () => {
+    useStore.setState({ busy: '正在导入…' })
+    render(<ImportPanel />)
+    expect(screen.getByRole('button', { name: '确认导入' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: '取消' })).toHaveProperty('disabled', true)
+  })
+
   it('点取消回到待选态且不发请求', async () => {
     render(<ImportPanel />)
     await userEvent.click(screen.getByText('取消'))

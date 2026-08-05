@@ -348,24 +348,30 @@ export const useStore = create<State>((set, get) => ({
   },
 
   readImportFile(name, text) {
-    const parsed = parseImportFile(text)
-    if (!parsed.ok) {
-      return set({ importError: parsed.error, importFile: null, importDone: null })
+    // 兜底：解析或归一阶段任何未预见的异常（比如坏文件触发的意外报错）都不能让侧栏白屏或悄无声息地卡住。
+    try {
+      const parsed = parseImportFile(text)
+      if (!parsed.ok) {
+        return set({ importError: parsed.error, importFile: null, importDone: null, error: null })
+      }
+      set({
+        importError: null,
+        importDone: null,
+        error: null,
+        importFile: {
+          name,
+          preview: buildImportPreview(parsed.doc, get().tree, new Date()),
+        },
+      })
+    } catch {
+      set({ importError: '文件结构损坏。', importFile: null, importDone: null, error: null })
     }
-    set({
-      importError: null,
-      importDone: null,
-      importFile: {
-        name,
-        preview: buildImportPreview(parsed.doc, get().tree, new Date()),
-      },
-    })
   },
 
   async confirmImport() {
     const file = get().importFile
     if (file === null) return
-    set({ busy: '正在导入…', busyKind: null, error: null })
+    set({ busy: '正在导入…', busyKind: null, error: null, progress: null, logs: [] })
 
     const res = await send({
       kind: 'import',
@@ -390,7 +396,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   resetImport() {
-    set({ importFile: null, importError: null, importDone: null })
+    set({ importFile: null, importError: null, importDone: null, error: null })
   },
 
   reset() {

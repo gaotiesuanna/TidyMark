@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildImportPreview, findBookmarksBar, parseImportFile } from '@/core/import'
+import type { ExportNode } from '@/core/export'
 import type { BookmarkNode } from '@/core/ports'
 
 const tree: BookmarkNode[] = [
@@ -60,6 +61,13 @@ describe('parseImportFile 文件级校验', () => {
     const text = JSON.stringify({ format: 'tidymark/v1', kind: 'csv', roots: [] })
     expect(parseImportFile(text)).toEqual({
       ok: false, error: '无法识别的导出类型：csv',
+    })
+  })
+
+  it('kind 字段缺失时报错并带上 undefined', () => {
+    const text = JSON.stringify({ format: 'tidymark/v1', roots: [] })
+    expect(parseImportFile(text)).toEqual({
+      ok: false, error: '无法识别的导出类型：undefined',
     })
   })
 
@@ -160,6 +168,18 @@ describe('buildImportPreview 节点级容错', () => {
     expect(preview.nodes).toEqual([{ name: 'B', url: 'https://b.dev' }])
   })
 
+  it('url 非字符串但 children 是数组时当成文件夹处理', () => {
+    const doc = parsed(treeDoc([
+      { name: 'A', url: 42, children: [{ name: 'B', url: 'https://b.dev' }] },
+    ]))
+    const preview = buildImportPreview(doc, tree, AT)
+    expect(preview.nodes).toEqual([
+      { name: 'A', children: [{ name: 'B', url: 'https://b.dev' }] },
+    ])
+    expect(preview.folderCount).toBe(1)
+    expect(preview.bookmarkCount).toBe(1)
+  })
+
   it('url 与 children 同时存在时按书签处理', () => {
     const doc = parsed(treeDoc([
       { name: 'A', url: 'https://a.dev', children: [{ name: 'C', url: 'https://c.dev' }] },
@@ -172,6 +192,36 @@ describe('buildImportPreview 节点级容错', () => {
   it('坏节点被剔除后不计入统计', () => {
     const doc = parsed(treeDoc([null, { name: 'A', url: 'https://a.dev' }]))
     expect(buildImportPreview(doc, tree, AT).bookmarkCount).toBe(1)
+  })
+
+  it('超过 MAX_DEPTH（64）的嵌套被截断且不抛异常，64 层以内正常保留', () => {
+    // 用循环构造一条深度 100 的文件夹链，链条最底部挂一个书签
+    function nestedChain(depth: number): unknown {
+      let node: unknown = { name: 'leaf', url: 'https://leaf.dev' }
+      for (let i = depth; i >= 1; i--) node = { name: `f${i}`, children: [node] }
+      return node
+    }
+    const doc = parsed(treeDoc([nestedChain(100), { name: '正常的', url: 'https://normal.dev' }]))
+
+    expect(() => buildImportPreview(doc, tree, AT)).not.toThrow()
+    const preview = buildImportPreview(doc, tree, AT)
+
+    // 同级的正常书签完全不受深链条影响
+    expect(preview.nodes.find((n) => n.name === '正常的')).toEqual({
+      name: '正常的', url: 'https://normal.dev',
+    })
+
+    // 沿深链条往下走，数一数实际保留了几层——超过 64 层的部分（包括最底部的叶子书签）应当被丢弃
+    let node: ExportNode = preview.nodes.find((n) => n.name === 'f1')!
+    let levels = 1
+    while ('children' in node && node.children.length > 0) {
+      levels += 1
+      node = node.children[0]!
+    }
+    expect(levels).toBeLessThan(100)
+    expect(levels).toBeLessThanOrEqual(65)
+    // 走到底是个空文件夹（叶子书签被丢弃），不是那颗 leaf 书签本身
+    expect('url' in node).toBe(false)
   })
 })
 
@@ -201,6 +251,26 @@ describe('buildImportPreview 拦截不安全链接', () => {
     const preview = buildImportPreview(doc, tree, AT)
     expect(preview.nodes).toEqual([])
     expect(preview.blocked).toHaveLength(3)
+  })
+
+  it('拦得住藏在 tab/LF/CR 里、绕开单纯 trimStart 的绕过变体', () => {
+    const doc = parsed(treeDoc([
+      { name: 'A', url: 'java\tscript:alert(1)' },
+      { name: 'B', url: 'java\nscript:alert(1)' },
+      { name: 'C', url: 'javascript\t:alert(1)' },
+      { name: 'D', url: ' javascript:alert(1)' },
+      { name: 'E', url: 'da\tta:text/html,x' },
+    ]))
+    const preview = buildImportPreview(doc, tree, AT)
+    expect(preview.nodes).toEqual([])
+    expect(preview.blocked).toHaveLength(5)
+  })
+
+  it('URL 片段里含 javascript 字样的正常链接不被误拦', () => {
+    const doc = parsed(treeDoc([{ name: 'A', url: 'https://x.dev/#javascript:foo' }]))
+    const preview = buildImportPreview(doc, tree, AT)
+    expect(preview.nodes).toEqual([{ name: 'A', url: 'https://x.dev/#javascript:foo' }])
+    expect(preview.blocked).toEqual([])
   })
 
   it('file:// 与 chrome:// 照常放行', () => {

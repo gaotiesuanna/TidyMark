@@ -49,16 +49,34 @@ export function parseImportFile(text: string): ParseResult {
  */
 const BLOCKED_SCHEMES = ['javascript:', 'data:'] as const
 
+/**
+ * 比对前先按 URL 标准做解析前处理：
+ * 首部的 C0 控制符与空格、以及任意位置的 tab/LF/CR，都会被 URL 解析器去掉。
+ * 只做 trimStart 的话，"java\tscript:" 这种会溜过去而浏览器照样当 javascript: 执行。
+ */
 function blockedScheme(url: string): string | null {
-  const lower = url.trimStart().toLowerCase()
-  return BLOCKED_SCHEMES.find((scheme) => lower.startsWith(scheme)) ?? null
+  const canonical = url
+    .replace(/^[\u0000-\u0020]+/, '')
+    .replace(/[\t\n\r]/g, '')
+    .trimStart() // JS 认得而 URL 解析器不认得的 Unicode 空白，宁可多拦
+    .toLowerCase()
+  return BLOCKED_SCHEMES.find((scheme) => canonical.startsWith(scheme)) ?? null
 }
 
 /**
- * 把来路不明的一条原始数据归一成 ExportNode，归一不了就返回 null 由调用方丢弃。
- * 被安全策略拦下的条目不是「丢弃」，要记进 blocked 让用户看见。
+ * 真实书签树的层级远达不到这个数——超过大概率是构造出来的坏文件（或恶意文件）。
+ * JSON.parse 本身撑得住远超此值的嵌套，若不设界，后续的 count / NodeRow
+ * 等递归会在深层输入下栈溢出，把整个侧栏搞崩，比整份拒绝还难看。
  */
-function normalize(raw: unknown, blocked: BlockedLink[]): ExportNode | null {
+const MAX_DEPTH = 64
+
+/**
+ * 把来路不明的一条原始数据归一成 ExportNode，归一不了就返回 null 由调用方丢弃。
+ * 被安全策略拦下的条目不是「丢弃」，要记进 blocked 让用户看见；
+ * 超过 MAX_DEPTH 的子树同样当坏节点丢弃——它不是安全问题，不记进 blocked。
+ */
+function normalize(raw: unknown, blocked: BlockedLink[], depth = 0): ExportNode | null {
+  if (depth > MAX_DEPTH) return null
   if (typeof raw !== 'object' || raw === null) return null
   const node = raw as Record<string, unknown>
   const name = typeof node.name === 'string' ? node.name : ''
@@ -75,7 +93,7 @@ function normalize(raw: unknown, blocked: BlockedLink[]): ExportNode | null {
   if ('children' in node) {
     const children = Array.isArray(node.children)
       ? node.children
-          .map((child) => normalize(child, blocked))
+          .map((child) => normalize(child, blocked, depth + 1))
           .filter((child): child is ExportNode => child !== null)
       : []
     return { name, children }
