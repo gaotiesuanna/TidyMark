@@ -77,3 +77,31 @@ describe('createFakeBookmarks', () => {
     await expect(fake.api.move('999', { parentId: '1' })).rejects.toThrow(/不存在/)
   })
 })
+
+describe('createFakeBookmarks 建书签', () => {
+  it('create 带 url 时建出的是书签而不是文件夹', async () => {
+    const fake = createFakeBookmarks(initial)
+    const created = await fake.api.create({
+      parentId: '11', title: '新书签', url: 'https://new.dev',
+    })
+    expect(created.url).toBe('https://new.dev')
+
+    const tree = await fake.api.getTree()
+    const blogs = tree[0]!.children![1]!
+    const added = blogs.children![1]!
+    expect(added.title).toBe('新书签')
+    expect(added.url).toBe('https://new.dev')
+    // 书签没有 children，否则会被当成文件夹
+    expect(added.children).toBeUndefined()
+  })
+
+  it('create 不带 url 时仍然建文件夹', async () => {
+    const fake = createFakeBookmarks(initial)
+    const created = await fake.api.create({ parentId: '11', title: '新文件夹' })
+    expect(created.url).toBeUndefined()
+
+    const tree = await fake.api.getTree()
+    const added = tree[0]!.children![1]!.children![1]!
+    expect(added.children).toEqual([])
+  })
+})

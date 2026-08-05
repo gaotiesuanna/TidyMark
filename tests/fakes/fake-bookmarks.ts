@@ -79,10 +79,10 @@ export function createFakeBookmarks(initial: TreeSpec[]): FakeBookmarks {
       const entry = entries.get(id)
       return entry ? toNode(entry, false) : null
     },
-    async create({ parentId, title, index }) {
+    async create({ parentId, title, index, url }) {
       const parent = must(parentId)
       const id = String(nextId++)
-      entries.set(id, { id, parentId, title, childIds: [] })
+      entries.set(id, { id, parentId, title, url, childIds: [] })
       const at = index ?? parent.childIds.length
       parent.childIds.splice(at, 0, id)
       return toNode(must(id), false)
