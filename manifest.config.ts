@@ -9,5 +9,18 @@ export default defineManifest({
   optional_host_permissions: ['https://*/*', 'http://localhost/*', 'http://127.0.0.1/*'],
   background: { service_worker: 'src/background/service-worker.ts', type: 'module' },
   side_panel: { default_path: 'src/sidepanel/index.html' },
-  action: { default_title: 'TidyMark' },
+  // 图标由 tools/gen-icon.py 生成，源文件在 public/icons/，改配色或形状后重跑该脚本
+  icons: {
+    16: 'icons/icon-16.png',
+    32: 'icons/icon-32.png',
+    48: 'icons/icon-48.png',
+    128: 'icons/icon-128.png',
+  },
+  action: {
+    default_title: 'TidyMark',
+    default_icon: {
+      16: 'icons/icon-16.png',
+      32: 'icons/icon-32.png',
+    },
+  },
 })
