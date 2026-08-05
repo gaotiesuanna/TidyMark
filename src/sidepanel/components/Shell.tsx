@@ -14,8 +14,11 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-screen flex-col bg-white text-neutral-800">
       <header className="border-b px-4 py-3">
-        <h1 className="text-base font-semibold">TidyMark</h1>
-        <ol className="mt-2 flex gap-1 text-xs">
+        {/* Chrome 侧栏顶部已经显示了图标和「TidyMark」，这里再写一遍是重复，还白占一行高度。
+            但那个标题栏属于浏览器界面、不在本文档里，读屏用户在文档中导航时找不到它，
+            所以只是视觉隐藏而非删除——保证这个页面至少还有一个 h1。 */}
+        <h1 className="sr-only">TidyMark</h1>
+        <ol className="flex gap-1 text-xs">
           {STEPS.map((each, i) => (
             <li
               key={each.key}
