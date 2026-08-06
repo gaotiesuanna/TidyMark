@@ -1,4 +1,5 @@
 import type { BookmarkNode } from '@/core/ports'
+import { t } from '@/i18n'
 
 interface Props {
   nodes: BookmarkNode[]
@@ -33,7 +34,7 @@ function Row({
         {folders.length > 0 ? (
           <button
             className="h-5 w-5 shrink-0 text-xs text-neutral-400 hover:text-neutral-700"
-            aria-label={`${expanded ? '收起' : '展开'} ${node.title}`}
+            aria-label={expanded ? t('treeCollapse', node.title) : t('treeExpand', node.title)}
             aria-expanded={expanded}
             onClick={() => onToggleExpand(node.id)}
           >

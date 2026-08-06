@@ -1,4 +1,16 @@
 {
   "extName": { "message": "TidyMark" },
-  "extDescription": { "message": "Reorganize your Chrome bookmarks with AI — every change is previewed, confirmed, and undoable" }
+  "extDescription": { "message": "Reorganize your Chrome bookmarks with AI — every change is previewed, confirmed, and undoable" },
+  "shellStepScope": { "message": "Scope" },
+  "shellStepPreferences": { "message": "Settings" },
+  "shellStepReview": { "message": "Preview" },
+  "shellStepResult": { "message": "Result" },
+  "treeExpand": { "message": "Expand $name$", "placeholders": { "name": { "content": "$1" } } },
+  "treeCollapse": { "message": "Collapse $name$", "placeholders": { "name": { "content": "$1" } } },
+  "scopeIntro": { "message": "Check the folders you want TidyMark to reorganize." },
+  "scopeSafety": { "message": "Unchecked folders are never read and never modified — no bookmark moves out of them, and none moves in." },
+  "scopeExpandAll": { "message": "Expand all" },
+  "scopeCollapseAll": { "message": "Collapse all" },
+  "scopeScanOne": { "message": "Scan $count$ selected folder", "placeholders": { "count": { "content": "$1" } } },
+  "scopeScanOther": { "message": "Scan $count$ selected folders", "placeholders": { "count": { "content": "$1" } } }
 }

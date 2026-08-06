@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { plural, t } from '@/i18n'
 import { BookmarkTree, topLevelNodes } from '../components/BookmarkTree'
 import { ExportPanel } from '../components/ExportPanel'
 import { ImportPanel } from '../components/ImportPanel'
@@ -23,23 +24,21 @@ export function ScopeStep() {
 
   return (
     <div className="space-y-3">
-      <p className="text-xs leading-relaxed text-neutral-500">
-        勾选你想让 TidyMark 重构的文件夹。<strong>未勾选的部分不会被读取，也不会被修改</strong>，
-        其中的书签不会移出、也不会有书签移入。
-      </p>
+      <p className="text-xs leading-relaxed text-neutral-500">{t('scopeIntro')}</p>
+      <p className="text-xs font-medium leading-relaxed text-neutral-600">{t('scopeSafety')}</p>
 
       <div className="flex gap-1 text-xs">
         <button
           className="rounded border px-2 py-1 hover:bg-neutral-50"
           onClick={() => setExpanded(new Set(collectAllFolderIds(tree)))}
         >
-          全部展开
+          {t('scopeExpandAll')}
         </button>
         <button
           className="rounded border px-2 py-1 hover:bg-neutral-50"
           onClick={() => setExpanded(new Set())}
         >
-          全部收起
+          {t('scopeCollapseAll')}
         </button>
       </div>
 
@@ -61,7 +60,7 @@ export function ScopeStep() {
           disabled={checkedIds.size === 0 || busy !== null}
           onClick={() => void goScan()}
         >
-          扫描选中的 {checkedIds.size} 个文件夹
+          {plural(checkedIds.size, 'scopeScanOne', 'scopeScanOther', String(checkedIds.size))}
         </button>
         {/* 灰底成组：把「分享书签」这条支线整体降一级，不跟上面的主操作抢注意力。
             组内再用一条分隔线把导出和导入切开。 */}

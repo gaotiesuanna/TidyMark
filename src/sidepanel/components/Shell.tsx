@@ -1,12 +1,13 @@
 import type { ReactNode } from 'react'
+import { t } from '@/i18n'
 import { useStore } from '../store'
 import { ProgressPanel } from './ProgressPanel'
 
 const STEPS = [
-  { key: 'scope', label: '选范围' },
-  { key: 'preferences', label: '设置' },
-  { key: 'review', label: '预览' },
-  { key: 'result', label: '结果' },
+  { key: 'scope', labelKey: 'shellStepScope' },
+  { key: 'preferences', labelKey: 'shellStepPreferences' },
+  { key: 'review', labelKey: 'shellStepReview' },
+  { key: 'result', labelKey: 'shellStepResult' },
 ] as const
 
 export function Shell({ children }: { children: ReactNode }) {
@@ -28,7 +29,7 @@ export function Shell({ children }: { children: ReactNode }) {
                   : 'rounded bg-neutral-100 px-2 py-0.5 text-neutral-500'
               }
             >
-              {i + 1}. {each.label}
+              {i + 1}. {t(each.labelKey)}
             </li>
           ))}
         </ol>
