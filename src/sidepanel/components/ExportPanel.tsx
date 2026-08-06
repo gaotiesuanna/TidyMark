@@ -5,6 +5,7 @@ import {
   toLinksExport,
   toTreeExport,
 } from '@/core/export'
+import { plural, t } from '@/i18n'
 import { downloadJson } from '../lib/download'
 import { useStore } from '../store'
 import { groupLabel, secondaryButton } from './buttonStyles'
@@ -32,14 +33,14 @@ export function ExportPanel() {
       {/* 下行箭头标出数据流向，让导出组与下方的导入组一眼分得开 */}
       <p className={groupLabel}>
         <DownloadIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
-        导出选中的 {count} 条书签
+        {plural(count, 'exportGroupOne', 'exportGroupOther', String(count))}
       </p>
       <div className="flex gap-2">
         <button className={`${secondaryButton} flex-1`} disabled={disabled} onClick={exportTree}>
-          带文件夹结构
+          {t('exportTree')}
         </button>
         <button className={`${secondaryButton} flex-1`} disabled={disabled} onClick={exportLinks}>
-          纯链接清单
+          {t('exportLinks')}
         </button>
       </div>
     </div>

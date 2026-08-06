@@ -1,5 +1,6 @@
 import { useRef, type ChangeEvent } from 'react'
 import type { ExportNode } from '@/core/export'
+import { plural, t } from '@/i18n'
 import { useStore } from '../store'
 import { filePickerButton, groupLabel, primaryButton, secondaryButton } from './buttonStyles'
 import { AlertIcon, CheckCircleIcon, FileIcon, FolderIcon, LinkIcon, UploadIcon } from './icons'
@@ -7,7 +8,7 @@ import { AlertIcon, CheckCircleIcon, FileIcon, FolderIcon, LinkIcon, UploadIcon 
 /** 直接用 'url' in node 分支返回，不要抬成布尔别名——JSX 的 && 里收窄不住 node.children。 */
 function NodeRow({ node, depth }: { node: ExportNode; depth: number }) {
   const indent = { paddingLeft: `${depth * 12 + 6}px` }
-  const label = node.name === '' ? '（无标题）' : node.name
+  const label = node.name === '' ? t('importUntitled') : node.name
 
   if ('url' in node) {
     return (
@@ -52,7 +53,7 @@ export function ImportPanel() {
       ref={inputRef}
       type="file"
       accept="application/json"
-      aria-label="选择导入文件"
+      aria-label={t('importPickerLabel')}
       className="hidden"
       onChange={(event) => void onPick(event)}
     />
@@ -67,21 +68,23 @@ export function ImportPanel() {
         {/* 成功状态不能只靠颜色，勾选图标 + 文字一起给（色盲/高对比度模式下也读得出来） */}
         <p className="flex items-start gap-1.5 text-neutral-700">
           <CheckCircleIcon className="mt-px h-3.5 w-3.5 shrink-0 text-emerald-600" />
-          已导入 {result.bookmarks} 条书签到 {barTitle}/{targetName}
+          {t('importDone', String(result.bookmarks), `${barTitle}/${targetName}`)}
         </p>
         {missed.length > 0 && (
           <div className="space-y-0.5 rounded-md border border-neutral-200 bg-white p-2 text-neutral-500">
-            <p className="font-medium text-neutral-600">{missed.length} 条没有进来：</p>
+            <p className="font-medium text-neutral-600">
+              {plural(missed.length, 'importMissedOne', 'importMissedOther', String(missed.length))}
+            </p>
             {missed.map((item, index) => (
               <p key={`${item.name}-${index}`} className="truncate">
-                · {item.name === '' ? '（无标题）' : item.name} — {item.reason}
+                · {item.name === '' ? t('importUntitled') : item.name} — {item.reason}
               </p>
             ))}
           </div>
         )}
-        <p className="leading-relaxed text-neutral-500">不需要的话，直接在 Chrome 里删掉这个文件夹即可。</p>
+        <p className="leading-relaxed text-neutral-500">{t('importDeleteHint')}</p>
         <button className={`${secondaryButton} w-full`} onClick={resetImport}>
-          完成
+          {t('importFinish')}
         </button>
       </div>
     )
@@ -96,7 +99,7 @@ export function ImportPanel() {
           {importError}
         </p>
         <button className={`${secondaryButton} w-full`} onClick={resetImport}>
-          重新选择
+          {t('importRetry')}
         </button>
       </div>
     )
@@ -113,17 +116,17 @@ export function ImportPanel() {
         </p>
         <div className="space-y-1 text-neutral-500">
           <p className="tabular-nums">
-            {preview.bookmarkCount} 条书签、{preview.folderCount} 个文件夹
+            {t('importStats', String(preview.bookmarkCount), String(preview.folderCount))}
           </p>
-          {preview.duplicateCount > 0 && <p>其中 {preview.duplicateCount} 条你已经收藏过</p>}
+          {preview.duplicateCount > 0 && <p>{t('importDuplicates', String(preview.duplicateCount))}</p>}
           {preview.blocked.length > 0 && (
             <p className="flex items-start gap-1.5 text-amber-700">
               <AlertIcon className="mt-px h-3.5 w-3.5 shrink-0" />
-              已拦下 {preview.blocked.length} 条不安全的链接
+              {t('importBlocked', String(preview.blocked.length))}
             </p>
           )}
           <p className="truncate">
-            将建到：{preview.barTitle}/{preview.targetName}
+            {t('importTarget', `${preview.barTitle}/${preview.targetName}`)}
           </p>
         </div>
         <div className="max-h-48 overflow-y-auto rounded-md border border-neutral-200 bg-white py-1">
@@ -137,10 +140,10 @@ export function ImportPanel() {
             disabled={(preview.bookmarkCount === 0 && preview.folderCount === 0) || busy !== null}
             onClick={() => void confirmImport()}
           >
-            确认导入
+            {t('importConfirm')}
           </button>
           <button className={`${secondaryButton} flex-1`} disabled={busy !== null} onClick={resetImport}>
-            取消
+            {t('importCancel')}
           </button>
         </div>
       </div>
@@ -153,14 +156,14 @@ export function ImportPanel() {
       {/* 标题带上行箭头图标，与上方导出组区分开；否则三个按钮长得一样，导入会被当成第三个导出选项 */}
       <p className={groupLabel}>
         <UploadIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
-        导入别人分享的书签
+        {t('importGroup')}
       </p>
       <button
         className={filePickerButton}
         disabled={busy !== null}
         onClick={() => inputRef.current?.click()}
       >
-        选择文件…
+        {t('importPickFile')}
       </button>
     </div>
   )
