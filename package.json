@@ -10,11 +10,10 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "package": "python3 scripts/package.py"
+    "test:watch": "vitest"
   },
   "keywords": [],
-  "author": "",
+  "author": "gaotiesuanna <gaotiesuanna@gmail.com>",
   "license": "ISC",
   "type": "module",
   "dependencies": {
