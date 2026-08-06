@@ -57,6 +57,13 @@ describe('_locales 一致性', () => {
     }
   })
 
+  it('英文词条里不该出现中文——出现了就是漏译', () => {
+    const cjk = /[\u4e00-\u9fff]/
+    for (const [key, entry] of Object.entries(catalogs.get('en')!)) {
+      expect(cjk.test(entry.message), `en 的 ${key} 里混着中文：${entry.message}`).toBe(false)
+    }
+  })
+
   it('声明了占位符的词条，正文里必须真的用到它', () => {
     for (const locale of LOCALES) {
       for (const [key, entry] of Object.entries(catalogs.get(locale)!)) {

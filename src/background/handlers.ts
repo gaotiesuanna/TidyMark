@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 import { buildCandidatesFromFolders } from '@/core/map'
 import { buildPlan, type NewFolderSpec, type RenameFolderSpec } from '@/core/plan'
 import { scanTree } from '@/core/scan'
@@ -29,7 +30,7 @@ export interface HandlerDeps {
   isCancelled?: () => boolean
 }
 
-const CANCELLED: Response = { ok: false, error: '分析已取消。', cancelled: true }
+const CANCELLED: Response = { ok: false, error: t('errAnalysisCancelled'), cancelled: true }
 
 export async function handle(
   ports: Ports,
@@ -53,14 +54,14 @@ export async function handle(
       case 'scan': {
         const tree = await ports.bookmarks.getTree()
         const scan = scanTree(tree, request.scopeRootIds)
-        log('scan', `扫描完成：${scan.stats.totalBookmarks} 个书签、${scan.stats.totalFolders} 个文件夹`)
+        log('scan', t('logScanDone', String(scan.stats.totalBookmarks), String(scan.stats.totalFolders)))
         return { ok: true, kind: 'scan', scan }
       }
 
       case 'analyze': {
         const settings = await loadSettings(ports)
         if (settings.llm.apiKey.trim() === '') {
-          return { ok: false, error: '尚未配置 API Key，请先在设置中填写。' }
+          return { ok: false, error: t('errNoApiKey') }
         }
         const tree = await ports.bookmarks.getTree()
         const scan = scanTree(tree, request.scopeRootIds)
@@ -74,8 +75,8 @@ export async function handle(
 
         if (settings.rebuildStructure) {
           const rootId = request.scopeRootIds[0]
-          if (rootId === undefined) return { ok: false, error: '未选择任何范围。' }
-          log('tags', `开始为 ${scan.bookmarks.length} 个书签抽取主题标签`)
+          if (rootId === undefined) return { ok: false, error: t('errNoScope') }
+          log('tags', t('logTagsStart', String(scan.bookmarks.length)))
           tags = await extractTags(scan.bookmarks, client, {
             onProgress: progress('tags'),
             onLog: (message, level) => log('tags', message, level),
@@ -91,7 +92,7 @@ export async function handle(
             if (isCancelled()) return CANCELLED
           }
           // 分批抽标签的模型看不到全局，同义碎片只能在这里归并
-          log('tree', `开始设计目录：${scan.bookmarks.length} 个书签的标签`)
+          log('tree', t('logTreeStart', String(scan.bookmarks.length)))
           tags = await designTagFolders(tags, scan.bookmarks, settings.domainGroups, client, {
             onLog: (message, level) => log('tree', message, level),
             isCancelled,
@@ -107,22 +108,25 @@ export async function handle(
           pinned = tree_.pinned
           log(
             'tree',
-            `目录设计完成：新建 ${tree_.newFolders.length} 个目录，` +
-              `复用 ${tree_.candidates.length - tree_.newFolders.length} 个已有目录`,
+            t(
+              'logTreeDone',
+              String(tree_.newFolders.length),
+              String(tree_.candidates.length - tree_.newFolders.length),
+            ),
           )
           if (pinned.length > 0) {
-            log('tree', `${pinned.length} 个书签按域名聚合，跳过 AI 分类`)
+            log('tree', t('logPinnedSkip', String(pinned.length)))
           }
         }
 
         if (candidates.length === 0) {
-          return { ok: false, error: '所选范围内没有可用的目标文件夹。请开启「重建结构」或先选择包含子文件夹的范围。' }
+          return { ok: false, error: t('errNoTargetFolders') }
         }
         const cache = await loadCache(ports)
         // 已按域名确定归属的书签不必再花一次分类调用
         const pinnedIds = new Set(pinned.map((p) => p.bookmarkId))
         const toClassify = scan.bookmarks.filter((b) => !pinnedIds.has(b.id))
-        log('classify', `开始分类：${toClassify.length} 个书签，${candidates.length} 个候选目录`)
+        log('classify', t('logClassifyStart', String(toClassify.length), String(candidates.length)))
         const llmResults = await classifyBookmarks({
           items: toClassify,
           candidates,
@@ -144,14 +148,18 @@ export async function handle(
         if (toClassify.length > 0 && failed.length === toClassify.length) {
           return {
             ok: false,
-            error: `AI 分析失败，没有任何书签完成分类。\n${failed[0]!.reason}`,
+            error: t('errClassifyAllFailed', failed[0]!.reason),
           }
         }
         const warnings =
           failed.length > 0
             ? [
-                `${failed.length} 个书签分类失败，已保持原位。原因：` +
+                t(
+                  'logClassifyFailed',
+                  String(failed.length),
+                  // 这条中文前缀来自 llm/classify.ts 的产出层文案，双语化属于计划二，这里先不动。
                   failed[0]!.reason.replace(/^分类失败，保持原位：/, ''),
+                ),
               ]
             : []
         // 标题统一与目录整理相互独立：它由自己的开关决定，不受移动建议的勾选影响
@@ -159,7 +167,7 @@ export async function handle(
           ? planTitleRewrites(scan.bookmarks)
           : []
         if (titleRewrites.length > 0) {
-          log('classify', `${titleRewrites.length} 个 GitHub 书签的标题会被统一`)
+          log('classify', t('logTitleRewrites', String(titleRewrites.length)))
         }
         const plan = buildPlan({
           id: `plan-${now()}`,
@@ -176,7 +184,7 @@ export async function handle(
           titleRewrites,
         })
         for (const warning of warnings) log('classify', warning, 'warn')
-        log('classify', `分析完成：${plan.rows.length} 条移动建议`)
+        log('classify', t('logAnalyzeDone', String(plan.rows.length)))
         return { ok: true, kind: 'analyze', plan }
       }
 
@@ -188,9 +196,12 @@ export async function handle(
         })
         log(
           'apply',
-          `整理${result.status === 'completed' ? '完成' : '中断'}：执行 ${result.executed} 步，` +
-            `清理空文件夹 ${result.removedFolders.length} 个，` +
-            `按编号排位 ${result.sortedFolders} 个目录`,
+          t(
+            result.status === 'completed' ? 'logApplyDone' : 'logApplyInterrupted',
+            String(result.executed),
+            String(result.removedFolders.length),
+            String(result.sortedFolders),
+          ),
           result.status === 'completed' ? 'info' : 'error',
         )
         return { ok: true, kind: 'apply', result }
@@ -198,7 +209,7 @@ export async function handle(
 
       case 'undo': {
         const result = await undoLast(ports, progress('undo'))
-        log('undo', `撤销完成：还原 ${result.restored} 项，删除新建目录 ${result.removedFolders} 个`)
+        log('undo', t('logUndoDone', String(result.restored), String(result.removedFolders)))
         return { ok: true, kind: 'undo', result }
       }
 
@@ -213,10 +224,10 @@ export async function handle(
         // 用自己新读的树查书签栏，不接受侧栏传来的 id——那份树可能已经过期
         const tree = await ports.bookmarks.getTree()
         const bar = findBookmarksBar(tree)
-        if (bar === null) return { ok: false, error: '找不到书签栏，无法导入。' }
+        if (bar === null) return { ok: false, error: t('errNoBookmarksBar') }
 
         const result = await importTree(ports, request.nodes, request.targetName, bar.id)
-        log('import', `导入完成：${result.bookmarks} 条书签、${result.folders} 个文件夹`)
+        log('import', t('logImportDone', String(result.bookmarks), String(result.folders)))
         return { ok: true, kind: 'import', result }
       }
 

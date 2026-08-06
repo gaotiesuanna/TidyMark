@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { t } from '@/i18n'
 import type { ProgressEvent, ProgressPhase } from '@/background/events'
 import type { BookmarkNode } from '@/core/ports'
 import { LOW_CONFIDENCE, renumberPlan } from '@/core/plan'
@@ -203,7 +204,7 @@ export const useStore = create<State>((set, get) => ({
 
   async cancel() {
     // 只标记取消，真正的收尾由正在进行的 analyze 自己完成
-    set({ busy: '正在取消，等当前批次结束…', busyKind: null })
+    set({ busy: t('busyCancelling'), busyKind: null })
     await send({ kind: 'cancel' })
   },
 
@@ -212,10 +213,10 @@ export const useStore = create<State>((set, get) => ({
       onEvent: (event) => get().pushEvent(event),
       onDisconnect: () => {
         if (get().busy === null) return
-        set({ busy: null, busyKind: null, error: '后台已被浏览器回收，本次操作中断，请重试。' })
+        set({ busy: null, busyKind: null, error: t('errBackgroundRecycled') })
       },
     })
-    set({ busy: '正在读取书签…', busyKind: 'init', error: null })
+    set({ busy: t('busyReading'), busyKind: 'init', error: null })
     const treeRes = await send({ kind: 'get_tree' })
     const settingsRes = await send({ kind: 'get_settings' })
     const undoRes = await send({ kind: 'get_undo_state' })
@@ -233,7 +234,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   async goScan() {
-    set({ busy: '正在扫描…', busyKind: 'scan', error: null, progress: null, logs: [] })
+    set({ busy: t('busyScanning'), busyKind: 'scan', error: null, progress: null, logs: [] })
     const res = await send({ kind: 'scan', scopeRootIds: [...get().checkedIds] })
     if (!res.ok) return set({ busy: null, busyKind: null, error: res.error })
     if (res.kind !== 'scan') return set({ busy: null, busyKind: null })
@@ -248,9 +249,9 @@ export const useStore = create<State>((set, get) => ({
   async analyze() {
     const granted = await ensureHostPermission(get().settings.llm.baseUrl)
     if (!granted) {
-      return set({ error: '需要授权访问模型接口所在的域名才能继续分析。请重试并允许该权限。' })
+      return set({ error: t('errHostPermission') })
     }
-    set({ busy: '正在分析…', busyKind: 'analyze', error: null, progress: null, logs: [] })
+    set({ busy: t('busyAnalyzing'), busyKind: 'analyze', error: null, progress: null, logs: [] })
     // 分析可能跑好几分钟，期间持续 ping，别让后台因空闲被回收
     const stopKeepalive = startKeepalive(connection)
     const res = await send({ kind: 'analyze', scopeRootIds: [...get().checkedIds] })
@@ -323,7 +324,7 @@ export const useStore = create<State>((set, get) => ({
   async apply() {
     const plan = get().plan
     if (plan === null) return
-    set({ busy: '正在应用…', busyKind: 'apply', error: null, progress: null, logs: [] })
+    set({ busy: t('busyApplying'), busyKind: 'apply', error: null, progress: null, logs: [] })
     const stopKeepalive = startKeepalive(connection)
     // 按实际会落地的目录重排编号，避免出现 01、02、04 这样的空号
     const res = await send({
@@ -339,7 +340,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   async undo() {
-    set({ busy: '正在撤销…', busyKind: 'undo', error: null, progress: null, logs: [] })
+    set({ busy: t('busyUndoing'), busyKind: 'undo', error: null, progress: null, logs: [] })
     const res = await send({ kind: 'undo' })
     if (!res.ok) return set({ busy: null, busyKind: null, error: res.error })
     if (res.kind !== 'undo') return set({ busy: null, busyKind: null })
@@ -364,14 +365,14 @@ export const useStore = create<State>((set, get) => ({
         },
       })
     } catch {
-      set({ importError: '文件结构损坏。', importFile: null, importDone: null, error: null })
+      set({ importError: t('errFileCorrupt'), importFile: null, importDone: null, error: null })
     }
   },
 
   async confirmImport() {
     const file = get().importFile
     if (file === null) return
-    set({ busy: '正在导入…', busyKind: null, error: null, progress: null, logs: [] })
+    set({ busy: t('busyImporting'), busyKind: null, error: null, progress: null, logs: [] })
 
     const res = await send({
       kind: 'import',

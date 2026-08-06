@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 import { createChromePorts } from './chrome-ports'
 import { PROGRESS_PORT, type ProgressEvent } from './events'
 import { handle } from './handlers'
@@ -41,7 +42,7 @@ let cancelled = false
 chrome.runtime.onMessage.addListener((request: Request, _sender, sendResponse) => {
   if (request.kind === 'cancel') {
     cancelled = true
-    emit({ phase: 'classify', message: '已请求取消，正在结束当前批次…', level: 'warn' })
+    emit({ phase: 'classify', message: t('logCancelRequested'), level: 'warn' })
     sendResponse({ ok: true, kind: 'cancel' })
     return false
   }
