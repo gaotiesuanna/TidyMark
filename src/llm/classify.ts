@@ -5,6 +5,7 @@ import { resolveByRules } from '@/core/map'
 import { sanitizeUrl } from '@/core/sanitize'
 import type { BookmarkItem, CategoryCandidate, Classification } from '@/core/types'
 import type { LlmClient } from './client'
+import { fallbackReason, logBatchDone } from './logs'
 import { classifyPrompt } from './prompts'
 
 export interface ClassifyInput {
@@ -103,6 +104,8 @@ async function runBatch(
   locale: Locale,
 ): Promise<Classification[]> {
   const validIds = new Set(candidates.map((c) => c.id))
+  // 仅用于满足类型初始化：正常执行路径下，走到最终 return 之前必然先经过下面的
+  // catch 把它覆盖成真实错误信息，这个初始值实际不会被用户看到，不必双语。
   let lastError = '未知错误'
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -115,7 +118,7 @@ async function runBatch(
 
       return batch.map((item) => {
         const hit = byId.get(item.id)
-        if (!hit) return unclassified(item, '模型未返回该书签的结果')
+        if (!hit) return unclassified(item, fallbackReason(locale, 'noResult'))
         const target =
           hit.target_category_id !== null && validIds.has(hit.target_category_id)
             ? hit.target_category_id
@@ -130,6 +133,7 @@ async function runBatch(
       })
     } catch (error) {
       lastError = String(error)
+      // 只进开发者控制台，不进侧栏日志，不必双语。
       console.error('[TidyMark] 分类请求失败：', error)
       const retryable = (error as { retryable?: boolean }).retryable === true
       if (!retryable) break
@@ -138,7 +142,7 @@ async function runBatch(
       }
     }
   }
-  return batch.map((item) => unclassified(item, `分类失败，保持原位：${lastError}`))
+  return batch.map((item) => unclassified(item, fallbackReason(locale, 'failed', lastError)))
 }
 
 export async function classifyBookmarks(input: ClassifyInput): Promise<Classification[]> {
@@ -179,13 +183,14 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
       const startedAt = Date.now()
       const results = await runBatch(batch, candidates, client, locale)
       const ok = results.filter((r) => r.source === 'llm').length
-      const summary =
-        `分类批次 ${index + 1}/${batches.length}：${batch.length} 条，` +
-        `成功 ${ok} 条，耗时 ${Date.now() - startedAt}ms`
+      const summary = logBatchDone(locale, index, batches.length, batch.length, ok, Date.now() - startedAt)
+      // 只进开发者控制台，不必双语。
       console.log(`[TidyMark] ${summary}`)
       if (ok === batch.length) input.onLog?.(summary, 'info')
-      else if (ok === 0) input.onLog?.(`${summary}。${results[0]?.reason ?? ''}`, 'error')
-      else input.onLog?.(summary, 'warn')
+      else if (ok === 0) {
+        const sep = locale === 'zh_CN' ? '。' : '. '
+        input.onLog?.(`${summary}${sep}${results[0]?.reason ?? ''}`, 'error')
+      } else input.onLog?.(summary, 'warn')
       for (let i = 0; i < results.length; i++) {
         const result = results[i]!
         resolved.set(result.bookmarkId, result)
@@ -198,5 +203,5 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
 
   await Promise.all(Array.from({ length: Math.min(concurrency, batches.length) }, worker))
 
-  return items.map((item) => resolved.get(item.id) ?? unclassified(item, '未处理'))
+  return items.map((item) => resolved.get(item.id) ?? unclassified(item, fallbackReason(locale, 'unprocessed')))
 }

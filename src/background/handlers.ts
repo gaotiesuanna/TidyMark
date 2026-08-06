@@ -1,5 +1,6 @@
 import { resolveLocale, t } from '@/i18n'
 import { buildCandidatesFromFolders } from '@/core/map'
+import type { Locale } from '@/core/locale'
 import { buildPlan, type NewFolderSpec, type RenameFolderSpec } from '@/core/plan'
 import { scanTree } from '@/core/scan'
 import { planTitleRewrites } from '@/core/titles'
@@ -20,7 +21,7 @@ import type { EmitProgress, ProgressPhase } from './events'
 import type { Request, Response } from './messages'
 
 export interface HandlerDeps {
-  createClient?: (config: LlmConfig) => LlmClient
+  createClient?: (config: LlmConfig, locale: Locale) => LlmClient
   now?: () => number
   /** 仅供测试注入，生产环境使用 classifyBookmarks 的默认值。 */
   batchSize?: number
@@ -37,7 +38,7 @@ export async function handle(
   request: Request,
   deps: HandlerDeps = {},
 ): Promise<Response> {
-  const createClient = deps.createClient ?? ((config: LlmConfig) => createLlmClient(config))
+  const createClient = deps.createClient ?? ((config: LlmConfig, locale: Locale) => createLlmClient(config, locale))
   const now = deps.now ?? (() => Date.now())
   const emit = deps.onEvent ?? ((): void => {})
   const log = (phase: ProgressPhase, message: string, level: 'info' | 'warn' | 'error' = 'info'): void =>
@@ -67,7 +68,7 @@ export async function handle(
         const tree = await ports.bookmarks.getTree()
         const scan = scanTree(tree, request.scopeRootIds)
 
-        const client = createClient(settings.llm)
+        const client = createClient(settings.llm, locale)
         let candidates = buildCandidatesFromFolders(scan.folders, request.scopeRootIds)
         let newFolders: NewFolderSpec[] = []
         let renameFolders: RenameFolderSpec[] = []

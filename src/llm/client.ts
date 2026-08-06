@@ -1,3 +1,5 @@
+import type { Locale } from '@/core/locale'
+
 export interface LlmConfig {
   baseUrl: string
   apiKey: string
@@ -38,13 +40,20 @@ export function extractJson(content: string): string {
 /**
  * 只支持 json_object 的厂商（如 DeepSeek）无法约束输出形状，
  * 因此把 schema 直接写进提示词。调用方本来就会校验并丢弃非法字段。
+ *
+ * 这段格式指令会拼进发给模型的最终提示词，混进另一种语言会拉低输出质量，
+ * 甚至诱导模型用错语言作答，因此必须和 prompts.ts 一样按 locale 双语。
  */
-function withSchemaInPrompt(prompt: string, schema: object): string {
+function withSchemaInPrompt(prompt: string, schema: object, locale: Locale): string {
   return [
     prompt,
     '',
-    '只输出一个 JSON 对象，不要任何解释文字、不要 Markdown 代码块。',
-    '输出必须严格符合以下 JSON Schema：',
+    locale === 'zh_CN'
+      ? '只输出一个 JSON 对象，不要任何解释文字、不要 Markdown 代码块。'
+      : 'Output only a single JSON object — no explanations, no Markdown code fences.',
+    locale === 'zh_CN'
+      ? '输出必须严格符合以下 JSON Schema：'
+      : 'The output must strictly conform to the following JSON Schema:',
     JSON.stringify(schema),
   ].join('\n')
 }
@@ -53,7 +62,7 @@ function isUnsupportedResponseFormat(status: number, body: string): boolean {
   return status === 400 && /response_format/i.test(body)
 }
 
-export function createLlmClient(config: LlmConfig, fetchImpl: typeof fetch = fetch): LlmClient {
+export function createLlmClient(config: LlmConfig, locale: Locale, fetchImpl: typeof fetch = fetch): LlmClient {
   const endpoint = `${config.baseUrl.replace(/\/+$/, '')}/chat/completions`
   // 一旦探明厂商不支持 json_schema 就记住，后续请求不再浪费一次 400。
   let mode: StructuredMode = 'json_schema'
@@ -63,7 +72,7 @@ export function createLlmClient(config: LlmConfig, fetchImpl: typeof fetch = fet
       model: config.model,
       temperature: 0,
       messages: [
-        { role: 'user', content: attempt === 'json_schema' ? prompt : withSchemaInPrompt(prompt, schema) },
+        { role: 'user', content: attempt === 'json_schema' ? prompt : withSchemaInPrompt(prompt, schema, locale) },
       ],
     }
     // attempt === 'none' 的厂商连 response_format 字段都不认，只能靠提示词约束
@@ -94,8 +103,16 @@ export function createLlmClient(config: LlmConfig, fetchImpl: typeof fetch = fet
       })
     } catch (error) {
       const elapsed = Date.now() - startedAt
+      // 只进开发者控制台，不必双语。
       console.error(`[TidyMark] fetch 失败（耗时 ${elapsed}ms）：`, error)
-      throw new LlmError(`网络请求失败（耗时 ${elapsed}ms）: ${String(error)}`, true)
+      // 这条消息会经 String(error) 拼进 logBatchFailed / logFoldersFailed 的 detail，
+      // 显示在侧栏运行日志里，属于用户可见内容，必须双语。
+      throw new LlmError(
+        locale === 'zh_CN'
+          ? `网络请求失败（耗时 ${elapsed}ms）: ${String(error)}`
+          : `Network request failed (${elapsed}ms): ${String(error)}`,
+        true,
+      )
     }
   }
 
@@ -113,6 +130,7 @@ export function createLlmClient(config: LlmConfig, fetchImpl: typeof fetch = fet
           const body = await response.text()
           const next = MODES[MODES.indexOf(attempt) + 1]
           if (isUnsupportedResponseFormat(response.status, body) && next !== undefined) {
+            // 只进开发者控制台，不必双语。
             console.warn(`[TidyMark] 厂商不支持 ${attempt}，降级为 ${next} 重试`)
             // mode 只前进不后退，作为后续请求的起点
             if (MODES.indexOf(next) > MODES.indexOf(mode)) mode = next
@@ -121,7 +139,13 @@ export function createLlmClient(config: LlmConfig, fetchImpl: typeof fetch = fet
             continue
           }
           const retryable = response.status === 429 || response.status >= 500
-          throw new LlmError(`模型接口返回 ${response.status}: ${body}`, retryable)
+          // 同上：会经 String(error) 流入侧栏日志，必须双语。
+          throw new LlmError(
+            locale === 'zh_CN'
+              ? `模型接口返回 ${response.status}: ${body}`
+              : `Model API returned ${response.status}: ${body}`,
+            retryable,
+          )
         }
 
         const payload = (await response.json()) as {
@@ -129,12 +153,20 @@ export function createLlmClient(config: LlmConfig, fetchImpl: typeof fetch = fet
         }
         const content = payload.choices?.[0]?.message?.content
         if (typeof content !== 'string') {
-          throw new LlmError('模型响应中没有 content 字段', false)
+          throw new LlmError(
+            locale === 'zh_CN' ? '模型响应中没有 content 字段' : 'The model response has no content field',
+            false,
+          )
         }
         try {
           return JSON.parse(extractJson(content)) as unknown
         } catch {
-          throw new LlmError(`模型返回的不是合法 JSON: ${content.slice(0, 200)}`, false)
+          throw new LlmError(
+            locale === 'zh_CN'
+              ? `模型返回的不是合法 JSON: ${content.slice(0, 200)}`
+              : `The model did not return valid JSON: ${content.slice(0, 200)}`,
+            false,
+          )
         }
       }
     },

@@ -3,6 +3,7 @@ import type { Locale } from '@/core/locale'
 import { sanitizeUrl } from '@/core/sanitize'
 import type { BookmarkItem, TagResult } from '@/core/types'
 import type { LlmClient } from './client'
+import { logBatch, logBatchFailed } from './logs'
 import { groupTagsPrompt, tagsPrompt } from './prompts'
 
 export type { TagResult }
@@ -91,6 +92,7 @@ async function runExtraction(
   buildOnePrompt: (batch: BookmarkItem[]) => string,
   options: ExtractOptions,
   label: string,
+  locale: Locale,
 ): Promise<TagResult[]> {
   const batchSize = options.batchSize ?? 25
   const concurrency = options.concurrency ?? 4
@@ -120,14 +122,15 @@ async function runExtraction(
             secondaryTopic: null,
           })
         }
-        options.onLog?.(`${label} ${index + 1}/${batches.length}：${batch.length} 条`, 'info')
+        options.onLog?.(logBatch(locale, label, index, batches.length, batch.length), 'info')
       } catch (error) {
+        // 只进开发者控制台，不必双语。
         console.error('[TidyMark] 标签抽取失败：', error)
         for (const item of batch) {
           resolved.set(item.id, { bookmarkId: item.id, primaryTopic: NO_TOPIC, secondaryTopic: null })
         }
         options.onLog?.(
-          `${label} ${index + 1}/${batches.length} 失败，这批书签不参与目录设计：${String(error)}`,
+          logBatchFailed(locale, label, index, batches.length, String(error)),
           'error',
         )
       }
@@ -150,7 +153,8 @@ export async function extractTags(
   locale: Locale,
   options: ExtractOptions = {},
 ): Promise<TagResult[]> {
-  return runExtraction(items, client, (batch) => buildPrompt(locale, batch), options, '标签批次')
+  const label = locale === 'zh_CN' ? '标签批次' : 'Tag batch'
+  return runExtraction(items, client, (batch) => buildPrompt(locale, batch), options, label, locale)
 }
 
 /**
@@ -182,8 +186,9 @@ export async function refineGroupTags(
   const refined = new Map<string, TagResult>()
   for (const { title, items } of byGroup.values()) {
     if (options.isCancelled?.() === true) break
+    const groupLabel = locale === 'zh_CN' ? `${title} 功能域` : `${title} scope`
     const results = await runExtraction(
-      items, client, buildGroupPrompt(locale, title), options, `${title} 功能域`,
+      items, client, buildGroupPrompt(locale, title), options, groupLabel, locale,
     )
     for (const result of results) {
       if (result.primaryTopic !== NO_TOPIC) refined.set(result.bookmarkId, result)

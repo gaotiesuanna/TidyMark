@@ -5,6 +5,7 @@ import type { BookmarkItem, TagResult } from '@/core/types'
 import { MAX_SIBLINGS } from '@/core/tree'
 import { NO_TOPIC } from './tags'
 import type { LlmClient } from './client'
+import { logDuplicateTopics, logFoldersDone, logFoldersFailed } from './logs'
 import { foldersPrompt } from './prompts'
 
 export interface TopicCount {
@@ -141,7 +142,11 @@ export async function designFolders(
       folders?: RawFolder[]
     }
     const raw = response.folders ?? []
-    if (!Array.isArray(raw)) throw new Error('模型返回的 folders 不是数组')
+    // 以下几处 throw 的文案会经 catch 里的 String(error) 拼进 onLog 的 detail，
+    // 因此也要双语，不能当成纯开发者日志处理。
+    if (!Array.isArray(raw)) {
+      throw new Error(locale === 'zh_CN' ? '模型返回的 folders 不是数组' : "The model's folders field is not an array")
+    }
 
     // 非 oneLevel 时留一个位置给 tree.ts 建树时补的「其他」，避免第 MAX_SIBLINGS 个目录
     // 在这里放行、却在建树阶段被静默截掉
@@ -162,11 +167,15 @@ export async function designFolders(
     // 超出上限的目录整个丢弃，它吸收的标签一并视为未映射，落进「其他」
     for (const folder of raw.slice(0, limit)) {
       if (typeof folder !== 'object' || folder === null || typeof folder.title !== 'string') {
-        throw new Error('模型返回的目录形状非法')
+        throw new Error(locale === 'zh_CN' ? '模型返回的目录形状非法' : 'The model returned a malformed folder')
       }
-      if (!Array.isArray(folder.topics)) throw new Error('模型返回的 topics 不是数组')
+      if (!Array.isArray(folder.topics)) {
+        throw new Error(locale === 'zh_CN' ? '模型返回的 topics 不是数组' : "The folder's topics field is not an array")
+      }
       const children = options.oneLevel === true ? [] : (folder.children ?? [])
-      if (!Array.isArray(children)) throw new Error('模型返回的 children 不是数组')
+      if (!Array.isArray(children)) {
+        throw new Error(locale === 'zh_CN' ? '模型返回的 children 不是数组' : "The folder's children field is not an array")
+      }
       for (const topic of folder.topics) {
         setMapping(topic, folder.title, [folder.title])
       }
@@ -191,16 +200,21 @@ export async function designFolders(
     const duplicated = [...declaredBy.values()].filter((entry) => entry.owners.size > 1)
     if (duplicated.length > 0) {
       const detail = duplicated
-        .map((entry) => `「${entry.display}」被 ${entry.owners.size} 个目录同时声明`)
-        .join('；')
-      options.onLog?.(`模型返回的目录设计中标签重复声明，已保留最后一个：${detail}`, 'warn')
+        .map((entry) =>
+          locale === 'zh_CN'
+            ? `「${entry.display}」被 ${entry.owners.size} 个目录同时声明`
+            : `"${entry.display}" was declared by ${entry.owners.size} folders`,
+        )
+        .join(locale === 'zh_CN' ? '；' : '; ')
+      options.onLog?.(logDuplicateTopics(locale, detail), 'warn')
     }
 
-    options.onLog?.(`目录设计完成：${folders.length} 个目录，归并 ${mapping.size} 个标签`, 'info')
+    options.onLog?.(logFoldersDone(locale, folders.length, mapping.size), 'info')
     return { folders, mapping }
   } catch (error) {
+    // 只进开发者控制台，不必双语。
     console.error('[TidyMark] 目录设计失败：', error)
-    options.onLog?.(`目录设计失败，保留原始标签进入建树：${String(error)}`, 'error')
+    options.onLog?.(logFoldersFailed(locale, String(error)), 'error')
     return null
   }
 }
