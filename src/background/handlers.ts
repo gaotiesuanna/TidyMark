@@ -78,7 +78,7 @@ export async function handle(
           const rootId = request.scopeRootIds[0]
           if (rootId === undefined) return { ok: false, error: t('errNoScope') }
           log('tags', t('logTagsStart', String(scan.bookmarks.length)))
-          tags = await extractTags(scan.bookmarks, client, {
+          tags = await extractTags(scan.bookmarks, client, locale, {
             onProgress: progress('tags'),
             onLog: (message, level) => log('tags', message, level),
             isCancelled,
@@ -86,7 +86,7 @@ export async function handle(
           if (isCancelled()) return CANCELLED
           // 组内的共同点已经写在目录名上，通用标签在这里没有区分度，换一套细的重抽
           if (settings.domainGroups.length > 0) {
-            tags = await refineGroupTags(tags, scan.bookmarks, settings.domainGroups, client, {
+            tags = await refineGroupTags(tags, scan.bookmarks, settings.domainGroups, client, locale, {
               onLog: (message, level) => log('tags', message, level),
               isCancelled,
             })
@@ -94,7 +94,7 @@ export async function handle(
           }
           // 分批抽标签的模型看不到全局，同义碎片只能在这里归并
           log('tree', t('logTreeStart', String(scan.bookmarks.length)))
-          tags = await designTagFolders(tags, scan.bookmarks, settings.domainGroups, client, {
+          tags = await designTagFolders(tags, scan.bookmarks, settings.domainGroups, client, locale, {
             onLog: (message, level) => log('tree', message, level),
             isCancelled,
           })

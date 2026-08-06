@@ -35,14 +35,14 @@ describe('cacheKey', () => {
 
 describe('buildBatchPrompt', () => {
   it('只包含 title/domain/path/currentPath，绝不含 query', () => {
-    const prompt = buildBatchPrompt([item('1', 'https://x.com/a?token=SECRET')], candidates)
+    const prompt = buildBatchPrompt([item('1', 'https://x.com/a?token=SECRET')], candidates, 'zh_CN')
     expect(prompt).not.toContain('SECRET')
     expect(prompt).toContain('x.com')
     expect(prompt).toContain('书签栏')
   })
 
   it('列出所有候选目录及其 id', () => {
-    const prompt = buildBatchPrompt([item('1', 'https://x.com')], candidates)
+    const prompt = buildBatchPrompt([item('1', 'https://x.com')], candidates, 'zh_CN')
     expect(prompt).toContain('10')
     expect(prompt).toContain('书签栏 / react')
   })

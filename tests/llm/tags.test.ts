@@ -1,9 +1,33 @@
 import { describe, it, expect, vi } from 'vitest'
-import { extractTags, refineGroupTags, NO_TOPIC } from '@/llm/tags'
-import type { BookmarkItem } from '@/core/types'
+import { extractTags as extractTagsRaw, refineGroupTags as refineGroupTagsRaw, NO_TOPIC } from '@/llm/tags'
+import type { BookmarkItem, TagResult } from '@/core/types'
+import type { LlmClient } from '@/llm/client'
+import type { ExtractOptions } from '@/llm/tags'
 
 function item(id: string, url: string): BookmarkItem {
   return { id, title: 'T' + id, url, parentId: '1', index: 0, currentPath: ['书签栏'] }
+}
+
+/**
+ * locale 现在是必填项，但本文件里的用例全部只关心中文分支。
+ * 固定传 'zh_CN'，调用点不必逐个重复。
+ */
+function extractTags(
+  items: BookmarkItem[],
+  client: LlmClient,
+  options?: ExtractOptions,
+): Promise<TagResult[]> {
+  return extractTagsRaw(items, client, 'zh_CN', options)
+}
+
+function refineGroupTags(
+  tags: TagResult[],
+  bookmarks: BookmarkItem[],
+  domainGroups: string[],
+  client: LlmClient,
+  options?: ExtractOptions,
+): Promise<TagResult[]> {
+  return refineGroupTagsRaw(tags, bookmarks, domainGroups, client, 'zh_CN', options)
 }
 
 describe('extractTags', () => {

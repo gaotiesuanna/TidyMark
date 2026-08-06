@@ -1,11 +1,41 @@
 import { describe, it, expect, vi } from 'vitest'
-import { collectTopics, applyDesign, designFolders, designTagFolders, type FolderDesign } from '@/llm/folders'
+import {
+  collectTopics,
+  applyDesign,
+  designFolders as designFoldersRaw,
+  designTagFolders as designTagFoldersRaw,
+  type FolderDesign,
+  type DesignOptions,
+} from '@/llm/folders'
 import { NO_TOPIC } from '@/llm/tags'
 import type { BookmarkItem, TagResult } from '@/core/types'
+import type { LlmClient } from '@/llm/client'
 import { MAX_SIBLINGS } from '@/core/tree'
 
 function tag(bookmarkId: string, primaryTopic: string): TagResult {
   return { bookmarkId, primaryTopic, secondaryTopic: null }
+}
+
+/**
+ * locale 现在是必填项，但本文件里的用例全部只关心中文分支。
+ * 固定传 'zh_CN'，调用点不必逐个重复。
+ */
+function designFolders(
+  topics: Array<{ topic: string; count: number }>,
+  client: LlmClient,
+  options?: DesignOptions,
+): Promise<FolderDesign | null> {
+  return designFoldersRaw(topics, client, 'zh_CN', options)
+}
+
+function designTagFolders(
+  tags: TagResult[],
+  bookmarks: BookmarkItem[],
+  domainGroups: string[],
+  client: LlmClient,
+  options?: DesignOptions,
+): Promise<TagResult[]> {
+  return designTagFoldersRaw(tags, bookmarks, domainGroups, client, 'zh_CN', options)
 }
 
 function design(entries: Array<[string, string[]]>, folders: FolderDesign['folders'] = []): FolderDesign {

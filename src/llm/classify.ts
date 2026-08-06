@@ -5,6 +5,7 @@ import { resolveByRules } from '@/core/map'
 import { sanitizeUrl } from '@/core/sanitize'
 import type { BookmarkItem, CategoryCandidate, Classification } from '@/core/types'
 import type { LlmClient } from './client'
+import { classifyPrompt } from './prompts'
 
 export interface ClassifyInput {
   items: BookmarkItem[]
@@ -28,8 +29,13 @@ export function cacheKey(item: BookmarkItem, candidates: CategoryCandidate[]): s
   return `${djb2(item.url)}:${version}`
 }
 
-export function buildBatchPrompt(items: BookmarkItem[], candidates: CategoryCandidate[]): string {
-  const catalog = candidates.map((c) => `- id=${c.id} 目录=${c.path.join(' / ')}`).join('\n')
+export function buildBatchPrompt(
+  items: BookmarkItem[],
+  candidates: CategoryCandidate[],
+  locale: Locale,
+): string {
+  const folderLabel = locale === 'zh_CN' ? '目录' : 'folder'
+  const catalog = candidates.map((c) => `- id=${c.id} ${folderLabel}=${c.path.join(' / ')}`).join('\n')
   const payload = items.map((item) => {
     const url = sanitizeUrl(item.url)
     return {
@@ -42,18 +48,12 @@ export function buildBatchPrompt(items: BookmarkItem[], candidates: CategoryCand
   })
 
   return [
-    '你是一个书签整理助手。为每个书签从下面的候选目录中选择最合适的一个。',
+    ...classifyPrompt(locale),
     '',
-    '规则：',
-    '1. 只能从候选目录里选，绝不能创造新目录。',
-    '2. 如果没有任何目录合适，target_category_id 返回 null。',
-    '3. confidence 是 0 到 1 之间的数字，表示你的把握程度。',
-    '4. reason 用一句中文说明判断依据。',
-    '',
-    '候选目录：',
+    locale === 'zh_CN' ? '候选目录：' : 'Candidate folders:',
     catalog,
     '',
-    '待分类书签：',
+    locale === 'zh_CN' ? '待分类书签：' : 'Bookmarks to classify:',
     JSON.stringify(payload, null, 2),
   ].join('\n')
 }
@@ -100,6 +100,7 @@ async function runBatch(
   batch: BookmarkItem[],
   candidates: CategoryCandidate[],
   client: LlmClient,
+  locale: Locale,
 ): Promise<Classification[]> {
   const validIds = new Set(candidates.map((c) => c.id))
   let lastError = '未知错误'
@@ -107,7 +108,7 @@ async function runBatch(
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const raw = (await client.complete(
-        buildBatchPrompt(batch, candidates),
+        buildBatchPrompt(batch, candidates, locale),
         buildSchema(candidates),
       )) as { results?: RawResult[] }
       const byId = new Map((raw.results ?? []).map((r) => [r.bookmark_id, r]))
@@ -176,7 +177,7 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
       const index = cursor++
       const batch = batches[index]!
       const startedAt = Date.now()
-      const results = await runBatch(batch, candidates, client)
+      const results = await runBatch(batch, candidates, client, locale)
       const ok = results.filter((r) => r.source === 'llm').length
       const summary =
         `分类批次 ${index + 1}/${batches.length}：${batch.length} 条，` +

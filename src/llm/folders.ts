@@ -1,9 +1,11 @@
 import { normalizeName } from '@/core/map'
 import { groupFolderTitle, matchDomainGroup } from '@/core/domainGroups'
+import type { Locale } from '@/core/locale'
 import type { BookmarkItem, TagResult } from '@/core/types'
 import { MAX_SIBLINGS } from '@/core/tree'
-import { NO_TOPIC, BROAD_WORDS } from './tags'
+import { NO_TOPIC } from './tags'
 import type { LlmClient } from './client'
+import { foldersPrompt } from './prompts'
 
 export interface TopicCount {
   topic: string
@@ -99,42 +101,20 @@ export interface DesignOptions {
   isCancelled?: () => boolean
 }
 
-function buildDesignPrompt(topics: TopicCount[], options: DesignOptions): string {
+function buildDesignPrompt(topics: TopicCount[], options: DesignOptions, locale: Locale): string {
   const total = topics.reduce((sum, t) => sum + t.count, 0)
-  const head =
-    options.oneLevel === true
-      ? [
-          `下面这些标签来自「${options.parentTitle ?? ''}」目录里的 ${total} 个书签，需要为它们设计子目录。`,
-          '这个共同点已经写在父目录名上，不要再拿它当分类依据。',
-        ]
-      : [`下面是从 ${total} 个书签中抽出的主题标签，每个标签后面是它的书签数。请据此设计目录结构。`]
-
-  const rules =
-    options.oneLevel === true
-      ? [
-          '1. 合并同义或高度重叠的标签，用一个子目录容纳它们。',
-          '2. 只输出一层目录，children 一律返回空数组。',
-          `3. 子目录不超过 ${MAX_SIBLINGS} 个。`,
-          `4. 目录名要具体，禁止使用这些宽泛词：${BROAD_WORDS}。`,
-        ]
-      : [
-          '1. 合并同义或高度重叠的标签，用一个目录容纳它们。',
-          // tree.ts 建树时会再留一个位置给「其他」，这里的上限要和它对齐，否则模型给满
-          // MAX_SIBLINGS 个时最小的那个会被建树阶段静默丢弃
-          `2. 一级目录不超过 ${MAX_SIBLINGS - 1} 个。`,
-          '3. 书签少时只给一层目录，不要硬凑二级目录；只有当某个一级目录下确实存在多个清晰的子主题、书签数量也撑得起来时，才用 children 分出二级。',
-          `4. 一级目录名要具体，禁止使用这些宽泛词：${BROAD_WORDS}。「Claude Code」「LLM 原理」「终端工具」是好名字，「AI」「开发」不是。`,
-        ]
+  // tree.ts 建树时会再留一个位置给「其他」，非 oneLevel 时的上限要和它对齐，否则模型给满
+  // MAX_SIBLINGS 个时最小的那个会被建树阶段静默丢弃
+  const maxSiblings = options.oneLevel === true ? MAX_SIBLINGS : MAX_SIBLINGS - 1
 
   return [
-    ...head,
+    ...foldersPrompt(locale, {
+      total,
+      parentTitle: options.oneLevel === true ? (options.parentTitle ?? '') : undefined,
+      maxSiblings,
+    }),
     '',
-    '规则：',
-    ...rules,
-    '5. 每个标签必须出现在恰好一个目录的 topics 里，不要遗漏、不要重复。直接归入某个一级目录的标签写在它自己的 topics 里，归入子目录的写在子目录的 topics 里。',
-    '6. 目录名用中文，专有技术名词（React、RAG、MCP）可直接用原文。',
-    '',
-    '标签清单：',
+    locale === 'zh_CN' ? '标签清单：' : 'Label list:',
     JSON.stringify(topics, null, 2),
   ].join('\n')
 }
@@ -151,12 +131,13 @@ function buildDesignPrompt(topics: TopicCount[], options: DesignOptions): string
 export async function designFolders(
   topics: TopicCount[],
   client: LlmClient,
+  locale: Locale,
   options: DesignOptions = {},
 ): Promise<FolderDesign | null> {
   if (topics.length === 0) return null
 
   try {
-    const response = (await client.complete(buildDesignPrompt(topics, options), DESIGN_SCHEMA)) as {
+    const response = (await client.complete(buildDesignPrompt(topics, options, locale), DESIGN_SCHEMA)) as {
       folders?: RawFolder[]
     }
     const raw = response.folders ?? []
@@ -237,6 +218,7 @@ export async function designTagFolders(
   bookmarks: BookmarkItem[],
   domainGroups: string[],
   client: LlmClient,
+  locale: Locale,
   options: DesignOptions = {},
 ): Promise<TagResult[]> {
   const bookmarkById = new Map(bookmarks.map((b) => [b.id, b]))
@@ -252,9 +234,8 @@ export async function designTagFolders(
       topicEntries.push({ index, tag })
       return
     }
-    // 这里的 title 只喂给提示词与日志，不是最终目录名——产出层已在 tree.ts 双语化，
-    // 这一层的双语化属于计划二，先固定用中文，不改变现有行为。
-    const bucket = byGroup.get(group.key) ?? { title: groupFolderTitle(group, 'zh_CN'), entries: [] }
+    // 这里的 title 只喂给提示词与日志，不是最终目录名——产出层已在 tree.ts 双语化。
+    const bucket = byGroup.get(group.key) ?? { title: groupFolderTitle(group, locale), entries: [] }
     bucket.entries.push({ index, tag })
     byGroup.set(group.key, bucket)
   })
@@ -266,7 +247,7 @@ export async function designTagFolders(
     batchOptions: DesignOptions,
   ): Promise<void> => {
     const batch = entries.map((entry) => entry.tag)
-    const design = await designFolders(collectTopics(batch), client, batchOptions)
+    const design = await designFolders(collectTopics(batch), client, locale, batchOptions)
     // 设计失败就保留原始标签：碎片化的目录也好过整摊书签失去归属
     const next = design === null ? batch : applyDesign(batch, design)
     next.forEach((tag, i) => {

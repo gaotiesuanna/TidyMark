@@ -1,7 +1,9 @@
 import { groupFolderTitle, matchDomainGroup } from '@/core/domainGroups'
+import type { Locale } from '@/core/locale'
 import { sanitizeUrl } from '@/core/sanitize'
 import type { BookmarkItem, TagResult } from '@/core/types'
 import type { LlmClient } from './client'
+import { groupTagsPrompt, tagsPrompt } from './prompts'
 
 export type { TagResult }
 
@@ -12,8 +14,8 @@ export type { TagResult }
  */
 export const NO_TOPIC = ''
 
-/** 提示词共用的宽泛词黑名单，三处提示词（本文件两处、folders.ts 一处）都从这里引用，避免各自维护一份字面量而漂移。 */
-export const BROAD_WORDS = 'AI、人工智能、开发、编程、技术、工具、学习、资源、其他'
+/** 宽泛词黑名单现在按语言分表维护，定义搬去了 prompts.ts，这里只是重新导出，避免两处定义。 */
+export { BROAD_WORDS } from './prompts'
 
 const SCHEMA = {
   type: 'object',
@@ -48,18 +50,11 @@ function payloadOf(items: BookmarkItem[]): unknown[] {
   })
 }
 
-function buildPrompt(items: BookmarkItem[]): string {
+function buildPrompt(locale: Locale, items: BookmarkItem[]): string {
   return [
-    '为每个书签抽取一个具体主题，供后续归并使用。',
+    ...tagsPrompt(locale),
     '',
-    '规则：',
-    '1. 主题回答「这个书签讲什么、解决什么问题」，要具体。',
-    `2. 禁止使用这些宽泛词：${BROAD_WORDS}。`,
-    '3. 例如「Claude Code」「KV Cache」「终端工具」「提示工程」，而不是「AI」「开发」。',
-    '4. 主题名用中文，2 到 8 个字；专有技术名词（React、RAG、MCP）可直接用原文。',
-    '5. 尽量复用已出现过的主题名，不要为同一概念创造多个说法。',
-    '',
-    '书签列表：',
+    locale === 'zh_CN' ? '书签列表：' : 'Bookmark list:',
     JSON.stringify(payloadOf(items), null, 2),
   ].join('\n')
 }
@@ -71,20 +66,12 @@ function buildPrompt(items: BookmarkItem[]): string {
  * 再抽一次「AI」「开发」毫无区分度，105 个 GitHub 仓库会挤进三四个目录。
  * 这里换成问「它解决什么问题」，并明令禁止那些宽泛词。
  */
-function buildGroupPrompt(groupTitle: string): (items: BookmarkItem[]) => string {
+function buildGroupPrompt(locale: Locale, groupTitle: string): (items: BookmarkItem[]) => string {
   return (items) =>
     [
-      `下面这些书签全部来自「${groupTitle}」。这个共同点已经体现在目录名上，不要再拿它当分类依据。`,
-      '为每个书签抽取一个「功能域」标签，回答「它解决什么问题」。',
+      ...groupTagsPrompt(locale, groupTitle),
       '',
-      '规则：',
-      `1. 禁止使用这些宽泛词：${BROAD_WORDS}。`,
-      '2. 用具体的问题域，例如「文档解析」「RAG 检索」「模型微调」「语音合成」「Agent 框架」「可观测性」。',
-      '3. title 通常是「作者/仓库名: 一句话简介」，简介是判断用途最可靠的依据。',
-      '4. 标签用中文，2 到 6 个字；专有技术名词（RAG、MCP、TTS）可直接用原文。',
-      '5. 尽量复用已出现过的标签名，不要为同一概念创造多个说法。',
-      '',
-      '书签列表：',
+      locale === 'zh_CN' ? '书签列表：' : 'Bookmark list:',
       JSON.stringify(payloadOf(items), null, 2),
     ].join('\n')
 }
@@ -160,9 +147,10 @@ async function runExtraction(
 export async function extractTags(
   items: BookmarkItem[],
   client: LlmClient,
+  locale: Locale,
   options: ExtractOptions = {},
 ): Promise<TagResult[]> {
-  return runExtraction(items, client, buildPrompt, options, '标签批次')
+  return runExtraction(items, client, (batch) => buildPrompt(locale, batch), options, '标签批次')
 }
 
 /**
@@ -175,6 +163,7 @@ export async function refineGroupTags(
   bookmarks: BookmarkItem[],
   domainGroups: string[],
   client: LlmClient,
+  locale: Locale,
   options: ExtractOptions = {},
 ): Promise<TagResult[]> {
   if (domainGroups.length === 0) return tags
@@ -183,9 +172,8 @@ export async function refineGroupTags(
   for (const item of bookmarks) {
     const group = matchDomainGroup(item, domainGroups)
     if (group === null) continue
-    // 这里的 title 只喂给提示词与日志，不是最终目录名——产出层已在 tree.ts 双语化，
-    // 这一层的双语化属于计划二，先固定用中文，不改变现有行为。
-    const bucket = byGroup.get(group.key) ?? { title: groupFolderTitle(group, 'zh_CN'), items: [] }
+    // 这里的 title 只喂给提示词与日志，不是最终目录名——产出层已在 tree.ts 双语化。
+    const bucket = byGroup.get(group.key) ?? { title: groupFolderTitle(group, locale), items: [] }
     bucket.items.push(item)
     byGroup.set(group.key, bucket)
   }
@@ -195,7 +183,7 @@ export async function refineGroupTags(
   for (const { title, items } of byGroup.values()) {
     if (options.isCancelled?.() === true) break
     const results = await runExtraction(
-      items, client, buildGroupPrompt(title), options, `${title} 功能域`,
+      items, client, buildGroupPrompt(locale, title), options, `${title} 功能域`,
     )
     for (const result of results) {
       if (result.primaryTopic !== NO_TOPIC) refined.set(result.bookmarkId, result)
