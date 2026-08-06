@@ -5,3 +5,13 @@ dist
 release
 docs/superpowers/
 Bookmark-Refactor-AI-Chrome书签整理产品方案.md
+
+# macOS
+.DS_Store
+
+# Chrome 扩展打包私钥与产物（.pem 是签名私钥，泄露等于别人能伪造更新）
+*.pem
+*.crx
+
+# 测试覆盖率
+coverage/
