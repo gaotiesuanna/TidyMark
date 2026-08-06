@@ -1,4 +1,5 @@
 import type { ResultTreeNode } from '@/core/resultTree'
+import { t } from '@/i18n'
 
 interface Props {
   nodes: ResultTreeNode[]
@@ -14,7 +15,7 @@ function Row({ node, depth }: { node: ResultTreeNode; depth: number }) {
         <span aria-hidden className="shrink-0 text-neutral-400">📁</span>
         <span className="truncate">{node.title}</span>
         {node.isNew && (
-          <span className="shrink-0 rounded bg-green-100 px-1 text-[10px] text-green-700">新建</span>
+          <span className="shrink-0 rounded bg-green-100 px-1 text-[10px] text-green-700">{t('resultTreeNew')}</span>
         )}
         <span className="ml-auto shrink-0 text-neutral-400">{node.total}</span>
       </div>

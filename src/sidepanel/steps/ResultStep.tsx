@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { buildResultTree } from '@/core/resultTree'
+import { t } from '@/i18n'
 import { ResultTree } from '../components/ResultTree'
 import { useStore } from '../store'
 
@@ -25,18 +26,18 @@ export function ResultStep() {
     <div className="space-y-4 text-sm">
       <section className="rounded border p-3">
         <h2 className="mb-2 font-medium">
-          {applyResult.status === 'completed' ? '整理完成' : '整理中断'}
+          {applyResult.status === 'completed' ? t('resultCompleted') : t('resultInterrupted')}
         </h2>
         <dl className="grid grid-cols-2 gap-y-1 text-xs">
-          <dt className="text-neutral-500">已执行操作</dt><dd>{applyResult.executed}</dd>
-          <dt className="text-neutral-500">新建文件夹</dt><dd>{applyResult.createdFolderIds.length}</dd>
-          <dt className="text-neutral-500">清理空文件夹</dt><dd>{applyResult.removedFolders.length}</dd>
-          <dt className="text-neutral-500">统一书签标题</dt><dd>{applyResult.renamedBookmarkIds.length}</dd>
-          <dt className="text-neutral-500">跳过</dt><dd>{applyResult.skipped.length}</dd>
+          <dt className="text-neutral-500">{t('resultStatExecuted')}</dt><dd>{applyResult.executed}</dd>
+          <dt className="text-neutral-500">{t('resultStatCreated')}</dt><dd>{applyResult.createdFolderIds.length}</dd>
+          <dt className="text-neutral-500">{t('resultStatRemoved')}</dt><dd>{applyResult.removedFolders.length}</dd>
+          <dt className="text-neutral-500">{t('resultStatRenamed')}</dt><dd>{applyResult.renamedBookmarkIds.length}</dd>
+          <dt className="text-neutral-500">{t('resultStatSkipped')}</dt><dd>{applyResult.skipped.length}</dd>
         </dl>
         {applyResult.removedFolders.length > 0 && (
           <details className="mt-2 text-xs text-neutral-500">
-            <summary className="cursor-pointer">查看被清理的空文件夹</summary>
+            <summary className="cursor-pointer">{t('resultRemovedDetails')}</summary>
             <ul className="mt-1 space-y-0.5">
               {applyResult.removedFolders.map((folder) => (
                 <li key={folder.id}>{[...folder.path, folder.title].join(' / ')}</li>
@@ -46,14 +47,14 @@ export function ResultStep() {
         )}
         {applyResult.error !== null && (
           <p className="mt-2 rounded bg-red-50 p-2 text-xs text-red-700">
-            在第 {(applyResult.failedAt ?? 0) + 1} 步失败：{applyResult.error}
-            <br />已执行的部分可以通过下方按钮完整撤销。
+            {t('resultFailedAt', String((applyResult.failedAt ?? 0) + 1), applyResult.error ?? '')}
+            <br />{t('resultFailedHint')}
           </p>
         )}
         {applyResult.skipped.length > 0 && (
           <ul className="mt-2 space-y-0.5 text-xs text-neutral-500">
             {applyResult.skipped.map((each) => (
-              <li key={each.bookmarkId}>书签 {each.bookmarkId}：{each.reason}</li>
+              <li key={each.bookmarkId}>{t('resultSkippedItem', each.bookmarkId, each.reason)}</li>
             ))}
           </ul>
         )}
@@ -62,11 +63,10 @@ export function ResultStep() {
       {showTree && (
         <section className="rounded border p-3">
           <h2 className="mb-1 font-medium">
-            {undoResult === null ? '整理后的结构' : '撤销后的结构'}
+            {undoResult === null ? t('resultTreeAfterApply') : t('resultTreeAfterUndo')}
           </h2>
           <p className="mb-2 text-xs text-neutral-500">
-            书签栏的真实结构，右侧数字为该目录下的书签数（含子目录）。
-            未勾选的移动建议不会执行，那些书签仍留在原目录里。
+            {t('resultTreeHint')}
           </p>
           <ResultTree nodes={tree} />
         </section>
@@ -74,7 +74,7 @@ export function ResultStep() {
 
       {undoResult !== null && (
         <section className="rounded border border-green-200 bg-green-50 p-3 text-xs">
-          <p>撤销完成：还原 {undoResult.restored} 项，删除新建文件夹 {undoResult.removedFolders} 个。</p>
+          <p>{t('resultUndone', String(undoResult.restored), String(undoResult.removedFolders))}</p>
           {undoResult.skipped.length > 0 && (
             <ul className="mt-1 space-y-0.5 text-neutral-600">
               {undoResult.skipped.map((each) => (
@@ -92,20 +92,20 @@ export function ResultStep() {
             disabled={!undoAvailable || busy !== null}
             onClick={() => void undo()}
           >
-            撤销本次整理
+            {t('resultUndoButton')}
           </button>
           <button
             className="flex-1 rounded border py-2 text-sm hover:bg-neutral-50"
             onClick={reset}
           >
-            再整理一次
+            {t('resultAgain')}
           </button>
         </div>
         <button
           className="w-full rounded bg-neutral-800 py-2 text-sm text-white"
           onClick={finish}
         >
-          结束整理
+          {t('resultFinish')}
         </button>
       </div>
     </div>
