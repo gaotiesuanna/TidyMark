@@ -31,8 +31,6 @@ export interface HandlerDeps {
   isCancelled?: () => boolean
 }
 
-const CANCELLED: Response = { ok: false, error: t('errAnalysisCancelled'), cancelled: true }
-
 export async function handle(
   ports: Ports,
   request: Request,
@@ -47,6 +45,10 @@ export async function handle(
     emit({ phase, message: '', done, total })
   const isCancelled = deps.isCancelled ?? ((): boolean => false)
   const locale = resolveLocale()
+  // 挪进 handle() 里而不是留在模块顶层：MV3 里 chrome.i18n 求值时已可用，眼下没问题，
+  // 但这是全项目唯一一处模块级 i18n 调用，一旦求值时机提前就会静默产出 error: ''
+  // （getMessage 缺键返回空串、不抛错），挪到调用时刻求值更稳妥。
+  const CANCELLED: Response = { ok: false, error: t('errAnalysisCancelled'), cancelled: true }
 
   try {
     switch (request.kind) {

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { buildResultTree } from '@/core/resultTree'
-import { t } from '@/i18n'
+import { plural, t } from '@/i18n'
 import { ResultTree } from '../components/ResultTree'
 import { useStore } from '../store'
 
@@ -74,11 +74,11 @@ export function ResultStep() {
 
       {undoResult !== null && (
         <section className="rounded border border-green-200 bg-green-50 p-3 text-xs">
-          <p>{t('resultUndone', String(undoResult.restored), String(undoResult.removedFolders))}</p>
+          <p>{plural(undoResult.restored, 'resultUndoneOne', 'resultUndoneOther', String(undoResult.restored), String(undoResult.removedFolders))}</p>
           {undoResult.skipped.length > 0 && (
             <ul className="mt-1 space-y-0.5 text-neutral-600">
               {undoResult.skipped.map((each) => (
-                <li key={each.id}>{each.title}：{each.reason}</li>
+                <li key={each.id}>{t('resultUndoneSkippedItem', each.title, each.reason)}</li>
               ))}
             </ul>
           )}

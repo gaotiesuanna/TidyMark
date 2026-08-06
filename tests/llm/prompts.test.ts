@@ -22,6 +22,8 @@ describe('提示词双语', () => {
   it('中文提示词明确要求用中文作答', () => {
     expect(tagsPrompt('zh_CN').join(' ')).toContain('中文')
     expect(foldersPrompt('zh_CN', { total: 10, maxSiblings: 8 }).join(' ')).toContain('中文')
+    expect(classifyPrompt('zh_CN').join(' ')).toContain('中文')
+    expect(groupTagsPrompt('zh_CN', 'GitHub').join(' ')).toContain('中文')
   })
 
   it('宽泛词表两种语言各自独立，不是互译', () => {

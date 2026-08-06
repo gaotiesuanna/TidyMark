@@ -18,7 +18,7 @@ export default defineManifest({
     128: 'icons/icon-128.png',
   },
   action: {
-    default_title: 'TidyMark',
+    default_title: '__MSG_extName__',
     default_icon: {
       16: 'icons/icon-16.png',
       32: 'icons/icon-32.png',

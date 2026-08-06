@@ -1,4 +1,5 @@
 import type { Ports } from '@/core/ports'
+import type { Locale } from '@/core/locale'
 import type { Classification } from '@/core/types'
 import type { LlmConfig } from '@/llm/client'
 
@@ -24,12 +25,18 @@ export const DEFAULT_SETTINGS: Settings = {
   rewriteGithubTitles: false,
 }
 
-export const PRESETS: Array<{ label: string; baseUrl: string; model: string }> = [
-  { label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
-  { label: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
-  { label: 'Kimi', baseUrl: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k' },
-  { label: '智谱', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
-  { label: '本地 Ollama', baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5' },
+/**
+ * label 按语言分开存：这个文件属于界面层（不在 core/llm/engine 的禁止名单里），
+ * 但内容本身跟 _locales 无关——它是供应商预设，不是一句完整文案，用小型双语表
+ * 比额外开一个 _locales 键更直接。「智谱」是品牌名，两种语言都保留原文；
+ * 「本地 Ollama」里的「本地」是描述词不是品牌，必须双语。
+ */
+export const PRESETS: Array<{ label: Record<Locale, string>; baseUrl: string; model: string }> = [
+  { label: { zh_CN: 'OpenAI', en: 'OpenAI' }, baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+  { label: { zh_CN: 'DeepSeek', en: 'DeepSeek' }, baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
+  { label: { zh_CN: 'Kimi', en: 'Kimi' }, baseUrl: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k' },
+  { label: { zh_CN: '智谱', en: 'Zhipu' }, baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
+  { label: { zh_CN: '本地 Ollama', en: 'Local Ollama' }, baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5' },
 ]
 
 export async function loadSettings(ports: Ports): Promise<Settings> {

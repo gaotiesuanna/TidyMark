@@ -28,14 +28,14 @@ export function PreferencesStep() {
         <div className="flex flex-wrap gap-1">
           {PRESETS.map((preset) => (
             <button
-              key={preset.label}
+              key={preset.baseUrl}
               className="rounded border px-2 py-0.5 text-xs hover:bg-neutral-50"
               onClick={() => void setSettings({
                 ...settings,
                 llm: { ...settings.llm, baseUrl: preset.baseUrl, model: preset.model },
               })}
             >
-              {preset.label}
+              {preset.label[locale]}
             </button>
           ))}
         </div>
@@ -60,6 +60,7 @@ export function PreferencesStep() {
         />
         <p className="text-[11px] leading-relaxed text-neutral-400">
           {t('prefsPrivacyKey')}
+          {' '}
           {t('prefsPrivacyPayload')}
         </p>
       </section>

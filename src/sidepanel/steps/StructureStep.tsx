@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { buildStructureView } from '@/core/structure'
-import { resolveLocale, t } from '@/i18n'
+import { plural, resolveLocale, t } from '@/i18n'
 import { useStore } from '../store'
 
 export function StructureStep() {
@@ -16,7 +16,8 @@ export function StructureStep() {
   return (
     <div className="space-y-3">
       <p className="text-xs text-neutral-500">
-        {t('structureIntro', String(nodes.length), String(total))}
+        {plural(nodes.length, 'structureIntroOne', 'structureIntroOther', String(nodes.length), String(total))}
+        {' '}
         {t('structureHint')}
       </p>
 

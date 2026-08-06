@@ -77,7 +77,7 @@ export function ImportPanel() {
         {/* 成功状态不能只靠颜色，勾选图标 + 文字一起给（色盲/高对比度模式下也读得出来） */}
         <p className="flex items-start gap-1.5 text-neutral-700">
           <CheckCircleIcon className="mt-px h-3.5 w-3.5 shrink-0 text-emerald-600" />
-          {t('importDone', String(result.bookmarks), `${barTitle}/${targetName}`)}
+          {plural(result.bookmarks, 'importDoneOne', 'importDoneOther', String(result.bookmarks), `${barTitle}/${targetName}`)}
         </p>
         {missed.length > 0 && (
           <div className="space-y-0.5 rounded-md border border-neutral-200 bg-white p-2 text-neutral-500">
@@ -125,13 +125,13 @@ export function ImportPanel() {
         </p>
         <div className="space-y-1 text-neutral-500">
           <p className="tabular-nums">
-            {t('importStats', String(preview.bookmarkCount), String(preview.folderCount))}
+            {plural(preview.bookmarkCount, 'importStatsOne', 'importStatsOther', String(preview.bookmarkCount), String(preview.folderCount))}
           </p>
           {preview.duplicateCount > 0 && <p>{t('importDuplicates', String(preview.duplicateCount))}</p>}
           {preview.blocked.length > 0 && (
             <p className="flex items-start gap-1.5 text-amber-700">
               <AlertIcon className="mt-px h-3.5 w-3.5 shrink-0" />
-              {t('importBlocked', String(preview.blocked.length))}
+              {plural(preview.blocked.length, 'importBlockedOne', 'importBlockedOther', String(preview.blocked.length))}
             </p>
           )}
           <p className="truncate">

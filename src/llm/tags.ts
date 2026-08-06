@@ -186,7 +186,7 @@ export async function refineGroupTags(
   const refined = new Map<string, TagResult>()
   for (const { title, items } of byGroup.values()) {
     if (options.isCancelled?.() === true) break
-    const groupLabel = locale === 'zh_CN' ? `${title} 功能域` : `${title} scope`
+    const groupLabel = locale === 'zh_CN' ? `${title} 功能域` : `${title} domains`
     const results = await runExtraction(
       items, client, buildGroupPrompt(locale, title), options, groupLabel, locale,
     )

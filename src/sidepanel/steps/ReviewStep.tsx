@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { LOW_CONFIDENCE, renumberPlan, summarize } from '@/core/plan'
-import { t } from '@/i18n'
+import { plural, t } from '@/i18n'
 import { useStore } from '../store'
 
 export function ReviewStep() {
@@ -16,20 +16,20 @@ export function ReviewStep() {
   return (
     <div className="space-y-3">
       <p className="text-xs text-neutral-500">
-        {t('reviewSummary', String(plan.rows.length), String(accepted.size))}
+        {plural(plan.rows.length, 'reviewSummaryOne', 'reviewSummaryOther', String(plan.rows.length), String(accepted.size))}
       </p>
 
       {(summary.createdFolders > 0 || summary.renamedFolders > 0) && (
         <p className="text-xs text-neutral-500">
-          {t('reviewCreateFolders', String(summary.createdFolders))}
-          {summary.renamedFolders > 0 && t('reviewRenameFolders', String(summary.renamedFolders))}
-          。
+          {plural(summary.createdFolders, 'reviewCreateFoldersOne', 'reviewCreateFoldersOther', String(summary.createdFolders))}
+          {summary.renamedFolders > 0 && plural(summary.renamedFolders, 'reviewRenameFoldersOne', 'reviewRenameFoldersOther', String(summary.renamedFolders))}
+          {t('reviewSummaryPeriod')}
         </p>
       )}
 
       {summary.renamedBookmarks > 0 && (
         <p className="text-xs text-neutral-500">
-          {t('reviewRenameBookmarks', String(summary.renamedBookmarks))}
+          {plural(summary.renamedBookmarks, 'reviewRenameBookmarksOne', 'reviewRenameBookmarksOther', String(summary.renamedBookmarks))}
         </p>
       )}
 
@@ -95,7 +95,7 @@ export function ReviewStep() {
           disabled={accepted.size === 0 || busy !== null}
           onClick={() => void apply()}
         >
-          {t('reviewApply', String(accepted.size))}
+          {plural(accepted.size, 'reviewApplyOne', 'reviewApplyOther', String(accepted.size))}
         </button>
       </div>
     </div>

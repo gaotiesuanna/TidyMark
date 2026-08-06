@@ -22,6 +22,14 @@ function placeholderNames(catalog: Catalog, key: string): string[] {
   return Object.keys(catalog[key]?.placeholders ?? {}).map((n) => n.toLowerCase()).sort()
 }
 
+/** name -> content（如 "$2"），不只比名字集合——否则某个语言把 $1/$2 写反也测不出来。 */
+function placeholderContents(catalog: Catalog, key: string): Record<string, string> {
+  const declared = catalog[key]?.placeholders ?? {}
+  const result: Record<string, string> = {}
+  for (const [name, entry] of Object.entries(declared)) result[name.toLowerCase()] = entry.content
+  return result
+}
+
 const catalogs = new Map(LOCALES.map((locale) => [locale, load(locale)]))
 
 describe('_locales 一致性', () => {
@@ -45,6 +53,16 @@ describe('_locales 一致性', () => {
       const expected = placeholderNames(catalogs.get(first!)!, key)
       for (const locale of rest) {
         expect(placeholderNames(catalogs.get(locale)!, key)).toEqual(expected)
+      }
+    }
+  })
+
+  it('同名键的占位符 content 也要一致——只比名字集合的话，参数顺序被写反（比如 $1/$2 互换）也测不出来', () => {
+    const [first, ...rest] = LOCALES
+    for (const key of Object.keys(catalogs.get(first!)!)) {
+      const expected = placeholderContents(catalogs.get(first!)!, key)
+      for (const locale of rest) {
+        expect(placeholderContents(catalogs.get(locale)!, key), `${locale} 的 ${key}`).toEqual(expected)
       }
     }
   })
