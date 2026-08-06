@@ -12,5 +12,21 @@
   "scopeExpandAll": { "message": "全部展开" },
   "scopeCollapseAll": { "message": "全部收起" },
   "scopeScanOne": { "message": "扫描选中的 $count$ 个文件夹", "placeholders": { "count": { "content": "$1" } } },
-  "scopeScanOther": { "message": "扫描选中的 $count$ 个文件夹", "placeholders": { "count": { "content": "$1" } } }
+  "scopeScanOther": { "message": "扫描选中的 $count$ 个文件夹", "placeholders": { "count": { "content": "$1" } } },
+  "phaseScan": { "message": "扫描" },
+  "phaseTags": { "message": "抽取标签" },
+  "phaseTree": { "message": "设计目录" },
+  "phaseClassify": { "message": "分类" },
+  "phaseApply": { "message": "应用" },
+  "phaseUndo": { "message": "撤销" },
+  "phaseImport": { "message": "导入" },
+  "progressCancel": { "message": "取消" },
+  "progressLogsExpand": { "message": "展开运行日志" },
+  "progressLogsCollapse": { "message": "收起运行日志" },
+  "progressLogsTitleOne": { "message": "运行日志（$count$ 条）", "placeholders": { "count": { "content": "$1" } } },
+  "progressLogsTitleOther": { "message": "运行日志（$count$ 条）", "placeholders": { "count": { "content": "$1" } } },
+  "sendErrChannelClosed": { "message": "后台在返回结果前被中断了（扩展刚重新加载，或后台被浏览器回收）。请重试——已经跑完的批次有缓存，重试会快很多。" },
+  "sendErrContextInvalidated": { "message": "扩展已重新加载，这个侧栏面板已失效。请关掉侧栏重新打开。" },
+  "sendErrNoReceiver": { "message": "连不上后台。请在 chrome://extensions 里确认 TidyMark 已启用，然后重开侧栏。" },
+  "sendErrNoResponse": { "message": "后台没有返回结果，可能已被浏览器回收，请重试。" }
 }

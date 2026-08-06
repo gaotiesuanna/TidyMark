@@ -3,14 +3,15 @@ export const PROGRESS_PORT = 'tidymark:progress'
 
 export type ProgressPhase = 'scan' | 'tags' | 'tree' | 'classify' | 'apply' | 'undo' | 'import'
 
+/** 值是 _locales 里的词条键，不是文案——events.ts 要保持零依赖，由渲染方 t() 取文案。 */
 export const PHASE_LABELS: Record<ProgressPhase, string> = {
-  scan: '扫描',
-  tags: '抽取标签',
-  tree: '设计目录',
-  classify: '分类',
-  apply: '应用',
-  undo: '撤销',
-  import: '导入',
+  scan: 'phaseScan',
+  tags: 'phaseTags',
+  tree: 'phaseTree',
+  classify: 'phaseClassify',
+  apply: 'phaseApply',
+  undo: 'phaseUndo',
+  import: 'phaseImport',
 }
 
 export interface ProgressEvent {

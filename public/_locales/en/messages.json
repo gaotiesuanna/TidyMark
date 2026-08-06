@@ -12,5 +12,21 @@
   "scopeExpandAll": { "message": "Expand all" },
   "scopeCollapseAll": { "message": "Collapse all" },
   "scopeScanOne": { "message": "Scan $count$ selected folder", "placeholders": { "count": { "content": "$1" } } },
-  "scopeScanOther": { "message": "Scan $count$ selected folders", "placeholders": { "count": { "content": "$1" } } }
+  "scopeScanOther": { "message": "Scan $count$ selected folders", "placeholders": { "count": { "content": "$1" } } },
+  "phaseScan": { "message": "Scanning" },
+  "phaseTags": { "message": "Extracting topics" },
+  "phaseTree": { "message": "Designing folders" },
+  "phaseClassify": { "message": "Classifying" },
+  "phaseApply": { "message": "Applying" },
+  "phaseUndo": { "message": "Undoing" },
+  "phaseImport": { "message": "Importing" },
+  "progressCancel": { "message": "Cancel" },
+  "progressLogsExpand": { "message": "Show log" },
+  "progressLogsCollapse": { "message": "Hide log" },
+  "progressLogsTitleOne": { "message": "Log ($count$ entry)", "placeholders": { "count": { "content": "$1" } } },
+  "progressLogsTitleOther": { "message": "Log ($count$ entries)", "placeholders": { "count": { "content": "$1" } } },
+  "sendErrChannelClosed": { "message": "The background stopped before returning a result (the extension was just reloaded, or the browser suspended it). Please retry — finished batches are cached, so a retry is much faster." },
+  "sendErrContextInvalidated": { "message": "The extension was reloaded, so this side panel is stale. Close it and open it again." },
+  "sendErrNoReceiver": { "message": "Cannot reach the background. Make sure TidyMark is enabled at chrome://extensions, then reopen the side panel." },
+  "sendErrNoResponse": { "message": "The background returned nothing — it may have been suspended. Please retry." }
 }

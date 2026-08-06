@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { PHASE_LABELS } from '@/background/events'
+import { plural, t } from '@/i18n'
 import type { LogLine, Progress } from '../store'
 
 interface Props {
@@ -55,7 +56,7 @@ export function ProgressPanel({ busy, progress, logs, onCancel }: Props) {
           <span>{busy}</span>
           {progress !== null && progress.total > 0 && (
             <span className="ml-auto shrink-0 text-neutral-500">
-              {PHASE_LABELS[progress.phase]} {progress.done}/{progress.total}
+              {t(PHASE_LABELS[progress.phase])} {progress.done}/{progress.total}
             </span>
           )}
           {onCancel !== undefined && (
@@ -65,7 +66,7 @@ export function ProgressPanel({ busy, progress, logs, onCancel }: Props) {
               }`}
               onClick={onCancel}
             >
-              取消
+              {t('progressCancel')}
             </button>
           )}
         </div>
@@ -82,12 +83,12 @@ export function ProgressPanel({ busy, progress, logs, onCancel }: Props) {
           <button
             className="flex w-full items-center gap-1 text-left text-neutral-500 hover:text-neutral-800"
             aria-expanded={expanded}
-            aria-label={expanded ? '收起运行日志' : '展开运行日志'}
+            aria-label={expanded ? t('progressLogsCollapse') : t('progressLogsExpand')}
             onClick={() => setExpanded(!expanded)}
           >
             <span aria-hidden className="shrink-0">{expanded ? '▾' : '▸'}</span>
             {expanded ? (
-              <span>运行日志（{logs.length} 条）</span>
+              <span>{plural(logs.length, 'progressLogsTitleOne', 'progressLogsTitleOther', String(logs.length))}</span>
             ) : (
               <span className={`truncate ${LEVEL_CLASS[latest!.level]}`}>{latest!.message}</span>
             )}
@@ -97,7 +98,7 @@ export function ProgressPanel({ busy, progress, logs, onCancel }: Props) {
             <ul className="mt-1 max-h-40 space-y-0.5 overflow-y-auto">
               {logs.map((line) => (
                 <li key={line.id} className={`break-all ${LEVEL_CLASS[line.level]}`}>
-                  <span className="text-neutral-400">[{PHASE_LABELS[line.phase]}] </span>
+                  <span className="text-neutral-400">[{t(PHASE_LABELS[line.phase])}] </span>
                   {line.message}
                 </li>
               ))}
