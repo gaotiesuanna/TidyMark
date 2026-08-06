@@ -125,6 +125,10 @@ describe('classifyBookmarks', () => {
     })
     expect(complete).toHaveBeenCalledTimes(3)
     expect(results[0]!).toMatchObject({ targetCategoryId: null, source: 'none' })
+    // detail 是纯错误信息，不含 reason 里「分类失败，保持原位：」这类前缀，
+    // 供调用方拼接展示时不必自己剥前缀。
+    expect(results[0]!.detail).toBe('Error: boom')
+    expect(results[0]!.reason).toContain(results[0]!.detail!)
   })
 
   it('不可重试错误立即降级，不重试', async () => {

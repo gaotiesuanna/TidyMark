@@ -294,7 +294,7 @@ export const useStore = create<State>((set, get) => ({
   confirmStructure() {
     const plan = get().plan
     if (plan === null) return
-    const next = applyStructureEdits(plan, get().structureEdits)
+    const next = applyStructureEdits(plan, get().structureEdits, resolveLocale())
     set({
       plan: next,
       accepted: new Set(next.rows.filter((r) => r.confidence >= LOW_CONFIDENCE).map((r) => r.bookmarkId)),

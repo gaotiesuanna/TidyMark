@@ -182,6 +182,15 @@ describe('buildCategoryTree 编号前缀', () => {
   })
 })
 
+describe('buildCategoryTree 兜底目录名双语化', () => {
+  it('英文 locale 下兜底目录名是 Other 而不是「其他」', () => {
+    const many = Array.from({ length: 6 }, (_, i) => [String(i), 'React', null] as [string, string, null])
+    const { newFolders } = buildCategoryTree({ tags: tags(many), rootId, existingFolders: [], locale: 'en' })
+    expect(newFolders.map((f) => base(f.title))).toContain('Other')
+    expect(newFolders.map((f) => base(f.title))).not.toContain('其他')
+  })
+})
+
 describe('buildCategoryTree 忽略空主题', () => {
   it('主题为空的书签不参与建树，不会凑出一个假目录', () => {
     const spec: Array<[string, string, string | null]> = [
@@ -341,6 +350,17 @@ describe('buildCategoryTree 域名聚合', () => {
     expect(pinned.every((p) => p.confidence === 1 && p.source === 'rule')).toBe(true)
     expect(pinned[0]!.reason).toContain('github.com')
     expect(pinned[0]!.reason).toContain('GitHub')
+  })
+
+  it('英文 locale 下 pinned 的 reason 也是英文', () => {
+    const gh = githubFixture(2, 'AI Tools')
+    const { pinned } = buildCategoryTree({
+      tags: gh.tags, rootId, existingFolders: [],
+      bookmarks: gh.bookmarks, domainGroups: ['github'], locale: 'en',
+    })
+    expect(pinned[0]!.reason).toContain('github.com')
+    expect(pinned[0]!.reason).toContain('GitHub')
+    expect(pinned[0]!.reason).not.toContain('域名')
   })
 
   it('聚合目录的 candidate 带 domainGroup 标记，主题目录不带', () => {

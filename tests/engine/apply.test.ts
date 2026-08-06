@@ -46,7 +46,7 @@ function setup(api?: Partial<BookmarksApi>) {
 describe('applyPlan', () => {
   it('执行前保存快照', async () => {
     const { ports } = setup()
-    await applyPlan(ports, makePlan(), new Set(['100', '101']))
+    await applyPlan(ports, makePlan(), new Set(['100', '101']), 'zh_CN')
     const snapshot = await loadSnapshot(ports)
     expect(snapshot!.planId).toBe('p1')
     expect(snapshot!.nodes.find((n) => n.id === '100')!.parentId).toBe('11')
@@ -54,7 +54,7 @@ describe('applyPlan', () => {
 
   it('把书签移到目标目录', async () => {
     const { ports, fake } = setup()
-    const result = await applyPlan(ports, makePlan(), new Set(['100', '101']))
+    const result = await applyPlan(ports, makePlan(), new Set(['100', '101']), 'zh_CN')
     expect(result.status).toBe('completed')
     expect(result.executed).toBe(2)
     expect(fake.structure()).toContain('书签栏/react/React 文档')
@@ -63,7 +63,7 @@ describe('applyPlan', () => {
 
   it('只执行被接受的条目', async () => {
     const { ports, fake } = setup()
-    await applyPlan(ports, makePlan(), new Set(['100']))
+    await applyPlan(ports, makePlan(), new Set(['100']), 'zh_CN')
     expect(fake.structure()).toContain('书签栏/杂项/Router')
   })
 
@@ -74,7 +74,7 @@ describe('applyPlan', () => {
       [{ bookmarkId: '100', targetCategoryId: 'tmp:1', confidence: 0.9, reason: 'r', source: 'llm' }],
     )
     const { ports, fake } = setup()
-    const result = await applyPlan(ports, plan, new Set(['100']))
+    const result = await applyPlan(ports, plan, new Set(['100']), 'zh_CN')
     expect(result.createdFolderIds).toHaveLength(1)
     expect(fake.structure()).toContain('书签栏/前端/React 文档')
   })
@@ -89,7 +89,7 @@ describe('applyPlan', () => {
       [{ bookmarkId: '100', targetCategoryId: 'tmp:2', confidence: 0.9, reason: 'r', source: 'llm' }],
     )
     const { ports, fake } = setup()
-    await applyPlan(ports, plan, new Set(['100']))
+    await applyPlan(ports, plan, new Set(['100']), 'zh_CN')
     expect(fake.structure()).toContain('书签栏/开发/前端/React 文档')
   })
 
@@ -100,17 +100,24 @@ describe('applyPlan', () => {
       [{ bookmarkId: '100', targetCategoryId: 'tmp:1', confidence: 0.9, reason: 'r', source: 'llm' }],
     )
     const { ports } = setup()
-    const result = await applyPlan(ports, plan, new Set(['100']))
+    const result = await applyPlan(ports, plan, new Set(['100']), 'zh_CN')
     expect((await loadSnapshot(ports))!.createdFolderIds).toEqual(result.createdFolderIds)
   })
 
   it('目标书签已不存在时跳过并记录', async () => {
     const { ports, fake } = setup()
     await fake.api.remove('100')
-    const result = await applyPlan(ports, makePlan(), new Set(['100', '101']))
+    const result = await applyPlan(ports, makePlan(), new Set(['100', '101']), 'zh_CN')
     expect(result.status).toBe('completed')
     expect(result.executed).toBe(1)
     expect(result.skipped).toEqual([{ bookmarkId: '100', reason: '书签已不存在' }])
+  })
+
+  it('英文 locale 下跳过原因也是英文', async () => {
+    const { ports, fake } = setup()
+    await fake.api.remove('100')
+    const result = await applyPlan(ports, makePlan(), new Set(['100', '101']), 'en')
+    expect(result.skipped).toEqual([{ bookmarkId: '100', reason: 'Bookmark no longer exists' }])
   })
 
   it('写操作失败时立即停止，不执行后续操作', async () => {
@@ -122,7 +129,7 @@ describe('applyPlan', () => {
       return fake.api.move(id, dest)
     }
     const ports = { bookmarks: { ...fake.api, move }, storage: createFakeStorage() }
-    const result = await applyPlan(ports, makePlan(), new Set(['100', '101']))
+    const result = await applyPlan(ports, makePlan(), new Set(['100', '101']), 'zh_CN')
     expect(result.status).toBe('failed')
     expect(result.executed).toBe(1)
     expect(result.failedAt).toBe(1)
@@ -143,7 +150,7 @@ describe('applyPlan', () => {
       return result
     }
     const ports = { bookmarks: { ...fake.api, move }, storage: createFakeStorage() }
-    await applyPlan(ports, makePlan(), new Set(['100', '101']))
+    await applyPlan(ports, makePlan(), new Set(['100', '101']), 'zh_CN')
     expect(maxInFlight).toBe(1)
   })
 
@@ -158,20 +165,20 @@ describe('applyPlan', () => {
         return originalSet(key, value)
       },
     }
-    await applyPlan(ports, makePlan(), new Set(['100', '101']))
+    await applyPlan(ports, makePlan(), new Set(['100', '101']), 'zh_CN')
     expect(seen).toEqual([0, 1, 2])
   })
 
   it('完成后清除进度记录', async () => {
     const { ports, storage } = setup()
-    await applyPlan(ports, makePlan(), new Set(['100', '101']))
+    await applyPlan(ports, makePlan(), new Set(['100', '101']), 'zh_CN')
     expect(storage.dump()[PROGRESS_KEY]).toBeUndefined()
   })
 
   it('回报进度', async () => {
     const { ports } = setup()
     const onProgress = vi.fn()
-    await applyPlan(ports, makePlan(), new Set(['100', '101']), { onProgress })
+    await applyPlan(ports, makePlan(), new Set(['100', '101']), 'zh_CN', { onProgress })
     expect(onProgress).toHaveBeenLastCalledWith(2, 2)
   })
 })
@@ -179,7 +186,7 @@ describe('applyPlan', () => {
 describe('applyPlan 清理空文件夹', () => {
   it('开启时删掉被搬空的目录', async () => {
     const { ports, fake } = setup()
-    const result = await applyPlan(ports, makePlan(), new Set(['100', '101']), {
+    const result = await applyPlan(ports, makePlan(), new Set(['100', '101']), 'zh_CN', {
       removeEmptyFolders: true,
     })
     expect(result.removedFolders.map((f) => f.title)).toEqual(['杂项'])
@@ -188,20 +195,20 @@ describe('applyPlan 清理空文件夹', () => {
 
   it('默认不清理', async () => {
     const { ports, fake } = setup()
-    const result = await applyPlan(ports, makePlan(), new Set(['100', '101']))
+    const result = await applyPlan(ports, makePlan(), new Set(['100', '101']), 'zh_CN')
     expect(result.removedFolders).toEqual([])
     expect(fake.structure()).toContain('杂项')
   })
 
   it('还有书签的目录不删', async () => {
     const { ports, fake } = setup()
-    await applyPlan(ports, makePlan(), new Set(['100']), { removeEmptyFolders: true })
+    await applyPlan(ports, makePlan(), new Set(['100']), 'zh_CN', { removeEmptyFolders: true })
     expect(fake.structure()).toContain('书签栏/杂项/Router')
   })
 
   it('删除失败不影响整体结果，记进 skipped', async () => {
     const { ports } = setup({ remove: async () => { throw new Error('boom') } })
-    const result = await applyPlan(ports, makePlan(), new Set(['100', '101']), {
+    const result = await applyPlan(ports, makePlan(), new Set(['100', '101']), 'zh_CN', {
       removeEmptyFolders: true,
     })
     expect(result.status).toBe('completed')
@@ -213,7 +220,7 @@ describe('applyPlan 清理空文件夹', () => {
     const { ports, fake } = setup({
       move: async () => { throw new Error('move 挂了') },
     })
-    const result = await applyPlan(ports, makePlan(), new Set(['100', '101']), {
+    const result = await applyPlan(ports, makePlan(), new Set(['100', '101']), 'zh_CN', {
       removeEmptyFolders: true,
     })
     expect(result.status).toBe('failed')
@@ -268,28 +275,28 @@ describe('applyPlan 按编号排列目录', () => {
   it('推翻模式下带编号的目录按编号升序排到最前', async () => {
     const fake = createFakeBookmarks(messy)
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
-    await applyPlan(ports, messyPlan(true), new Set(['100']))
+    await applyPlan(ports, messyPlan(true), new Set(['100']), 'zh_CN')
     expect(await childTitles(ports, '1')).toEqual(['01 GitHub', '02 AI', 'fastapi'])
   })
 
   it('子目录同样按编号排列', async () => {
     const fake = createFakeBookmarks(messy)
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
-    await applyPlan(ports, messyPlan(true), new Set(['100']))
+    await applyPlan(ports, messyPlan(true), new Set(['100']), 'zh_CN')
     expect(await childTitles(ports, 'f-ai')).toEqual(['01 dify', '02 RAG', 'React 文档'])
   })
 
   it('结果里记录排序过的目录数量', async () => {
     const fake = createFakeBookmarks(messy)
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
-    const result = await applyPlan(ports, messyPlan(true), new Set(['100']))
+    const result = await applyPlan(ports, messyPlan(true), new Set(['100']), 'zh_CN')
     expect(result.sortedFolders).toBe(4)
   })
 
   it('非推翻模式不动用户自己的排列', async () => {
     const fake = createFakeBookmarks(messy)
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
-    const result = await applyPlan(ports, messyPlan(false), new Set(['100']))
+    const result = await applyPlan(ports, messyPlan(false), new Set(['100']), 'zh_CN')
     expect(result.sortedFolders).toBe(0)
     expect(await childTitles(ports, '1')).toEqual(['fastapi', '02 AI', '01 GitHub'])
   })
@@ -297,8 +304,8 @@ describe('applyPlan 按编号排列目录', () => {
   it('撤销后目录顺序还原', async () => {
     const fake = createFakeBookmarks(messy)
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
-    await applyPlan(ports, messyPlan(true), new Set(['100']))
-    await undoLast(ports)
+    await applyPlan(ports, messyPlan(true), new Set(['100']), 'zh_CN')
+    await undoLast(ports, 'zh_CN')
     expect(await childTitles(ports, '1')).toEqual(['fastapi', '02 AI', '01 GitHub'])
     expect(await childTitles(ports, 'f-ai')).toEqual(['02 RAG', '01 dify'])
   })
@@ -332,32 +339,32 @@ describe('applyPlan 统一书签标题', () => {
   it('改名落地到书签栏', async () => {
     const fake = createFakeBookmarks(ghTree)
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
-    await applyPlan(ports, renamePlan(), new Set())
+    await applyPlan(ports, renamePlan(), new Set(), 'zh_CN')
     expect(await titleOf(ports, '100')).toBe('opencode (sst)')
   })
 
   it('一条移动建议都没勾选时改名照样执行——它由设置开关决定', async () => {
     const fake = createFakeBookmarks(ghTree)
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
-    const result = await applyPlan(ports, renamePlan(), new Set())
+    const result = await applyPlan(ports, renamePlan(), new Set(), 'zh_CN')
     expect(result.renamedBookmarkIds).toEqual(['100'])
   })
 
   it('撤销后标题还原', async () => {
     const fake = createFakeBookmarks(ghTree)
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
-    await applyPlan(ports, renamePlan(), new Set())
-    await undoLast(ports)
+    await applyPlan(ports, renamePlan(), new Set(), 'zh_CN')
+    await undoLast(ports, 'zh_CN')
     expect(await titleOf(ports, '100')).toBe('GitHub - sst/opencode: The AI coding agent')
   })
 
   it('用户自己改过的书签标题，撤销时仍然不覆盖', async () => {
     const fake = createFakeBookmarks(ghTree)
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
-    await applyPlan(ports, renamePlan(), new Set())
+    await applyPlan(ports, renamePlan(), new Set(), 'zh_CN')
     // 应用之后用户自己动了另一个书签的名字
     await ports.bookmarks.update('101', { title: '用户新起的名字' })
-    await undoLast(ports)
+    await undoLast(ports, 'zh_CN')
     expect(await titleOf(ports, '101')).toBe('用户新起的名字')
   })
 })

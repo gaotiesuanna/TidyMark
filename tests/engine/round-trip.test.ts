@@ -64,11 +64,11 @@ describe('Apply → Undo 往返一致性', () => {
 
     const plan = await buildMessyPlan(fake)()
     const accepted = new Set(plan.rows.map((r) => r.bookmarkId))
-    const applyResult = await applyPlan(ports, plan, accepted)
+    const applyResult = await applyPlan(ports, plan, accepted, 'zh_CN')
     expect(applyResult.status).toBe('completed')
     expect(fake.structure()).not.toBe(before)
 
-    const undoResult = await undoLast(ports)
+    const undoResult = await undoLast(ports, 'zh_CN')
     expect(undoResult.skipped).toEqual([])
     expect(fake.structure()).toBe(before)
   })
@@ -80,8 +80,8 @@ describe('Apply → Undo 往返一致性', () => {
 
     const plan = await buildMessyPlan(fake)()
     const accepted = new Set(plan.rows.slice(0, 2).map((r) => r.bookmarkId))
-    await applyPlan(ports, plan, accepted)
-    await undoLast(ports)
+    await applyPlan(ports, plan, accepted, 'zh_CN')
+    await undoLast(ports, 'zh_CN')
     expect(fake.structure()).toBe(before)
   })
 
@@ -104,10 +104,10 @@ describe('Apply → Undo 往返一致性', () => {
         { temporaryId: 'tmp:2', parentId: null, parentTemporaryId: 'tmp:1', title: '前端' },
       ],
     })
-    await applyPlan(ports, plan, new Set(plan.rows.map((r) => r.bookmarkId)))
+    await applyPlan(ports, plan, new Set(plan.rows.map((r) => r.bookmarkId)), 'zh_CN')
     expect(fake.structure()).toContain('书签栏/开发/前端/')
 
-    const result = await undoLast(ports)
+    const result = await undoLast(ports, 'zh_CN')
     expect(result.removedFolders).toBe(2)
     expect(fake.structure()).toBe(before)
   })
@@ -128,13 +128,13 @@ describe('Apply → Undo 往返一致性', () => {
       })),
       newFolders: [],
     })
-    const result = await applyPlan(ports, plan, new Set(plan.rows.map((r) => r.bookmarkId)), {
+    const result = await applyPlan(ports, plan, new Set(plan.rows.map((r) => r.bookmarkId)), 'zh_CN', {
       removeEmptyFolders: true,
     })
     expect(result.removedFolders.length).toBeGreaterThan(0)
     expect(fake.structure()).not.toBe(before)
 
-    const undoResult = await undoLast(ports)
+    const undoResult = await undoLast(ports, 'zh_CN')
     expect(undoResult.skipped).toEqual([])
     expect(fake.structure()).toBe(before)
   })
@@ -151,12 +151,12 @@ describe('Apply → Undo 往返一致性', () => {
     const before = fake.structure()
 
     const plan = await buildMessyPlan(fake)()
-    const applyResult = await applyPlan(ports, plan, new Set(plan.rows.map((r) => r.bookmarkId)))
+    const applyResult = await applyPlan(ports, plan, new Set(plan.rows.map((r) => r.bookmarkId)), 'zh_CN')
     expect(applyResult.status).toBe('failed')
     expect(fake.structure()).not.toBe(before)
 
     const undoPorts = { bookmarks: fake.api, storage: ports.storage }
-    await undoLast(undoPorts)
+    await undoLast(undoPorts, 'zh_CN')
     expect(fake.structure()).toBe(before)
   })
 
@@ -165,11 +165,11 @@ describe('Apply → Undo 往返一致性', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
 
     const plan = await buildMessyPlan(fake)()
-    await applyPlan(ports, plan, new Set(plan.rows.map((r) => r.bookmarkId)))
+    await applyPlan(ports, plan, new Set(plan.rows.map((r) => r.bookmarkId)), 'zh_CN')
     expect(fake.structure()).toContain('其他书签/范围外')
     expect((await fake.api.get('200'))!.parentId).toBe('2')
 
-    await undoLast(ports)
+    await undoLast(ports, 'zh_CN')
     expect((await fake.api.get('200'))!.parentId).toBe('2')
   })
 
@@ -178,10 +178,10 @@ describe('Apply → Undo 往返一致性', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
 
     const plan = await buildMessyPlan(fake)()
-    await applyPlan(ports, plan, new Set(plan.rows.map((r) => r.bookmarkId)))
+    await applyPlan(ports, plan, new Set(plan.rows.map((r) => r.bookmarkId)), 'zh_CN')
     await fake.api.update('100', { title: '我自己改的名字' })
 
-    const result = await undoLast(ports)
+    const result = await undoLast(ports, 'zh_CN')
     expect(result.skipped.some((s) => s.id === '100')).toBe(true)
     expect((await fake.api.get('100'))!.title).toBe('我自己改的名字')
     // 其余书签仍回到原位

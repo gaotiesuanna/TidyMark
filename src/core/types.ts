@@ -49,6 +49,12 @@ export interface Classification {
   targetCategoryId: string | null
   confidence: number
   reason: string
+  /**
+   * reason 的纯 detail 部分（不含「分类失败，保持原位：」这类双语前缀）。
+   * 只有 llm/classify.ts 因请求失败兜底时才会填；调用方需要拼接展示 detail
+   * 而不是 reason 全文时（例如结果页避免同一句话说两遍）用它。
+   */
+  detail?: string
   source: 'rule' | 'llm' | 'none'
 }
 

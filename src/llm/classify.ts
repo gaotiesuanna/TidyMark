@@ -93,8 +93,8 @@ interface RawResult {
   reason: string
 }
 
-function unclassified(item: BookmarkItem, reason: string): Classification {
-  return { bookmarkId: item.id, targetCategoryId: null, confidence: 0, reason, source: 'none' }
+function unclassified(item: BookmarkItem, reason: string, detail?: string): Classification {
+  return { bookmarkId: item.id, targetCategoryId: null, confidence: 0, reason, detail, source: 'none' }
 }
 
 async function runBatch(
@@ -142,7 +142,7 @@ async function runBatch(
       }
     }
   }
-  return batch.map((item) => unclassified(item, fallbackReason(locale, 'failed', lastError)))
+  return batch.map((item) => unclassified(item, fallbackReason(locale, 'failed', lastError), lastError))
 }
 
 export async function classifyBookmarks(input: ClassifyInput): Promise<Classification[]> {

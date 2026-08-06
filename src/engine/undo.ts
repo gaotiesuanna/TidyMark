@@ -1,4 +1,9 @@
+import type { Locale } from '@/core/locale'
 import type { Ports } from '@/core/ports'
+import {
+  msgFolderRebuildFailed, msgNodeGone, msgRepositionFailed,
+  msgReorderFailed, msgTitleManuallyChanged, msgTitleRestoreFailed,
+} from './messages'
 import { clearSnapshot, loadSnapshot, type SnapshotNode } from './snapshot'
 
 export interface UndoSkip {
@@ -16,6 +21,7 @@ export interface UndoResult {
 
 export async function undoLast(
   ports: Ports,
+  locale: Locale,
   onProgress?: (done: number, total: number) => void,
 ): Promise<UndoResult> {
   const snapshot = await loadSnapshot(ports)
@@ -43,7 +49,7 @@ export async function undoLast(
       })
       idMap.set(node.id, created.id)
     } catch (error) {
-      skipped.push({ id: node.id, title: node.title, reason: `目录重建失败：${String(error)}` })
+      skipped.push({ id: node.id, title: node.title, reason: msgFolderRebuildFailed(locale, String(error)) })
     }
   }
 
@@ -53,7 +59,7 @@ export async function undoLast(
   for (const node of snapshot.nodes) {
     const current = await ports.bookmarks.get(mapId(node.id))
     if (current === null) {
-      skipped.push({ id: node.id, title: node.title, reason: '节点已不存在' })
+      skipped.push({ id: node.id, title: node.title, reason: msgNodeGone(locale) })
       continue
     }
     const isFolder = node.url === undefined
@@ -62,12 +68,12 @@ export async function undoLast(
         try {
           await ports.bookmarks.update(mapId(node.id), { title: node.title })
         } catch (error) {
-          skipped.push({ id: node.id, title: node.title, reason: `标题恢复失败：${String(error)}` })
+          skipped.push({ id: node.id, title: node.title, reason: msgTitleRestoreFailed(locale, String(error)) })
           continue
         }
       } else {
         skipped.push({
-          id: node.id, title: node.title, reason: '标题已被手动修改，跳过以免覆盖',
+          id: node.id, title: node.title, reason: msgTitleManuallyChanged(locale),
         })
         continue
       }
@@ -92,7 +98,7 @@ export async function undoLast(
       await ports.bookmarks.move(mapId(node.id), { parentId: mapId(node.parentId) })
       parentRestored.push(node)
     } catch (error) {
-      skipped.push({ id: node.id, title: node.title, reason: `归位失败：${String(error)}` })
+      skipped.push({ id: node.id, title: node.title, reason: msgRepositionFailed(locale, String(error)) })
     }
   }
 
@@ -114,7 +120,7 @@ export async function undoLast(
         done++
         onProgress?.(done, total)
       } catch (error) {
-        skipped.push({ id: node.id, title: node.title, reason: `排序失败：${String(error)}` })
+        skipped.push({ id: node.id, title: node.title, reason: msgReorderFailed(locale, String(error)) })
       }
     }
   }

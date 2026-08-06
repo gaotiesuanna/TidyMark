@@ -1,3 +1,4 @@
+import type { Locale } from './locale'
 import { normalizeName, stripNumberPrefix } from './map'
 import { summarize } from './plan'
 import { FALLBACK_TITLE } from './tree'
@@ -22,9 +23,9 @@ export interface StructureNode {
   children: StructureNode[]
 }
 
-const isFallback = (candidate: CategoryCandidate): boolean =>
+const isFallback = (candidate: CategoryCandidate, locale: Locale): boolean =>
   candidate.path.length === 1 &&
-  normalizeName(stripNumberPrefix(candidate.path[0]!)) === normalizeName(FALLBACK_TITLE)
+  normalizeName(stripNumberPrefix(candidate.path[0]!)) === normalizeName(FALLBACK_TITLE[locale])
 
 /** 编辑后的裸名字：用户改过就用他的，否则用去掉编号的原名。 */
 const titleOf = (candidate: CategoryCandidate, edits: StructureEdits): string =>
@@ -54,7 +55,9 @@ function buildTargetMap(operations: BookmarkOperation[]): Map<string, string> {
   return targets
 }
 
-export function buildStructureView(plan: OrganizePlan, edits: StructureEdits): StructureNode[] {
+export function buildStructureView(
+  plan: OrganizePlan, edits: StructureEdits, locale: Locale,
+): StructureNode[] {
   const removed = new Set(edits.removed)
   const parentOf = buildParentMap(plan.candidates)
   const targets = buildTargetMap(plan.operations)
@@ -80,18 +83,20 @@ export function buildStructureView(plan: OrganizePlan, edits: StructureEdits): S
       id: candidate.id,
       title: titleOf(candidate, edits),
       count: (directCount.get(candidate.id) ?? 0) + children.reduce((sum, c) => sum + c.count, 0),
-      removable: !isFallback(candidate),
+      removable: !isFallback(candidate, locale),
       children,
     })
   }
   return nodes
 }
 
-export function applyStructureEdits(plan: OrganizePlan, edits: StructureEdits): OrganizePlan {
+export function applyStructureEdits(
+  plan: OrganizePlan, edits: StructureEdits, locale: Locale,
+): OrganizePlan {
   const removed = new Set(edits.removed)
   const byId = new Map(plan.candidates.map((c) => [c.id, c]))
   const parentOf = buildParentMap(plan.candidates)
-  const fallbackId = plan.candidates.find(isFallback)?.id ?? null
+  const fallbackId = plan.candidates.find((c) => isFallback(c, locale))?.id ?? null
 
   // 一级目录被删时，它的子目录一并消失
   for (const candidate of plan.candidates) {

@@ -33,7 +33,7 @@ describe('undoLast 重建被删掉的文件夹', () => {
     for (const id of ['100', '101', '102']) await fake.api.move(id, { parentId: '10' })
     await fake.api.remove('11')
 
-    const result = await undoLast(ports)
+    const result = await undoLast(ports, 'zh_CN')
     expect(result.skipped).toEqual([])
     expect(fake.structure()).toContain('书签栏/杂项/A')
     expect(fake.structure()).toContain('书签栏/杂项/C')
@@ -57,7 +57,7 @@ describe('undoLast 重建被删掉的文件夹', () => {
     await fake.api.remove('11')
     await fake.api.remove('10')
 
-    await undoLast(ports)
+    await undoLast(ports, 'zh_CN')
     expect(fake.structure()).toContain('书签栏/外层/内层/A')
   })
 
@@ -66,7 +66,7 @@ describe('undoLast 重建被删掉的文件夹', () => {
     await saveSnapshot(ports, await captureSnapshot(ports, 'p1', ['1']))
     await fake.api.remove('100')
 
-    const result = await undoLast(ports)
+    const result = await undoLast(ports, 'zh_CN')
     expect(result.skipped.some((s) => s.id === '100')).toBe(true)
     expect(fake.structure()).not.toContain('杂项/A')
   })
@@ -75,7 +75,7 @@ describe('undoLast 重建被删掉的文件夹', () => {
 describe('undoLast', () => {
   it('无快照时返回 no_snapshot', async () => {
     const { ports } = setup()
-    expect(await undoLast(ports)).toMatchObject({ status: 'no_snapshot', restored: 0 })
+    expect(await undoLast(ports, 'zh_CN')).toMatchObject({ status: 'no_snapshot', restored: 0 })
   })
 
   it('把书签移回原 parent', async () => {
@@ -83,7 +83,7 @@ describe('undoLast', () => {
     await saveSnapshot(ports, await captureSnapshot(ports, 'p1', ['1']))
     await fake.api.move('100', { parentId: '10' })
 
-    const result = await undoLast(ports)
+    const result = await undoLast(ports, 'zh_CN')
     expect(result.status).toBe('completed')
     expect((await fake.api.get('100'))!.parentId).toBe('11')
   })
@@ -96,7 +96,7 @@ describe('undoLast', () => {
     await fake.api.move('101', { parentId: '10' })
     await fake.api.move('100', { parentId: '10' })
 
-    await undoLast(ports)
+    await undoLast(ports, 'zh_CN')
     // 顶层含隐藏的空标题根节点 '0'（模拟 Chrome 的书签根），structure() 会照实输出其 '/' 前缀。
     expect(fake.structure()).toBe(
       ['/', '/书签栏/', '/书签栏/react/', '/书签栏/杂项/', '/书签栏/杂项/A', '/书签栏/杂项/B', '/书签栏/杂项/C'].join(
@@ -110,7 +110,7 @@ describe('undoLast', () => {
     await saveSnapshot(ports, await captureSnapshot(ports, 'p1', ['1']))
     await fake.api.update('11', { title: '归档' })
 
-    await undoLast(ports)
+    await undoLast(ports, 'zh_CN')
     expect((await fake.api.get('11'))!.title).toBe('杂项')
   })
 
@@ -121,7 +121,7 @@ describe('undoLast', () => {
     await fake.api.move('100', { parentId: created.id })
     await saveSnapshot(ports, { ...snapshot, createdFolderIds: [created.id] })
 
-    const result = await undoLast(ports)
+    const result = await undoLast(ports, 'zh_CN')
     expect(result.removedFolders).toBe(1)
     expect(await fake.api.get(created.id)).toBeNull()
   })
@@ -135,7 +135,7 @@ describe('undoLast', () => {
     // 用户事后手动新增了一条
     await fake.api.create({ parentId: created.id, title: '用户自己建的' })
 
-    const result = await undoLast(ports)
+    const result = await undoLast(ports, 'zh_CN')
     expect(result.removedFolders).toBe(0)
     expect(await fake.api.get(created.id)).not.toBeNull()
   })
@@ -145,9 +145,18 @@ describe('undoLast', () => {
     await saveSnapshot(ports, await captureSnapshot(ports, 'p1', ['1']))
     await fake.api.remove('100')
 
-    const result = await undoLast(ports)
+    const result = await undoLast(ports, 'zh_CN')
     expect(result.status).toBe('completed')
     expect(result.skipped).toContainEqual({ id: '100', title: 'A', reason: '节点已不存在' })
+  })
+
+  it('英文 locale 下节点已不存在的提示也是英文', async () => {
+    const { ports, fake } = setup()
+    await saveSnapshot(ports, await captureSnapshot(ports, 'p1', ['1']))
+    await fake.api.remove('100')
+
+    const result = await undoLast(ports, 'en')
+    expect(result.skipped).toContainEqual({ id: '100', title: 'A', reason: 'Node no longer exists' })
   })
 
   it('用户在 Apply 之后手动改过标题的节点不被覆盖', async () => {
@@ -156,12 +165,24 @@ describe('undoLast', () => {
     await fake.api.move('100', { parentId: '10' })
     await fake.api.update('100', { title: 'A（我改过）' })
 
-    const result = await undoLast(ports)
+    const result = await undoLast(ports, 'zh_CN')
     expect(result.skipped).toContainEqual({
       id: '100', title: 'A', reason: '标题已被手动修改，跳过以免覆盖',
     })
     expect((await fake.api.get('100'))!.parentId).toBe('10')
     expect((await fake.api.get('100'))!.title).toBe('A（我改过）')
+  })
+
+  it('英文 locale 下标题手动修改的提示也是英文', async () => {
+    const { ports, fake } = setup()
+    await saveSnapshot(ports, await captureSnapshot(ports, 'p1', ['1']))
+    await fake.api.move('100', { parentId: '10' })
+    await fake.api.update('100', { title: 'A（我改过）' })
+
+    const result = await undoLast(ports, 'en')
+    expect(result.skipped).toContainEqual({
+      id: '100', title: 'A', reason: 'Title was manually changed; skipped to avoid overwriting it',
+    })
   })
 
   it('单个节点还原失败不影响其余节点', async () => {
@@ -181,7 +202,7 @@ describe('undoLast', () => {
         return fake.api.move(id, dest)
       },
     }
-    const result = await undoLast(ports)
+    const result = await undoLast(ports, 'zh_CN')
     expect(result.status).toBe('completed')
     expect(result.skipped.some((s) => s.id === '100')).toBe(true)
     expect((await fake.api.get('101'))!.parentId).toBe('11')
@@ -190,7 +211,7 @@ describe('undoLast', () => {
   it('撤销成功后清除快照，防止二次撤销', async () => {
     const { ports } = setup()
     await saveSnapshot(ports, await captureSnapshot(ports, 'p1', ['1']))
-    await undoLast(ports)
+    await undoLast(ports, 'zh_CN')
     expect(await loadSnapshot(ports)).toBeNull()
   })
 
@@ -202,7 +223,7 @@ describe('undoLast', () => {
     await fake.api.move('100', { parentId: '10', index: 0 })
     await fake.api.move('102', { parentId: '10', index: 1 })
 
-    await undoLast(ports)
+    await undoLast(ports, 'zh_CN')
     expect(fake.structure()).toBe(before)
   })
 })

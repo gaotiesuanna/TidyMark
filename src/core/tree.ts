@@ -6,7 +6,8 @@ import type { BookmarkItem, CategoryCandidate, Classification, TagResult } from 
 
 /** 同一层最多允许的目录数量。目录集合由 llm/folders.ts 设计，这里只做兜底截断。 */
 export const MAX_SIBLINGS = 12
-export const FALLBACK_TITLE = '其他'
+/** 兜底目录名，会真的建进用户书签栏，必须双语。 */
+export const FALLBACK_TITLE: Record<Locale, string> = { zh_CN: '其他', en: 'Other' }
 
 export { stripNumberPrefix }
 
@@ -168,10 +169,10 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
     .sort((a, b) => b.count - a.count)
     .slice(0, MAX_SIBLINGS - 1) // 留一个位置给「其他」
 
-  const hasFallback = ranked.some((g) => normalizeName(g.title) === normalizeName(FALLBACK_TITLE))
+  const hasFallback = ranked.some((g) => normalizeName(g.title) === normalizeName(FALLBACK_TITLE[locale]))
   const orderedTopics = hasFallback
     ? ranked
-    : [...ranked, { title: FALLBACK_TITLE, count: 0, children: new Map() } satisfies TopicGroup]
+    : [...ranked, { title: FALLBACK_TITLE[locale], count: 0, children: new Map() } satisfies TopicGroup]
 
   const topicSections: Section[] = orderedTopics.map((group) => ({
     title: group.title,
@@ -195,11 +196,15 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
   // 理由说明的是「为什么进这个聚合组」，因此落到子目录时也报组名而不是子目录名
   const pin = (bookmarkIds: string[], categoryId: string, groupTitle: string): void => {
     for (const bookmarkId of bookmarkIds) {
+      const domain = domainOf.get(bookmarkId) ?? ''
       pinned.push({
         bookmarkId,
         targetCategoryId: categoryId,
         confidence: 1,
-        reason: `域名 ${domainOf.get(bookmarkId) ?? ''} 命中「${groupTitle}」聚合`,
+        reason:
+          locale === 'zh_CN'
+            ? `域名 ${domain} 命中「${groupTitle}」聚合`
+            : `Domain ${domain} matched the "${groupTitle}" group`,
         source: 'rule',
       })
     }

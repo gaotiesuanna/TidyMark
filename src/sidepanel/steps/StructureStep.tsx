@@ -1,12 +1,12 @@
 import { useMemo } from 'react'
 import { buildStructureView } from '@/core/structure'
-import { t } from '@/i18n'
+import { resolveLocale, t } from '@/i18n'
 import { useStore } from '../store'
 
 export function StructureStep() {
   const { plan, structureEdits, renameNode, removeNode, confirmStructure, backToPreferences } = useStore()
   const nodes = useMemo(
-    () => (plan === null ? [] : buildStructureView(plan, structureEdits)),
+    () => (plan === null ? [] : buildStructureView(plan, structureEdits, resolveLocale())),
     [plan, structureEdits],
   )
   if (plan === null) return null

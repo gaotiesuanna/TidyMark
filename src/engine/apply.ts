@@ -1,8 +1,13 @@
 import { findEmptyFolders, type EmptyFolder } from '@/core/empty'
+import type { Locale } from '@/core/locale'
 import { planFolderOrder } from '@/core/order'
 import { filterAccepted } from '@/core/plan'
 import type { Ports } from '@/core/ports'
 import type { OrganizePlan } from '@/core/types'
+import {
+  msgBookmarkGone, msgEmptyFolderRemoveFailed, msgFolderSortFailed,
+  msgParentUnresolved, msgTargetUnresolved,
+} from './messages'
 import { captureSnapshot, saveSnapshot } from './snapshot'
 
 export const PROGRESS_KEY = 'tidymark:apply-progress'
@@ -41,6 +46,7 @@ async function removeEmpty(
   ports: Ports,
   scopeRootIds: string[],
   skipped: SkipRecord[],
+  locale: Locale,
 ): Promise<EmptyFolder[]> {
   const tree = await ports.bookmarks.getTree()
   const removed: EmptyFolder[] = []
@@ -49,7 +55,7 @@ async function removeEmpty(
       await ports.bookmarks.remove(folder.id)
       removed.push(folder)
     } catch (error) {
-      skipped.push({ bookmarkId: folder.id, reason: `空文件夹删除失败：${String(error)}` })
+      skipped.push({ bookmarkId: folder.id, reason: msgEmptyFolderRemoveFailed(locale, String(error)) })
     }
   }
   return removed
@@ -65,6 +71,7 @@ async function sortFolders(
   ports: Ports,
   scopeRootIds: string[],
   skipped: SkipRecord[],
+  locale: Locale,
 ): Promise<number> {
   const tree = await ports.bookmarks.getTree()
   let sorted = 0
@@ -73,7 +80,7 @@ async function sortFolders(
       await ports.bookmarks.move(move.id, { parentId: move.parentId, index: move.index })
       sorted++
     } catch (error) {
-      skipped.push({ bookmarkId: move.id, reason: `目录排序失败：${String(error)}` })
+      skipped.push({ bookmarkId: move.id, reason: msgFolderSortFailed(locale, String(error)) })
     }
   }
   return sorted
@@ -83,6 +90,7 @@ export async function applyPlan(
   ports: Ports,
   plan: OrganizePlan,
   accepted: Set<string>,
+  locale: Locale,
   options: ApplyOptions = {},
 ): Promise<ApplyResult> {
   const onProgress = options.onProgress
@@ -109,7 +117,7 @@ export async function applyPlan(
             ? tempToReal.get(operation.parentTemporaryId)
             : operation.parentId
         if (parentId === undefined || parentId === null) {
-          throw new Error(`无法解析文件夹 ${operation.title} 的父目录`)
+          throw new Error(msgParentUnresolved(locale, operation.title))
         }
         const created = await ports.bookmarks.create({ parentId, title: operation.title })
         tempToReal.set(operation.temporaryId, created.id)
@@ -117,14 +125,14 @@ export async function applyPlan(
       } else if (operation.type === 'move_bookmark') {
         const existing = await ports.bookmarks.get(operation.bookmarkId)
         if (existing === null) {
-          skipped.push({ bookmarkId: operation.bookmarkId, reason: '书签已不存在' })
+          skipped.push({ bookmarkId: operation.bookmarkId, reason: msgBookmarkGone(locale) })
           continue
         }
         const targetId =
           operation.toTemporaryId !== null
             ? tempToReal.get(operation.toTemporaryId)
             : operation.toCategoryId
-        if (targetId === undefined) throw new Error(`无法解析目标目录 ${operation.toCategoryId}`)
+        if (targetId === undefined) throw new Error(msgTargetUnresolved(locale, operation.toCategoryId))
         await ports.bookmarks.move(operation.bookmarkId, { parentId: targetId })
       } else if (operation.type === 'rename_folder') {
         await ports.bookmarks.update(operation.folderId, { title: operation.newTitle })
@@ -155,12 +163,12 @@ export async function applyPlan(
   // 只有整批操作都成功才清理——中途失败时结构还没落定，删目录只会添乱
   const removedFolders =
     options.removeEmptyFolders === true
-      ? await removeEmpty(ports, plan.scopeRootIds, skipped)
+      ? await removeEmpty(ports, plan.scopeRootIds, skipped, locale)
       : []
 
   // 非推翻模式不产生编号，也就没有需要排序的目录，不该动用户自己的排列
   const sortedFolders = plan.rebuildStructure
-    ? await sortFolders(ports, plan.scopeRootIds, skipped)
+    ? await sortFolders(ports, plan.scopeRootIds, skipped, locale)
     : 0
 
   await saveSnapshot(ports, { ...snapshot, createdFolderIds, renamedBookmarkIds })

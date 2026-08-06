@@ -160,8 +160,9 @@ export async function handle(
                 t(
                   'logClassifyFailed',
                   String(failed.length),
-                  // 这条中文前缀来自 llm/classify.ts 的产出层文案，双语化属于计划二，这里先不动。
-                  failed[0]!.reason.replace(/^分类失败，保持原位：/, ''),
+                  // detail 是 reason 剥掉「分类失败，保持原位：」这类双语前缀后的纯错误信息；
+                  // logClassifyFailed 自己的文案已经说过"分类失败"，不能再把整句 reason 塞进去重复一遍。
+                  failed[0]!.detail ?? failed[0]!.reason,
                 ),
               ]
             : []
@@ -193,7 +194,7 @@ export async function handle(
 
       case 'apply': {
         const settings = await loadSettings(ports)
-        const result = await applyPlan(ports, request.plan, new Set(request.accepted), {
+        const result = await applyPlan(ports, request.plan, new Set(request.accepted), locale, {
           removeEmptyFolders: settings.removeEmptyFolders,
           onProgress: progress('apply'),
         })
@@ -211,7 +212,7 @@ export async function handle(
       }
 
       case 'undo': {
-        const result = await undoLast(ports, progress('undo'))
+        const result = await undoLast(ports, locale, progress('undo'))
         log('undo', t('logUndoDone', String(result.restored), String(result.removedFolders)))
         return { ok: true, kind: 'undo', result }
       }
