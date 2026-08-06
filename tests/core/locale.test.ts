@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { LOCALES, normalizeLocale } from '@/core/locale'
+import { LOCALES, normalizeLocale, toHtmlLang } from '@/core/locale'
 
 describe('normalizeLocale', () => {
   it('中文的各种写法都归到 zh_CN', () => {
@@ -38,5 +38,18 @@ describe('normalizeLocale', () => {
 
   it('LOCALES 列出全部支持的语言', () => {
     expect([...LOCALES].sort()).toEqual(['en', 'zh_CN'])
+  })
+})
+
+describe('toHtmlLang', () => {
+  it('把 Locale 转成合法的 BCP 47 标签', () => {
+    expect(toHtmlLang('zh_CN')).toBe('zh-CN')
+    expect(toHtmlLang('en')).toBe('en')
+  })
+
+  it('每个受支持的语言都有对应标签，且不含下划线', () => {
+    for (const locale of LOCALES) {
+      expect(toHtmlLang(locale)).not.toContain('_')
+    }
   })
 })

@@ -19,3 +19,13 @@ export function normalizeLocale(uiLanguage: string): Locale {
   if (tag === 'zh' || tag.startsWith('zh-') || tag.startsWith('zh_')) return 'zh_CN'
   return 'en'
 }
+
+/**
+ * Locale → HTML `lang` 属性的值。
+ *
+ * `zh_CN` 是 `_locales` 的目录名，不是合法的 BCP 47 标签；写进 `lang` 要用 `zh-CN`。
+ * 两者只差一个字符，直接把 Locale 塞进 lang 不会报错、只会静默产出无效值，所以单列一层。
+ */
+export function toHtmlLang(locale: Locale): string {
+  return locale === 'zh_CN' ? 'zh-CN' : 'en'
+}
