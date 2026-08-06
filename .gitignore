@@ -15,3 +15,7 @@ Bookmark-Refactor-AI-Chrome书签整理产品方案.md
 
 # 测试覆盖率
 coverage/
+
+# 本地工具状态
+.claude/
+.superpowers/
