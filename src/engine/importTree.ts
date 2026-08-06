@@ -5,7 +5,8 @@ export interface ImportSkip {
   name: string
   /** 文件夹没有 url，这里是空串。 */
   url: string
-  reason: string
+  code: 'createFailed' | 'folderCreateFailed'
+  detail: string
 }
 
 export interface ImportResult {
@@ -40,7 +41,7 @@ export async function importTree(
           await ports.bookmarks.create({ parentId: into, title: item.name, url: item.url })
           result.bookmarks += 1
         } catch (error) {
-          result.skipped.push({ name: item.name, url: item.url, reason: `创建失败：${String(error)}` })
+          result.skipped.push({ name: item.name, url: item.url, code: 'createFailed', detail: String(error) })
         }
         continue
       }
@@ -50,7 +51,7 @@ export async function importTree(
         result.folders += 1
       } catch (error) {
         // 建不出目录，它整棵子树都没地方放，跳过
-        result.skipped.push({ name: item.name, url: '', reason: `文件夹创建失败：${String(error)}` })
+        result.skipped.push({ name: item.name, url: '', code: 'folderCreateFailed', detail: String(error) })
         continue
       }
       await walk(item.children, folderId)

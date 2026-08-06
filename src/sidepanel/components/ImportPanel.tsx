@@ -61,7 +61,16 @@ export function ImportPanel() {
 
   if (importDone !== null) {
     const { result, blocked, targetName, barTitle } = importDone
-    const missed = [...blocked, ...result.skipped]
+    // blocked 来自归一阶段（scheme），skipped 来自建树阶段（code + detail），形状不同，先各自翻译再归一
+    const missed = [
+      ...blocked.map((b) => ({ name: b.name, reason: t('importReasonUnsafe', b.scheme) })),
+      ...result.skipped.map((s) => ({
+        name: s.name,
+        reason: s.code === 'folderCreateFailed'
+          ? t('importReasonFolderFailed', s.detail)
+          : t('importReasonCreateFailed', s.detail),
+      })),
+    ]
     return (
       <div className="space-y-2 text-xs">
         {picker}

@@ -102,7 +102,8 @@ describe('importTree', () => {
     expect(result.skipped).toHaveLength(1)
     expect(result.skipped[0]!.name).toBe('坏')
     expect(result.skipped[0]!.url).toBe('https://bad.dev')
-    expect(result.skipped[0]!.reason).toContain('创建失败')
+    expect(result.skipped[0]!.code).toBe('createFailed')
+    expect(result.skipped[0]!.detail).toContain('boom')
   })
 
   it('文件夹创建失败时跳过它整棵子树，不影响同级', async () => {

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { t } from '@/i18n'
+import { resolveLocale, t } from '@/i18n'
 import type { ProgressEvent, ProgressPhase } from '@/background/events'
 import type { BookmarkNode } from '@/core/ports'
 import { LOW_CONFIDENCE, renumberPlan } from '@/core/plan'
@@ -7,7 +7,7 @@ import { applyStructureEdits, EMPTY_EDITS, type StructureEdits } from '@/core/st
 import type { OrganizePlan, ScanResult } from '@/core/types'
 import {
   buildImportPreview, parseImportFile,
-  type BlockedLink, type ImportPreview,
+  type BlockedLink, type ImportError, type ImportPreview,
 } from '@/core/import'
 import type { ApplyResult } from '@/engine/apply'
 import type { ImportResult } from '@/engine/importTree'
@@ -56,6 +56,14 @@ export function appendLog(logs: LogLine[], event: ProgressEvent, id: number): Lo
 
 /** 与后台的进度长连接，整个侧栏共用一条。 */
 let connection: ProgressConnection | null = null
+
+/** core 层只产出错误码（保持零浏览器依赖），这里翻成用户可读的文案。 */
+function describeImportError(error: ImportError): string {
+  if (error.code === 'unknownKind') return t('errImportUnknownKind', error.kind)
+  if (error.code === 'invalidJson') return t('errImportInvalidJson')
+  if (error.code === 'unsupportedFormat') return t('errImportUnsupportedFormat')
+  return t('errImportMalformed')
+}
 
 function findNode(tree: BookmarkNode[], id: string): BookmarkNode | null {
   const stack = [...tree]
@@ -353,7 +361,7 @@ export const useStore = create<State>((set, get) => ({
     try {
       const parsed = parseImportFile(text)
       if (!parsed.ok) {
-        return set({ importError: parsed.error, importFile: null, importDone: null, error: null })
+        return set({ importError: describeImportError(parsed.error), importFile: null, importDone: null, error: null })
       }
       set({
         importError: null,
@@ -361,7 +369,7 @@ export const useStore = create<State>((set, get) => ({
         error: null,
         importFile: {
           name,
-          preview: buildImportPreview(parsed.doc, get().tree, new Date()),
+          preview: buildImportPreview(parsed.doc, get().tree, new Date(), resolveLocale()),
         },
       })
     } catch {

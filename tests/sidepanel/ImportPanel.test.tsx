@@ -150,7 +150,7 @@ describe('ImportPanel 预览态', () => {
     expect(state.importFile).toBeNull()
     expect(state.importDone).not.toBeNull()
     expect(state.importDone!.blocked).toEqual([
-      { name: '坏的', url: 'javascript:alert(1)', reason: '不安全的链接类型（javascript:）' },
+      { name: '坏的', url: 'javascript:alert(1)', scheme: 'javascript:' },
     ])
   })
 
@@ -183,10 +183,10 @@ describe('ImportPanel 结果态', () => {
       importDone: {
         result: {
           folderId: '99', bookmarks: 185, folders: 24,
-          skipped: [{ name: '无标题', url: 'https://x.dev', reason: '创建失败：boom' }],
+          skipped: [{ name: '无标题', url: 'https://x.dev', code: 'createFailed', detail: 'boom' }],
         },
         blocked: [
-          { name: 'Gmail', url: 'javascript:x', reason: '不安全的链接类型（javascript:）' },
+          { name: 'Gmail', url: 'javascript:x', scheme: 'javascript:' },
         ],
         targetName: '导入 2026-08-04',
         barTitle: '书签栏',

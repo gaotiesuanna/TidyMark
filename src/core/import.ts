@@ -1,10 +1,19 @@
 import { EXPORT_FORMAT, localDate, type ExportNode } from './export'
+import type { Locale } from './locale'
 import type { BookmarkNode } from './ports'
+
+/**
+ * targetName 与 barTitle 兜底值是要写进用户书签栏的产出内容，跟随界面语言而非写死中文。
+ * 用 Record<Locale, string> 而不是 string，让 tsc 强制每个词两种语言都有。
+ */
+const IMPORT_TARGET_PREFIX: Record<Locale, string> = { zh_CN: '导入', en: 'Imported' }
+/** Chrome 英文界面里书签栏的实际名字；中文取真实名字失败时兜底为「书签栏」。 */
+const DEFAULT_BAR_TITLE: Record<Locale, string> = { zh_CN: '书签栏', en: 'Bookmarks Bar' }
 
 export interface BlockedLink {
   name: string
   url: string
-  reason: string
+  scheme: string
 }
 
 /** 解析并通过文件级校验之后的文档，两种 kind 的原始条目都还没归一。 */
@@ -12,34 +21,41 @@ export type ImportDoc =
   | { kind: 'tree'; roots: unknown[] }
   | { kind: 'links'; bookmarks: unknown[] }
 
+/**
+ * 错误码而非文案：这一层不许 import src/i18n（要保持零浏览器依赖、能在 node 环境测试），
+ * 具体文案由界面层（store.ts / ImportPanel.tsx）用 t() 翻译。
+ */
+export type ImportErrorCode = 'invalidJson' | 'unsupportedFormat' | 'malformed'
+export type ImportError = { code: ImportErrorCode } | { code: 'unknownKind'; kind: string }
+
 export type ParseResult =
   | { ok: true; doc: ImportDoc }
-  | { ok: false; error: string }
+  | { ok: false; error: ImportError }
 
 export function parseImportFile(text: string): ParseResult {
   let raw: unknown
   try {
     raw = JSON.parse(text)
   } catch {
-    return { ok: false, error: '这个文件不是有效的 JSON。' }
+    return { ok: false, error: { code: 'invalidJson' } }
   }
   // 数组也是 object，但顶层必须是带 format 字段的对象
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-    return { ok: false, error: '这不是 TidyMark 导出的文件，或者版本不支持。' }
+    return { ok: false, error: { code: 'unsupportedFormat' } }
   }
   const doc = raw as Record<string, unknown>
   if (doc.format !== EXPORT_FORMAT) {
-    return { ok: false, error: '这不是 TidyMark 导出的文件，或者版本不支持。' }
+    return { ok: false, error: { code: 'unsupportedFormat' } }
   }
   if (doc.kind === 'tree') {
-    if (!Array.isArray(doc.roots)) return { ok: false, error: '文件结构损坏。' }
+    if (!Array.isArray(doc.roots)) return { ok: false, error: { code: 'malformed' } }
     return { ok: true, doc: { kind: 'tree', roots: doc.roots } }
   }
   if (doc.kind === 'links') {
-    if (!Array.isArray(doc.bookmarks)) return { ok: false, error: '文件结构损坏。' }
+    if (!Array.isArray(doc.bookmarks)) return { ok: false, error: { code: 'malformed' } }
     return { ok: true, doc: { kind: 'links', bookmarks: doc.bookmarks } }
   }
-  return { ok: false, error: `无法识别的导出类型：${String(doc.kind)}` }
+  return { ok: false, error: { code: 'unknownKind', kind: String(doc.kind) } }
 }
 
 /**
@@ -84,7 +100,7 @@ function normalize(raw: unknown, blocked: BlockedLink[], depth = 0): ExportNode 
   if (typeof node.url === 'string') {
     const scheme = blockedScheme(node.url)
     if (scheme !== null) {
-      blocked.push({ name, url: node.url, reason: `不安全的链接类型（${scheme}）` })
+      blocked.push({ name, url: node.url, scheme })
       return null
     }
     return { name, url: node.url }
@@ -135,6 +151,7 @@ export function buildImportPreview(
   doc: ImportDoc,
   tree: BookmarkNode[],
   at: Date,
+  locale: Locale,
 ): ImportPreview {
   const blocked: BlockedLink[] = []
   const raw = doc.kind === 'tree' ? doc.roots : doc.bookmarks
@@ -166,7 +183,7 @@ export function buildImportPreview(
     folderCount,
     duplicateCount,
     blocked,
-    targetName: `导入 ${localDate(at)}`,
-    barTitle: findBookmarksBar(tree)?.title ?? '书签栏',
+    targetName: `${IMPORT_TARGET_PREFIX[locale]} ${localDate(at)}`,
+    barTitle: findBookmarksBar(tree)?.title ?? DEFAULT_BAR_TITLE[locale],
   }
 }
