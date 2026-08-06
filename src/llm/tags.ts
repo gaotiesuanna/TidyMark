@@ -1,4 +1,4 @@
-import { matchDomainGroup } from '@/core/domainGroups'
+import { groupFolderTitle, matchDomainGroup } from '@/core/domainGroups'
 import { sanitizeUrl } from '@/core/sanitize'
 import type { BookmarkItem, TagResult } from '@/core/types'
 import type { LlmClient } from './client'
@@ -183,7 +183,9 @@ export async function refineGroupTags(
   for (const item of bookmarks) {
     const group = matchDomainGroup(item, domainGroups)
     if (group === null) continue
-    const bucket = byGroup.get(group.key) ?? { title: group.folderTitle, items: [] }
+    // 这里的 title 只喂给提示词与日志，不是最终目录名——产出层已在 tree.ts 双语化，
+    // 这一层的双语化属于计划二，先固定用中文，不改变现有行为。
+    const bucket = byGroup.get(group.key) ?? { title: groupFolderTitle(group, 'zh_CN'), items: [] }
     bucket.items.push(item)
     byGroup.set(group.key, bucket)
   }

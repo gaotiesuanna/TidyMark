@@ -1,5 +1,5 @@
 import { normalizeName } from '@/core/map'
-import { matchDomainGroup } from '@/core/domainGroups'
+import { groupFolderTitle, matchDomainGroup } from '@/core/domainGroups'
 import type { BookmarkItem, TagResult } from '@/core/types'
 import { MAX_SIBLINGS } from '@/core/tree'
 import { NO_TOPIC, BROAD_WORDS } from './tags'
@@ -252,7 +252,9 @@ export async function designTagFolders(
       topicEntries.push({ index, tag })
       return
     }
-    const bucket = byGroup.get(group.key) ?? { title: group.folderTitle, entries: [] }
+    // 这里的 title 只喂给提示词与日志，不是最终目录名——产出层已在 tree.ts 双语化，
+    // 这一层的双语化属于计划二，先固定用中文，不改变现有行为。
+    const bucket = byGroup.get(group.key) ?? { title: groupFolderTitle(group, 'zh_CN'), entries: [] }
     bucket.entries.push({ index, tag })
     byGroup.set(group.key, bucket)
   })

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { classifyBookmarks, buildBatchPrompt, cacheKey } from '@/llm/classify'
-import type { BookmarkItem, CategoryCandidate } from '@/core/types'
+import type { ClassifyInput } from '@/llm/classify'
+import type { BookmarkItem, CategoryCandidate, Classification } from '@/core/types'
 import type { LlmClient } from '@/llm/client'
 
 const candidates: CategoryCandidate[] = [
@@ -10,6 +11,14 @@ const candidates: CategoryCandidate[] = [
 
 function item(id: string, url: string, title = 'T'): BookmarkItem {
   return { id, title, url, parentId: '1', index: 0, currentPath: ['书签栏'] }
+}
+
+/**
+ * locale 现在是必填项，但本文件里的用例全部只关心中文分支。
+ * 固定传 'zh_CN'，调用点不必逐个重复。
+ */
+function classify(input: Omit<ClassifyInput, 'locale'>): Promise<Classification[]> {
+  return classifyBookmarks({ ...input, locale: 'zh_CN' })
 }
 
 function clientReturning(results: unknown): LlmClient {
@@ -42,7 +51,7 @@ describe('buildBatchPrompt', () => {
 describe('classifyBookmarks', () => {
   it('规则能确定归属的书签不发给模型', async () => {
     const client = clientReturning({ results: [] })
-    const results = await classifyBookmarks({
+    const results = await classify({
       items: [item('1', 'https://arxiv.org/abs/1')],
       candidates,
       client,
@@ -56,7 +65,7 @@ describe('classifyBookmarks', () => {
     const client = clientReturning({
       results: [{ bookmark_id: '1', target_category_id: '10', confidence: 0.9, reason: '与 React 相关' }],
     })
-    const results = await classifyBookmarks({
+    const results = await classify({
       items: [item('1', 'https://some-blog.dev/react-hooks')],
       candidates,
       client,
@@ -69,7 +78,7 @@ describe('classifyBookmarks', () => {
     const client = clientReturning({
       results: [{ bookmark_id: '1', target_category_id: null, confidence: 0.2, reason: '无合适目录' }],
     })
-    const results = await classifyBookmarks({
+    const results = await classify({
       items: [item('1', 'https://weird.site/x')],
       candidates,
       client,
@@ -81,7 +90,7 @@ describe('classifyBookmarks', () => {
   it('按 batchSize 分批', async () => {
     const complete = vi.fn().mockResolvedValue({ results: [] })
     const items = Array.from({ length: 5 }, (_, i) => item(String(i), `https://s${i}.dev/x`))
-    await classifyBookmarks({ items, candidates, client: { complete }, cache: new Map(), batchSize: 2 })
+    await classify({ items, candidates, client: { complete }, cache: new Map(), batchSize: 2 })
     expect(complete).toHaveBeenCalledTimes(3)
   })
 
@@ -91,7 +100,7 @@ describe('classifyBookmarks', () => {
     const cache = new Map([
       [cacheKey(it1, candidates), { bookmarkId: '1', targetCategoryId: '10', confidence: 0.8, reason: '缓存', source: 'llm' as const }],
     ])
-    const results = await classifyBookmarks({ items: [it1], candidates, client: { complete }, cache })
+    const results = await classify({ items: [it1], candidates, client: { complete }, cache })
     expect(complete).not.toHaveBeenCalled()
     expect(results[0]!.reason).toBe('缓存')
   })
@@ -102,13 +111,13 @@ describe('classifyBookmarks', () => {
     })
     const cache = new Map()
     const it1 = item('1', 'https://some-blog.dev/x')
-    await classifyBookmarks({ items: [it1], candidates, client, cache })
+    await classify({ items: [it1], candidates, client, cache })
     expect(cache.get(cacheKey(it1, candidates))).toMatchObject({ targetCategoryId: '10' })
   })
 
   it('可重试错误重试 2 次后降级为未分类，流程不崩', async () => {
     const complete = vi.fn().mockRejectedValue(Object.assign(new Error('boom'), { retryable: true }))
-    const results = await classifyBookmarks({
+    const results = await classify({
       items: [item('1', 'https://some-blog.dev/x')],
       candidates,
       client: { complete },
@@ -120,7 +129,7 @@ describe('classifyBookmarks', () => {
 
   it('不可重试错误立即降级，不重试', async () => {
     const complete = vi.fn().mockRejectedValue(Object.assign(new Error('bad key'), { retryable: false }))
-    const results = await classifyBookmarks({
+    const results = await classify({
       items: [item('1', 'https://some-blog.dev/x')],
       candidates,
       client: { complete },
@@ -134,7 +143,7 @@ describe('classifyBookmarks', () => {
     const client = clientReturning({
       results: [{ bookmark_id: '1', target_category_id: '999', confidence: 0.9, reason: 'r' }],
     })
-    const results = await classifyBookmarks({
+    const results = await classify({
       items: [item('1', 'https://some-blog.dev/x')],
       candidates,
       client,
@@ -146,7 +155,7 @@ describe('classifyBookmarks', () => {
   it('回报进度', async () => {
     const onProgress = vi.fn()
     const items = Array.from({ length: 4 }, (_, i) => item(String(i), `https://s${i}.dev/x`))
-    await classifyBookmarks({
+    await classify({
       items, candidates, client: clientReturning({ results: [] }),
       cache: new Map(), batchSize: 2, onProgress,
     })
@@ -155,7 +164,7 @@ describe('classifyBookmarks', () => {
 
   it('每个输入书签都有且仅有一条结果', async () => {
     const items = Array.from({ length: 3 }, (_, i) => item(String(i), `https://s${i}.dev/x`))
-    const results = await classifyBookmarks({
+    const results = await classify({
       items, candidates, client: clientReturning({ results: [] }), cache: new Map(),
     })
     expect(results.map((r) => r.bookmarkId).sort()).toEqual(['0', '1', '2'])
@@ -170,7 +179,7 @@ describe('classifyBookmarks 取消', () => {
       return { results: [] }
     })
     const items = Array.from({ length: 6 }, (_, i) => item(String(i), `https://s${i}.dev/x`))
-    await classifyBookmarks({
+    await classify({
       items, candidates, client: { complete }, cache: new Map(),
       batchSize: 2, concurrency: 1, isCancelled: () => cancelled,
     })
@@ -184,7 +193,7 @@ describe('classifyBookmarks 取消', () => {
       return { results: [{ bookmark_id: '0', target_category_id: '10', confidence: 0.9, reason: 'r' }] }
     })
     const items = Array.from({ length: 4 }, (_, i) => item(String(i), `https://s${i}.dev/x`))
-    const results = await classifyBookmarks({
+    const results = await classify({
       items, candidates, client: { complete }, cache: new Map(),
       batchSize: 1, concurrency: 1, isCancelled: () => cancelled,
     })

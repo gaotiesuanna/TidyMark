@@ -1,12 +1,13 @@
 import { PRESETS } from '@/storage/settings'
-import { DOMAIN_GROUPS } from '@/core/domainGroups'
-import { t } from '@/i18n'
+import { DOMAIN_GROUPS, groupFolderTitle } from '@/core/domainGroups'
+import { resolveLocale, t } from '@/i18n'
 import { useStore } from '../store'
 
 export function PreferencesStep() {
   const { scan, settings, setSettings, analyze, busy, reset } = useStore()
   if (scan === null) return null
   const { stats } = scan
+  const locale = resolveLocale()
 
   return (
     <div className="space-y-4">
@@ -128,7 +129,7 @@ export function PreferencesStep() {
               >
                 <input
                   type="checkbox"
-                  aria-label={group.folderTitle}
+                  aria-label={groupFolderTitle(group, locale)}
                   className="h-3.5 w-3.5"
                   disabled={!settings.rebuildStructure}
                   checked={settings.domainGroups.includes(group.key)}
@@ -139,7 +140,7 @@ export function PreferencesStep() {
                       : settings.domainGroups.filter((key) => key !== group.key),
                   })}
                 />
-                {group.folderTitle}
+                {groupFolderTitle(group, locale)}
               </label>
             ))}
           </div>

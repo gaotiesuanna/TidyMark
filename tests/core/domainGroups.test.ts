@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { DOMAIN_GROUPS, matchDomainGroup } from '@/core/domainGroups'
+import { DOMAIN_GROUPS, matchDomainGroup, groupFolderTitle } from '@/core/domainGroups'
 import type { BookmarkItem } from '@/core/types'
 
 function item(url: string): BookmarkItem {
@@ -49,5 +49,26 @@ describe('matchDomainGroup', () => {
 
   it('组 key 唯一', () => {
     expect(new Set(ALL).size).toBe(ALL.length)
+  })
+})
+
+describe('groupFolderTitle 双语', () => {
+  it('每个聚合组两种语言都有名字', () => {
+    for (const group of DOMAIN_GROUPS) {
+      expect(groupFolderTitle(group, 'zh_CN').trim(), `${group.key} 缺中文名`).not.toBe('')
+      expect(groupFolderTitle(group, 'en').trim(), `${group.key} 缺英文名`).not.toBe('')
+    }
+  })
+
+  it('中文与英文各自正确', () => {
+    const video = DOMAIN_GROUPS.find((g) => g.key === 'video')!
+    expect(groupFolderTitle(video, 'zh_CN')).toBe('视频')
+    expect(groupFolderTitle(video, 'en')).toBe('Videos')
+  })
+
+  it('专有名词两种语言相同', () => {
+    const gh = DOMAIN_GROUPS.find((g) => g.key === 'github')!
+    expect(groupFolderTitle(gh, 'zh_CN')).toBe('GitHub')
+    expect(groupFolderTitle(gh, 'en')).toBe('GitHub')
   })
 })

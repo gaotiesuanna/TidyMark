@@ -1,4 +1,5 @@
 import { djb2 } from '@/core/hash'
+import type { Locale } from '@/core/locale'
 import { classifyByRules } from '@/core/rules'
 import { resolveByRules } from '@/core/map'
 import { sanitizeUrl } from '@/core/sanitize'
@@ -16,6 +17,8 @@ export interface ClassifyInput {
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => void
   /** 每批开始前检查一次，返回 true 就停止派发后续批次。 */
   isCancelled?: () => boolean
+  /** 规则表命中的标签走哪种语言。必填——Record<Locale, string> 的强制在调用点这一侧也不能松口。 */
+  locale: Locale
 }
 
 const MAX_RETRIES = 2
@@ -138,7 +141,7 @@ async function runBatch(
 }
 
 export async function classifyBookmarks(input: ClassifyInput): Promise<Classification[]> {
-  const { items, candidates, client, cache } = input
+  const { items, candidates, client, cache, locale } = input
   const batchSize = input.batchSize ?? 25
   const concurrency = input.concurrency ?? 4
 
@@ -151,7 +154,7 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
       resolved.set(item.id, { ...cached, bookmarkId: item.id })
       continue
     }
-    const rule = classifyByRules(item)
+    const rule = classifyByRules(item, locale)
     const byRule = rule ? resolveByRules(item, rule, candidates) : null
     if (byRule) {
       resolved.set(item.id, byRule)

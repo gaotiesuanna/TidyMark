@@ -1,4 +1,4 @@
-import { t } from '@/i18n'
+import { resolveLocale, t } from '@/i18n'
 import { buildCandidatesFromFolders } from '@/core/map'
 import { buildPlan, type NewFolderSpec, type RenameFolderSpec } from '@/core/plan'
 import { scanTree } from '@/core/scan'
@@ -45,6 +45,7 @@ export async function handle(
   const progress = (phase: ProgressPhase) => (done: number, total: number): void =>
     emit({ phase, message: '', done, total })
   const isCancelled = deps.isCancelled ?? ((): boolean => false)
+  const locale = resolveLocale()
 
   try {
     switch (request.kind) {
@@ -100,7 +101,7 @@ export async function handle(
           if (isCancelled()) return CANCELLED
           const tree_ = buildCategoryTree({
             tags, rootId, existingFolders: scan.folders,
-            bookmarks: scan.bookmarks, domainGroups: settings.domainGroups,
+            bookmarks: scan.bookmarks, domainGroups: settings.domainGroups, locale,
           })
           candidates = tree_.candidates
           newFolders = tree_.newFolders
@@ -136,6 +137,7 @@ export async function handle(
           onProgress: progress('classify'),
           onLog: (message, level) => log('classify', message, level),
           isCancelled,
+          locale,
         })
         const classifications = [...pinned, ...llmResults]
         // 已经跑完的批次仍然写进缓存，重来时不必再花一次钱

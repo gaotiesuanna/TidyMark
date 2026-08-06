@@ -1,4 +1,5 @@
-import { DOMAIN_GROUPS, matchDomainGroup } from './domainGroups'
+import { DOMAIN_GROUPS, groupFolderTitle, matchDomainGroup } from './domainGroups'
+import type { Locale } from './locale'
 import { normalizeName, stripNumberPrefix } from './map'
 import type { NewFolderSpec, RenameFolderSpec } from './plan'
 import type { BookmarkItem, CategoryCandidate, Classification, TagResult } from './types'
@@ -26,6 +27,8 @@ export interface BuildTreeInput {
   bookmarks?: BookmarkItem[]
   /** 已勾选的聚合组 key。省略或为空时不做聚合。 */
   domainGroups?: string[]
+  /** 聚合组目录名走哪种语言。必填——Record<Locale, string> 的强制在调用点这一侧也不能松口。 */
+  locale: Locale
 }
 
 export interface BuildTreeOutput {
@@ -67,6 +70,7 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
   if (input.tags.length === 0) {
     return { candidates: [], newFolders: [], renameFolders: [], pinned: [] }
   }
+  const { locale } = input
 
   const baseTitle = (folder: ExistingFolder): string => stripNumberPrefix(folder.title)
   const lookupKey = (parentId: string, title: string): string =>
@@ -107,7 +111,7 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
     const bucket = byDomainGroup.get(group.key) ?? []
     bucket.push(tag)
     byDomainGroup.set(group.key, bucket)
-    groupTitleByKey.set(group.key, group.folderTitle)
+    groupTitleByKey.set(group.key, groupFolderTitle(group, locale))
     // sanitizeUrl 已在 matchDomainGroup 内部成功解析过，这里必定拿得到 host
     domainOf.set(tag.bookmarkId, new URL(bookmark!.url).hostname.toLowerCase().replace(/^www\./, ''))
   }
