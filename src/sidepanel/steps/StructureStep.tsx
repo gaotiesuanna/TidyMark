@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { buildStructureView } from '@/core/structure'
+import { t } from '@/i18n'
 import { useStore } from '../store'
 
 export function StructureStep() {
@@ -15,8 +16,8 @@ export function StructureStep() {
   return (
     <div className="space-y-3">
       <p className="text-xs text-neutral-500">
-        AI 设计了 {nodes.length} 个一级目录，将容纳 {total} 个书签。
-        可以改名或删掉不想要的目录，确认后再查看逐条移动清单。编号会自动重排。
+        {t('structureIntro', String(nodes.length), String(total))}
+        {t('structureHint')}
       </p>
 
       <ul className="space-y-1">
@@ -35,10 +36,10 @@ export function StructureStep() {
                 ) : (
                   <span className="min-w-0 flex-1 px-2 py-1 text-neutral-500">{node.title}</span>
                 )}
-                <span className="shrink-0 text-neutral-400">{node.count} 条将移入</span>
+                <span className="shrink-0 text-neutral-400">{t('structureIncoming', String(node.count))}</span>
                 {node.removable && (
                   <button
-                    aria-label={`删除目录 ${node.title}`}
+                    aria-label={t('structureDelete', node.title)}
                     className="shrink-0 rounded border px-1.5 py-0.5 text-neutral-400 hover:bg-neutral-50"
                     onClick={() => removeNode(node.id)}
                   >
@@ -59,9 +60,9 @@ export function StructureStep() {
                         value={child.title}
                         onChange={(e) => renameNode(child.id, e.target.value)}
                       />
-                      <span className="shrink-0 text-neutral-400">{child.count} 条将移入</span>
+                      <span className="shrink-0 text-neutral-400">{t('structureIncoming', String(child.count))}</span>
                       <button
-                        aria-label={`删除目录 ${child.title}`}
+                        aria-label={t('structureDelete', child.title)}
                         className="shrink-0 rounded border px-1.5 py-0.5 text-neutral-400 hover:bg-neutral-50"
                         onClick={() => removeNode(child.id)}
                       >
@@ -77,16 +78,16 @@ export function StructureStep() {
       </ul>
 
       <p className="text-[11px] leading-relaxed text-neutral-400">
-        删掉一级目录，里面的书签会落到「其他」；删掉子目录，书签留在它的上级目录。
+        {t('structureFallback')}
       </p>
 
       <div className="sticky bottom-0 flex gap-2 bg-white pt-2">
-        <button className="rounded border px-3 py-2 text-sm" onClick={backToPreferences}>返回</button>
+        <button className="rounded border px-3 py-2 text-sm" onClick={backToPreferences}>{t('structureBack')}</button>
         <button
           className="flex-1 rounded bg-neutral-800 py-2 text-sm text-white"
           onClick={confirmStructure}
         >
-          继续 → 查看移动清单
+          {t('structureNext')}
         </button>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { PRESETS } from '@/storage/settings'
 import { DOMAIN_GROUPS } from '@/core/domainGroups'
+import { t } from '@/i18n'
 import { useStore } from '../store'
 
 export function PreferencesStep() {
@@ -10,19 +11,19 @@ export function PreferencesStep() {
   return (
     <div className="space-y-4">
       <section className="rounded border p-3 text-sm">
-        <h2 className="mb-2 font-medium">扫描结果</h2>
+        <h2 className="mb-2 font-medium">{t('prefsScanTitle')}</h2>
         <dl className="grid grid-cols-2 gap-y-1 text-xs">
-          <dt className="text-neutral-500">书签</dt><dd>{stats.totalBookmarks}</dd>
-          <dt className="text-neutral-500">文件夹</dt><dd>{stats.totalFolders}</dd>
-          <dt className="text-neutral-500">空文件夹</dt><dd>{stats.emptyFolders}</dd>
-          <dt className="text-neutral-500">无标题书签</dt><dd>{stats.untitledBookmarks}</dd>
-          <dt className="text-neutral-500">重复链接组</dt><dd>{stats.duplicateUrlGroups}</dd>
-          <dt className="text-neutral-500">最深层级</dt><dd>{stats.maxDepth}</dd>
+          <dt className="text-neutral-500">{t('prefsStatBookmarks')}</dt><dd>{stats.totalBookmarks}</dd>
+          <dt className="text-neutral-500">{t('prefsStatFolders')}</dt><dd>{stats.totalFolders}</dd>
+          <dt className="text-neutral-500">{t('prefsStatEmpty')}</dt><dd>{stats.emptyFolders}</dd>
+          <dt className="text-neutral-500">{t('prefsStatUntitled')}</dt><dd>{stats.untitledBookmarks}</dd>
+          <dt className="text-neutral-500">{t('prefsStatDuplicates')}</dt><dd>{stats.duplicateUrlGroups}</dd>
+          <dt className="text-neutral-500">{t('prefsStatDepth')}</dt><dd>{stats.maxDepth}</dd>
         </dl>
       </section>
 
       <section className="space-y-2 rounded border p-3">
-        <h2 className="text-sm font-medium">模型配置</h2>
+        <h2 className="text-sm font-medium">{t('prefsModelTitle')}</h2>
         <div className="flex flex-wrap gap-1">
           {PRESETS.map((preset) => (
             <button
@@ -57,8 +58,8 @@ export function PreferencesStep() {
           onChange={(e) => void setSettings({ ...settings, llm: { ...settings.llm, model: e.target.value } })}
         />
         <p className="text-[11px] leading-relaxed text-neutral-400">
-          API Key 明文保存在本地浏览器存储中，不会上传到任何服务器。
-          发送给模型的内容仅包含书签标题、域名、路径与所在目录，不含 URL 参数与网页正文。
+          {t('prefsPrivacyKey')}
+          {t('prefsPrivacyPayload')}
         </p>
       </section>
 
@@ -71,13 +72,11 @@ export function PreferencesStep() {
             onChange={(e) => void setSettings({ ...settings, rebuildStructure: e.target.checked })}
           />
           <span>
-            推翻现有文件夹结构
+            {t('prefsRebuildTitle')}
             <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-400">
-              开启后会重新设计整棵目录树，并给范围内<b className="font-medium text-neutral-500">每一个</b>
-              一级文件夹加上编号前缀（01、02…），包括你自己建的、以及本次一个书签都没移入的。
-              二级只重排本来就带编号的目录。整理可一键撤销。
+              {t('prefsRebuildOn')}
               <br />
-              关闭时只把书签移进已有文件夹，绝不改名、合并或删除任何现有文件夹。
+              {t('prefsRebuildOff')}
             </span>
           </span>
         </label>
@@ -90,10 +89,9 @@ export function PreferencesStep() {
             onChange={(e) => void setSettings({ ...settings, removeEmptyFolders: e.target.checked })}
           />
           <span>
-            整理后清理空文件夹
+            {t('prefsCleanTitle')}
             <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-400">
-              删除范围内不含任何书签的文件夹，包括子目录清空后变空的父目录。
-              范围根目录不会被删除，撤销时会连同目录一起还原。
+              {t('prefsCleanBody')}
             </span>
           </span>
         </label>
@@ -106,21 +104,18 @@ export function PreferencesStep() {
             onChange={(e) => void setSettings({ ...settings, rewriteGithubTitles: e.target.checked })}
           />
           <span>
-            统一 GitHub 书签标题
+            {t('prefsGithubTitle')}
             <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-400">
-              把标题按 URL 改写成 <code>仓库名 (作者)</code>，收藏具体文件时保留文件名。
-              这会改动书签本身的名字，不只是位置；可一键撤销。
-              与上面的勾选无关，开启后范围内所有 GitHub 书签都会改。
+              {t('prefsGithubBody')}
             </span>
           </span>
         </label>
 
         <div className="mt-3 border-t pt-3">
           <p className="text-sm">
-            单独聚合这些站点
+            {t('prefsGroupTitle')}
             <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-400">
-              勾选的站点会各自成为一个顶级目录，目录内再按主题细分。
-              只在「推翻现有文件夹结构」开启时生效。
+              {t('prefsGroupBody')}
             </span>
           </p>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
@@ -152,13 +147,13 @@ export function PreferencesStep() {
       </section>
 
       <div className="flex gap-2">
-        <button className="rounded border px-3 py-2 text-sm" onClick={reset}>返回</button>
+        <button className="rounded border px-3 py-2 text-sm" onClick={reset}>{t('prefsBack')}</button>
         <button
           className="flex-1 rounded bg-neutral-800 py-2 text-sm text-white disabled:opacity-40"
           disabled={busy !== null || settings.llm.apiKey.trim() === ''}
           onClick={() => void analyze()}
         >
-          开始 AI 分析
+          {t('prefsStart')}
         </button>
       </div>
     </div>
