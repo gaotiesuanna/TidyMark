@@ -33,6 +33,8 @@
   "exportGroupOther": { "message": "导出选中的 $count$ 条书签", "placeholders": { "count": { "content": "$1" } } },
   "exportTree": { "message": "带文件夹结构" },
   "exportLinks": { "message": "纯链接清单" },
+  "exportHtml": { "message": "浏览器书签文件" },
+  "exportHtmlBusy": { "message": "正在取图标…" },
   "importGroup": { "message": "导入别人分享的书签" },
   "importPickFile": { "message": "选择文件…" },
   "importPickerLabel": { "message": "选择导入文件" },

@@ -4,7 +4,8 @@ import { findScopeRoots } from './scan'
 /** 导出文件的版本标识，将来的导入功能靠它挡住不认识的版本。 */
 export const EXPORT_FORMAT = 'tidymark/v1'
 
-export type ExportKind = 'tree' | 'links'
+/** tree / links 是 tidymark/v1 的 JSON，html 是给别家浏览器导入用的 Netscape 书签文件。 */
+export type ExportKind = 'tree' | 'links' | 'html'
 
 /** 二选一：带 url 的是书签，带 children 的是文件夹。 */
 export type ExportNode =
@@ -88,6 +89,15 @@ export function countScopedBookmarks(tree: BookmarkNode[], scopeRootIds: string[
   return scopedLinks(tree, scopeRootIds).length
 }
 
+/**
+ * 范围内所有书签的 URL，深度优先、保持树内顺序。
+ * HTML 导出拿它去查 favicon——同样走 scopedLinks，
+ * 保证「查图标的范围」与「导出的范围」是同一批，不会多查到没勾选的书签。
+ */
+export function scopedBookmarkUrls(tree: BookmarkNode[], scopeRootIds: string[]): string[] {
+  return scopedLinks(tree, scopeRootIds).map((link) => link.url)
+}
+
 /** 本地日期串，形如 2026-08-04。导出的文件名和导入的目标文件夹名共用它。 */
 export function localDate(at: Date): string {
   const pad = (n: number): string => String(n).padStart(2, '0')
@@ -96,5 +106,6 @@ export function localDate(at: Date): string {
 
 /** 文件名用本地日期——下载下来的应该是用户自己时区的今天，而不是 UTC 的今天。 */
 export function exportFileName(kind: ExportKind, at: Date): string {
-  return `tidymark-${kind}-${localDate(at)}.json`
+  const ext = kind === 'html' ? 'html' : 'json'
+  return `tidymark-${kind}-${localDate(at)}.${ext}`
 }

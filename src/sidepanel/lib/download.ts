@@ -4,7 +4,12 @@
  * 用 Blob + <a download> 而不是 chrome.downloads——侧栏里这条路不需要额外权限。
  */
 export function downloadJson(filename: string, data: unknown): void {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  downloadText(filename, JSON.stringify(data, null, 2), 'application/json')
+}
+
+/** HTML 导出走这条：内容已经是字符串，不该再被 JSON.stringify 一遍。 */
+export function downloadText(filename: string, text: string, mime: string): void {
+  const blob = new Blob([text], { type: mime })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url

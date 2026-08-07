@@ -33,6 +33,8 @@
   "exportGroupOther": { "message": "Export $count$ selected bookmarks", "placeholders": { "count": { "content": "$1" } } },
   "exportTree": { "message": "With folder structure" },
   "exportLinks": { "message": "Links only" },
+  "exportHtml": { "message": "Browser bookmarks file" },
+  "exportHtmlBusy": { "message": "Fetching icons…" },
   "importGroup": { "message": "Import shared bookmarks" },
   "importPickFile": { "message": "Choose a file…" },
   "importPickerLabel": { "message": "Choose a file to import" },
