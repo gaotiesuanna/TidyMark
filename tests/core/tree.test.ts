@@ -102,7 +102,7 @@ describe('buildCategoryTree', () => {
 
   it('无标签输入时返回空结果', () => {
     expect(buildTree({ tags: [], rootId, existingFolders: [] }))
-      .toEqual({ candidates: [], newFolders: [], renameFolders: [], pinned: [] })
+      .toEqual({ candidates: [], newFolders: [], renameFolders: [], pinned: [], mergeRootTemporaryId: null })
   })
 })
 
@@ -410,5 +410,59 @@ describe('buildCategoryTree 域名聚合', () => {
       // buildTree 固定传 zh_CN（见本文件顶部的封装），断言跟着用中文名
       expect(candidates.map((c) => base(c.path[0]!))).toContain(groupFolderTitle(group, 'zh_CN'))
     }
+  })
+})
+
+describe('buildCategoryTree 合并模式', () => {
+  const merge = { parentId: '1', title: 'AI 学习' }
+
+  it('首条新建目录是合并根，标题不带编号前缀', () => {
+    const { newFolders, mergeRootTemporaryId } = buildTree({
+      tags: tags([['1', '前端', null], ['2', '后端', null]]),
+      rootId: 'unused', existingFolders: [], mergeRoot: merge,
+    })
+    expect(newFolders[0]).toMatchObject({
+      temporaryId: mergeRootTemporaryId, parentId: '1', parentTemporaryId: null, title: 'AI 学习',
+    })
+    expect(base(newFolders[0]!.title)).toBe('AI 学习')
+  })
+
+  it('一级目录挂在合并根的临时 id 下，而不是真实 parentId', () => {
+    const { newFolders, mergeRootTemporaryId } = buildTree({
+      tags: tags([['1', '前端', null]]),
+      rootId: 'unused', existingFolders: [], mergeRoot: merge,
+    })
+    const top = newFolders.filter((f) => base(f.title) === '前端')
+    expect(top).toHaveLength(1)
+    expect(top[0]).toMatchObject({ parentId: null, parentTemporaryId: mergeRootTemporaryId })
+  })
+
+  it('不复用源目录下的同名子目录', () => {
+    const { newFolders, renameFolders } = buildTree({
+      tags: tags([['1', '前端', null]]),
+      rootId: 'unused',
+      existingFolders: [folder('90', '前端', '9')],
+      mergeRoot: merge,
+    })
+    expect(newFolders.some((f) => base(f.title) === '前端')).toBe(true)
+    expect(renameFolders).toEqual([])
+  })
+
+  it('仍然沿用用户既有的命名写法', () => {
+    const { newFolders } = buildTree({
+      tags: tags([['1', 'AI工具', null]]),
+      rootId: 'unused',
+      existingFolders: [folder('90', 'AI 工具', '9')],
+      mergeRoot: merge,
+    })
+    expect(newFolders.map((f) => base(f.title))).toContain('AI 工具')
+  })
+
+  it('不给 mergeRoot 时 mergeRootTemporaryId 为 null，输出与今天一致', () => {
+    const { newFolders, mergeRootTemporaryId } = buildTree({
+      tags: tags([['1', '前端', null]]), rootId, existingFolders: [],
+    })
+    expect(mergeRootTemporaryId).toBeNull()
+    expect(newFolders.every((f) => f.parentId === rootId || f.parentTemporaryId !== null)).toBe(true)
   })
 })

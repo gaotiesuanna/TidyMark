@@ -22,6 +22,11 @@ export interface BuildTreeInput {
   tags: TagResult[]
   /** 新目录挂载的范围根文件夹 id。 */
   rootId: string
+  /**
+   * 合并模式：新目录树挂在一个本批新建的容器目录下，而不是已有的 rootId。
+   * 给出时 rootId 不再被使用，两者互斥。
+   */
+  mergeRoot?: { parentId: string; title: string }
   /** 范围内已存在的文件夹，用于复用而不是重复新建同名目录。 */
   existingFolders: ExistingFolder[]
   /** 域名匹配需要 URL，TagResult 只有 bookmarkId。省略时不做聚合。 */
@@ -38,6 +43,8 @@ export interface BuildTreeOutput {
   renameFolders: RenameFolderSpec[]
   /** 命中聚合组的书签，归属已确定，无需再走 LLM 分类。 */
   pinned: Classification[]
+  /** 合并模式下容器目录的临时 id；非合并模式为 null。 */
+  mergeRootTemporaryId: string | null
 }
 
 /** 建树时的中间形态：聚合组与主题组归一成同一种结构，交给同一个发射循环。 */
@@ -69,7 +76,7 @@ function domainGroupOrder(key: string): number {
 
 export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
   if (input.tags.length === 0) {
-    return { candidates: [], newFolders: [], renameFolders: [], pinned: [] }
+    return { candidates: [], newFolders: [], renameFolders: [], pinned: [], mergeRootTemporaryId: null }
   }
   const { locale } = input
 
@@ -193,6 +200,19 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
   let counter = 0
   const nextId = (): string => `tmp:${++counter}`
 
+  // 合并模式：容器目录必须第一个发射，后面的一级目录才挂得上它的临时 id。
+  // 它是容器不是分类，标题不编号。
+  let mergeRootTemporaryId: string | null = null
+  if (input.mergeRoot !== undefined) {
+    mergeRootTemporaryId = nextId()
+    newFolders.push({
+      temporaryId: mergeRootTemporaryId,
+      parentId: input.mergeRoot.parentId,
+      parentTemporaryId: null,
+      title: input.mergeRoot.title,
+    })
+  }
+
   // 理由说明的是「为什么进这个聚合组」，因此落到子目录时也报组名而不是子目录名
   const pin = (bookmarkIds: string[], categoryId: string, groupTitle: string): void => {
     for (const bookmarkId of bookmarkIds) {
@@ -213,7 +233,8 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
   ;[...domainSections, ...topicSections].forEach((section, sectionIndex) => {
     const prefix = String(sectionIndex + 1).padStart(2, '0')
     const title = numbered(prefix, section.title)
-    const existing = findChild(input.rootId, section.title)
+    // 合并模式下容器目录是刚建的，底下没有任何可复用的子目录
+    const existing = mergeRootTemporaryId === null ? findChild(input.rootId, section.title) : null
     const mark = section.domainGroup === null ? {} : { domainGroup: section.domainGroup }
 
     let parentRealId: string | null = null
@@ -230,7 +251,10 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
       parentTemporaryId = nextId()
       sectionId = parentTemporaryId
       newFolders.push({
-        temporaryId: parentTemporaryId, parentId: input.rootId, parentTemporaryId: null, title,
+        temporaryId: parentTemporaryId,
+        parentId: mergeRootTemporaryId === null ? input.rootId : null,
+        parentTemporaryId: mergeRootTemporaryId,
+        title,
       })
       candidates.push({ id: parentTemporaryId, path: [title], ...mark })
     }
@@ -259,5 +283,5 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
     })
   })
 
-  return { candidates, newFolders, renameFolders, pinned }
+  return { candidates, newFolders, renameFolders, pinned, mergeRootTemporaryId }
 }
