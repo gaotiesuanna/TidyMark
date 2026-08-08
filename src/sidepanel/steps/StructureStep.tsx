@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { buildStructureView } from '@/core/structure'
 import { plural, resolveLocale, t } from '@/i18n'
+import { joinTitles } from '../lib/listText'
 import { useStore } from '../store'
 
 export function StructureStep() {
@@ -23,14 +24,23 @@ export function StructureStep() {
 
       {/* 合并根是容器不是分类，不进下面那份两层列表；它不可删除，也不带计数 */}
       {plan.mergeRoot !== null && (
-        <label className="flex items-center gap-2 rounded border border-neutral-300 bg-neutral-50 p-2 text-xs">
-          <span className="shrink-0 text-neutral-500">{t('structureMergeLabel')}</span>
-          <input
-            className="min-w-0 flex-1 rounded border px-2 py-1"
-            value={structureEdits.renames[plan.mergeRoot.temporaryId] ?? plan.mergeRoot.title}
-            onChange={(e) => renameNode(plan.mergeRoot!.temporaryId, e.target.value)}
-          />
-        </label>
+        <div className="space-y-1 rounded border border-neutral-300 bg-neutral-50 p-2">
+          <label className="flex items-center gap-2 text-xs">
+            <span className="shrink-0 text-neutral-500">{t('structureMergeLabel')}</span>
+            <input
+              className="min-w-0 flex-1 rounded border px-2 py-1"
+              value={structureEdits.renames[plan.mergeRoot.temporaryId] ?? plan.mergeRoot.title}
+              onChange={(e) => renameNode(plan.mergeRoot!.temporaryId, e.target.value)}
+            />
+          </label>
+          {/* 上面那行说的是东西去哪儿，没说什么会没掉。合并会把这些源目录清空后删除，
+             而在这之前，整条动线没有任何一处讲过这件事——偏好页那段「范围根目录不会被删除」
+             讲的还是非合并模式。第一次听说不能是结果页，那时已经删完了。
+             点名到具体标题，不说「源文件夹」这种对不上号的话；删除吓人，撤销才是让人敢按的那句。 */}
+          <p className="text-[11px] leading-relaxed text-neutral-500">
+            {t('structureMergeNotice', joinTitles(plan.mergeRoot.sourceTitles, resolveLocale()))}
+          </p>
+        </div>
       )}
 
       <ul className="space-y-1">

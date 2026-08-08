@@ -1,11 +1,14 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   appendLog, collectDescendantFolderIds, nextStepAfterAnalyze, toggleChecked, useStore,
   MAX_LOGS, MAX_LOG_LENGTH, type LogLine,
 } from '@/sidepanel/store'
+import { send } from '@/sidepanel/lib/send'
 import { makePlan } from '../fakes/plan'
 import type { ProgressEvent } from '@/background/events'
 import type { BookmarkNode } from '@/core/ports'
+
+vi.mock('@/sidepanel/lib/send', () => ({ send: vi.fn() }))
 
 const tree: BookmarkNode[] = [
   { id: '0', title: '', children: [
@@ -219,5 +222,38 @@ describe('resetImport', () => {
     expect(state.importError).toBeNull()
     expect(state.importFile).toBeNull()
     expect(state.importDone).toBeNull()
+  })
+})
+
+describe('refreshTree 剪掉已经不存在的勾选', () => {
+  // 合并会删掉被勾中的源目录，撤销又用新 id 把它们重建出来。
+  // reset() 有意保留 checkedIds（「再整理一次」时不用重勾），但没人剪过这个集合：
+  // 回到范围页会看到「扫描 2 个文件夹」的按钮亮着、树上却一个勾都没有，
+  // 点下去扫的是一批死 id，直接撞 errNoScope——本功能自己的回头路被自己堵死了。
+  it('树里已经没有的 id 被剪掉', async () => {
+    vi.mocked(send).mockResolvedValue({ ok: true, kind: 'get_tree', tree })
+    useStore.setState({ checkedIds: new Set(['10', '11', '900', '901']) })
+
+    await useStore.getState().refreshTree()
+
+    expect([...useStore.getState().checkedIds].sort()).toEqual(['10', '11'])
+  })
+
+  it('仍然存在的 id 一个不动——跨 reset 记住选择是有意为之，不能一把清空', async () => {
+    vi.mocked(send).mockResolvedValue({ ok: true, kind: 'get_tree', tree })
+    useStore.setState({ checkedIds: new Set(['1', '10', '101', '11']) })
+
+    await useStore.getState().refreshTree()
+
+    expect([...useStore.getState().checkedIds].sort()).toEqual(['1', '10', '101', '11'])
+  })
+
+  it('读树失败时不动勾选——拿不到新树就无从判断谁还活着', async () => {
+    vi.mocked(send).mockResolvedValue({ ok: false, error: '后台没了' })
+    useStore.setState({ checkedIds: new Set(['900']) })
+
+    await useStore.getState().refreshTree()
+
+    expect([...useStore.getState().checkedIds]).toEqual(['900'])
   })
 })

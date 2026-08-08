@@ -104,3 +104,39 @@ describe('StructureStep 合并根', () => {
     expect(screen.queryByText('合并到')).toBeNull()
   })
 })
+
+describe('StructureStep 合并会删掉哪些文件夹', () => {
+  // 应用之前，整条动线没有任何一处告诉用户「你勾的那两个文件夹会消失」：
+  // 范围页不说，偏好页说的是反话，日志只报新名字，
+  // 结构页的「合并到」讲的是东西去哪儿、不是什么会没掉，评审页只有逐条路径。
+  // 第一次听说是结果页——那时已经删完了。这段说明是最后一道能赶在删除之前的门。
+  const withMergeRoot = () => ({
+    ...makePlan(),
+    mergeRoot: {
+      temporaryId: 'tmp:0', title: 'AI 学习',
+      sourceRootIds: ['10', '11'], sourceTitles: ['NiceG', 'b_llm'],
+    },
+  })
+
+  it('点名将被清空删除的源文件夹，并说明可一键撤销', () => {
+    useStore.setState({ plan: withMergeRoot(), structureEdits: EMPTY_EDITS, step: 'structure' })
+    render(<StructureStep />)
+    // 必须点到具体名字：抽象地说「源文件夹会被删除」，用户对不上是哪两个
+    const notice = screen.getByText(/NiceG、b_llm/)
+    expect(notice.textContent).toMatch(/删除/)
+    expect(notice.textContent).toMatch(/撤销/)
+  })
+
+  it('中文界面下名单用顿号分隔，与结果页同一套写法', () => {
+    useStore.setState({ plan: withMergeRoot(), structureEdits: EMPTY_EDITS, step: 'structure' })
+    render(<StructureStep />)
+    expect(screen.queryByText(/NiceG, b_llm/)).toBeNull()
+    expect(screen.getByText(/NiceG、b_llm/)).toBeTruthy()
+  })
+
+  it('非合并模式不出现这段说明', () => {
+    useStore.setState({ plan: makePlan(), structureEdits: EMPTY_EDITS, step: 'structure' })
+    render(<StructureStep />)
+    expect(screen.queryByText(/会被清空并删除/)).toBeNull()
+  })
+})

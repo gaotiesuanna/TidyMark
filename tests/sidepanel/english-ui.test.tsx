@@ -100,6 +100,24 @@ describe('英文界面渲染守卫：五个步骤组件', () => {
     assertNoChinese(container, 'StructureStep')
   })
 
+  it('StructureStep（合并模式：合并到输入框与「源目录会被删除」说明）', () => {
+    // makePlan() 的 mergeRoot 是 null，上面那条用例一行合并 UI 都没渲染到。
+    // 合并说明是整条动线里唯一一处在删除发生之前点名源目录的文案，
+    // 它同时要把名字用分隔符连起来——中文顿号漏到英文界面正是这份文件要挡的东西。
+    useStore.setState({
+      plan: {
+        ...makePlan(),
+        mergeRoot: {
+          temporaryId: 'tmp:0', title: 'AI learning',
+          sourceRootIds: ['10', '11'], sourceTitles: ['NiceG', 'b_llm'],
+        },
+      },
+      structureEdits: EMPTY_EDITS, step: 'structure',
+    })
+    const { container } = render(<StructureStep />)
+    assertNoChinese(container, 'StructureStep（合并模式）')
+  })
+
   it('ReviewStep（含新建目录、重命名目录、重命名书签三条摘要，覆盖第 26 行的分支）', () => {
     // summary 里的 createdFolders/renamedFolders/renamedBookmarks 由组件用
     // summarize(plan, accepted) 现算，不读 plan.summary 字段——operations 必须
@@ -169,11 +187,91 @@ describe('英文界面渲染守卫：五个步骤组件', () => {
     useStore.setState({
       plan, accepted: new Set(['100']), applyResult, tree: resultTree,
       // undoResult.skipped 命中第 81 行 `{each.title}：{each.reason}`
-      undoResult: { status: 'completed', restored: 1, removedFolders: 1, skipped: [{ id: '55', title: 'orphaned bookmark', reason: 'node is gone' }] },
+      undoResult: {
+        status: 'completed', restored: 1, removedFolders: 1, rebuiltRootIds: [],
+        skipped: [{ id: '55', title: 'orphaned bookmark', reason: 'node is gone' }],
+      },
       undoAvailable: false, busy: null, error: null,
     })
     const { container } = render(<ResultStep />)
     assertNoChinese(container, 'ResultStep')
+  })
+
+  // 上面那条用例的 plan.mergeRoot 是 null、undoResult 又不为 null，
+  // 合并说明与「原文件夹已删除」名单两段都被跳过，一个字都没经过英文界面。
+  const mergedPlan: OrganizePlan = {
+    id: 'p2', createdAt: 1, scopeRootIds: ['10', '11'], rebuildStructure: true,
+    candidates: [{ id: 'tmp:1', path: ['AI'] }],
+    operations: [
+      { type: 'create_folder', temporaryId: 'tmp:0', parentId: '1', parentTemporaryId: null, title: 'AI learning' },
+      { type: 'create_folder', temporaryId: 'tmp:1', parentId: null, parentTemporaryId: 'tmp:0', title: 'AI' },
+      { type: 'move_bookmark', bookmarkId: '100', fromParentId: '10', originalIndex: 0, toCategoryId: 'tmp:1', toTemporaryId: 'tmp:1', confidence: 1, reason: '' },
+    ],
+    rows: [
+      { bookmarkId: '100', title: 'a', url: 'https://a', fromPath: ['NiceG'], toPath: ['AI learning', 'AI'], confidence: 1, reason: '' },
+    ],
+    summary: { totalBookmarks: 1, movedBookmarks: 1, unchangedBookmarks: 0, createdFolders: 2, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 0 },
+    warnings: [],
+    tags: [],
+    mergeRoot: {
+      temporaryId: 'tmp:0', title: 'AI learning',
+      sourceRootIds: ['10', '11'], sourceTitles: ['NiceG', 'b_llm'],
+    },
+  }
+
+  const mergedApplyResult: ApplyResult = {
+    status: 'completed', executed: 3, skipped: [], createdFolderIds: ['20', '21'],
+    removedFolders: [
+      { id: '10', title: 'NiceG', path: ['Bookmarks bar'] },
+      { id: '11', title: 'b_llm', path: ['Bookmarks bar'] },
+    ],
+    sortedFolders: 0, renamedBookmarkIds: [], mergeRootId: '20',
+    failedAt: null, error: null,
+  }
+
+  it('ResultStep（合并模式：合并说明与已删除的源目录名单）', () => {
+    const mergedTree: BookmarkNode[] = [
+      { id: '0', title: '', children: [
+        { id: '1', title: 'Bookmarks bar', children: [
+          { id: '20', title: 'AI learning', children: [
+            { id: '21', title: '01 AI', children: [
+              { id: '100', title: 'a', url: 'https://a' },
+            ]},
+          ]},
+        ]},
+      ]},
+    ]
+    useStore.setState({
+      plan: mergedPlan, accepted: new Set(['100']),
+      applyResult: mergedApplyResult, tree: mergedTree,
+      undoResult: null, undoAvailable: true, busy: null, error: null,
+    })
+    const { container } = render(<ResultStep />)
+    assertNoChinese(container, 'ResultStep（合并模式）')
+  })
+
+  it('ResultStep（合并撤销之后：结构树按重建出来的新根 id 画）', () => {
+    const restoredTree: BookmarkNode[] = [
+      { id: '0', title: '', children: [
+        { id: '1', title: 'Bookmarks bar', children: [
+          { id: '30', title: 'NiceG', children: [
+            { id: '100', title: 'a', url: 'https://a' },
+          ]},
+          { id: '31', title: 'b_llm', children: [] },
+        ]},
+      ]},
+    ]
+    useStore.setState({
+      plan: mergedPlan, accepted: new Set(['100']),
+      applyResult: mergedApplyResult, tree: restoredTree,
+      undoResult: {
+        status: 'completed', restored: 1, removedFolders: 2, skipped: [],
+        rebuiltRootIds: ['30', '31'],
+      },
+      undoAvailable: false, busy: null, error: null,
+    })
+    const { container } = render(<ResultStep />)
+    assertNoChinese(container, 'ResultStep（合并撤销之后）')
   })
 })
 

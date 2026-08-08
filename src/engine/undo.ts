@@ -17,6 +17,14 @@ export interface UndoResult {
   restored: number
   skipped: UndoSkip[]
   removedFolders: number
+  /**
+   * 本次撤销重建出来的范围根的**新** id，按快照顺序；没重建过任何根时为空数组。
+   *
+   * 重建只能新建节点，旧 id 一去不返。调用方（结果页）手里的 plan.scopeRootIds
+   * 与 applyResult.mergeRootId 在合并撤销之后全指向不存在的节点，
+   * 不把新 id 带出去，它就再也找不到那几个刚被还原回来的目录。
+   */
+  rebuiltRootIds: string[]
 }
 
 export async function undoLast(
@@ -26,7 +34,7 @@ export async function undoLast(
 ): Promise<UndoResult> {
   const snapshot = await loadSnapshot(ports)
   if (snapshot === null) {
-    return { status: 'no_snapshot', restored: 0, skipped: [], removedFolders: 0 }
+    return { status: 'no_snapshot', restored: 0, skipped: [], removedFolders: 0, rebuiltRootIds: [] }
   }
 
   const skipped: UndoSkip[] = []
@@ -46,8 +54,10 @@ export async function undoLast(
   const mapId = (id: string): string => idMap.get(id) ?? id
   for (const node of [...(snapshot.rootNodes ?? []), ...snapshot.nodes]) {
     if (node.url !== undefined) continue
-    if ((await ports.bookmarks.get(node.id)) !== null) continue
+    // get 也放进 try：它一旦 reject，异常会穿出整个 undoLast，什么都没还原就结束了。
+    // 这一趟里其余每一步失败都只记一条 skip，单次查询没有理由是唯一的例外。
     try {
+      if ((await ports.bookmarks.get(node.id)) !== null) continue
       const created = await ports.bookmarks.create({
         parentId: mapId(node.parentId),
         title: node.title,
@@ -64,8 +74,11 @@ export async function undoLast(
   // 「撤销不动幸存的范围根」这条不变量因此原样成立。
   // 归位交给后面两趟而不是在 create 时传 index：只补回部分兄弟时，
   // 唯有第二趟那套按 parent 分组、组内升序插入的做法才能复原原始排列。
+  const rebuiltRootIds: string[] = []
   for (const node of snapshot.rootNodes ?? []) {
-    if (idMap.has(node.id)) restorable.push(node)
+    if (!idMap.has(node.id)) continue
+    restorable.push(node)
+    rebuiltRootIds.push(idMap.get(node.id)!)
   }
 
   // 校验：只还原仍然存在的节点。
@@ -152,5 +165,5 @@ export async function undoLast(
   }
 
   await clearSnapshot(ports)
-  return { status: 'completed', restored: done, skipped, removedFolders }
+  return { status: 'completed', restored: done, skipped, removedFolders, rebuiltRootIds }
 }

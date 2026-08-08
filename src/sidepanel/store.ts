@@ -195,7 +195,17 @@ export const useStore = create<State>((set, get) => ({
   /** 整理或撤销之后重新读一次书签树，结果页据此展示真实结构。 */
   async refreshTree() {
     const res = await send({ kind: 'get_tree' })
-    if (res.ok && res.kind === 'get_tree') set({ tree: res.tree })
+    if (!res.ok || res.kind !== 'get_tree') return
+    // 顺手剪掉已经不存在的勾选。合并会删掉被勾中的源目录，撤销又拿新 id 把它们重建出来，
+    // 两种情况下 checkedIds 里都躺着一批死 id。reset() 有意保留这个集合（「再整理一次」
+    // 不用重勾），可没人剪过它：回到范围页会看到「扫描 2 个文件夹」的按钮亮着、
+    // 树上却一个勾都没有，点下去扫的是一批不存在的 id，直接撞 errNoScope。
+    // 只剪死的，活着的一个不动——跨 reset 记住选择是有意为之。
+    const alive = new Set(collectAllFolderIds(res.tree))
+    set({
+      tree: res.tree,
+      checkedIds: new Set([...get().checkedIds].filter((id) => alive.has(id))),
+    })
   },
 
   pushEvent(event) {

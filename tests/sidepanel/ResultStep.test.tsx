@@ -86,7 +86,7 @@ describe('ResultStep', () => {
   })
 
   it('撤销之后展示撤销后的结构', () => {
-    useStore.setState({ undoResult: { status: 'completed', restored: 2, removedFolders: 2, skipped: [] } })
+    useStore.setState({ undoResult: { status: 'completed', restored: 2, removedFolders: 2, skipped: [], rebuiltRootIds: [] } })
     render(<ResultStep />)
     expect(screen.getByText('撤销后的结构')).toBeDefined()
     expect(screen.queryByText('整理后的结构')).toBeNull()
@@ -323,12 +323,44 @@ describe('ResultStep 合并结果——"已删除"名单只能报真被删掉的
           { id: '11', title: 'b_llm', path: ['书签栏'] },
         ],
       },
-      undoResult: { status: 'completed', restored: 2, removedFolders: 2, skipped: [] },
+      undoResult: { status: 'completed', restored: 2, removedFolders: 2, skipped: [], rebuiltRootIds: [] },
       undoAvailable: false, busy: null, error: null,
     })
     render(<ResultStep />)
     expect(screen.queryByText(/个文件夹已合并为/)).toBeNull()
     expect(screen.queryByText(/已删除/)).toBeNull()
+  })
+
+  it('撤销之后仍然画得出结构树——用撤销回报的新根 id，不是手里那批死 id', () => {
+    // 撤销把 NiceG / b_llm 用新 id（'30' / '31'）重建了出来，合并根 '20' 被删掉。
+    // plan.scopeRootIds 与 applyResult.mergeRootId 此刻全指向不存在的节点，
+    // 「撤销后的结构」会整块消失——偏偏是刚被删过文件夹的人最想看它还在的时候。
+    const restoredTree: BookmarkNode[] = [
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '30', title: 'NiceG', children: [
+            { id: '100', title: 'a', url: 'https://a' },
+          ]},
+          { id: '31', title: 'b_llm', children: [
+            { id: '101', title: 'b', url: 'https://b' },
+          ]},
+        ]},
+      ]},
+    ]
+    useStore.setState({
+      plan: mergedPlan,
+      tree: restoredTree,
+      applyResult: { ...applyResult, mergeRootId: '20', createdFolderIds: ['20', '21'] },
+      undoResult: {
+        status: 'completed', restored: 2, removedFolders: 1, skipped: [],
+        rebuiltRootIds: ['30', '31'],
+      },
+      undoAvailable: false, busy: null, error: null,
+    })
+    render(<ResultStep />)
+    expect(screen.getByText('撤销后的结构')).toBeTruthy()
+    expect(screen.getByText('NiceG')).toBeTruthy()
+    expect(screen.getByText('b_llm')).toBeTruthy()
   })
 
   it('两个源目录都真被删掉时，名单用中文顿号分隔，不是英文逗号', () => {

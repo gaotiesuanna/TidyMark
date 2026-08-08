@@ -241,6 +241,33 @@ describe('undoLast', () => {
     expect((await fake.api.get('101'))!.parentId).toBe('11')
   })
 
+  it('判断目录是否还在的那次查询失败，只记一条 skip，不会掀翻整次撤销', async () => {
+    // 这一趟里 create 失败只记一条 skip，唯独它前面那次 get 曾经在 try 之外：
+    // 一次查询 reject 就能让异常穿出整个 undoLast，什么都没还原就结束了。
+    // 这条分支上删掉的是用户自己勾的文件夹，撤销是唯一的退路，不能被一次查询带走。
+    const { ports, fake } = setup()
+    await saveSnapshot(ports, await captureSnapshot(ports, 'p1', ['1']))
+    await fake.api.move('100', { parentId: '10' })
+
+    let failed = false
+    ports.bookmarks = {
+      ...fake.api,
+      async get(id) {
+        if (id === '11' && !failed) {
+          failed = true
+          throw new Error('模拟失败')
+        }
+        return fake.api.get(id)
+      },
+    }
+
+    const result = await undoLast(ports, 'zh_CN')
+    expect(result.status).toBe('completed')
+    expect(result.skipped.some((s) => s.id === '11')).toBe(true)
+    // 其余节点照常归位——一次查询失败不该殃及别人
+    expect((await fake.api.get('100'))!.parentId).toBe('11')
+  })
+
   it('撤销成功后清除快照，防止二次撤销', async () => {
     const { ports } = setup()
     await saveSnapshot(ports, await captureSnapshot(ports, 'p1', ['1']))
@@ -304,6 +331,34 @@ describe('undoLast 重建被删的范围根', () => {
     await fake.api.move('10', { parentId: '1', index: 2 })
     await undoLast(ports, 'zh_CN')
     expect((await fake.api.get('10'))!.index).toBe(1)
+  })
+
+  it('回报重建出来的范围根的新 id——旧 id 在调用方手里全是死的', async () => {
+    // 撤销把源根重建成了新 id，可 UndoResult 只回计数，侧栏手里的
+    // plan.scopeRootIds 与 applyResult.mergeRootId 于是全指向不存在的节点，
+    // 结果页那棵「撤销后的结构」直接整块消失。新 id 只有这里知道，必须带出去。
+    const { ports, fake } = setup()
+    await saveSnapshot(ports, await captureSnapshot(ports, 'p1', ['10', '11']))
+    const merged = await fake.api.create({ parentId: '1', title: 'AI 学习' })
+    for (const id of ['100', '101', '102']) await fake.api.move(id, { parentId: merged.id })
+    await fake.api.remove('10')
+    await fake.api.remove('11')
+
+    const result = await undoLast(ports, 'zh_CN')
+    expect(result.rebuiltRootIds).toHaveLength(2)
+    expect(result.rebuiltRootIds).not.toContain('10')
+    expect(result.rebuiltRootIds).not.toContain('11')
+    for (const id of result.rebuiltRootIds) expect(await fake.api.get(id)).not.toBeNull()
+    // 顺序跟着快照走，第一个是 react、第二个是杂项
+    expect((await fake.api.get(result.rebuiltRootIds[1]!))!.title).toBe('杂项')
+  })
+
+  it('一个根都没被删时是空数组——非合并流程的撤销不受影响', async () => {
+    const { ports, fake } = setup()
+    await saveSnapshot(ports, await captureSnapshot(ports, 'p1', ['10', '11']))
+    await fake.api.move('100', { parentId: '10' })
+
+    expect((await undoLast(ports, 'zh_CN')).rebuiltRootIds).toEqual([])
   })
 
   it('旧快照没有 rootNodes 时不报错', async () => {

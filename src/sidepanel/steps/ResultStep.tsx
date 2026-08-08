@@ -2,26 +2,29 @@ import { useMemo } from 'react'
 import { buildResultTree } from '@/core/resultTree'
 import { plural, resolveLocale, t } from '@/i18n'
 import { ResultTree } from '../components/ResultTree'
+import { joinTitles } from '../lib/listText'
 import { useStore } from '../store'
 
 export function ResultStep() {
   const { applyResult, undoResult, undoAvailable, undo, reset, busy, plan, tree: bookmarks } = useStore()
   // 用整理后重新读取的书签树，而不是从方案推导——未接受的书签仍在原处，
   // 只看方案会画出一棵与实际不符的树
-  const tree = useMemo(
-    () =>
-      plan === null || applyResult === null
-        ? []
-        : // 合并后源根已被删除，合并根又不在 scopeRootIds 里，不带上它结果树会是空的
-          buildResultTree(
-            bookmarks,
-            applyResult.mergeRootId === null
-              ? plan.scopeRootIds
-              : [...plan.scopeRootIds, applyResult.mergeRootId],
-            applyResult.createdFolderIds,
-          ),
-    [bookmarks, plan, applyResult],
-  )
+  const tree = useMemo(() => {
+    if (plan === null || applyResult === null) return []
+    // 合并后源根已被删除，合并根又不在 scopeRootIds 里，不带上它结果树会是空的。
+    // 撤销之后这两个 id 一起作废：源根是用新 id 重建的，合并根则被删掉了——
+    // 只有 undoResult 手里那份新 id 还指得到东西，不接上，「撤销后的结构」
+    // 会整块消失在刚被删过文件夹的人面前。
+    const extraRootIds =
+      undoResult !== null && undoResult.rebuiltRootIds.length > 0
+        ? undoResult.rebuiltRootIds
+        : applyResult.mergeRootId === null ? [] : [applyResult.mergeRootId]
+    return buildResultTree(
+      bookmarks,
+      [...plan.scopeRootIds, ...extraRootIds],
+      applyResult.createdFolderIds,
+    )
+  }, [bookmarks, plan, applyResult, undoResult])
   if (applyResult === null) return null
 
   const showTree = tree.length > 0
@@ -34,8 +37,6 @@ export function ResultStep() {
   // 用户在复核页取消勾选，源目录里还留着书签，它就没资格上这份名单，
   // 哪怕它在 sourceTitles 里。名单要报的是「实际发生了什么」，不是「打算合并谁」。
   const removedMergeSources = applyResult.removedFolders.filter((folder) => mergedSourceIds.has(folder.id))
-  // 中文句子里用全角顿号，英文保留半角逗号——照抄句子里已有的标点习惯，不新造规则。
-  const mergeSourceSeparator = resolveLocale() === 'zh_CN' ? '、' : ', '
   // 侧栏本身是一个独立文档，关掉它就结束了本次整理；
   // 状态不必手动清，下次打开是全新的页面。
   const finish = (): void => window.close()
@@ -81,7 +82,7 @@ export function ResultStep() {
               <p>
                 {t(
                   'resultMergeSourcesRemoved',
-                  removedMergeSources.map((folder) => folder.title).join(mergeSourceSeparator),
+                  joinTitles(removedMergeSources.map((folder) => folder.title), resolveLocale()),
                 )}
               </p>
             )}
