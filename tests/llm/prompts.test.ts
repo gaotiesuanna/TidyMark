@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { BROAD_WORDS, classifyPrompt, foldersPrompt, groupTagsPrompt, tagsPrompt } from '@/llm/prompts'
+import { BROAD_WORDS, classifyPrompt, foldersPrompt, groupTagsPrompt, mergeNamePrompt, tagsPrompt } from '@/llm/prompts'
 import { LOCALES } from '@/core/locale'
 
 describe('提示词双语', () => {
@@ -9,6 +9,7 @@ describe('提示词双语', () => {
       expect(tagsPrompt(locale).join('').trim()).not.toBe('')
       expect(groupTagsPrompt(locale, 'GitHub').join('').trim()).not.toBe('')
       expect(foldersPrompt(locale, { total: 10, maxSiblings: 8 }).join('').trim()).not.toBe('')
+      expect(mergeNamePrompt(locale, ['NiceG', 'b_llm']).join('').trim()).not.toBe('')
     }
   })
 
@@ -47,5 +48,30 @@ describe('提示词双语', () => {
     const en = foldersPrompt('en', { total: 5, parentTitle: 'GitHub', maxSiblings: 8 }).join(' ')
     expect(zh).toContain('GitHub')
     expect(en).toContain('GitHub')
+  })
+
+  it('合并起名提示词会带上每个源目录名，两种语言都能定位到', () => {
+    const zh = mergeNamePrompt('zh_CN', ['NiceG', 'b_llm']).join(' ')
+    const en = mergeNamePrompt('en', ['NiceG', 'b_llm']).join(' ')
+    expect(zh).toContain('NiceG')
+    expect(zh).toContain('b_llm')
+    expect(en).toContain('NiceG')
+    expect(en).toContain('b_llm')
+  })
+
+  it('合并起名提示词的英文分支是英文，且带齐编号前缀/引号/JSON 回复形状这几条约束', () => {
+    const en = mergeNamePrompt('en', ['NiceG', 'b_llm']).join(' ')
+    expect(en).toContain('No numbering prefix')
+    expect(en).toContain('No quotes')
+    expect(en).toContain('Reply with JSON')
+    // 英文分支混入中文字符，说明两个分支的文案被改串了
+    expect(en).not.toMatch(/[一-鿿]/)
+  })
+
+  it('合并起名提示词的中文分支带齐对应的编号前缀/引号/JSON 回复形状这几条约束', () => {
+    const zh = mergeNamePrompt('zh_CN', ['NiceG', 'b_llm']).join(' ')
+    expect(zh).toContain('不要编号前缀')
+    expect(zh).toContain('不要引号')
+    expect(zh).toContain('JSON')
   })
 })
