@@ -239,3 +239,114 @@ describe('ResultStep 合并结果——清理统计不能把被合并的源目�
     expect(screen.queryByText('查看被清理的空文件夹')).toBeNull()
   })
 })
+
+describe('ResultStep 合并结果——"已删除"名单只能报真被删掉的源目录', () => {
+  // sourceTitles 是「打算合并谁」，取消勾选会让某个源目录整棵子树都留有书签，
+  // findEmptyFolders 找不到空子树，它就不会进 removedFolders——但它仍然在
+  // sourceTitles 里。这组用例专门盯这个落差，防止"已删除"文案说了假话。
+  const mergedPlan: OrganizePlan = {
+    ...plan,
+    scopeRootIds: ['10', '11'],
+    mergeRoot: {
+      temporaryId: 'tmp:0', title: 'AI 学习',
+      sourceRootIds: ['10', '11'], sourceTitles: ['NiceG', 'b_llm'],
+    },
+  }
+  const mergedTree: BookmarkNode[] = [
+    { id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '20', title: 'AI 学习', children: [
+          { id: '21', title: '01 前端', children: [
+            { id: '100', title: 'a', url: 'https://a' },
+          ]},
+        ]},
+        // NiceG 没被删掉：用户在复核页取消勾选，里面还留着书签，源目录原样健在
+        { id: '10', title: 'NiceG', children: [
+          { id: '103', title: 'd', url: 'https://d' },
+        ]},
+      ]},
+    ]},
+  ]
+
+  it('部分合并：只有真被删掉的源目录上"已删除"名单，留存的那个不上榜', () => {
+    useStore.setState({
+      plan: mergedPlan,
+      tree: mergedTree,
+      applyResult: {
+        ...applyResult,
+        mergeRootId: '20',
+        createdFolderIds: ['20', '21'],
+        // 只有 b_llm（'11'）真的被清空删除了，NiceG（'10'）没进这个列表
+        removedFolders: [{ id: '11', title: 'b_llm', path: ['书签栏'] }],
+      },
+      undoResult: null, undoAvailable: true, busy: null, error: null,
+    })
+    render(<ResultStep />)
+    // "已删除" 这行只报真被删掉的 b_llm，NiceG 不上这个名单
+    const deletionLine = screen.getByText(/已删除/)
+    expect(deletionLine.textContent).toContain('b_llm')
+    expect(deletionLine.textContent).not.toContain('NiceG')
+    // NiceG 同时作为结果树里活着的目录出现——它没被删，画面不能说反话
+    expect(screen.getByText('NiceG')).toBeTruthy()
+  })
+
+  it('全部源目录都没被删：整条"已删除"说明不渲染，不能说半句空话', () => {
+    useStore.setState({
+      plan: mergedPlan,
+      tree: mergedTree,
+      applyResult: {
+        ...applyResult,
+        mergeRootId: '20',
+        createdFolderIds: ['20', '21'],
+        // 两个源目录都还留着书签，removedFolders 里一个源根都没有
+        removedFolders: [],
+      },
+      undoResult: null, undoAvailable: true, busy: null, error: null,
+    })
+    render(<ResultStep />)
+    // 合并本身仍然发生了，"2 个文件夹已合并为「AI 学习」" 这句还在
+    expect(screen.getByText('2 个文件夹已合并为「AI 学习」')).toBeTruthy()
+    // 但没有任何源目录真的被删，"已删除" 这行不该出现
+    expect(screen.queryByText(/已删除/)).toBeNull()
+  })
+
+  it('撤销之后：合并说明与"已删除"名单一起消失，撤销结果区接管叙事', () => {
+    useStore.setState({
+      plan: mergedPlan,
+      tree: mergedTree,
+      applyResult: {
+        ...applyResult,
+        mergeRootId: '20',
+        createdFolderIds: ['20', '21'],
+        removedFolders: [
+          { id: '10', title: 'NiceG', path: ['书签栏'] },
+          { id: '11', title: 'b_llm', path: ['书签栏'] },
+        ],
+      },
+      undoResult: { status: 'completed', restored: 2, removedFolders: 2, skipped: [] },
+      undoAvailable: false, busy: null, error: null,
+    })
+    render(<ResultStep />)
+    expect(screen.queryByText(/个文件夹已合并为/)).toBeNull()
+    expect(screen.queryByText(/已删除/)).toBeNull()
+  })
+
+  it('两个源目录都真被删掉时，名单用中文顿号分隔，不是英文逗号', () => {
+    useStore.setState({
+      plan: mergedPlan,
+      tree: mergedTree,
+      applyResult: {
+        ...applyResult,
+        mergeRootId: '20',
+        createdFolderIds: ['20', '21'],
+        removedFolders: [
+          { id: '10', title: 'NiceG', path: ['书签栏'] },
+          { id: '11', title: 'b_llm', path: ['书签栏'] },
+        ],
+      },
+      undoResult: null, undoAvailable: true, busy: null, error: null,
+    })
+    render(<ResultStep />)
+    expect(screen.getByText('原文件夹已删除：NiceG、b_llm')).toBeTruthy()
+  })
+})

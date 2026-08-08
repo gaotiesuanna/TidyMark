@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { buildResultTree } from '@/core/resultTree'
-import { plural, t } from '@/i18n'
+import { plural, resolveLocale, t } from '@/i18n'
 import { ResultTree } from '../components/ResultTree'
 import { useStore } from '../store'
 
@@ -30,6 +30,12 @@ export function ResultStep() {
   // 两者不加区分，用户会读到「NiceG 是个空文件夹被清理了」这种误导性描述。
   const mergedSourceIds = new Set(plan?.mergeRoot?.sourceRootIds ?? [])
   const cleanedEmptyFolders = applyResult.removedFolders.filter((folder) => !mergedSourceIds.has(folder.id))
+  // 源目录只有真被删掉（子树被清空、进了 removedFolders）才能说"已删除"——
+  // 用户在复核页取消勾选，源目录里还留着书签，它就没资格上这份名单，
+  // 哪怕它在 sourceTitles 里。名单要报的是「实际发生了什么」，不是「打算合并谁」。
+  const removedMergeSources = applyResult.removedFolders.filter((folder) => mergedSourceIds.has(folder.id))
+  // 中文句子里用全角顿号，英文保留半角逗号——照抄句子里已有的标点习惯，不新造规则。
+  const mergeSourceSeparator = resolveLocale() === 'zh_CN' ? '、' : ', '
   // 侧栏本身是一个独立文档，关掉它就结束了本次整理；
   // 状态不必手动清，下次打开是全新的页面。
   const finish = (): void => window.close()
@@ -57,13 +63,28 @@ export function ResultStep() {
             </ul>
           </details>
         )}
-        {plan !== null && plan.mergeRoot !== null && applyResult.mergeRootId !== null && (
+        {/* 撤销已经把这些目录重建回来了，合并说明再讲"已合并/已删除"就是在骗用户——
+           撤销结果区（undoResult !== null）接管了叙事，这里整段让路，
+           与下面结果树标题按 undoResult 切换标题的做法是同一个道理。 */}
+        {undoResult === null && plan !== null && plan.mergeRoot !== null && applyResult.mergeRootId !== null && (
           <div className="mt-2 text-xs text-neutral-500">
-            {/* 个数取 sourceTitles.length，不用 scopeRootIds.length——后者是级联勾选的全集，会把子目录也算进去 */}
+            {/* 个数取 sourceTitles.length，不用 scopeRootIds.length——后者是级联勾选的全集，会把子目录也算进去。
+               这句说的是"这次合并涉及几个源目录"，是合并操作本身的规模，不是"删了几个"，
+               所以哪怕下面那行一个源目录都没删掉，这个数字也不用跟着变。 */}
             <p>{t('resultMergedInto', String(plan.mergeRoot.sourceTitles.length), plan.mergeRoot.title)}</p>
-            {/* 源目录去哪儿了不能语焉不详：上面清理空文件夹的统计里特意把它们摘掉了，
-               这里就必须点名说清楚——它们不是被留下了，是被删掉了。 */}
-            <p>{t('resultMergeSourcesRemoved', plan.mergeRoot.sourceTitles.join(', '))}</p>
+            {/* 源目录去哪儿了不能语焉不详，但也不能说错——名单只能取真被删掉的那些
+               （removedMergeSources，即 removedFolders 里属于源根的部分)。sourceTitles
+               是"打算合并谁"，用户在复核页取消勾选会让某个源目录留着书签、根本没被删，
+               直接把 sourceTitles 全量报成"已删除"就是结果树里明明还在的目录，说明区却说它没了。
+               一个没删的都没有时，这行连带不渲染——没有"已删除：（空）"这种半吊子说法。 */}
+            {removedMergeSources.length > 0 && (
+              <p>
+                {t(
+                  'resultMergeSourcesRemoved',
+                  removedMergeSources.map((folder) => folder.title).join(mergeSourceSeparator),
+                )}
+              </p>
+            )}
           </div>
         )}
         {applyResult.error !== null && (
