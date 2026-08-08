@@ -4,6 +4,7 @@ import {
   applyDesign,
   designFolders as designFoldersRaw,
   designTagFolders as designTagFoldersRaw,
+  nameMergedFolder,
   type FolderDesign,
   type DesignOptions,
 } from '@/llm/folders'
@@ -325,5 +326,45 @@ describe('designTagFolders', () => {
     )
     expect(result[0]!.primaryTopic).toBe('A')
     expect(result[1]!.primaryTopic).toBe('B')
+  })
+})
+
+describe('nameMergedFolder', () => {
+  const topics = [{ topic: '前端', count: 10 }, { topic: '大模型', count: 6 }]
+
+  it('返回模型给的名字', async () => {
+    const client = { complete: vi.fn().mockResolvedValue({ name: 'AI 与前端' }) }
+    const name = await nameMergedFolder(topics, ['NiceG', 'b_llm'], client, 'zh_CN')
+    expect(name).toBe('AI 与前端')
+  })
+
+  it('提示词里带上源目录名与主题', async () => {
+    const complete = vi.fn().mockResolvedValue({ name: 'X' })
+    await nameMergedFolder(topics, ['NiceG', 'b_llm'], { complete }, 'zh_CN')
+    const prompt = JSON.stringify(complete.mock.calls[0])
+    expect(prompt).toContain('NiceG')
+    expect(prompt).toContain('b_llm')
+    expect(prompt).toContain('前端')
+  })
+
+  it('请求失败返回 null', async () => {
+    const client = { complete: vi.fn().mockRejectedValue(new Error('boom')) }
+    expect(await nameMergedFolder(topics, ['a', 'b'], client, 'zh_CN')).toBeNull()
+  })
+
+  it('模型返回空名字时返回 null', async () => {
+    const client = { complete: vi.fn().mockResolvedValue({ name: '   ' }) }
+    expect(await nameMergedFolder(topics, ['a', 'b'], client, 'zh_CN')).toBeNull()
+  })
+
+  it('没有主题时不发请求', async () => {
+    const complete = vi.fn()
+    expect(await nameMergedFolder([], ['a', 'b'], { complete }, 'zh_CN')).toBeNull()
+    expect(complete).not.toHaveBeenCalled()
+  })
+
+  it('返回的名字去掉编号前缀与首尾空白', async () => {
+    const client = { complete: vi.fn().mockResolvedValue({ name: ' 01 AI 学习 ' }) }
+    expect(await nameMergedFolder(topics, ['a', 'b'], client, 'zh_CN')).toBe('AI 学习')
   })
 })

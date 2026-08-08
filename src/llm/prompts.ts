@@ -156,3 +156,30 @@ export function foldersPrompt(
     '6. Write folder names in English. Established technical names (React, RAG, MCP) stay as they are.',
   ]
 }
+
+/**
+ * 给若干个被合并的文件夹起一个统一的名字。
+ * 只出名字，不出结构——目录结构由 foldersPrompt 那一轮已经定好了。
+ */
+export function mergeNamePrompt(locale: Locale, sourceTitles: string[]): string[] {
+  if (locale === 'en') {
+    return [
+      'These bookmark folders are being merged into one new folder:',
+      sourceTitles.map((title) => `- ${title}`).join('\n'),
+      '',
+      'Their bookmarks fall into the topics listed below.',
+      'Give the new folder ONE short name (at most 12 characters) that covers them.',
+      'No numbering prefix. No quotes. No explanation.',
+      'Reply with JSON: {"name": "..."}',
+    ]
+  }
+  return [
+    '下面这几个书签文件夹正在被合并成一个新文件夹：',
+    sourceTitles.map((title) => `- ${title}`).join('\n'),
+    '',
+    '它们里面的书签分布在下列主题上。',
+    '请给这个新文件夹起一个能概括它们的短名字，不超过 12 个字。',
+    '不要编号前缀，不要引号，不要解释。',
+    '按 JSON 回复：{"name": "..."}',
+  ]
+}

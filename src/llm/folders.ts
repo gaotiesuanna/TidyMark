@@ -1,4 +1,4 @@
-import { normalizeName } from '@/core/map'
+import { normalizeName, stripNumberPrefix } from '@/core/map'
 import { groupFolderTitle, matchDomainGroup } from '@/core/domainGroups'
 import type { Locale } from '@/core/locale'
 import type { BookmarkItem, TagResult } from '@/core/types'
@@ -6,7 +6,7 @@ import { MAX_SIBLINGS } from '@/core/tree'
 import { NO_TOPIC } from './tags'
 import type { LlmClient } from './client'
 import { logDuplicateTopics, logFoldersDone, logFoldersFailed } from './logs'
-import { foldersPrompt } from './prompts'
+import { foldersPrompt, mergeNamePrompt } from './prompts'
 
 export interface TopicCount {
   topic: string
@@ -279,4 +279,44 @@ export async function designTagFolders(
   }
 
   return result
+}
+
+const NAME_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['name'],
+  properties: {
+    name: { type: 'string' },
+  },
+}
+
+/**
+ * 给合并出来的容器目录起名。一次调用，失败返回 null 由调用方兜底。
+ *
+ * 命名失败不该让整次分析白跑——名字在结构确认页还能改，目录结构才是贵的那部分。
+ */
+export async function nameMergedFolder(
+  topics: TopicCount[],
+  sourceTitles: string[],
+  client: LlmClient,
+  locale: Locale,
+  options: { onLog?: (message: string, level: 'info' | 'warn' | 'error') => void } = {},
+): Promise<string | null> {
+  if (topics.length === 0) return null
+  try {
+    const prompt = [
+      ...mergeNamePrompt(locale, sourceTitles),
+      '',
+      locale === 'zh_CN' ? '主题清单：' : 'Topic list:',
+      JSON.stringify(topics, null, 2),
+    ].join('\n')
+    const response = (await client.complete(prompt, NAME_SCHEMA)) as { name?: unknown }
+    const name = stripNumberPrefix(String(response.name ?? '').trim()).trim()
+    return name === '' ? null : name
+  } catch (error) {
+    // 只进开发者控制台，不必双语，与 designFolders 的失败兜底同一套形态。
+    console.error('[TidyMark] 合并目录命名失败：', error)
+    options.onLog?.(String(error), 'warn')
+    return null
+  }
 }
