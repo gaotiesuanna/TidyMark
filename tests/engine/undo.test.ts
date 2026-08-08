@@ -70,6 +70,39 @@ describe('undoLast 重建被删掉的文件夹', () => {
     expect(result.skipped.some((s) => s.id === '100')).toBe(true)
     expect(fake.structure()).not.toContain('杂项/A')
   })
+
+  it('级联勾选下清理空目录后撤销仍能完整复原', async () => {
+    // 回归测试：侧栏勾「书签栏」时 toggleChecked 会级联勾上它所有子目录，
+    // captureSnapshot 传入的 scopeRootIds 因此是 ['1', '10', '11']，而不是只有 ['1']。
+    // 若快照的 rootSet 判定直接拿 scopeRootIds 当集合（旧 bug），'10'、'11' 会被
+    // 一并当成范围根滤出 nodes，清理空目录删掉它们之后撤销就无法重建，
+    // 书签归位时 parentId 指向已经不存在的旧目录 id，最终整棵树对不上原状。
+    const fake = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: '前端', children: [
+            { id: '100', title: 'React', url: 'https://react.dev' },
+          ]},
+          { id: '11', title: '后端', children: [
+            { id: '101', title: 'Node', url: 'https://node.dev' },
+          ]},
+        ]},
+      ]},
+    ])
+    const ports: Ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    const before = fake.structure()
+    await saveSnapshot(ports, await captureSnapshot(ports, 'p1', ['1', '10', '11']))
+
+    // 模拟「清理空目录」：整理先把书签搬走，子目录变空后再被删掉
+    await fake.api.move('100', { parentId: '1' })
+    await fake.api.move('101', { parentId: '1' })
+    await fake.api.remove('10')
+    await fake.api.remove('11')
+
+    const result = await undoLast(ports, 'zh_CN')
+    expect(result.skipped).toEqual([])
+    expect(fake.structure()).toBe(before)
+  })
 })
 
 describe('undoLast', () => {
