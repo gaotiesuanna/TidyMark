@@ -1,5 +1,5 @@
 import { resolveLocale, t } from '@/i18n'
-import { buildCandidatesFromFolders } from '@/core/map'
+import { buildCandidatesFromFolders, stripNumberPrefix } from '@/core/map'
 import type { Locale } from '@/core/locale'
 import { buildPlan, type NewFolderSpec, type RenameFolderSpec } from '@/core/plan'
 import { findScopeRoots, scanTree } from '@/core/scan'
@@ -121,7 +121,9 @@ export async function handle(
               { onLog: (message, level) => log('tree', message, level) },
             )
             if (isCancelled()) return CANCELLED
-            const title = named ?? sourceTitles.join(' + ')
+            // 兜底名字要去掉源目录名上的编号：模型那条路径 nameMergedFolder 已经剥过，
+            // 这条不剥的话，对上一轮整理出的「01 前端」再整理会建出「NiceG + 01 前端」
+            const title = named ?? sourceTitles.map(stripNumberPrefix).join(' + ')
             if (named === null) log('tree', t('logMergeNameFailed', title), 'warn')
             else log('tree', t('logMergeNamed', title))
             mergeRoot = { parentId, title }

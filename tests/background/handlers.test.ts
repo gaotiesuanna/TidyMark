@@ -683,6 +683,17 @@ const mergeTree = [
       { id: '11', title: 'b_llm', children: [
         { id: '101', title: 'Claude', url: 'https://claude.ai' },
       ]},
+      // 上一轮整理留下的编号，用来盯住兜底名字有没有去掉编号前缀
+      { id: '13', title: '01 前端', children: [
+        { id: '103', title: 'Vite', url: 'https://vite.dev' },
+      ]},
+    ]},
+    // 「其他书签」也是永久目录：它和「书签栏」是两次独立勾选、互不包含，
+    // findScopeRoots 会原样返回两项，只有 hasPermanent 这道闸拦得住合并
+    { id: '2', title: '其他书签', children: [
+      { id: '20', title: '工具', children: [
+        { id: '102', title: 'Raycast', url: 'https://raycast.com' },
+      ]},
     ]},
   ]},
 ]
@@ -692,20 +703,21 @@ function mergeClient(nameResponse: () => Promise<{ name: string }>) {
   return vi.fn(async (prompt: string) => {
     // 命名那一轮的提示词由 mergeNamePrompt 生成，措辞以 src/llm/prompts.ts 为准
     if (prompt.includes('合并成一个新文件夹')) return nameResponse()
+    // 书签 id 从提示词自带的 payload 里读，不写死——各用例的范围不同，
+    // 写死会让漏答的书签变成 source: 'none'，掩盖掉真正要断言的东西
+    const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
     const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)]
     if (ids.length > 0) {
-      return { results: [
-        { bookmark_id: '100', target_category_id: ids[0]![1]!, confidence: 0.9, reason: 'r' },
-        { bookmark_id: '101', target_category_id: ids[0]![1]!, confidence: 0.9, reason: 'r' },
-      ]}
+      return { results: bookmarkIds.map((id) => (
+        { bookmark_id: id, target_category_id: ids[0]![1]!, confidence: 0.9, reason: 'r' }
+      ))}
     }
     if (prompt.includes('标签清单')) {
       return { folders: [{ title: '前端', topics: ['前端'], children: [] }] }
     }
-    return { results: [
-      { bookmark_id: '100', primary_topic: '前端', secondary_topic: null },
-      { bookmark_id: '101', primary_topic: '前端', secondary_topic: null },
-    ]}
+    return { results: bookmarkIds.map((id) => (
+      { bookmark_id: id, primary_topic: '前端', secondary_topic: null }
+    ))}
   })
 }
 
@@ -754,6 +766,23 @@ describe('analyze 合并模式', () => {
     expect((await analyzeMerge(['1', '10', '11'], true)).mergeRoot).toBeNull()
   })
 
+  // 上一条里 '10'、'11' 是 '1' 的后代，findScopeRoots 只会返回 '1' 一项，
+  // roots.length >= 2 自己就把结果定死了，hasPermanent 那半边条件根本没被问到。
+  // 「书签栏 + 其他书签」是互不包含的两个永久目录，只有这条能盯住那道闸。
+  it('勾中两个永久目录时不合并', async () => {
+    expect((await analyzeMerge(['1', '2'], true)).mergeRoot).toBeNull()
+  })
+
+  it('跨父目录合并时容器落在树序第一个根的父目录下', async () => {
+    const plan = await analyzeMerge(['20', '10'], true)
+    const create = plan.operations.find(
+      (o) => o.type === 'create_folder' && o.temporaryId === plan.mergeRoot!.temporaryId,
+    )
+    // 勾选顺序是「其他书签下的 20」在先，落点仍按书签树顺序取 '10' 的父目录
+    expect(create).toMatchObject({ parentId: '1', parentTemporaryId: null })
+    expect(plan.mergeRoot!.sourceRootIds).toEqual(['10', '20'])
+  })
+
   it('推翻重建关闭时不合并', async () => {
     expect((await analyzeMerge(['10', '11'], false)).mergeRoot).toBeNull()
   })
@@ -761,5 +790,12 @@ describe('analyze 合并模式', () => {
   it('命名失败时用源目录名拼接兜底', async () => {
     const plan = await analyzeMerge(['10', '11'], true, async () => { throw new Error('boom') })
     expect(plan.mergeRoot!.title).toBe('NiceG + b_llm')
+  })
+
+  // 反复整理同一批目录时源目录名上会积编号，兜底名字不去掉的话
+  // 会真建出一个叫「NiceG + 01 前端」的目录，下一轮再拼一层
+  it('兜底拼接前先去掉源目录名上的编号前缀', async () => {
+    const plan = await analyzeMerge(['10', '13'], true, async () => { throw new Error('boom') })
+    expect(plan.mergeRoot!.title).toBe('NiceG + 前端')
   })
 })
