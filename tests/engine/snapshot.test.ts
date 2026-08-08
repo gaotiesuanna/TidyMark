@@ -79,3 +79,32 @@ describe('快照存取', () => {
       .toContain(SNAPSHOT_KEY)
   })
 })
+
+describe('captureSnapshot 范围根判定', () => {
+  it('级联勾选下仍然记录范围内的子目录', async () => {
+    const { ports: p } = ports()
+    // UI 勾「书签栏」时 checkedIds 会级联成 { '1', '10' }
+    const snapshot = await captureSnapshot(p, 'plan-1', ['1', '10'])
+    expect(snapshot.nodes.map((n) => n.id).sort()).toEqual(['10', '100'])
+  })
+
+  it('记录非永久的范围根', async () => {
+    const { ports: p } = ports()
+    const snapshot = await captureSnapshot(p, 'plan-1', ['10'])
+    expect(snapshot.rootNodes).toEqual([
+      { id: '10', parentId: '1', index: 0, title: 'react' },
+    ])
+  })
+
+  it('排除 parentId 为 0 的永久目录', async () => {
+    const { ports: p } = ports()
+    const snapshot = await captureSnapshot(p, 'plan-1', ['1'])
+    expect(snapshot.rootNodes).toEqual([])
+  })
+
+  it('级联勾选下子目录不会被误当成范围根', async () => {
+    const { ports: p } = ports()
+    const snapshot = await captureSnapshot(p, 'plan-1', ['1', '10'])
+    expect(snapshot.rootNodes).toEqual([])
+  })
+})
