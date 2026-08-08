@@ -149,6 +149,8 @@
   "logTagsStart": { "message": "Extracting topic tags for $count$ bookmarks", "placeholders": { "count": { "content": "$1" } } },
   "logTreeStart": { "message": "Designing folders from the tags of $count$ bookmarks", "placeholders": { "count": { "content": "$1" } } },
   "logTreeDone": { "message": "Folder design complete: $new$ new folders created, $reused$ existing folders reused", "placeholders": { "new": { "content": "$1" }, "reused": { "content": "$2" } } },
+  "logMergeNamed": { "message": "Merged folder named \"$name$\"", "placeholders": { "name": { "content": "$1" } } },
+  "logMergeNameFailed": { "message": "Could not name the merged folder, using \"$name$\"", "placeholders": { "name": { "content": "$1" } } },
   "logPinnedSkip": { "message": "$count$ bookmarks grouped by domain, skipping AI classification", "placeholders": { "count": { "content": "$1" } } },
   "logClassifyStart": { "message": "Classifying $bookmarks$ bookmarks against $candidates$ candidate folders", "placeholders": { "bookmarks": { "content": "$1" }, "candidates": { "content": "$2" } } },
   "logClassifyFailed": { "message": "$count$ bookmarks failed to classify and were left in place. Reason: $reason$", "placeholders": { "count": { "content": "$1" }, "reason": { "content": "$2" } } },

@@ -670,3 +670,96 @@ describe('analyze 统一 GitHub 书签标题', () => {
     ])
   })
 })
+
+const mergeTree = [
+  { id: '0', title: '', children: [
+    { id: '1', title: '书签栏', children: [
+      { id: '10', title: 'NiceG', children: [
+        { id: '100', title: 'React 官网', url: 'https://react.dev' },
+        // 非推翻模式下候选目录只能来自范围内的非根目录：'10'、'11' 自己是范围根、
+        // 会被 buildCandidatesFromFolders 排除，没有它整个分析会以「没有目标目录」提前返回
+        { id: '12', title: '待归档', children: [] },
+      ]},
+      { id: '11', title: 'b_llm', children: [
+        { id: '101', title: 'Claude', url: 'https://claude.ai' },
+      ]},
+    ]},
+  ]},
+]
+
+/** 按提示词内容分流的 client：合并模式下要应付四轮不同的请求。 */
+function mergeClient(nameResponse: () => Promise<{ name: string }>) {
+  return vi.fn(async (prompt: string) => {
+    // 命名那一轮的提示词由 mergeNamePrompt 生成，措辞以 src/llm/prompts.ts 为准
+    if (prompt.includes('合并成一个新文件夹')) return nameResponse()
+    const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)]
+    if (ids.length > 0) {
+      return { results: [
+        { bookmark_id: '100', target_category_id: ids[0]![1]!, confidence: 0.9, reason: 'r' },
+        { bookmark_id: '101', target_category_id: ids[0]![1]!, confidence: 0.9, reason: 'r' },
+      ]}
+    }
+    if (prompt.includes('标签清单')) {
+      return { folders: [{ title: '前端', topics: ['前端'], children: [] }] }
+    }
+    return { results: [
+      { bookmark_id: '100', primary_topic: '前端', secondary_topic: null },
+      { bookmark_id: '101', primary_topic: '前端', secondary_topic: null },
+    ]}
+  })
+}
+
+async function analyzeMerge(
+  scopeRootIds: string[],
+  rebuildStructure: boolean,
+  nameResponse: () => Promise<{ name: string }> = async () => ({ name: 'AI 学习' }),
+): Promise<OrganizePlan> {
+  const fake = createFakeBookmarks(mergeTree)
+  const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+  await saveSettings(ports, {
+    llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+    rebuildStructure, removeEmptyFolders: false, domainGroups: [], rewriteGithubTitles: false,
+  })
+  const deps = { createClient: () => ({ complete: mergeClient(nameResponse) }), now: () => 1 }
+  const res = await handle(ports, { kind: 'analyze', scopeRootIds }, deps) as { plan: OrganizePlan }
+  return res.plan
+}
+
+describe('analyze 合并模式', () => {
+  it('勾选多个平级目录时新建合并根，名字来自模型', async () => {
+    const plan = await analyzeMerge(['10', '11'], true)
+    expect(plan.mergeRoot).toMatchObject({ title: 'AI 学习' })
+    const create = plan.operations.find(
+      (o) => o.type === 'create_folder' && o.temporaryId === plan.mergeRoot!.temporaryId,
+    )
+    expect(create).toMatchObject({ parentId: '1', parentTemporaryId: null, title: 'AI 学习' })
+  })
+
+  it('一级目录挂在合并根下，不再直接挂书签栏', async () => {
+    const plan = await analyzeMerge(['10', '11'], true)
+    const others = plan.operations.filter(
+      (o) => o.type === 'create_folder' && o.temporaryId !== plan.mergeRoot!.temporaryId,
+    )
+    expect(others.length).toBeGreaterThan(0)
+    for (const op of others) {
+      expect(op).toMatchObject({ parentId: null, parentTemporaryId: plan.mergeRoot!.temporaryId })
+    }
+  })
+
+  it('只勾选一个目录时不合并', async () => {
+    expect((await analyzeMerge(['10'], true)).mergeRoot).toBeNull()
+  })
+
+  it('勾中永久目录时不合并', async () => {
+    expect((await analyzeMerge(['1', '10', '11'], true)).mergeRoot).toBeNull()
+  })
+
+  it('推翻重建关闭时不合并', async () => {
+    expect((await analyzeMerge(['10', '11'], false)).mergeRoot).toBeNull()
+  })
+
+  it('命名失败时用源目录名拼接兜底', async () => {
+    const plan = await analyzeMerge(['10', '11'], true, async () => { throw new Error('boom') })
+    expect(plan.mergeRoot!.title).toBe('NiceG + b_llm')
+  })
+})

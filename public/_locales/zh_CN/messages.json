@@ -149,6 +149,8 @@
   "logTagsStart": { "message": "开始为 $count$ 个书签抽取主题标签", "placeholders": { "count": { "content": "$1" } } },
   "logTreeStart": { "message": "开始设计目录：$count$ 个书签的标签", "placeholders": { "count": { "content": "$1" } } },
   "logTreeDone": { "message": "目录设计完成：新建 $new$ 个目录，复用 $reused$ 个已有目录", "placeholders": { "new": { "content": "$1" }, "reused": { "content": "$2" } } },
+  "logMergeNamed": { "message": "合并目录命名为「$name$」", "placeholders": { "name": { "content": "$1" } } },
+  "logMergeNameFailed": { "message": "合并目录命名失败，使用「$name$」", "placeholders": { "name": { "content": "$1" } } },
   "logPinnedSkip": { "message": "$count$ 个书签按域名聚合，跳过 AI 分类", "placeholders": { "count": { "content": "$1" } } },
   "logClassifyStart": { "message": "开始分类：$bookmarks$ 个书签，$candidates$ 个候选目录", "placeholders": { "bookmarks": { "content": "$1" }, "candidates": { "content": "$2" } } },
   "logClassifyFailed": { "message": "$count$ 个书签分类失败，已保持原位。原因：$reason$", "placeholders": { "count": { "content": "$1" }, "reason": { "content": "$2" } } },

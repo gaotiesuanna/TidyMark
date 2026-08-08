@@ -2,17 +2,17 @@ import { resolveLocale, t } from '@/i18n'
 import { buildCandidatesFromFolders } from '@/core/map'
 import type { Locale } from '@/core/locale'
 import { buildPlan, type NewFolderSpec, type RenameFolderSpec } from '@/core/plan'
-import { scanTree } from '@/core/scan'
+import { findScopeRoots, scanTree } from '@/core/scan'
 import { planTitleRewrites } from '@/core/titles'
 import { buildCategoryTree } from '@/core/tree'
 import type { Ports } from '@/core/ports'
-import type { Classification, TagResult } from '@/core/types'
+import type { Classification, OrganizePlan, TagResult } from '@/core/types'
 import { applyPlan } from '@/engine/apply'
 import { loadSnapshot } from '@/engine/snapshot'
 import { undoLast } from '@/engine/undo'
 import { createLlmClient, type LlmClient, type LlmConfig } from '@/llm/client'
 import { classifyBookmarks } from '@/llm/classify'
-import { designTagFolders } from '@/llm/folders'
+import { collectTopics, designTagFolders, nameMergedFolder } from '@/llm/folders'
 import { extractTags, refineGroupTags } from '@/llm/tags'
 import { loadCache, loadSettings, saveCache, saveSettings } from '@/storage/settings'
 import { findBookmarksBar } from '@/core/import'
@@ -69,6 +69,9 @@ export async function handle(
         }
         const tree = await ports.bookmarks.getTree()
         const scan = scanTree(tree, request.scopeRootIds)
+        // findScopeRoots 按书签树顺序返回，确定性；
+        // 直接取 scopeRootIds[0] 拿到的是用户的点击顺序，先点子目录时甚至不是真正的根
+        const roots = findScopeRoots(tree, request.scopeRootIds)
 
         const client = createClient(settings.llm, locale)
         let candidates = buildCandidatesFromFolders(scan.folders, request.scopeRootIds)
@@ -76,10 +79,15 @@ export async function handle(
         let renameFolders: RenameFolderSpec[] = []
         let pinned: Classification[] = []
         let tags: TagResult[] = []
+        let planMergeRoot: NonNullable<OrganizePlan['mergeRoot']> | undefined
 
         if (settings.rebuildStructure) {
-          const rootId = request.scopeRootIds[0]
+          const rootId = roots[0]?.id
           if (rootId === undefined) return { ok: false, error: t('errNoScope') }
+          // 勾中「书签栏」这类永久目录表达的是「整理这里面」，不是「把这两个并起来」；
+          // 它们也删不掉、父节点是不可见的 '0'，排除后所有边界情况一并消失
+          const hasPermanent = roots.some((r) => (r.parentId ?? '0') === '0')
+          const merging = roots.length >= 2 && !hasPermanent
           log('tags', t('logTagsStart', String(scan.bookmarks.length)))
           tags = await extractTags(scan.bookmarks, client, locale, {
             onProgress: progress('tags'),
@@ -102,10 +110,35 @@ export async function handle(
             isCancelled,
           })
           if (isCancelled()) return CANCELLED
+          let mergeRoot: { parentId: string; title: string } | undefined
+          if (merging) {
+            const sourceTitles = roots.map((r) => r.title)
+            // 跨父目录（一个在书签栏、一个在其他书签）时落在树序第一个根的父目录下；
+            // 同父时它就是那个共同父目录，两种情况写法相同
+            const parentId = roots[0]!.parentId!
+            const named = await nameMergedFolder(
+              collectTopics(tags), sourceTitles, client, locale,
+              { onLog: (message, level) => log('tree', message, level) },
+            )
+            if (isCancelled()) return CANCELLED
+            const title = named ?? sourceTitles.join(' + ')
+            if (named === null) log('tree', t('logMergeNameFailed', title), 'warn')
+            else log('tree', t('logMergeNamed', title))
+            mergeRoot = { parentId, title }
+          }
           const tree_ = buildCategoryTree({
             tags, rootId, existingFolders: scan.folders,
             bookmarks: scan.bookmarks, domainGroups: settings.domainGroups, locale,
+            mergeRoot,
           })
+          if (mergeRoot !== undefined && tree_.mergeRootTemporaryId !== null) {
+            planMergeRoot = {
+              temporaryId: tree_.mergeRootTemporaryId,
+              title: mergeRoot.title,
+              sourceRootIds: roots.map((r) => r.id),
+              sourceTitles: roots.map((r) => r.title),
+            }
+          }
           candidates = tree_.candidates
           newFolders = tree_.newFolders
           renameFolders = tree_.renameFolders
@@ -188,6 +221,7 @@ export async function handle(
           warnings,
           tags,
           titleRewrites,
+          mergeRoot: planMergeRoot,
         })
         for (const warning of warnings) log('classify', warning, 'warn')
         log('classify', t('logAnalyzeDone', String(plan.rows.length)))
