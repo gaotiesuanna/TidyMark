@@ -94,6 +94,17 @@ export function applyStructureEdits(
   plan: OrganizePlan, edits: StructureEdits, locale: Locale,
 ): OrganizePlan {
   const removed = new Set(edits.removed)
+  // 合并根是容器不是分类，删掉它整棵树就无处可去
+  if (plan.mergeRoot !== null) removed.delete(plan.mergeRoot.temporaryId)
+
+  /** 合并根改名后的标题；用户清空输入时退回模型给的原名。 */
+  const mergeRootTitle =
+    plan.mergeRoot === null
+      ? null
+      : (edits.renames[plan.mergeRoot.temporaryId]?.trim() ?? '') === ''
+        ? plan.mergeRoot.title
+        : edits.renames[plan.mergeRoot.temporaryId]!.trim()
+
   const byId = new Map(plan.candidates.map((c) => [c.id, c]))
   const parentOf = buildParentMap(plan.candidates)
   const fallbackId = plan.candidates.find((c) => isFallback(c, locale))?.id ?? null
@@ -156,6 +167,9 @@ export function applyStructureEdits(
 
   const operations = plan.operations.flatMap((operation): BookmarkOperation[] => {
     if (operation.type === 'create_folder') {
+      if (operation.temporaryId === plan.mergeRoot?.temporaryId) {
+        return [{ ...operation, title: mergeRootTitle! }]
+      }
       if (removed.has(operation.temporaryId)) return []
       return [{ ...operation, title: pathById.get(operation.temporaryId)?.at(-1) ?? operation.title }]
     }
@@ -175,13 +189,18 @@ export function applyStructureEdits(
     }]
   })
 
+  const prefix = mergeRootTitle === null ? [] : [mergeRootTitle]
   const rows: PlanRow[] = plan.rows.flatMap((row) => {
     const target = retarget.get(row.bookmarkId) ?? null
     if (target === null) return []
-    return [{ ...row, toPath: pathById.get(target) ?? row.toPath }]
+    const path = pathById.get(target)
+    return [{ ...row, toPath: path === undefined ? row.toPath : [...prefix, ...path] }]
   })
 
-  const next: OrganizePlan = { ...plan, candidates, operations, rows }
+  const next: OrganizePlan = {
+    ...plan, candidates, operations, rows,
+    mergeRoot: plan.mergeRoot === null ? null : { ...plan.mergeRoot, title: mergeRootTitle! },
+  }
   return {
     ...next,
     summary: summarize(next, new Set(rows.map((r) => r.bookmarkId)), plan.summary.totalBookmarks),

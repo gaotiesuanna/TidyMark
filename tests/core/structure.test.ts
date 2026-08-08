@@ -158,3 +158,69 @@ describe('applyStructureEdits 删除', () => {
     expect(next.candidates.map((c) => c.id)).toEqual(plan.candidates.map((c) => c.id))
   })
 })
+
+/** 把 makePlan() 改造成合并模式：所有一级目录挂在新建的容器 tmp:0 下。 */
+function makeMergePlan(): OrganizePlan {
+  const plan = makePlan()
+  const mergeRoot = {
+    temporaryId: 'tmp:0', title: 'AI 学习',
+    sourceRootIds: ['8', '9'], sourceTitles: ['NiceG', 'b_llm'],
+  }
+  return {
+    ...plan,
+    mergeRoot,
+    operations: [
+      {
+        type: 'create_folder' as const,
+        temporaryId: 'tmp:0', parentId: '1', parentTemporaryId: null, title: 'AI 学习',
+      },
+      ...plan.operations.map((o) =>
+        o.type === 'create_folder' && o.parentId === '1'
+          ? { ...o, parentId: null, parentTemporaryId: 'tmp:0' }
+          : o,
+      ),
+    ],
+    rows: plan.rows.map((r) => ({ ...r, toPath: [mergeRoot.title, ...r.toPath] })),
+  }
+}
+
+function mergeRootTitle(plan: OrganizePlan): string | undefined {
+  const op = plan.operations.find((o) => o.type === 'create_folder' && o.temporaryId === 'tmp:0')
+  return op === undefined || op.type !== 'create_folder' ? undefined : op.title
+}
+
+describe('applyStructureEdits 合并根', () => {
+  it('用户改名写回 create_folder', () => {
+    const next = applyStructureEdits(
+      makeMergePlan(), { renames: { 'tmp:0': '大模型' }, removed: [] }, 'zh_CN',
+    )
+    expect(mergeRootTitle(next)).toBe('大模型')
+  })
+
+  it('rows 的 toPath 首段跟着改名', () => {
+    const next = applyStructureEdits(
+      makeMergePlan(), { renames: { 'tmp:0': '大模型' }, removed: [] }, 'zh_CN',
+    )
+    for (const row of next.rows) expect(row.toPath[0]).toBe('大模型')
+  })
+
+  it('改成空白时退回原名', () => {
+    const next = applyStructureEdits(
+      makeMergePlan(), { renames: { 'tmp:0': '   ' }, removed: [] }, 'zh_CN',
+    )
+    expect(mergeRootTitle(next)).toBe('AI 学习')
+    expect(next.rows[0]!.toPath[0]).toBe('AI 学习')
+  })
+
+  it('合并根不会被删除', () => {
+    const next = applyStructureEdits(
+      makeMergePlan(), { renames: {}, removed: ['tmp:0'] }, 'zh_CN',
+    )
+    expect(mergeRootTitle(next)).toBe('AI 学习')
+  })
+
+  it('非合并模式的 rows 不带前缀', () => {
+    const next = applyStructureEdits(makePlan(), EMPTY_EDITS, 'zh_CN')
+    expect(next.rows[0]!.toPath[0]).not.toBe('AI 学习')
+  })
+})
