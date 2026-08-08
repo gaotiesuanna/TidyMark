@@ -212,11 +212,18 @@ export function renumberPlan(
   const participates = (id: string, topLevel: boolean): boolean =>
     used.has(id) || (!newFolderIds.has(id) && (topLevel || hasNumberPrefix(currentTitle(id))))
 
-  /** 本轮没进候选的已有目录，接在设计好的目录后面。 */
+  /**
+   * 本轮没进候选的已有目录，接在设计好的目录后面。
+   *
+   * 合并模式例外：范围内的旧目录正是即将被清空删除的源目录子树，
+   * 给它们改名毫无意义，还会让 summary.renamedFolders 虚高。
+   */
   const strays = (matches: (folder: ScopeFolder) => boolean, topLevel: boolean): string[] =>
-    scopeFolders
-      .filter((f) => !candidateIds.has(f.id) && matches(f) && (topLevel || hasNumberPrefix(f.title)))
-      .map((f) => f.id)
+    plan.mergeRoot !== null
+      ? []
+      : scopeFolders
+          .filter((f) => !candidateIds.has(f.id) && matches(f) && (topLevel || hasNumberPrefix(f.title)))
+          .map((f) => f.id)
 
   const renumbered = new Map<string, string[]>()
   const topIds = [
@@ -275,7 +282,10 @@ export function renumberPlan(
     rows: plan.rows.map((row) => {
       const path = row.toPath.map(stripNumberPrefix)
       const numbered = renumbered.get(targetOf.get(row.bookmarkId) ?? '')
-      return { ...row, toPath: numbered ?? path }
+      if (numbered === undefined) return { ...row, toPath: path }
+      // renumbered 里是 candidate 的相对路径，不补前缀会把合并根冲掉
+      const prefix = plan.mergeRoot === null ? [] : [plan.mergeRoot.title]
+      return { ...row, toPath: [...prefix, ...numbered] }
     }),
   }
 }

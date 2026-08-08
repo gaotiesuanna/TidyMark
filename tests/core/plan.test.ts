@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildPlan, filterAccepted, renumberPlan, summarize, LOW_CONFIDENCE } from '@/core/plan'
-import type { BookmarkItem, BookmarkOperation, CategoryCandidate, Classification } from '@/core/types'
+import type { BookmarkItem, BookmarkOperation, CategoryCandidate, Classification, OrganizePlan } from '@/core/types'
+import { makePlan } from '../fakes/plan'
 
 const candidates: CategoryCandidate[] = [
   { id: '10', path: ['书签栏', 'react'] },
@@ -323,6 +324,69 @@ describe('renumberPlan 重排上一轮遗留的编号目录', () => {
     expect(titleOf(ops, 'f-finance')).toBeUndefined()
     expect(titleOf(ops, 'f-avatar')).toBeUndefined()
     expect(titleOf(ops, 'f-dify')).toBe('01 dify')
+  })
+})
+
+/** 把 makePlan() 改造成合并模式：所有一级目录挂在新建的容器 tmp:0 下。 */
+function makeMergePlan(): OrganizePlan {
+  const plan = makePlan()
+  const mergeRoot = {
+    temporaryId: 'tmp:0', title: 'AI 学习',
+    sourceRootIds: ['8', '9'], sourceTitles: ['NiceG', 'b_llm'],
+  }
+  return {
+    ...plan,
+    scopeRootIds: ['8', '9'],
+    mergeRoot,
+    operations: [
+      {
+        type: 'create_folder' as const,
+        temporaryId: 'tmp:0', parentId: '1', parentTemporaryId: null, title: 'AI 学习',
+      },
+      ...plan.operations.map((o) =>
+        o.type === 'create_folder' && o.parentId === '1'
+          ? { ...o, parentId: null, parentTemporaryId: 'tmp:0' }
+          : o,
+      ),
+    ],
+    rows: plan.rows.map((r) => ({ ...r, toPath: [mergeRoot.title, ...r.toPath] })),
+  }
+}
+
+describe('renumberPlan 合并模式', () => {
+  const all = (plan: OrganizePlan): Set<string> => new Set(plan.rows.map((r) => r.bookmarkId))
+
+  it('合并根不参与编号，标题原样保留', () => {
+    const plan = makeMergePlan()
+    const next = renumberPlan(plan, all(plan), [])
+    const create = next.operations.find(
+      (o) => o.type === 'create_folder' && o.temporaryId === 'tmp:0',
+    )
+    expect(create).toMatchObject({ title: 'AI 学习' })
+  })
+
+  it('rows 的 toPath 仍带合并根前缀', () => {
+    const plan = makeMergePlan()
+    const next = renumberPlan(plan, all(plan), [])
+    for (const row of next.rows) expect(row.toPath[0]).toBe('AI 学习')
+    expect(next.rows.find((r) => r.bookmarkId === 'r0')!.toPath).toHaveLength(3)
+  })
+
+  it('合并模式下不给范围内的遗留目录改名', () => {
+    const plan = makeMergePlan()
+    const scopeFolders = [
+      { id: '80', parentId: '8', title: '旧的子目录', depth: 1 },
+      { id: '90', parentId: '9', title: '01 另一个旧的', depth: 1 },
+    ]
+    const next = renumberPlan(plan, all(plan), scopeFolders)
+    expect(next.operations.filter((o) => o.type === 'rename_folder')).toEqual([])
+  })
+
+  it('非合并模式仍然给遗留目录改名', () => {
+    const plan = makePlan()
+    const scopeFolders = [{ id: '80', parentId: '1', title: '旧的子目录', depth: 1 }]
+    const next = renumberPlan(plan, all(plan), scopeFolders)
+    expect(next.operations.some((o) => o.type === 'rename_folder' && o.folderId === '80')).toBe(true)
   })
 })
 
