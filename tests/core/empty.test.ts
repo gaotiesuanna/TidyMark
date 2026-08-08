@@ -91,3 +91,26 @@ describe('findEmptyFolders 与级联勾选的范围', () => {
     expect(ids).toEqual(expect.arrayContaining(['10', '12']))
   })
 })
+
+describe('findEmptyFolders 可删除的范围根', () => {
+  it('范围根被列为可删且已空时会被删除', () => {
+    const ids = findEmptyFolders(tree, ['10', '11'], ['10', '11']).map((f) => f.id)
+    expect(ids).toContain('10')
+  })
+
+  it('含书签的范围根即使可删也不删', () => {
+    const ids = findEmptyFolders(tree, ['10', '11'], ['10', '11']).map((f) => f.id)
+    expect(ids).not.toContain('11')
+  })
+
+  it('不在可删名单里的范围根仍不删', () => {
+    const ids = findEmptyFolders(tree, ['10', '11'], ['11']).map((f) => f.id)
+    expect(ids).not.toContain('10')
+  })
+
+  it('不传第三个参数时行为不变', () => {
+    const ids = findEmptyFolders(tree, ['10', '11']).map((f) => f.id)
+    expect(ids).not.toContain('10')
+    expect(ids).not.toContain('11')
+  })
+})

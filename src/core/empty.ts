@@ -11,10 +11,17 @@ export interface EmptyFolder {
 /**
  * 找出范围内整个子树都不含书签的文件夹。
  * 返回顺序保证子目录在父目录之前，调用方按顺序删除即可。
- * 范围根本身不会被返回，同一个目录也不会返回两次。
+ * 范围根本身默认不会被返回，同一个目录也不会返回两次。
+ *
+ * removableRootIds 里的范围根例外：合并会有意清空源根，把空壳留下不是任何人想要的结果。
  */
-export function findEmptyFolders(tree: BookmarkNode[], scopeRootIds: string[]): EmptyFolder[] {
+export function findEmptyFolders(
+  tree: BookmarkNode[],
+  scopeRootIds: string[],
+  removableRootIds: string[] = [],
+): EmptyFolder[] {
   const empty: EmptyFolder[] = []
+  const removable = new Set(removableRootIds)
 
   // 返回子树里是否含有书签；后序遍历，子目录先于父目录入列
   function walk(node: BookmarkNode, path: string[], isRoot: boolean): boolean {
@@ -24,7 +31,9 @@ export function findEmptyFolders(tree: BookmarkNode[], scopeRootIds: string[]): 
     for (const child of node.children ?? []) {
       if (walk(child, childPath, false)) hasBookmark = true
     }
-    if (!hasBookmark && !isRoot) empty.push({ id: node.id, title: node.title, path })
+    if (!hasBookmark && (!isRoot || removable.has(node.id))) {
+      empty.push({ id: node.id, title: node.title, path })
+    }
     return hasBookmark
   }
 
