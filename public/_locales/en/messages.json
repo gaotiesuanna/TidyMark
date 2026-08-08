@@ -111,6 +111,8 @@
   "resultStatRenamed": { "message": "Titles normalized" },
   "resultStatSkipped": { "message": "Skipped" },
   "resultRemovedDetails": { "message": "Show removed empty folders" },
+  "resultMergedInto": { "message": "$count$ folders merged into \"$name$\"", "placeholders": { "count": { "content": "$1" }, "name": { "content": "$2" } } },
+  "resultMergeSourcesRemoved": { "message": "Original folders deleted: $names$", "placeholders": { "names": { "content": "$1" } } },
   "resultFailedAt": { "message": "Failed at step $step$: $error$", "placeholders": { "step": { "content": "$1" }, "error": { "content": "$2" } } },
   "resultFailedHint": { "message": "Everything already applied can be fully undone with the button below." },
   "resultSkippedItem": { "message": "Bookmark $id$: $reason$", "placeholders": { "id": { "content": "$1" }, "reason": { "content": "$2" } } },

@@ -111,6 +111,8 @@
   "resultStatRenamed": { "message": "统一书签标题" },
   "resultStatSkipped": { "message": "跳过" },
   "resultRemovedDetails": { "message": "查看被清理的空文件夹" },
+  "resultMergedInto": { "message": "$count$ 个文件夹已合并为「$name$」", "placeholders": { "count": { "content": "$1" }, "name": { "content": "$2" } } },
+  "resultMergeSourcesRemoved": { "message": "原文件夹已删除：$names$", "placeholders": { "names": { "content": "$1" } } },
   "resultFailedAt": { "message": "在第 $step$ 步失败：$error$", "placeholders": { "step": { "content": "$1" }, "error": { "content": "$2" } } },
   "resultFailedHint": { "message": "已执行的部分可以通过下方按钮完整撤销。" },
   "resultSkippedItem": { "message": "书签 $id$：$reason$", "placeholders": { "id": { "content": "$1" }, "reason": { "content": "$2" } } },

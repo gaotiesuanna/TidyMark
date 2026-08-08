@@ -12,12 +12,24 @@ export function ResultStep() {
     () =>
       plan === null || applyResult === null
         ? []
-        : buildResultTree(bookmarks, plan.scopeRootIds, applyResult.createdFolderIds),
+        : // 合并后源根已被删除，合并根又不在 scopeRootIds 里，不带上它结果树会是空的
+          buildResultTree(
+            bookmarks,
+            applyResult.mergeRootId === null
+              ? plan.scopeRootIds
+              : [...plan.scopeRootIds, applyResult.mergeRootId],
+            applyResult.createdFolderIds,
+          ),
     [bookmarks, plan, applyResult],
   )
   if (applyResult === null) return null
 
   const showTree = tree.length > 0
+  // 合并流程会把源根本身清空后删除，那些 id 混在 removedFolders 里，
+  // 但它们不是「清理空文件夹」的战果，是合并本身的必然结果——
+  // 两者不加区分，用户会读到「NiceG 是个空文件夹被清理了」这种误导性描述。
+  const mergedSourceIds = new Set(plan?.mergeRoot?.sourceRootIds ?? [])
+  const cleanedEmptyFolders = applyResult.removedFolders.filter((folder) => !mergedSourceIds.has(folder.id))
   // 侧栏本身是一个独立文档，关掉它就结束了本次整理；
   // 状态不必手动清，下次打开是全新的页面。
   const finish = (): void => window.close()
@@ -31,19 +43,28 @@ export function ResultStep() {
         <dl className="grid grid-cols-2 gap-y-1 text-xs">
           <dt className="text-neutral-500">{t('resultStatExecuted')}</dt><dd>{applyResult.executed}</dd>
           <dt className="text-neutral-500">{t('resultStatCreated')}</dt><dd>{applyResult.createdFolderIds.length}</dd>
-          <dt className="text-neutral-500">{t('resultStatRemoved')}</dt><dd>{applyResult.removedFolders.length}</dd>
+          <dt className="text-neutral-500">{t('resultStatRemoved')}</dt><dd>{cleanedEmptyFolders.length}</dd>
           <dt className="text-neutral-500">{t('resultStatRenamed')}</dt><dd>{applyResult.renamedBookmarkIds.length}</dd>
           <dt className="text-neutral-500">{t('resultStatSkipped')}</dt><dd>{applyResult.skipped.length}</dd>
         </dl>
-        {applyResult.removedFolders.length > 0 && (
+        {cleanedEmptyFolders.length > 0 && (
           <details className="mt-2 text-xs text-neutral-500">
             <summary className="cursor-pointer">{t('resultRemovedDetails')}</summary>
             <ul className="mt-1 space-y-0.5">
-              {applyResult.removedFolders.map((folder) => (
+              {cleanedEmptyFolders.map((folder) => (
                 <li key={folder.id}>{[...folder.path, folder.title].join(' / ')}</li>
               ))}
             </ul>
           </details>
+        )}
+        {plan !== null && plan.mergeRoot !== null && applyResult.mergeRootId !== null && (
+          <div className="mt-2 text-xs text-neutral-500">
+            {/* 个数取 sourceTitles.length，不用 scopeRootIds.length——后者是级联勾选的全集，会把子目录也算进去 */}
+            <p>{t('resultMergedInto', String(plan.mergeRoot.sourceTitles.length), plan.mergeRoot.title)}</p>
+            {/* 源目录去哪儿了不能语焉不详：上面清理空文件夹的统计里特意把它们摘掉了，
+               这里就必须点名说清楚——它们不是被留下了，是被删掉了。 */}
+            <p>{t('resultMergeSourcesRemoved', plan.mergeRoot.sourceTitles.join(', '))}</p>
+          </div>
         )}
         {applyResult.error !== null && (
           <p className="mt-2 rounded bg-red-50 p-2 text-xs text-red-700">

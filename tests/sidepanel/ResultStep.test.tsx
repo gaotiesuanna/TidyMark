@@ -111,3 +111,131 @@ describe('ResultStep 结束整理', () => {
     expect(screen.getByRole('button', { name: '结束整理' })).toBeTruthy()
   })
 })
+
+describe('ResultStep 合并结果', () => {
+  // 合并后源根 '10' / '11' 已被删除，合并出来的 '20' 不在 scopeRootIds 里
+  const mergedTree: BookmarkNode[] = [
+    { id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '20', title: 'AI 学习', children: [
+          { id: '21', title: '01 前端', children: [
+            { id: '100', title: 'a', url: 'https://a' },
+          ]},
+        ]},
+      ]},
+    ]},
+  ]
+
+  const mergedPlan: OrganizePlan = {
+    ...plan,
+    scopeRootIds: ['10', '11'],
+    mergeRoot: {
+      temporaryId: 'tmp:0', title: 'AI 学习',
+      sourceRootIds: ['10', '11'], sourceTitles: ['NiceG', 'b_llm'],
+    },
+  }
+
+  it('结果树包含新建的合并目录', () => {
+    useStore.setState({
+      plan: mergedPlan, tree: mergedTree,
+      applyResult: { ...applyResult, mergeRootId: '20', createdFolderIds: ['20', '21'] },
+      undoResult: null, undoAvailable: true, busy: null, error: null,
+    })
+    render(<ResultStep />)
+    expect(screen.getByText('AI 学习')).toBeTruthy()
+    expect(screen.getByText('01 前端')).toBeTruthy()
+  })
+
+  it('显示合并说明，个数取源目录数而不是级联勾选数', () => {
+    useStore.setState({
+      // scopeRootIds 故意比 sourceTitles 长，模拟级联勾选把子目录也算进去的情况
+      plan: { ...mergedPlan, scopeRootIds: ['10', '11', '12', '13'] },
+      tree: mergedTree,
+      applyResult: { ...applyResult, mergeRootId: '20', createdFolderIds: ['20', '21'] },
+      undoResult: null, undoAvailable: true, busy: null, error: null,
+    })
+    render(<ResultStep />)
+    expect(screen.getByText('2 个文件夹已合并为「AI 学习」')).toBeTruthy()
+  })
+
+  it('非合并模式不显示合并说明', () => {
+    render(<ResultStep />)   // beforeEach 注入的是非合并 plan
+    expect(screen.queryByText(/个文件夹已合并为/)).toBeNull()
+  })
+})
+
+describe('ResultStep 合并结果——清理统计不能把被合并的源目录算作空文件夹', () => {
+  // 源根 '10'/'11' 是合并流程本身删掉的，不是「清理空文件夹」清出来的；
+  // '40' 才是真正因为整理后变空而被清理掉的目录。
+  const mergedPlan: OrganizePlan = {
+    ...plan,
+    scopeRootIds: ['10', '11'],
+    mergeRoot: {
+      temporaryId: 'tmp:0', title: 'AI 学习',
+      sourceRootIds: ['10', '11'], sourceTitles: ['NiceG', 'b_llm'],
+    },
+  }
+  const mergedTree: BookmarkNode[] = [
+    { id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '20', title: 'AI 学习', children: [
+          { id: '21', title: '01 前端', children: [
+            { id: '100', title: 'a', url: 'https://a' },
+          ]},
+        ]},
+      ]},
+    ]},
+  ]
+
+  it('数量与展开列表只统计真正清空的目录，不含被合并走的源目录，且源目录名不会出现在清理列表里', () => {
+    useStore.setState({
+      plan: mergedPlan,
+      tree: mergedTree,
+      applyResult: {
+        ...applyResult,
+        mergeRootId: '20',
+        createdFolderIds: ['20', '21'],
+        removedFolders: [
+          { id: '10', title: 'NiceG', path: ['书签栏'] },
+          { id: '11', title: 'b_llm', path: ['书签栏'] },
+          { id: '40', title: '杂项', path: ['书签栏'] },
+        ],
+      },
+      undoResult: null, undoAvailable: true, busy: null, error: null,
+    })
+    render(<ResultStep />)
+
+    // 统计数字只算真正清空的那 1 个，不含 2 个被合并走的源根
+    expect(screen.getByText('清理空文件夹').nextElementSibling?.textContent).toBe('1')
+
+    // 展开列表里只有真正被清理的目录，源目录名不出现在这个标签下
+    const details = screen.getByText('查看被清理的空文件夹').closest('details')!
+    expect(within(details).getByText('书签栏 / 杂项')).toBeTruthy()
+    expect(within(details).queryByText(/NiceG/)).toBeNull()
+    expect(within(details).queryByText(/b_llm/)).toBeNull()
+
+    // 源目录去哪儿了不能语焉不详——合并说明里要点名，并明确写出「已删除」
+    expect(screen.getByText(/NiceG/)).toBeTruthy()
+    expect(screen.getByText(/b_llm/)).toBeTruthy()
+  })
+
+  it('清理数量为零时，行为与今天「什么都没清理」时一致——不新造一种空状态', () => {
+    useStore.setState({
+      plan: mergedPlan,
+      tree: mergedTree,
+      applyResult: {
+        ...applyResult,
+        mergeRootId: '20',
+        createdFolderIds: ['20', '21'],
+        removedFolders: [
+          { id: '10', title: 'NiceG', path: ['书签栏'] },
+          { id: '11', title: 'b_llm', path: ['书签栏'] },
+        ],
+      },
+      undoResult: null, undoAvailable: true, busy: null, error: null,
+    })
+    render(<ResultStep />)
+    expect(screen.getByText('清理空文件夹').nextElementSibling?.textContent).toBe('0')
+    expect(screen.queryByText('查看被清理的空文件夹')).toBeNull()
+  })
+})
