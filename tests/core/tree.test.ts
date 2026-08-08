@@ -438,10 +438,13 @@ describe('buildCategoryTree 合并模式', () => {
   })
 
   it('不复用源目录下的同名子目录', () => {
+    // rootId 与 existingFolders 里目录的 parentId 都设成和 merge.parentId 一样的 '1'：
+    // 去掉合并模式的旁路判断后，findChild(rootId, '前端') 会命中 '90'，
+    // 复用旧目录并产出一条 rename，从而让下面的断言暴露出来。
     const { newFolders, renameFolders } = buildTree({
       tags: tags([['1', '前端', null]]),
-      rootId: 'unused',
-      existingFolders: [folder('90', '前端', '9')],
+      rootId: '1',
+      existingFolders: [folder('90', '前端', '1')],
       mergeRoot: merge,
     })
     expect(newFolders.some((f) => base(f.title) === '前端')).toBe(true)
