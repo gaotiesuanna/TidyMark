@@ -325,3 +325,42 @@ describe('renumberPlan 重排上一轮遗留的编号目录', () => {
     expect(titleOf(ops, 'f-dify')).toBe('01 dify')
   })
 })
+
+describe('buildPlan 合并模式', () => {
+  const input = {
+    id: 'p', createdAt: 0, scopeRootIds: ['10', '11'], rebuildStructure: true,
+    items: [{
+      id: 'b1', title: 'React', url: 'https://react.dev',
+      parentId: '10', index: 0, currentPath: ['NiceG'],
+    }],
+    candidates: [{ id: 'tmp:2', path: ['01 前端'] }],
+    classifications: [{
+      bookmarkId: 'b1', targetCategoryId: 'tmp:2', confidence: 1, reason: 'r', source: 'llm' as const,
+    }],
+    newFolders: [
+      { temporaryId: 'tmp:1', parentId: '1', parentTemporaryId: null, title: 'AI 学习' },
+      { temporaryId: 'tmp:2', parentId: null, parentTemporaryId: 'tmp:1', title: '01 前端' },
+    ],
+  }
+
+  const mergeRoot = {
+    temporaryId: 'tmp:1', title: 'AI 学习',
+    sourceRootIds: ['10', '11'], sourceTitles: ['NiceG', 'b_llm'],
+  }
+
+  it('rows 的 toPath 前置合并根名字', () => {
+    const plan = buildPlan({ ...input, mergeRoot })
+    expect(plan.rows[0]!.toPath).toEqual(['AI 学习', '01 前端'])
+  })
+
+  it('plan.mergeRoot 被透传', () => {
+    const plan = buildPlan({ ...input, mergeRoot })
+    expect(plan.mergeRoot).toEqual(mergeRoot)
+  })
+
+  it('非合并模式 toPath 不变、mergeRoot 为 null', () => {
+    const plan = buildPlan(input)
+    expect(plan.rows[0]!.toPath).toEqual(['01 前端'])
+    expect(plan.mergeRoot).toBeNull()
+  })
+})

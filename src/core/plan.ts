@@ -34,6 +34,8 @@ export interface BuildPlanInput {
   renameFolders?: RenameFolderSpec[]
   warnings?: string[]
   tags?: TagResult[]
+  /** 合并模式：所有新目录挂在这个本批新建的容器目录下。 */
+  mergeRoot?: NonNullable<OrganizePlan['mergeRoot']>
   /** GitHub 标题统一，与移动无关，由设置开关决定是否传入。 */
   titleRewrites?: TitleRewrite[]
 }
@@ -68,6 +70,9 @@ export function buildPlan(input: BuildPlanInput): OrganizePlan {
   const moveOps: BookmarkOperation[] = []
   const rows: PlanRow[] = []
 
+  // 合并把书签移出了它原来的顶层目录，只显示范围根内的相对路径看不出东西去了哪
+  const prefix = input.mergeRoot === undefined ? [] : [input.mergeRoot.title]
+
   for (const item of input.items) {
     const classification = byId.get(item.id)
     if (!classification?.targetCategoryId) continue
@@ -92,7 +97,7 @@ export function buildPlan(input: BuildPlanInput): OrganizePlan {
       title: item.title,
       url: item.url,
       fromPath: item.currentPath,
-      toPath: target.path,
+      toPath: [...prefix, ...target.path],
       confidence: classification.confidence,
       reason: classification.reason,
     })
@@ -109,6 +114,7 @@ export function buildPlan(input: BuildPlanInput): OrganizePlan {
     rows,
     warnings: input.warnings ?? [],
     tags: input.tags ?? [],
+    mergeRoot: input.mergeRoot ?? null,
     summary: {
       totalBookmarks: 0, movedBookmarks: 0, unchangedBookmarks: 0,
       createdFolders: 0, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 0,

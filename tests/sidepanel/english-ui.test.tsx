@@ -123,6 +123,7 @@ describe('英文界面渲染守卫：五个步骤组件', () => {
       summary: { totalBookmarks: 2, movedBookmarks: 2, unchangedBookmarks: 0, createdFolders: 1, renamedFolders: 1, renamedBookmarks: 1, lowConfidenceItems: 1 },
       warnings: [],
       tags: [],
+      mergeRoot: null,
     }
     useStore.setState({
       plan, accepted: new Set(['100', '101']), busy: null, error: null, scan: null,
@@ -146,6 +147,7 @@ describe('英文界面渲染守卫：五个步骤组件', () => {
       summary: { totalBookmarks: 1, movedBookmarks: 1, unchangedBookmarks: 0, createdFolders: 1, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 0 },
       warnings: [],
       tags: [],
+      mergeRoot: null,
     }
     const applyResult: ApplyResult = {
       status: 'completed', executed: 2,

@@ -15,6 +15,7 @@ const plan: OrganizePlan = {
   summary: { totalBookmarks: 2, movedBookmarks: 2, unchangedBookmarks: 0, createdFolders: 0, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 1 },
   warnings: [],
   tags: [],
+  mergeRoot: null,
 }
 
 beforeEach(() => {

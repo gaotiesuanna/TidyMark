@@ -48,7 +48,7 @@ export function makePlan(): OrganizePlan {
   ]
   return {
     id: 'p', createdAt: 0, scopeRootIds: ['1'], rebuildStructure: true,
-    candidates, operations, rows, warnings: [], tags,
+    candidates, operations, rows, warnings: [], tags, mergeRoot: null,
     summary: {
       totalBookmarks: 5, movedBookmarks: 5, unchangedBookmarks: 0,
       createdFolders: 5, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 0,

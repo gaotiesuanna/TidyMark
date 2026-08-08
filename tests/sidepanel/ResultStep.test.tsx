@@ -23,6 +23,7 @@ const plan: OrganizePlan = {
   summary: { totalBookmarks: 2, movedBookmarks: 2, unchangedBookmarks: 0, createdFolders: 2, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 0 },
   warnings: [],
   tags: [],
+  mergeRoot: null,
 }
 
 const applyResult: ApplyResult = {

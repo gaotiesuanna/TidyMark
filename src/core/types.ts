@@ -98,6 +98,21 @@ export interface OrganizePlan {
   warnings: string[]
   /** 推翻模式下抽取的主题标签。删除聚合目录时据此决定书签回落到哪个主题目录。 */
   tags: TagResult[]
+  /** 合并模式下新建的容器目录；非合并模式为 null。 */
+  mergeRoot: {
+    temporaryId: string
+    title: string
+    /**
+     * 被合并的源根 id。
+     *
+     * 不能用 scopeRootIds 代替——那里装的是级联勾选的全集，
+     * 勾一个父目录会连它所有子目录一起进去，既数不对个数，
+     * 也不能当作「允许被删除的根」的名单。
+     */
+    sourceRootIds: string[]
+    /** 源根的标题，用于命名兜底与结果页文案。 */
+    sourceTitles: string[]
+  } | null
 }
 
 /** 推翻模式下由模型抽取的主题标签，供 core/tree.ts 聚合成目录树。 */
