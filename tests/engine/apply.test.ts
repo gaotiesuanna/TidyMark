@@ -368,3 +368,93 @@ describe('applyPlan 统一书签标题', () => {
     expect(await titleOf(ports, '101')).toBe('用户新起的名字')
   })
 })
+
+const mergeInitial = [
+  { id: '0', title: '', children: [
+    { id: '1', title: '书签栏', children: [
+      { id: '10', title: 'NiceG', children: [
+        { id: '100', title: 'React 文档', url: 'https://react.dev' },
+      ]},
+      { id: '11', title: 'b_llm', children: [
+        { id: '101', title: 'Claude', url: 'https://claude.ai' },
+      ]},
+    ]},
+  ]},
+]
+
+const mergeItems: BookmarkItem[] = [
+  { id: '100', title: 'React 文档', url: 'https://react.dev', parentId: '10', index: 0, currentPath: ['NiceG'] },
+  { id: '101', title: 'Claude', url: 'https://claude.ai', parentId: '11', index: 0, currentPath: ['b_llm'] },
+]
+
+/**
+ * 合并模式的 plan：tmp:0 是容器目录，tmp:1 / tmp:2 挂在它下面。
+ * titles 按传入顺序落地，用来构造「编号与实际位置不符」的场景。
+ */
+function makeMergePlan(titles: [string, string] = ['01 前端', '02 大模型']) {
+  return buildPlan({
+    id: 'pm', createdAt: 1, scopeRootIds: ['10', '11'], rebuildStructure: true,
+    items: mergeItems,
+    candidates: [{ id: 'tmp:1', path: [titles[0]] }, { id: 'tmp:2', path: [titles[1]] }],
+    classifications: [
+      { bookmarkId: '100', targetCategoryId: 'tmp:1', confidence: 1, reason: 'r', source: 'llm' },
+      { bookmarkId: '101', targetCategoryId: 'tmp:2', confidence: 1, reason: 'r', source: 'llm' },
+    ],
+    newFolders: [
+      { temporaryId: 'tmp:0', parentId: '1', parentTemporaryId: null, title: 'AI 学习' },
+      { temporaryId: 'tmp:1', parentId: null, parentTemporaryId: 'tmp:0', title: titles[0] },
+      { temporaryId: 'tmp:2', parentId: null, parentTemporaryId: 'tmp:0', title: titles[1] },
+    ],
+    mergeRoot: {
+      temporaryId: 'tmp:0', title: 'AI 学习',
+      sourceRootIds: ['10', '11'], sourceTitles: ['NiceG', 'b_llm'],
+    },
+  })
+}
+
+function mergeSetup() {
+  const fake = createFakeBookmarks(mergeInitial)
+  const storage = createFakeStorage()
+  return { fake, storage, ports: { bookmarks: fake.api, storage } }
+}
+
+describe('applyPlan 合并模式', () => {
+  const both = (): Set<string> => new Set(['100', '101'])
+
+  it('回填合并根的真实 id，书签落进容器目录', async () => {
+    const { ports, fake } = mergeSetup()
+    const result = await applyPlan(ports, makeMergePlan(), both(), 'zh_CN')
+    expect(result.status).toBe('completed')
+    expect(result.mergeRootId).not.toBeNull()
+    expect(result.createdFolderIds).toContain(result.mergeRootId!)
+    expect(fake.structure()).toContain('书签栏/AI 学习/01 前端/React 文档')
+    expect(fake.structure()).toContain('书签栏/AI 学习/02 大模型/Claude')
+  })
+
+  it('非合并模式 mergeRootId 为 null', async () => {
+    const { ports } = setup()
+    const result = await applyPlan(ports, makePlan(), new Set(['100', '101']), 'zh_CN')
+    expect(result.mergeRootId).toBeNull()
+  })
+
+  it('被清空的源根会被删除，即使关闭了清理空目录', async () => {
+    const { ports, fake } = mergeSetup()
+    await applyPlan(ports, makeMergePlan(), both(), 'zh_CN', { removeEmptyFolders: false })
+    expect(fake.structure()).not.toContain('NiceG')
+    expect(fake.structure()).not.toContain('b_llm')
+  })
+
+  it('仍有书签的源根不删', async () => {
+    const { ports, fake } = mergeSetup()
+    await applyPlan(ports, makeMergePlan(), new Set(['101']), 'zh_CN')
+    expect(fake.structure()).toContain('书签栏/NiceG/React 文档')
+    expect(fake.structure()).not.toContain('b_llm')
+  })
+
+  it('排序覆盖合并根内的编号目录', async () => {
+    // 建出来的顺序是 02 在前、01 在后，排序必须把它们换过来
+    const { ports } = mergeSetup()
+    const result = await applyPlan(ports, makeMergePlan(['02 大模型', '01 前端']), both(), 'zh_CN')
+    expect(result.sortedFolders).toBeGreaterThan(0)
+  })
+})

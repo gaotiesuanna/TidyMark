@@ -34,12 +34,17 @@ export async function undoLast(
   // 标题是我们改的，撤销时要还原；其余书签的标题一律不碰
   const renamedByUs = new Set(snapshot.renamedBookmarkIds ?? [])
 
-  // 第 0 趟：重建被「清理空文件夹」删掉的目录。
+  // 第 0 趟：重建被删掉的目录。
+  // 范围根先于其余节点——它们不在 nodes 里，但 nodes 的 parentId 可能指向它们。
+  // 合并会有意删掉源根，先把根建出来并登记进 idMap，其下每个节点归位时
+  // mapId(parentId) 才能落到新根上；否则整棵子树都会撞上一个已死的 id。
   // 快照里文件夹按先序排列，父目录必定排在子目录之前，因此顺序创建即可；
   // 重建出来的目录是新 id，用 idMap 把快照里的旧 id 映射过去。
+  // rootNodes 用 ?? [] 兜底：字段是后加的，旧版本写进 storage 的快照里没有它，
+  // 直接遍历会抛 TypeError，撤销整个失败，用户的书签树就卡在整理后的样子回不来了。
   const idMap = new Map<string, string>()
   const mapId = (id: string): string => idMap.get(id) ?? id
-  for (const node of snapshot.nodes) {
+  for (const node of [...(snapshot.rootNodes ?? []), ...snapshot.nodes]) {
     if (node.url !== undefined) continue
     if ((await ports.bookmarks.get(node.id)) !== null) continue
     try {

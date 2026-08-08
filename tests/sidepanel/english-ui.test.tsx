@@ -154,7 +154,7 @@ describe('英文界面渲染守卫：五个步骤组件', () => {
       skipped: [{ bookmarkId: '999', reason: 'bookmark is gone' }],
       createdFolderIds: ['20'],
       removedFolders: [{ id: '30', title: 'Misc', path: ['Bookmarks bar'] }],
-      sortedFolders: 0, renamedBookmarkIds: [],
+      sortedFolders: 0, renamedBookmarkIds: [], mergeRootId: null,
       failedAt: null, error: null,
     }
     const resultTree: BookmarkNode[] = [

@@ -29,7 +29,7 @@ const plan: OrganizePlan = {
 const applyResult: ApplyResult = {
   status: 'completed', executed: 4, skipped: [], createdFolderIds: ['20', '21'],
   removedFolders: [{ id: '30', title: '杂项', path: ['书签栏'] }],
-  sortedFolders: 0, renamedBookmarkIds: [],
+  sortedFolders: 0, renamedBookmarkIds: [], mergeRootId: null,
   failedAt: null, error: null,
 }
 

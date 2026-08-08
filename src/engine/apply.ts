@@ -28,6 +28,8 @@ export interface ApplyResult {
   sortedFolders: number
   /** 被统一了标题的书签 id。 */
   renamedBookmarkIds: string[]
+  /** 合并模式下新建的容器目录的真实 id；非合并模式为 null。 */
+  mergeRootId: string | null
   failedAt: number | null
   error: string | null
 }
@@ -41,16 +43,19 @@ export interface ApplyOptions {
 /**
  * 清理范围内的空目录。子目录先于父目录删除，单个失败不影响其余。
  * 必须在所有移动执行完之后调用——判空依据的是移动后的真实书签树。
+ *
+ * removableRootIds 里的范围根允许连自身一起删——合并把源根搬空了，留个空壳没人想要。
  */
 async function removeEmpty(
   ports: Ports,
   scopeRootIds: string[],
   skipped: SkipRecord[],
   locale: Locale,
+  removableRootIds: string[] = [],
 ): Promise<EmptyFolder[]> {
   const tree = await ports.bookmarks.getTree()
   const removed: EmptyFolder[] = []
-  for (const folder of findEmptyFolders(tree, scopeRootIds)) {
+  for (const folder of findEmptyFolders(tree, scopeRootIds, removableRootIds)) {
     try {
       await ports.bookmarks.remove(folder.id)
       removed.push(folder)
@@ -102,6 +107,7 @@ export async function applyPlan(
   const tempToReal = new Map<string, string>()
   const createdFolderIds: string[] = []
   const renamedBookmarkIds: string[] = []
+  let mergeRootId: string | null = null
   const skipped: SkipRecord[] = []
   let executed = 0
 
@@ -122,6 +128,8 @@ export async function applyPlan(
         const created = await ports.bookmarks.create({ parentId, title: operation.title })
         tempToReal.set(operation.temporaryId, created.id)
         createdFolderIds.push(created.id)
+        // 容器目录的真实 id 只有这里知道，收尾的清理与排序都要靠它才能进到合并根内部
+        if (operation.temporaryId === plan.mergeRoot?.temporaryId) mergeRootId = created.id
       } else if (operation.type === 'move_bookmark') {
         const existing = await ports.bookmarks.get(operation.bookmarkId)
         if (existing === null) {
@@ -154,27 +162,34 @@ export async function applyPlan(
         removedFolders: [],
         sortedFolders: 0,
         renamedBookmarkIds,
+        mergeRootId,
         failedAt: i,
         error: String(error),
       }
     }
   }
 
+  // 合并根不在 scopeRootIds 里，不带上它，它内部的空目录清不掉、编号目录也排不了序
+  const effectiveRootIds = mergeRootId === null ? plan.scopeRootIds : [...plan.scopeRootIds, mergeRootId]
+  // 合并把源根有意清空，留下空壳不是任何人想要的结果，不受「清理空目录」开关约束。
+  // 名单取 sourceRootIds 而不是 scopeRootIds——后者是级联勾选的全集。
+  const removableRootIds = mergeRootId === null ? [] : (plan.mergeRoot?.sourceRootIds ?? [])
+
   // 只有整批操作都成功才清理——中途失败时结构还没落定，删目录只会添乱
   const removedFolders =
-    options.removeEmptyFolders === true
-      ? await removeEmpty(ports, plan.scopeRootIds, skipped, locale)
+    options.removeEmptyFolders === true || mergeRootId !== null
+      ? await removeEmpty(ports, effectiveRootIds, skipped, locale, removableRootIds)
       : []
 
   // 非推翻模式不产生编号，也就没有需要排序的目录，不该动用户自己的排列
   const sortedFolders = plan.rebuildStructure
-    ? await sortFolders(ports, plan.scopeRootIds, skipped, locale)
+    ? await sortFolders(ports, effectiveRootIds, skipped, locale)
     : 0
 
   await saveSnapshot(ports, { ...snapshot, createdFolderIds, renamedBookmarkIds })
   await ports.storage.remove(PROGRESS_KEY)
   return {
     status: 'completed', executed, skipped, createdFolderIds, removedFolders, sortedFolders,
-    renamedBookmarkIds, failedAt: null, error: null,
+    renamedBookmarkIds, mergeRootId, failedAt: null, error: null,
   }
 }

@@ -260,3 +260,40 @@ describe('undoLast', () => {
     expect(fake.structure()).toBe(before)
   })
 })
+
+describe('undoLast 重建被删的范围根', () => {
+  it('源根被删后能重建，整棵子树回到原位', async () => {
+    const { ports, fake } = setup()
+    const before = fake.structure()
+    await saveSnapshot(ports, await captureSnapshot(ports, 'p1', ['10', '11']))
+    // 模拟合并：书签搬进新建的容器目录，两个源根被清理掉
+    const merged = await fake.api.create({ parentId: '1', title: 'AI 学习' })
+    for (const id of ['100', '101', '102']) await fake.api.move(id, { parentId: merged.id })
+    await fake.api.remove('10')
+    await fake.api.remove('11')
+
+    const result = await undoLast(ports, 'zh_CN')
+    expect(result.skipped).toEqual([])
+    await fake.api.remove(merged.id)
+    expect(fake.structure()).toEqual(before)
+  })
+
+  it('范围根未被删时不移动它', async () => {
+    const { ports, fake } = setup()
+    await saveSnapshot(ports, await captureSnapshot(ports, 'p1', ['10', '11']))
+    // Chrome 语义下同 parent 内向后移动以移除前的下标计算，index: 1 对首位元素是空操作，
+    // 必须传 2 才真的把 '10' 挪到 '11' 后面，否则这条用例什么都没验证
+    await fake.api.move('10', { parentId: '1', index: 2 })
+    await undoLast(ports, 'zh_CN')
+    expect((await fake.api.get('10'))!.index).toBe(1)
+  })
+
+  it('旧快照没有 rootNodes 时不报错', async () => {
+    const { ports } = setup()
+    const snapshot = await captureSnapshot(ports, 'p1', ['1'])
+    const legacy = { ...snapshot }
+    delete (legacy as Partial<typeof snapshot>).rootNodes
+    await saveSnapshot(ports, legacy as typeof snapshot)
+    expect((await undoLast(ports, 'zh_CN')).status).toBe('completed')
+  })
+})
