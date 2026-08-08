@@ -78,6 +78,7 @@
   "structureIntroOne": { "message": "AI 设计了 $folders$ 个一级目录，将容纳 $bookmarks$ 个书签。", "placeholders": { "folders": { "content": "$1" }, "bookmarks": { "content": "$2" } } },
   "structureIntroOther": { "message": "AI 设计了 $folders$ 个一级目录，将容纳 $bookmarks$ 个书签。", "placeholders": { "folders": { "content": "$1" }, "bookmarks": { "content": "$2" } } },
   "structureHint": { "message": "可以改名或删掉不想要的目录，确认后再查看逐条移动清单。编号会自动重排。" },
+  "structureMergeLabel": { "message": "合并到" },
   "structureIncoming": { "message": "$count$ 条将移入", "placeholders": { "count": { "content": "$1" } } },
   "structureDelete": { "message": "删除目录 $name$", "placeholders": { "name": { "content": "$1" } } },
   "structureFallback": { "message": "删掉一级目录，里面的书签会落到「其他」；删掉子目录，书签留在它的上级目录。" },

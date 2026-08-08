@@ -78,6 +78,7 @@
   "structureIntroOne": { "message": "The AI designed $folders$ top-level folder to hold $bookmarks$ bookmarks.", "placeholders": { "folders": { "content": "$1" }, "bookmarks": { "content": "$2" } } },
   "structureIntroOther": { "message": "The AI designed $folders$ top-level folders to hold $bookmarks$ bookmarks.", "placeholders": { "folders": { "content": "$1" }, "bookmarks": { "content": "$2" } } },
   "structureHint": { "message": "Rename or delete any folder you do not want, then continue to the move list. Numbering is reassigned automatically." },
+  "structureMergeLabel": { "message": "Merge into" },
   "structureIncoming": { "message": "$count$ incoming", "placeholders": { "count": { "content": "$1" } } },
   "structureDelete": { "message": "Delete folder $name$", "placeholders": { "name": { "content": "$1" } } },
   "structureFallback": { "message": "Delete a top-level folder and its bookmarks fall back to \"Other\"; delete a subfolder and they stay in its parent." },

@@ -67,3 +67,40 @@ describe('StructureStep', () => {
     expect(useStore.getState().step).toBe('preferences')
   })
 })
+
+describe('StructureStep 合并根', () => {
+  const withMergeRoot = () => ({
+    ...makePlan(),
+    mergeRoot: {
+      temporaryId: 'tmp:0', title: 'AI 学习',
+      sourceRootIds: ['10', '11'], sourceTitles: ['NiceG', 'b_llm'],
+    },
+  })
+
+  it('显示合并到输入框，预填模型给的名字', () => {
+    useStore.setState({ plan: withMergeRoot(), structureEdits: EMPTY_EDITS, step: 'structure' })
+    render(<StructureStep />)
+    expect(screen.getByDisplayValue('AI 学习')).toBeTruthy()
+  })
+
+  it('改名写入 structureEdits，key 是合并根的 temporaryId', async () => {
+    useStore.setState({ plan: withMergeRoot(), structureEdits: EMPTY_EDITS, step: 'structure' })
+    render(<StructureStep />)
+    const input = screen.getByDisplayValue('AI 学习')
+    await userEvent.clear(input)
+    await userEvent.type(input, '大模型')
+    expect(useStore.getState().structureEdits.renames['tmp:0']).toBe('大模型')
+  })
+
+  it('该输入框没有删除按钮', () => {
+    useStore.setState({ plan: withMergeRoot(), structureEdits: EMPTY_EDITS, step: 'structure' })
+    render(<StructureStep />)
+    expect(screen.queryByRole('button', { name: '删除目录 AI 学习' })).toBeNull()
+  })
+
+  it('非合并模式不显示该输入框', () => {
+    useStore.setState({ plan: makePlan(), structureEdits: EMPTY_EDITS, step: 'structure' })
+    render(<StructureStep />)
+    expect(screen.queryByText('合并到')).toBeNull()
+  })
+})

@@ -21,6 +21,18 @@ export function StructureStep() {
         {t('structureHint')}
       </p>
 
+      {/* 合并根是容器不是分类，不进下面那份两层列表；它不可删除，也不带计数 */}
+      {plan.mergeRoot !== null && (
+        <label className="flex items-center gap-2 rounded border border-neutral-300 bg-neutral-50 p-2 text-xs">
+          <span className="shrink-0 text-neutral-500">{t('structureMergeLabel')}</span>
+          <input
+            className="min-w-0 flex-1 rounded border px-2 py-1"
+            value={structureEdits.renames[plan.mergeRoot.temporaryId] ?? plan.mergeRoot.title}
+            onChange={(e) => renameNode(plan.mergeRoot!.temporaryId, e.target.value)}
+          />
+        </label>
+      )}
+
       <ul className="space-y-1">
         {nodes.map((node, index) => {
           const prefix = String(index + 1).padStart(2, '0')
