@@ -262,8 +262,26 @@ describe('undoLast', () => {
 })
 
 describe('undoLast 重建被删的范围根', () => {
-  it('源根被删后能重建，整棵子树回到原位', async () => {
-    const { ports, fake } = setup()
+  it('源根被删后能重建，整棵子树与兄弟次序都回到原位', async () => {
+    // 两个源根之间、前后都夹着不属于本次整理范围的兄弟节点。
+    // 重建只能把目录追加到父目录末尾，若之后没人把它们挪回去，
+    // 书签栏就会变成 [外链 A, 外链 B, 外链 C, react, 杂项]——内容没丢，但用户的排列被撤销悄悄改了。
+    const fake = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '200', title: '外链 A', url: 'https://a.example' },
+          { id: '10', title: 'react', children: [] },
+          { id: '201', title: '外链 B', url: 'https://b.example' },
+          { id: '11', title: '杂项', children: [
+            { id: '100', title: 'A', url: 'https://a.dev' },
+            { id: '101', title: 'B', url: 'https://b.dev' },
+            { id: '102', title: 'C', url: 'https://c.dev' },
+          ]},
+          { id: '202', title: '外链 C', url: 'https://c.example' },
+        ]},
+      ]},
+    ])
+    const ports: Ports = { bookmarks: fake.api, storage: createFakeStorage() }
     const before = fake.structure()
     await saveSnapshot(ports, await captureSnapshot(ports, 'p1', ['10', '11']))
     // 模拟合并：书签搬进新建的容器目录，两个源根被清理掉
