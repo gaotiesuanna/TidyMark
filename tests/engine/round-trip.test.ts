@@ -189,3 +189,74 @@ describe('Apply → Undo 往返一致性', () => {
     expect((await fake.api.get('122'))!.parentId).toBe('12')
   })
 })
+
+// '12' 未分类收藏排在两个合并源根之后（index 2），且不在合并范围内。
+// 这一点是关键：撤销要把被删掉的源根 10、11 重建回「书签栏」，如果只管重建、
+// 不管把它们放回原来的兄弟位置（Task 8 修的那个坑），create() 会把它们追加到
+// 父目录末尾——此时合并容器已被撤销顺手删掉，末尾就只剩「未分类收藏」，
+// 于是重建出的 10、11 会被排到它后面，形成 12/10/11，跟原始的 10/11/12 不同。
+// 若源根是父目录下仅有的两个子节点（Task 8 那次的写法），追加到末尾和放回原位
+// 结果一样，测试测不出问题；这里特意加了这个无关同级目录，让顺序错了就必然露馅。
+const mergeSourceTree: TreeSpec[] = [
+  { id: '0', title: '', children: [
+    { id: '1', title: '书签栏', children: [
+      { id: '10', title: 'NiceG', children: [
+        { id: '100', title: 'React 官网', url: 'https://react.dev' },
+        { id: '101', title: '某篇论文', url: 'https://arxiv.org/abs/2301.1' },
+      ]},
+      { id: '11', title: 'b_llm', children: [
+        { id: '110', title: 'Claude', url: 'https://claude.ai' },
+      ]},
+      { id: '12', title: '未分类收藏', children: [
+        { id: '120', title: '随手存的', url: 'https://example.com/x' },
+      ]},
+    ]},
+  ]},
+]
+
+describe('合并的完整往返', () => {
+  it('两个目录合并后再撤销，树结构与初始完全一致（含兄弟顺序）', async () => {
+    const fake = createFakeBookmarks(mergeSourceTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    const before = fake.structure()
+
+    const scan = scanTree(await fake.api.getTree(), ['10', '11'])
+    const plan = buildPlan({
+      id: 'rtm', createdAt: 1, scopeRootIds: ['10', '11'], rebuildStructure: true,
+      items: scan.bookmarks,
+      candidates: [{ id: 'tmp:1', path: ['01 前端'] }, { id: 'tmp:2', path: ['02 大模型'] }],
+      classifications: scan.bookmarks.map((b) => ({
+        bookmarkId: b.id,
+        targetCategoryId: b.id === '110' ? 'tmp:2' : 'tmp:1',
+        confidence: 0.9, reason: '测试用', source: 'llm' as const,
+      })),
+      newFolders: [
+        { temporaryId: 'tmp:0', parentId: '1', parentTemporaryId: null, title: 'AI 学习' },
+        { temporaryId: 'tmp:1', parentId: null, parentTemporaryId: 'tmp:0', title: '01 前端' },
+        { temporaryId: 'tmp:2', parentId: null, parentTemporaryId: 'tmp:0', title: '02 大模型' },
+      ],
+      mergeRoot: {
+        temporaryId: 'tmp:0', title: 'AI 学习',
+        sourceRootIds: ['10', '11'], sourceTitles: ['NiceG', 'b_llm'],
+      },
+    })
+
+    const applyResult = await applyPlan(
+      ports, plan, new Set(plan.rows.map((r) => r.bookmarkId)), 'zh_CN',
+    )
+    expect(applyResult.status).toBe('completed')
+    expect(applyResult.mergeRootId).not.toBeNull()
+    // 源目录被清空后删除，三个书签全落进合并出来的目录；范围外的兄弟目录不受影响
+    expect(fake.structure()).not.toContain('NiceG')
+    expect(fake.structure()).not.toContain('b_llm')
+    expect(fake.structure()).toContain('书签栏/AI 学习/01 前端/React 官网')
+    expect(fake.structure()).toContain('书签栏/AI 学习/02 大模型/Claude')
+    expect(fake.structure()).toContain('书签栏/未分类收藏/随手存的')
+
+    const undoResult = await undoLast(ports, 'zh_CN')
+    expect(undoResult.skipped).toEqual([])
+    // 连兄弟顺序都要一致：这一句同时验证了源根被重建、书签各自归位、
+    // 合并目录被删干净，并且重建出的源根落回了原来的位置而不是被甩到末尾
+    expect(fake.structure()).toEqual(before)
+  })
+})
