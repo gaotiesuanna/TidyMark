@@ -2,6 +2,8 @@
 
 Reorganize your Chrome bookmarks with AI — every change is previewed, confirmed, and undoable.
 
+**[▸ Install from the Chrome Web Store](https://chromewebstore.google.com/detail/tidymark/hlmicephladojlmomimpngjaaaflapma)**
+
 TidyMark reorganizes your **native Chrome bookmarks**, not some separate system. When it's
 done, your bookmarks bar is still your bookmarks bar, and sync across your devices works
 exactly as before.
@@ -51,10 +53,13 @@ Full policy: [Privacy Policy / 隐私权政策](https://gist.github.com/gaotiesu
 
 ## Build from source
 
+The Web Store listing above is the easy path. Build it yourself if you want to read the code
+you're running, or hack on it:
+
 ```bash
 npm install
 npm run build     # type-check, then build to dist/
-npm test          # 595 tests across 46 files
+npm test          # 708 tests across 49 files
 npm run dev       # dev server with HMR
 ```
 
