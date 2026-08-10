@@ -4,6 +4,8 @@ Reorganize your Chrome bookmarks with AI — every change is previewed, confirme
 
 **[▸ Install from the Chrome Web Store](https://chromewebstore.google.com/detail/tidymark/hlmicephladojlmomimpngjaaaflapma)**
 
+English | [简体中文](README.zh-CN.md)
+
 TidyMark reorganizes your **native Chrome bookmarks**, not some separate system. When it's
 done, your bookmarks bar is still your bookmarks bar, and sync across your devices works
 exactly as before.
