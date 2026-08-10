@@ -20,6 +20,8 @@ export interface ExistingFolder {
 
 export interface BuildTreeInput {
   tags: TagResult[]
+  /** 同一层目录数上限。省略时用 MAX_SIBLINGS。 */
+  maxTopFolders?: number
   /** 新目录挂载的范围根文件夹 id。 */
   rootId: string
   /**
@@ -75,6 +77,7 @@ function domainGroupOrder(key: string): number {
 }
 
 export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
+  const maxSiblings = input.maxTopFolders ?? MAX_SIBLINGS
   if (input.tags.length === 0) {
     return { candidates: [], newFolders: [], renameFolders: [], pinned: [], mergeRootTemporaryId: null }
   }
@@ -143,13 +146,13 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
     }
     const children = [...byTopic.values()]
       .sort((a, b) => b.bookmarkIds.length - a.bookmarkIds.length)
-      .slice(0, MAX_SIBLINGS)
+      .slice(0, maxSiblings)
     const placed = new Set(children.flatMap((c) => c.bookmarkIds))
     domainSections.push({
       title: preferredName(groupTitleByKey.get(key)!),
       domainGroup: key,
       children,
-      // primaryTopic 归一化后为空、或因超过 MAX_SIBLINGS 阈值未获得子目录的书签，
+      // primaryTopic 归一化后为空、或因超过同层上限未获得子目录的书签，
       // 不建子目录，直接平铺在组根下
       ownBookmarkIds: bucket.map((t) => t.bookmarkId).filter((id) => !placed.has(id)),
     })
@@ -174,7 +177,7 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
 
   const ranked = [...groups.values()]
     .sort((a, b) => b.count - a.count)
-    .slice(0, MAX_SIBLINGS - 1) // 留一个位置给「其他」
+    .slice(0, maxSiblings - 1) // 留一个位置给「其他」
 
   const hasFallback = ranked.some((g) => normalizeName(g.title) === normalizeName(FALLBACK_TITLE[locale]))
   const orderedTopics = hasFallback
@@ -186,7 +189,7 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
     domainGroup: null,
     children: [...group.children.values()]
       .sort((a, b) => b.count - a.count)
-      .slice(0, MAX_SIBLINGS)
+      .slice(0, maxSiblings)
       .map((c) => ({ title: c.title, bookmarkIds: [] })),
     ownBookmarkIds: [],
   }))

@@ -84,6 +84,26 @@ describe('buildCategoryTree', () => {
     expect(topLevel.length).toBe(MAX_SIBLINGS)
   })
 
+  it('maxTopFolders 覆盖默认上限', () => {
+    // 10 个各 1 条书签、互不相同的主题；上限设 5 时主题目录取前 4 个
+    // （留一个位置给兜底的「其他」），加上兜底目录本身，顶层恰好 5 个
+    const spec = Array.from({ length: 10 }, (_, i) => [
+      String(i), `主题${i}`, null,
+    ] as [string, string, null])
+    const { newFolders } = buildTree({
+      tags: tags(spec), rootId, existingFolders: [], maxTopFolders: 5,
+    })
+    expect(newFolders.filter((f) => f.parentTemporaryId === null)).toHaveLength(5)
+  })
+
+  it('不传 maxTopFolders 时上限仍是 MAX_SIBLINGS', () => {
+    const spec = Array.from({ length: MAX_SIBLINGS + 4 }, (_, i) => [
+      String(i), `主题${i}`, null,
+    ] as [string, string, null])
+    const { newFolders } = buildTree({ tags: tags(spec), rootId, existingFolders: [] })
+    expect(newFolders.filter((f) => f.parentTemporaryId === null)).toHaveLength(MAX_SIBLINGS)
+  })
+
   it('一级目录挂在指定的范围根下', () => {
     const many = Array.from({ length: 6 }, (_, i) => [String(i), '前端', null] as [string, string, null])
     const { newFolders } = buildTree({ tags: tags(many), rootId, existingFolders: [] })
