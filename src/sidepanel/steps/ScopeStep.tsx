@@ -23,38 +23,43 @@ export function ScopeStep() {
   }
 
   return (
-    <div className="space-y-3">
-      <p className="text-xs leading-relaxed text-neutral-500">{t('scopeIntro')}</p>
-      <p className="text-xs font-medium leading-relaxed text-neutral-600">{t('scopeSafety')}</p>
+    // 操作区不能放进这个 space-y-3 里：它的 `margin-bottom: 0` 优先级高于 -mb-4，会把下面那条负外边距吃掉。
+    <div>
+      <div className="space-y-3">
+        <p className="text-xs leading-relaxed text-neutral-500">{t('scopeIntro')}</p>
+        <p className="text-xs font-medium leading-relaxed text-neutral-600">{t('scopeSafety')}</p>
 
-      <div className="flex gap-1 text-xs">
-        <button
-          className="rounded border px-2 py-1 hover:bg-neutral-50"
-          onClick={() => setExpanded(new Set(collectAllFolderIds(tree)))}
-        >
-          {t('scopeExpandAll')}
-        </button>
-        <button
-          className="rounded border px-2 py-1 hover:bg-neutral-50"
-          onClick={() => setExpanded(new Set())}
-        >
-          {t('scopeCollapseAll')}
-        </button>
-      </div>
+        <div className="flex gap-1 text-xs">
+          <button
+            className="rounded border px-2 py-1 hover:bg-neutral-50"
+            onClick={() => setExpanded(new Set(collectAllFolderIds(tree)))}
+          >
+            {t('scopeExpandAll')}
+          </button>
+          <button
+            className="rounded border px-2 py-1 hover:bg-neutral-50"
+            onClick={() => setExpanded(new Set())}
+          >
+            {t('scopeCollapseAll')}
+          </button>
+        </div>
 
-      <div className="rounded border">
-        <BookmarkTree
-          nodes={tree}
-          checkedIds={checkedIds}
-          onToggle={toggle}
-          expandedIds={expandedIds}
-          onToggleExpand={toggleExpand}
-        />
+        <div className="rounded border">
+          <BookmarkTree
+            nodes={tree}
+            checkedIds={checkedIds}
+            onToggle={toggle}
+            expandedIds={expandedIds}
+            onToggleExpand={toggleExpand}
+          />
+        </div>
       </div>
       {/* 操作区钉在底部：书签上千条时目录树很长，扫描按钮不该被推到要滚半天才看得见的地方。
-          负的左右外边距抵掉 <main> 的 p-4，让顶边线和白底铺满整宽——否则树滚到下面会从两侧透出来；
-          负的下外边距让它贴住窗口底边，pb-4 把内边距补回来。 */}
-      <div className="sticky bottom-0 -mx-4 -mb-4 space-y-3 border-t border-neutral-200 bg-white px-4 pb-4 pt-3">
+          负的左右外边距抵掉 <main> 的 p-4，让顶边线和白底铺满整宽——否则树滚到下面会从两侧透出来。
+          底部同理：<main> 底下那 16px 内边距也在滚动区里，吸底位置得跟着往下挪 16px（-bottom-4）才盖得住，
+          否则目录树会从这条缝里滚过去露出来；-mb-4 则是把这 16px 从文档流里减回去，
+          免得滚到最底时操作区反被顶起来、底边又露出一条白缝。pb-4 把视觉内边距补回来。 */}
+      <div className="sticky -bottom-4 -mx-4 -mb-4 mt-3 space-y-3 border-t border-neutral-200 bg-white px-4 pb-4 pt-3">
         <button
           className="w-full cursor-pointer rounded-md bg-neutral-800 py-2 text-sm font-medium text-white transition-colors duration-150 hover:enabled:bg-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
           disabled={checkedIds.size === 0 || busy !== null}
