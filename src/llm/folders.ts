@@ -97,6 +97,8 @@ export interface DesignOptions {
   oneLevel?: boolean
   /** 只出一层时，把父目录名告诉模型，避免它把组名再当分类依据。 */
   parentTitle?: string
+  /** 同一层目录数上限。省略时用 MAX_SIBLINGS。 */
+  maxTopFolders?: number
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => void
   /** 每摊设计开始前检查一次，返回 true 就跳过剩余摊子。 */
   isCancelled?: () => boolean
@@ -104,9 +106,10 @@ export interface DesignOptions {
 
 function buildDesignPrompt(topics: TopicCount[], options: DesignOptions, locale: Locale): string {
   const total = topics.reduce((sum, t) => sum + t.count, 0)
+  const max = options.maxTopFolders ?? MAX_SIBLINGS
   // tree.ts 建树时会再留一个位置给「其他」，非 oneLevel 时的上限要和它对齐，否则模型给满
-  // MAX_SIBLINGS 个时最小的那个会被建树阶段静默丢弃
-  const maxSiblings = options.oneLevel === true ? MAX_SIBLINGS : MAX_SIBLINGS - 1
+  // 上限时最小的那个会被建树阶段静默丢弃
+  const maxSiblings = options.oneLevel === true ? max : max - 1
 
   return [
     ...foldersPrompt(locale, {
@@ -148,9 +151,10 @@ export async function designFolders(
       throw new Error(locale === 'zh_CN' ? '模型返回的 folders 不是数组' : "The model's folders field is not an array")
     }
 
-    // 非 oneLevel 时留一个位置给 tree.ts 建树时补的「其他」，避免第 MAX_SIBLINGS 个目录
+    // 非 oneLevel 时留一个位置给 tree.ts 建树时补的「其他」，避免第 max 个目录
     // 在这里放行、却在建树阶段被静默截掉
-    const limit = options.oneLevel === true ? MAX_SIBLINGS : MAX_SIBLINGS - 1
+    const max = options.maxTopFolders ?? MAX_SIBLINGS
+    const limit = options.oneLevel === true ? max : max - 1
     const folders: FolderDesign['folders'] = []
     const mapping = new Map<string, string[]>()
     // 标签归一化后 → 声明过它的目录标题集合，用于检测提示词第 5 条要求的
@@ -185,7 +189,7 @@ export async function designFolders(
           for (const topic of child.topics ?? []) setMapping(topic, folder.title, [folder.title])
         }
       }
-      const kept = children.slice(0, MAX_SIBLINGS)
+      const kept = children.slice(0, max)
       for (const child of kept) {
         for (const topic of child.topics ?? []) {
           setMapping(topic, `${folder.title}/${child.title}`, [folder.title, child.title])

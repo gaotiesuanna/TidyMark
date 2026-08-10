@@ -143,6 +143,23 @@ describe('designFolders', () => {
     expect(result!.mapping.has(`标签${MAX_SIBLINGS + 1}`)).toBe(false)
   })
 
+  it('maxTopFolders 覆盖截断上限，非 oneLevel 时仍给「其他」留位', async () => {
+    const many = Array.from({ length: 9 }, (_, i) => ({
+      title: `目录${i}`, topics: [`标签${i}`], children: [],
+    }))
+    const complete = vi.fn().mockResolvedValue({ folders: many })
+    const result = await designFolders(topics, { complete }, { maxTopFolders: 5 })
+    expect(result!.folders).toHaveLength(4)
+  })
+
+  // 上限只写进 slice 不写进提示词的话，模型仍会按 12 个来设计，
+  // 多出来的目录在这里被静默截掉，等于白花了 token
+  it('maxTopFolders 写进提示词文本', async () => {
+    const complete = vi.fn().mockResolvedValue({ folders: [] })
+    await designFolders(topics, { complete }, { maxTopFolders: 5 })
+    expect(complete.mock.calls[0]![0]).toContain('一级目录不超过 4 个')
+  })
+
   it('folders 不是数组时返回 null，不抛错', async () => {
     const complete = vi.fn().mockResolvedValue({ folders: { oops: true } })
     await expect(designFolders(topics, { complete })).resolves.toBeNull()
