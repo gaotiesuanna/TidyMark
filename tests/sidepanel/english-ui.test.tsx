@@ -14,6 +14,7 @@ import { ResultStep } from '@/sidepanel/steps/ResultStep'
 import { ExportPanel } from '@/sidepanel/components/ExportPanel'
 import { ImportPanel } from '@/sidepanel/components/ImportPanel'
 import { ProgressPanel } from '@/sidepanel/components/ProgressPanel'
+import { SettingsPanel } from '@/sidepanel/components/SettingsPanel'
 import { useStore } from '@/sidepanel/store'
 import { EMPTY_EDITS } from '@/core/structure'
 import { DEFAULT_SETTINGS } from '@/storage/settings'
@@ -72,7 +73,7 @@ const tree: BookmarkNode[] = [
   ]},
 ]
 
-describe('英文界面渲染守卫：五个步骤组件', () => {
+describe('英文界面渲染守卫：步骤组件', () => {
   it('ScopeStep', () => {
     useStore.setState({
       tree, checkedIds: new Set(['10']), busy: null, error: null,
@@ -272,6 +273,27 @@ describe('英文界面渲染守卫：五个步骤组件', () => {
     })
     const { container } = render(<ResultStep />)
     assertNoChinese(container, 'ResultStep（合并撤销之后）')
+  })
+})
+
+describe('英文界面渲染守卫：设置页', () => {
+  it('SettingsPanel', () => {
+    useStore.setState({
+      settingsOpen: true,
+      settings: { ...DEFAULT_SETTINGS, rebuildStructure: true },
+    })
+    const { container } = render(<SettingsPanel />)
+    assertNoChinese(container, 'SettingsPanel')
+  })
+
+  // 禁用态的说明文字与启用态不是同一批节点，两种都要过一遍
+  it('SettingsPanel 推翻重建关闭时', () => {
+    useStore.setState({
+      settingsOpen: true,
+      settings: { ...DEFAULT_SETTINGS, rebuildStructure: false },
+    })
+    const { container } = render(<SettingsPanel />)
+    assertNoChinese(container, 'SettingsPanel')
   })
 })
 

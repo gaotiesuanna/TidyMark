@@ -266,8 +266,8 @@ export const useStore = create<State>((set, get) => ({
   },
 
   async setSettings(settings) {
-    await send({ kind: 'save_settings', settings })
     set({ settings })
+    await send({ kind: 'save_settings', settings })
   },
 
   async analyze() {
