@@ -1,6 +1,7 @@
 import type { Ports } from '@/core/ports'
 import type { Locale } from '@/core/locale'
 import type { Classification } from '@/core/types'
+import { MAX_SIBLINGS } from '@/core/tree'
 import type { LlmConfig } from '@/llm/client'
 
 export const SETTINGS_KEY = 'tidymark:settings'
@@ -15,6 +16,10 @@ export interface Settings {
   domainGroups: string[]
   /** 把 GitHub 书签的标题统一成 `repo (owner)`。 */
   rewriteGithubTitles: boolean
+  /** 一级目录数上限。只在推翻重建模式下生效。 */
+  maxTopFolders: number
+  /** 允许模型分出二级目录。关掉时强制单层。只在推翻重建模式下生效。 */
+  allowSubfolders: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -23,6 +28,8 @@ export const DEFAULT_SETTINGS: Settings = {
   removeEmptyFolders: true,
   domainGroups: [],
   rewriteGithubTitles: false,
+  maxTopFolders: MAX_SIBLINGS,
+  allowSubfolders: true,
 }
 
 /**
@@ -47,6 +54,8 @@ export async function loadSettings(ports: Ports): Promise<Settings> {
     removeEmptyFolders: stored?.removeEmptyFolders ?? DEFAULT_SETTINGS.removeEmptyFolders,
     domainGroups: stored?.domainGroups ?? DEFAULT_SETTINGS.domainGroups,
     rewriteGithubTitles: stored?.rewriteGithubTitles ?? DEFAULT_SETTINGS.rewriteGithubTitles,
+    maxTopFolders: stored?.maxTopFolders ?? DEFAULT_SETTINGS.maxTopFolders,
+    allowSubfolders: stored?.allowSubfolders ?? DEFAULT_SETTINGS.allowSubfolders,
   }
 }
 

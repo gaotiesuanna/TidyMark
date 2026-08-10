@@ -53,6 +53,7 @@ describe('handle', () => {
       }),
     })
     await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
       removeEmptyFolders: false,
@@ -70,6 +71,7 @@ describe('handle', () => {
       }),
     })
     await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
       removeEmptyFolders: false,
@@ -93,6 +95,7 @@ describe('handle', () => {
       }),
     })
     await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
       removeEmptyFolders: true,
@@ -122,6 +125,7 @@ describe('handle', () => {
   it('设置可保存并读回', async () => {
     const { ports, deps } = setup()
     const settings: Settings = {
+      ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-d', model: 'deepseek-chat' },
       rebuildStructure: true,
       removeEmptyFolders: false,
@@ -148,6 +152,7 @@ describe('handle', () => {
     const fake = createFakeBookmarks(tree)
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: true,
       removeEmptyFolders: false,
@@ -176,6 +181,7 @@ describe('handle', () => {
     ])
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: true,
       removeEmptyFolders: false,
@@ -231,6 +237,7 @@ describe('handle', () => {
     })
     const { ports, deps } = setup({ complete })
     await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: true,
       removeEmptyFolders: false,
@@ -255,6 +262,7 @@ describe('handle', () => {
     })
     const { ports, deps } = setup({ complete })
     await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: true,
       removeEmptyFolders: false,
@@ -280,6 +288,7 @@ describe('handle', () => {
     ])
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
       removeEmptyFolders: false,
@@ -311,6 +320,7 @@ describe('handle', () => {
   it('批次失败时推送 error 级别的日志', async () => {
     const { ports } = setup()
     await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
       removeEmptyFolders: false,
@@ -345,6 +355,7 @@ describe('handle', () => {
     ])
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
       removeEmptyFolders: false,
@@ -369,6 +380,7 @@ describe('handle', () => {
   it('取消前已完成的批次写进缓存，重来时不必再花钱', async () => {
     const { ports } = setup()
     await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
       removeEmptyFolders: false,
@@ -392,6 +404,7 @@ describe('handle', () => {
     const { ports, fake } = setup()
     void fake
     await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
       removeEmptyFolders: false,
@@ -424,6 +437,7 @@ describe('handle', () => {
     ])
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: false,
       removeEmptyFolders: false,
@@ -729,6 +743,7 @@ async function analyzeMerge(
   const fake = createFakeBookmarks(mergeTree)
   const ports = { bookmarks: fake.api, storage: createFakeStorage() }
   await saveSettings(ports, {
+    ...DEFAULT_SETTINGS,
     llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
     rebuildStructure, removeEmptyFolders: false, domainGroups: [], rewriteGithubTitles: false,
   })

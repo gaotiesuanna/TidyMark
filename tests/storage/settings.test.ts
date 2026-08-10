@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { loadSettings, saveSettings, loadCache, saveCache, DEFAULT_SETTINGS } from '@/storage/settings'
+import { SETTINGS_KEY, loadSettings, saveSettings, loadCache, saveCache, DEFAULT_SETTINGS } from '@/storage/settings'
+import { MAX_SIBLINGS } from '@/core/tree'
 import { createFakeStorage } from '../fakes/fake-storage'
 import { createFakeBookmarks } from '../fakes/fake-bookmarks'
 import type { Classification } from '@/core/types'
@@ -20,14 +21,30 @@ describe('设置存取', () => {
     expect((await loadSettings(ports())).removeEmptyFolders).toBe(true)
   })
 
+  it('默认一级目录上限等于 MAX_SIBLINGS，默认允许二级目录', async () => {
+    const settings = await loadSettings(ports())
+    expect(settings.maxTopFolders).toBe(MAX_SIBLINGS)
+    expect(settings.allowSubfolders).toBe(true)
+  })
+
+  // 老用户存储里没有这两个键，缺字段必须回落默认值而不是 undefined，
+  // 否则 MAX_SIBLINGS 会变成 undefined 一路传到 slice(0, undefined)
+  it('旧数据缺这两个字段时回落默认值，已有字段不受影响', async () => {
+    const p = ports()
+    await p.storage.set(SETTINGS_KEY, { rebuildStructure: true })
+    const settings = await loadSettings(p)
+    expect(settings.maxTopFolders).toBe(MAX_SIBLINGS)
+    expect(settings.allowSubfolders).toBe(true)
+    expect(settings.rebuildStructure).toBe(true)
+  })
+
   it('保存后能读回', async () => {
     const p = ports()
     await saveSettings(p, {
+      ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-x', model: 'deepseek-chat' },
       rebuildStructure: true,
       removeEmptyFolders: false,
-      domainGroups: [],
-      rewriteGithubTitles: false,
     })
     const settings = await loadSettings(p)
     expect(settings.llm.model).toBe('deepseek-chat')
