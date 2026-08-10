@@ -489,3 +489,44 @@ describe('buildCategoryTree 合并模式', () => {
     expect(newFolders.every((f) => f.parentId === rootId || f.parentTemporaryId !== null)).toBe(true)
   })
 })
+
+describe('buildCategoryTree 二级目录开关', () => {
+  it('allowSubfolders=false 时忽略二级主题，只出一层', () => {
+    const spec: Array<[string, string, string | null]> = [
+      ...Array.from({ length: 6 }, (_, i) => ['a' + i, '前端', 'React'] as [string, string, string]),
+      ...Array.from({ length: 6 }, (_, i) => ['b' + i, '前端', 'Vue'] as [string, string, string]),
+    ]
+    const { candidates } = buildTree({
+      tags: tags(spec), rootId, existingFolders: [], allowSubfolders: false,
+    })
+    const paths = candidates.map((c) => c.path.map(base).join('/'))
+    expect(paths).toContain('前端')
+    expect(paths.every((p) => !p.includes('/'))).toBe(true)
+  })
+
+  it('默认仍然生成二级目录', () => {
+    const spec: Array<[string, string, string | null]> = [
+      ...Array.from({ length: 6 }, (_, i) => ['a' + i, '前端', 'React'] as [string, string, string]),
+      ...Array.from({ length: 6 }, (_, i) => ['b' + i, '前端', 'Vue'] as [string, string, string]),
+    ]
+    const { candidates } = buildTree({ tags: tags(spec), rootId, existingFolders: [] })
+    expect(candidates.map((c) => c.path.map(base).join('/'))).toContain('前端/React')
+  })
+
+  // 聚合组的两层是那个功能本身的定义，用户勾了组就是明确要这个结构
+  it('allowSubfolders=false 不影响域名聚合组内部的细分', () => {
+    const a = githubFixture(3, 'RAG 检索')
+    const b = githubFixture(3, '模型微调', 3)
+    const { candidates } = buildTree({
+      tags: [...a.tags, ...b.tags],
+      rootId,
+      existingFolders: [],
+      bookmarks: [...a.bookmarks, ...b.bookmarks],
+      domainGroups: ['github'],
+      allowSubfolders: false,
+    })
+    const paths = candidates.map((c) => c.path.map(base).join('/'))
+    expect(paths).toContain('GitHub/RAG 检索')
+    expect(paths).toContain('GitHub/模型微调')
+  })
+})

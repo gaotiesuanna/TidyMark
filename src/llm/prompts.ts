@@ -90,9 +90,9 @@ export function groupTagsPrompt(locale: Locale, groupTitle: string): string[] {
  */
 export function foldersPrompt(
   locale: Locale,
-  opts: { total: number; parentTitle?: string; maxSiblings: number },
+  opts: { total: number; parentTitle?: string; maxSiblings: number; allowSubfolders?: boolean },
 ): string[] {
-  const { total, parentTitle, maxSiblings } = opts
+  const { total, parentTitle, maxSiblings, allowSubfolders = true } = opts
 
   if (locale === 'zh_CN') {
     const head = parentTitle !== undefined
@@ -112,7 +112,9 @@ export function foldersPrompt(
       : [
           '1. 合并同义或高度重叠的标签，用一个目录容纳它们。',
           `2. 一级目录不超过 ${maxSiblings} 个。`,
-          '3. 书签少时只给一层目录，不要硬凑二级目录；只有当某个一级目录下确实存在多个清晰的子主题、书签数量也撑得起来时，才用 children 分出二级。',
+          allowSubfolders
+            ? '3. 书签少时只给一层目录，不要硬凑二级目录；只有当某个一级目录下确实存在多个清晰的子主题、书签数量也撑得起来时，才用 children 分出二级。'
+            : '3. 只输出一层目录，children 一律返回空数组。',
           `4. 一级目录名要具体，禁止使用这些宽泛词：${BROAD_WORDS.zh_CN}。「Claude Code」「LLM 原理」「终端工具」是好名字，「AI」「开发」不是。`,
         ]
 
@@ -143,7 +145,9 @@ export function foldersPrompt(
     : [
         '1. Merge synonymous or heavily overlapping labels into one folder.',
         `2. At most ${maxSiblings} top-level folders.`,
-        '3. With few bookmarks, produce a single level. Only use children when a top-level folder genuinely contains several distinct subtopics with enough bookmarks to justify them.',
+        allowSubfolders
+          ? '3. With few bookmarks, produce a single level. Only use children when a top-level folder genuinely contains several distinct subtopics with enough bookmarks to justify them.'
+          : '3. Output only one level. Always return an empty array for children.',
         `4. Top-level folder names must be specific. Never use these vague words: ${BROAD_WORDS.en}. "Claude Code", "LLM internals", "Terminal tools" are good names; "AI", "Dev" are not.`,
       ]
 

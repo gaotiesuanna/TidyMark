@@ -75,3 +75,25 @@ describe('提示词双语', () => {
     expect(zh).toContain('JSON')
   })
 })
+
+describe('foldersPrompt 二级目录开关', () => {
+  it('allowSubfolders=false 时要求只输出一层', () => {
+    expect(foldersPrompt('zh_CN', { total: 10, maxSiblings: 8, allowSubfolders: false }).join(' '))
+      .toContain('children 一律返回空数组')
+    expect(foldersPrompt('en', { total: 10, maxSiblings: 8, allowSubfolders: false }).join(' '))
+      .toMatch(/empty array for children/i)
+  })
+
+  it('默认（不传）仍留给模型自行决定要不要二级', () => {
+    expect(foldersPrompt('zh_CN', { total: 10, maxSiblings: 8 }).join(' '))
+      .toContain('只有当')
+    expect(foldersPrompt('en', { total: 10, maxSiblings: 8 }).join(' '))
+      .toMatch(/Only use children when/i)
+  })
+
+  // 顶层与聚合组内部是两套文案，别把开关接错分支
+  it('聚合组内部（带 parentTitle）本来就是单层，不受开关影响', () => {
+    const withParent = foldersPrompt('zh_CN', { total: 10, maxSiblings: 8, parentTitle: 'GitHub' })
+    expect(withParent.join(' ')).toContain('children 一律返回空数组')
+  })
+})
