@@ -145,6 +145,9 @@ interface State {
     targetName: string
     barTitle: string
   } | null
+  /** 设置页是否盖在内容区上。不进 Step——设置不是流程的一步，
+      混进 Step 会污染 nextStepAfterAnalyze 这类按步骤推进的判断。 */
+  settingsOpen: boolean
 
   init(): Promise<void>
   refreshTree(): Promise<void>
@@ -167,6 +170,8 @@ interface State {
   readImportFile(name: string, text: string): void
   confirmImport(): Promise<void>
   resetImport(): void
+  openSettings(): void
+  closeSettings(): void
   reset(): void
 }
 
@@ -191,6 +196,7 @@ export const useStore = create<State>((set, get) => ({
   importFile: null,
   importError: null,
   importDone: null,
+  settingsOpen: false,
 
   /** 整理或撤销之后重新读一次书签树，结果页据此展示真实结构。 */
   async refreshTree() {
@@ -416,6 +422,14 @@ export const useStore = create<State>((set, get) => ({
 
   resetImport() {
     set({ importFile: null, importError: null, importDone: null, error: null })
+  },
+
+  openSettings() {
+    set({ settingsOpen: true })
+  },
+
+  closeSettings() {
+    set({ settingsOpen: false })
   },
 
   reset() {
