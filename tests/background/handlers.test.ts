@@ -170,6 +170,45 @@ describe('handle', () => {
     expect(res.plan.operations.some((o) => o.type === 'create_folder')).toBe(true)
   })
 
+  it('一级目录上限从设置里读，并写进发给模型的目录设计提示词', async () => {
+    const { ports } = setup()
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: true,
+      maxTopFolders: 5,
+    })
+    const complete = vi.fn()
+      .mockResolvedValueOnce({ results: [{ bookmark_id: '100', primary_topic: '前端' }] })
+      .mockResolvedValueOnce({ folders: [{ title: '前端', topics: ['前端'], children: [] }] })
+      .mockResolvedValueOnce({ results: [{ bookmark_id: '100', target_category_id: 'tmp:1', confidence: 0.9, reason: 'r' }] })
+    const deps = { createClient: () => ({ complete }), now: () => 1 }
+
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
+    const prompts = complete.mock.calls.map((c) => c[0] as string)
+    // 上限 5 减去给「其他」留的那一位 = 4
+    expect(prompts.some((prompt) => prompt.includes('一级目录不超过 4 个'))).toBe(true)
+  })
+
+  it('关掉二级目录后，目录设计提示词要求只输出一层', async () => {
+    const { ports } = setup()
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: true,
+      allowSubfolders: false,
+    })
+    const complete = vi.fn()
+      .mockResolvedValueOnce({ results: [{ bookmark_id: '100', primary_topic: '前端' }] })
+      .mockResolvedValueOnce({ folders: [{ title: '前端', topics: ['前端'], children: [] }] })
+      .mockResolvedValueOnce({ results: [{ bookmark_id: '100', target_category_id: 'tmp:1', confidence: 0.9, reason: 'r' }] })
+    const deps = { createClient: () => ({ complete }), now: () => 1 }
+
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
+    const prompts = complete.mock.calls.map((c) => c[0] as string)
+    expect(prompts.some((prompt) => prompt.includes('children 一律返回空数组'))).toBe(true)
+  })
+
   it('推翻模式重复整理时复用已有目录，不再新建同名目录', async () => {
     const bookmarks = Array.from({ length: 6 }, (_, i) => ({
       id: `10${i}`, title: `站点${i}`, url: `https://site${i}.dev`,

@@ -108,6 +108,8 @@ export async function handle(
           tags = await designTagFolders(tags, scan.bookmarks, settings.domainGroups, client, locale, {
             onLog: (message, level) => log('tree', message, level),
             isCancelled,
+            maxTopFolders: settings.maxTopFolders,
+            allowSubfolders: settings.allowSubfolders,
           })
           if (isCancelled()) return CANCELLED
           let mergeRoot: { parentId: string; title: string } | undefined
@@ -132,6 +134,8 @@ export async function handle(
             tags, rootId, existingFolders: scan.folders,
             bookmarks: scan.bookmarks, domainGroups: settings.domainGroups, locale,
             mergeRoot,
+            maxTopFolders: settings.maxTopFolders,
+            allowSubfolders: settings.allowSubfolders,
           })
           if (mergeRoot !== undefined && tree_.mergeRootTemporaryId !== null) {
             planMergeRoot = {
