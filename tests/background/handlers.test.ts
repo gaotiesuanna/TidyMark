@@ -1,8 +1,9 @@
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
 import { handle } from '@/background/handlers'
 import { createFakeBookmarks } from '../fakes/fake-bookmarks'
 import { createFakeStorage } from '../fakes/fake-storage'
 import { DEFAULT_SETTINGS, loadCache, saveSettings, type Settings } from '@/storage/settings'
+import { currentLocale, setLocale } from '@/i18n'
 import type { LlmClient } from '@/llm/client'
 import type { OrganizePlan } from '@/core/types'
 import type { ProgressEvent } from '@/background/events'
@@ -851,5 +852,26 @@ describe('analyze 合并模式', () => {
   it('兜底拼接前先去掉源目录名上的编号前缀', async () => {
     const plan = await analyzeMerge(['10', '13'], true, async () => { throw new Error('boom') })
     expect(plan.mergeRoot!.title).toBe('NiceG + 前端')
+  })
+})
+
+describe('后台按用户设置的语言产出文案', () => {
+  afterEach(() => setLocale('zh_CN'))
+
+  it("uiLocale 为 'en' 时扫描日志是英文——浏览器仍是中文", async () => {
+    const { ports, deps } = setup()
+    await saveSettings(ports, { ...DEFAULT_SETTINGS, uiLocale: 'en' })
+    const events: ProgressEvent[] = []
+    await handle(ports, { kind: 'scan', scopeRootIds: ['1'] }, { ...deps, onEvent: (e) => events.push(e) })
+    expect(events[0]?.message).not.toMatch(/[一-鿿]/)
+  })
+
+  it('保存设置后当前语言立刻跟着变，不用等下一个请求', async () => {
+    const { ports, deps } = setup()
+    await handle(ports, {
+      kind: 'save_settings',
+      settings: { ...DEFAULT_SETTINGS, uiLocale: 'en' },
+    }, deps)
+    expect(currentLocale()).toBe('en')
   })
 })

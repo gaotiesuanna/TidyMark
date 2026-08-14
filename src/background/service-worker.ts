@@ -1,4 +1,5 @@
-import { t } from '@/i18n'
+import { resolveLocale, setLocale, t } from '@/i18n'
+import { loadSettings } from '@/storage/settings'
 import { createChromePorts } from './chrome-ports'
 import { PROGRESS_PORT, type ProgressEvent } from './events'
 import { handle } from './handlers'
@@ -8,6 +9,12 @@ import type { Request } from './messages'
 // 若分析过程中这行日志再次出现，说明 worker 被杀过，在途请求会以
 // "TypeError: Failed to fetch" 失败。
 console.log('[TidyMark] service worker 启动', new Date().toISOString())
+
+// cancel 的日志不走 handle()，没有「刚读过的设置」可用，所以启动时先定一次语言。
+// worker 被回收重启时会重新走这里，语言不会丢。
+void loadSettings(createChromePorts())
+  .then((settings) => setLocale(resolveLocale(settings.uiLocale)))
+  .catch(() => {}) // 读不到就用默认语言，不该因此阻塞消息监听
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error)

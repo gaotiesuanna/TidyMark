@@ -1,4 +1,4 @@
-import { currentLocale, t } from '@/i18n'
+import { currentLocale, resolveLocale, setLocale, t } from '@/i18n'
 import { buildCandidatesFromFolders, stripNumberPrefix } from '@/core/map'
 import type { Locale } from '@/core/locale'
 import { buildPlan, type NewFolderSpec, type RenameFolderSpec } from '@/core/plan'
@@ -44,10 +44,11 @@ export async function handle(
   const progress = (phase: ProgressPhase) => (done: number, total: number): void =>
     emit({ phase, message: '', done, total })
   const isCancelled = deps.isCancelled ?? ((): boolean => false)
+  // 每个请求进来先读设置再定语言：t() 是模块级状态，不先设好就会用上一次请求
+  // 留下的语言。这一次读到的 settings 下面 analyze 分支直接复用，不重复读。
+  const settings = await loadSettings(ports)
+  setLocale(resolveLocale(settings.uiLocale))
   const locale = currentLocale()
-  // 挪进 handle() 里而不是留在模块顶层：t() 取的是 i18n 的模块级当前语言，
-  // 模块顶层求值时 setLocale 多半还没跑过，文案会被钉死成默认语言、之后再也不变。
-  // 放在调用时刻求值，每次请求都拿到当时的语言。
   const CANCELLED: Response = { ok: false, error: t('errAnalysisCancelled'), cancelled: true }
 
   try {
@@ -63,7 +64,6 @@ export async function handle(
       }
 
       case 'analyze': {
-        const settings = await loadSettings(ports)
         if (settings.llm.apiKey.trim() === '') {
           return { ok: false, error: t('errNoApiKey') }
         }
@@ -264,6 +264,8 @@ export async function handle(
 
       case 'save_settings':
         await saveSettings(ports, request.settings)
+        // 立刻生效：cancel 端口的日志不走请求路径，等下一个请求就晚了
+        setLocale(resolveLocale(request.settings.uiLocale))
         return { ok: true, kind: 'save_settings' }
 
       case 'import': {
