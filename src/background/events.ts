@@ -3,8 +3,15 @@ export const PROGRESS_PORT = 'tidymark:progress'
 
 export type ProgressPhase = 'scan' | 'tags' | 'tree' | 'classify' | 'apply' | 'undo' | 'import'
 
-/** 值是 _locales 里的词条键，不是文案——events.ts 要保持零依赖，由渲染方 t() 取文案。 */
-export const PHASE_LABELS: Record<ProgressPhase, string> = {
+/**
+ * 值是 _locales 里的词条键，不是文案——events.ts 要保持零依赖，由渲染方 t() 取文案。
+ *
+ * 写成 `as const satisfies` 而不是标注成 `Record<ProgressPhase, string>`：后者会把值
+ * 拓宽成 string，t() 收 MessageKey 就传不进去了。这样既留住字面量类型（键名写错时
+ * 渲染方的 t() 编译期报错），又保住「ProgressPhase 每个取值都得有」这条穷尽检查，
+ * 还不用 import i18n。
+ */
+export const PHASE_LABELS = {
   scan: 'phaseScan',
   tags: 'phaseTags',
   tree: 'phaseTree',
@@ -12,7 +19,7 @@ export const PHASE_LABELS: Record<ProgressPhase, string> = {
   apply: 'phaseApply',
   undo: 'phaseUndo',
   import: 'phaseImport',
-}
+} as const satisfies Record<ProgressPhase, string>
 
 export interface ProgressEvent {
   phase: ProgressPhase

@@ -1,13 +1,13 @@
 import { PRESETS } from '@/storage/settings'
 import { DOMAIN_GROUPS, groupFolderTitle } from '@/core/domainGroups'
-import { resolveLocale, t } from '@/i18n'
+import { currentLocale, t } from '@/i18n'
 import { useStore } from '../store'
 
 export function PreferencesStep() {
   const { scan, settings, setSettings, analyze, busy, reset } = useStore()
   if (scan === null) return null
   const { stats } = scan
-  const locale = resolveLocale()
+  const locale = currentLocale()
 
   return (
     <div className="space-y-4">

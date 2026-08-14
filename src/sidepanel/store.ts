@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { resolveLocale, t } from '@/i18n'
+import { currentLocale, t } from '@/i18n'
 import type { ProgressEvent, ProgressPhase } from '@/background/events'
 import type { BookmarkNode } from '@/core/ports'
 import { LOW_CONFIDENCE, renumberPlan } from '@/core/plan'
@@ -310,7 +310,7 @@ export const useStore = create<State>((set, get) => ({
   confirmStructure() {
     const plan = get().plan
     if (plan === null) return
-    const next = applyStructureEdits(plan, get().structureEdits, resolveLocale())
+    const next = applyStructureEdits(plan, get().structureEdits, currentLocale())
     set({
       plan: next,
       accepted: new Set(next.rows.filter((r) => r.confidence >= LOW_CONFIDENCE).map((r) => r.bookmarkId)),
@@ -385,7 +385,7 @@ export const useStore = create<State>((set, get) => ({
         error: null,
         importFile: {
           name,
-          preview: buildImportPreview(parsed.doc, get().tree, new Date(), resolveLocale()),
+          preview: buildImportPreview(parsed.doc, get().tree, new Date(), currentLocale()),
         },
       })
     } catch {

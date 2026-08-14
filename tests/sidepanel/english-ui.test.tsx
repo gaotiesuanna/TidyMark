@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { render } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { createGetMessage, type Catalog } from '../setup/fake-i18n'
+import { setLocale } from '@/i18n'
 import { makePlan } from '../fakes/plan'
 import { ScopeStep } from '@/sidepanel/steps/ScopeStep'
 import { PreferencesStep } from '@/sidepanel/steps/PreferencesStep'
@@ -23,32 +20,13 @@ import type { OrganizePlan } from '@/core/types'
 import type { ApplyResult } from '@/engine/apply'
 
 /**
- * 全局 setup（tests/setup/i18n.ts）装的是中文桩，其余测试文件全程跑在中文界面下，
- * 断言的都是中文文案。这份文件是唯一跑在英文界面下的测试——
- * 「相邻 JSX 表达式之间缺空格」「裸写中文标点」这类缺陷只在英文分支才会现形，
- * 中文原文以句号/顿号收尾时天然无害，纯中文测试永远测不到。
- *
- * beforeEach 换上英文桩，afterEach 换回中文桩——不然会污染同一 jsdom project
- * 里跑在这份文件之后的其它测试文件（它们期望全局桩是中文）。
+ * 全局 setup（tests/setup/i18n.ts）把界面钉成中文，其余测试文件全程跑在中文界面下。
+ * 这份文件是唯一跑在英文界面下的测试——「相邻 JSX 表达式之间缺空格」
+ * 「裸写中文标点」这类缺陷只在英文分支才会现形。
+ * afterEach 换回中文，不然会污染同一 jsdom project 里跑在这份文件之后的其它测试。
  */
-const here = dirname(fileURLToPath(import.meta.url))
-const enCatalog = JSON.parse(
-  readFileSync(resolve(here, '../../public/_locales/en/messages.json'), 'utf8'),
-) as Catalog
-const zhCatalog = JSON.parse(
-  readFileSync(resolve(here, '../../public/_locales/zh_CN/messages.json'), 'utf8'),
-) as Catalog
-
-function installI18n(catalog: Catalog, uiLanguage: string): void {
-  const existing = (globalThis as { chrome?: Record<string, unknown> }).chrome
-  ;(globalThis as { chrome?: Record<string, unknown> }).chrome = {
-    ...existing,
-    i18n: { getMessage: createGetMessage(catalog), getUILanguage: () => uiLanguage },
-  }
-}
-
-beforeEach(() => installI18n(enCatalog, 'en-US'))
-afterEach(() => installI18n(zhCatalog, 'zh-CN'))
+beforeEach(() => setLocale('en'))
+afterEach(() => setLocale('zh_CN'))
 
 /** CJK 表意文字，加上项目里实际用过的中文全角标点：： 。「 」 */
 const CHINESE_LEAK = /[一-鿿：。「」]/

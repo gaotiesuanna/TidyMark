@@ -1,13 +1,13 @@
 import { useMemo } from 'react'
 import { buildStructureView } from '@/core/structure'
-import { plural, resolveLocale, t } from '@/i18n'
+import { currentLocale, plural, t } from '@/i18n'
 import { joinTitles } from '../lib/listText'
 import { useStore } from '../store'
 
 export function StructureStep() {
   const { plan, structureEdits, renameNode, removeNode, confirmStructure, backToPreferences } = useStore()
   const nodes = useMemo(
-    () => (plan === null ? [] : buildStructureView(plan, structureEdits, resolveLocale())),
+    () => (plan === null ? [] : buildStructureView(plan, structureEdits, currentLocale())),
     [plan, structureEdits],
   )
   if (plan === null) return null
@@ -38,7 +38,7 @@ export function StructureStep() {
              讲的还是非合并模式。第一次听说不能是结果页，那时已经删完了。
              点名到具体标题，不说「源文件夹」这种对不上号的话；删除吓人，撤销才是让人敢按的那句。 */}
           <p className="text-[11px] leading-relaxed text-neutral-500">
-            {t('structureMergeNotice', joinTitles(plan.mergeRoot.sourceTitles, resolveLocale()))}
+            {t('structureMergeNotice', joinTitles(plan.mergeRoot.sourceTitles, currentLocale()))}
           </p>
         </div>
       )}

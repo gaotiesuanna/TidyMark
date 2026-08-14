@@ -1,5 +1,5 @@
 import { toHtmlLang } from '@/core/locale'
-import { resolveLocale } from '@/i18n'
+import { currentLocale } from '@/i18n'
 
 /**
  * 按实际界面语言改写 `<html lang>`。
@@ -10,5 +10,5 @@ import { resolveLocale } from '@/i18n'
  * 放在 sidepanel/ 而不是 i18n/：i18n/ 那层只负责取词条，不碰 DOM。
  */
 export function applyDocumentLang(): void {
-  document.documentElement.lang = toHtmlLang(resolveLocale())
+  document.documentElement.lang = toHtmlLang(currentLocale())
 }

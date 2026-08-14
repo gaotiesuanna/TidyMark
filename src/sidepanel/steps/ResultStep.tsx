@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { buildResultTree } from '@/core/resultTree'
-import { plural, resolveLocale, t } from '@/i18n'
+import { currentLocale, plural, t } from '@/i18n'
 import { ResultTree } from '../components/ResultTree'
 import { joinTitles } from '../lib/listText'
 import { useStore } from '../store'
@@ -82,7 +82,7 @@ export function ResultStep() {
               <p>
                 {t(
                   'resultMergeSourcesRemoved',
-                  joinTitles(removedMergeSources.map((folder) => folder.title), resolveLocale()),
+                  joinTitles(removedMergeSources.map((folder) => folder.title), currentLocale()),
                 )}
               </p>
             )}

@@ -1,4 +1,4 @@
-import { resolveLocale, t } from '@/i18n'
+import { currentLocale, t } from '@/i18n'
 import { buildCandidatesFromFolders, stripNumberPrefix } from '@/core/map'
 import type { Locale } from '@/core/locale'
 import { buildPlan, type NewFolderSpec, type RenameFolderSpec } from '@/core/plan'
@@ -44,10 +44,10 @@ export async function handle(
   const progress = (phase: ProgressPhase) => (done: number, total: number): void =>
     emit({ phase, message: '', done, total })
   const isCancelled = deps.isCancelled ?? ((): boolean => false)
-  const locale = resolveLocale()
-  // 挪进 handle() 里而不是留在模块顶层：MV3 里 chrome.i18n 求值时已可用，眼下没问题，
-  // 但这是全项目唯一一处模块级 i18n 调用，一旦求值时机提前就会静默产出 error: ''
-  // （getMessage 缺键返回空串、不抛错），挪到调用时刻求值更稳妥。
+  const locale = currentLocale()
+  // 挪进 handle() 里而不是留在模块顶层：t() 取的是 i18n 的模块级当前语言，
+  // 模块顶层求值时 setLocale 多半还没跑过，文案会被钉死成默认语言、之后再也不变。
+  // 放在调用时刻求值，每次请求都拿到当时的语言。
   const CANCELLED: Response = { ok: false, error: t('errAnalysisCancelled'), cancelled: true }
 
   try {
