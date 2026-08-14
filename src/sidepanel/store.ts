@@ -214,6 +214,8 @@ export const useStore = create<State>((set, get) => ({
   importError: null,
   importDone: null,
   settingsOpen: false,
+  // 这行在模块求值期执行，那时 main.tsx 还没 setLocale，取到的必然是 i18n 的初值。
+  // 真正的对齐由 main.tsx 在 render 之前补一次 setState 完成。
   locale: currentLocale(),
 
   /** 整理或撤销之后重新读一次书签树，结果页据此展示真实结构。 */
