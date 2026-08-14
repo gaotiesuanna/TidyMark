@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createGetMessage, type Catalog } from '../setup/fake-i18n'
+import { formatMessage, type Catalog } from '@/i18n/format'
 
 const catalog: Catalog = {
   plain: { message: '你好' },
@@ -15,9 +15,12 @@ const catalog: Catalog = {
   undeclared: { message: '未声明的 $ghost$ 占位符' },
 }
 
-const getMessage = createGetMessage(catalog)
+// 用 subs: string | string[] 而不是 rest 参数——下面的断言里既有传单个字符串
+// 也有传数组的用例，跟 chrome.i18n.getMessage 的调用约定保持一致。
+const getMessage = (key: string, subs?: string | string[]): string =>
+  formatMessage(catalog, key, subs === undefined ? [] : Array.isArray(subs) ? subs : [subs])
 
-describe('createGetMessage 复刻 chrome.i18n 语义', () => {
+describe('formatMessage 复刻 chrome.i18n 语义', () => {
   it('普通词条原样返回', () => {
     expect(getMessage('plain')).toBe('你好')
   })
@@ -39,9 +42,10 @@ describe('createGetMessage 复刻 chrome.i18n 语义', () => {
   })
 
   it('占位符名大小写不敏感', () => {
-    const mixed = createGetMessage({
+    const mixedCatalog: Catalog = {
       x: { message: '值 $Count$', placeholders: { count: { content: '$1' } } },
-    })
+    }
+    const mixed = (key: string, ...args: string[]): string => formatMessage(mixedCatalog, key, args)
     expect(mixed('x', '7')).toBe('值 7')
   })
 

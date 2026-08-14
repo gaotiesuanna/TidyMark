@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { LOCALES, type Locale } from '@/core/locale'
-import type { Catalog } from '../setup/fake-i18n'
+import type { Catalog } from '@/i18n/format'
 
 /**
  * 故意不写成 `new URL('../../public/...', import.meta.url)`：Vite 会把这个字面
