@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { currentLocale, t } from '@/i18n'
+import { currentLocale, resolveLocale, setLocale, t } from '@/i18n'
+import type { Locale } from '@/core/locale'
 import type { ProgressEvent, ProgressPhase } from '@/background/events'
 import type { BookmarkNode } from '@/core/ports'
 import { LOW_CONFIDENCE, renumberPlan } from '@/core/plan'
@@ -17,6 +18,7 @@ import { DEFAULT_SETTINGS } from '@/storage/settings'
 import { send } from './lib/send'
 import { ensureHostPermission } from './lib/permissions'
 import { connectProgress, startKeepalive, type ProgressConnection } from './lib/progress'
+import { applyDocumentLang } from './lib/documentLang'
 
 export type Step = 'scope' | 'preferences' | 'structure' | 'review' | 'result'
 
@@ -148,6 +150,8 @@ interface State {
   /** 设置页是否盖在内容区上。不进 Step——设置不是流程的一步，
       混进 Step 会污染 nextStepAfterAnalyze 这类按步骤推进的判断。 */
   settingsOpen: boolean
+  /** 当前界面语言。App 拿它当 key 强制重挂载，切语言后所有 t() 才会重新求值。 */
+  locale: Locale
 
   init(): Promise<void>
   refreshTree(): Promise<void>
@@ -175,6 +179,19 @@ interface State {
   reset(): void
 }
 
+/**
+ * 语言只有一个真相来源：Settings.uiLocale。这里把它落到三个地方——
+ * i18n 的模块级状态（t() 读它）、<html lang>（读屏与浏览器翻译提示读它）、
+ * store 的 locale（App 拿它当重挂载 key）。三处必须一起动，漏一处就会出现
+ * 「文案变了但 lang 没变」或「设置存了但界面没刷」这类半截状态。
+ */
+function syncLocale(settings: Settings): Locale {
+  const locale = resolveLocale(settings.uiLocale)
+  setLocale(locale)
+  applyDocumentLang()
+  return locale
+}
+
 export const useStore = create<State>((set, get) => ({
   step: 'scope',
   tree: [],
@@ -197,6 +214,7 @@ export const useStore = create<State>((set, get) => ({
   importError: null,
   importDone: null,
   settingsOpen: false,
+  locale: currentLocale(),
 
   /** 整理或撤销之后重新读一次书签树，结果页据此展示真实结构。 */
   async refreshTree() {
@@ -244,9 +262,12 @@ export const useStore = create<State>((set, get) => ({
     const treeRes = await send({ kind: 'get_tree' })
     const settingsRes = await send({ kind: 'get_settings' })
     const undoRes = await send({ kind: 'get_undo_state' })
+    const settings =
+      settingsRes.ok && settingsRes.kind === 'get_settings' ? settingsRes.settings : DEFAULT_SETTINGS
     set({
       tree: treeRes.ok && treeRes.kind === 'get_tree' ? treeRes.tree : [],
-      settings: settingsRes.ok && settingsRes.kind === 'get_settings' ? settingsRes.settings : DEFAULT_SETTINGS,
+      settings,
+      locale: syncLocale(settings),
       undoAvailable: undoRes.ok && undoRes.kind === 'get_undo_state' ? undoRes.available : false,
       busy: null,
       busyKind: null,
@@ -266,7 +287,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   async setSettings(settings) {
-    set({ settings })
+    set({ settings, locale: syncLocale(settings) })
     await send({ kind: 'save_settings', settings })
   },
 

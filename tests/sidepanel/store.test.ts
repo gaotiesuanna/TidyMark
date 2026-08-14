@@ -1,9 +1,11 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   appendLog, collectDescendantFolderIds, nextStepAfterAnalyze, toggleChecked, useStore,
   MAX_LOGS, MAX_LOG_LENGTH, type LogLine,
 } from '@/sidepanel/store'
 import { send } from '@/sidepanel/lib/send'
+import { currentLocale, setLocale } from '@/i18n'
+import { DEFAULT_SETTINGS } from '@/storage/settings'
 import { makePlan } from '../fakes/plan'
 import type { ProgressEvent } from '@/background/events'
 import type { BookmarkNode } from '@/core/ports'
@@ -222,6 +224,24 @@ describe('resetImport', () => {
     expect(state.importError).toBeNull()
     expect(state.importFile).toBeNull()
     expect(state.importDone).toBeNull()
+  })
+})
+
+describe('语言跟着设置走', () => {
+  afterEach(() => setLocale('zh_CN'))
+
+  it('保存 uiLocale 后 store 的 locale 与 i18n 的当前语言一起变', async () => {
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS }, locale: 'zh_CN' })
+    await useStore.getState().setSettings({ ...DEFAULT_SETTINGS, uiLocale: 'en' })
+    expect(useStore.getState().locale).toBe('en')
+    expect(currentLocale()).toBe('en')
+    expect(document.documentElement.lang).toBe('en')
+  })
+
+  it("uiLocale 是 'auto' 时回落浏览器语言（桩是 zh-CN）", async () => {
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS, uiLocale: 'en' }, locale: 'en' })
+    await useStore.getState().setSettings({ ...DEFAULT_SETTINGS, uiLocale: 'auto' })
+    expect(useStore.getState().locale).toBe('zh_CN')
   })
 })
 
