@@ -10,6 +10,7 @@
     "noUnusedLocals": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
     "noEmit": true,
     "types": ["chrome", "vitest/globals"],
     "baseUrl": ".",
