@@ -6,20 +6,13 @@ const MIN_TOP_FOLDERS = 4
 const MAX_TOP_FOLDERS = 20
 
 export function SettingsPanel() {
-  const { closeSettings, settings, setSettings } = useStore()
+  const { settings, setSettings } = useStore()
   const enabled = settings.rebuildStructure
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <button
-          className="rounded border px-2 py-1 text-xs hover:bg-neutral-50"
-          onClick={closeSettings}
-        >
-          {t('settingsBack')}
-        </button>
-        <h2 className="text-sm font-medium">{t('settingsTitle')}</h2>
-      </div>
+      {/* 返回按钮在 Shell 的头部那一行，和齿轮同排 */}
+      <h2 className="text-sm font-medium">{t('settingsTitle')}</h2>
 
       <section className="space-y-3 rounded border p-3">
         <h3 className="text-sm font-medium">{t('settingsClassifyTitle')}</h3>
