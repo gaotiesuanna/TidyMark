@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { setLocale } from '@/i18n'
 import { SettingsPanel } from '@/sidepanel/components/SettingsPanel'
 import { useStore } from '@/sidepanel/store'
 import { DEFAULT_SETTINGS } from '@/storage/settings'
@@ -56,5 +57,34 @@ describe('SettingsPanel 分类参数', () => {
     render(<SettingsPanel />)
     expect(screen.getByLabelText('一级目录最多几个')).toHaveProperty('disabled', true)
     expect(screen.getByRole('checkbox', { name: '允许分出二级目录' })).toHaveProperty('disabled', true)
+  })
+})
+
+describe('SettingsPanel 语言', () => {
+  afterEach(() => setLocale('zh_CN'))
+
+  it('展示当前语言，默认是跟随浏览器', () => {
+    render(<SettingsPanel />)
+    expect(screen.getByLabelText('语言')).toHaveProperty('value', 'auto')
+  })
+
+  it('选中某个语言后写进设置', async () => {
+    render(<SettingsPanel />)
+    fireEvent.change(screen.getByLabelText('语言'), { target: { value: 'en' } })
+    expect(useStore.getState().settings.uiLocale).toBe('en')
+  })
+
+  // 分类参数在不推翻重建时会灰掉，语言不该跟着灰——它跟推翻重建没关系
+  it('语言不受推翻重建开关影响', () => {
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS, rebuildStructure: false } })
+    render(<SettingsPanel />)
+    expect(screen.getByLabelText('语言')).toHaveProperty('disabled', false)
+  })
+
+  it('两个语言选项各自用自己的语言写，界面语言变了也不翻译', () => {
+    setLocale('en')
+    render(<SettingsPanel />)
+    expect(screen.getByRole('option', { name: '中文' })).toBeTruthy()
+    expect(screen.getByRole('option', { name: 'English' })).toBeTruthy()
   })
 })

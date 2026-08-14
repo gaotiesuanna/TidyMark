@@ -31,8 +31,16 @@ afterEach(() => setLocale('zh_CN'))
 /** CJK 表意文字，加上项目里实际用过的中文全角标点：： 。「 」 */
 const CHINESE_LEAK = /[一-鿿：。「」]/
 
+/**
+ * 语言选择器里的「中文」是有意的中文：语言名永远用该语言自己的写法，
+ * 否则界面已经切到用户看不懂的语言时，他找不到切回去的那一项。
+ * 这是本守卫唯一的例外，写成精确字面量而不是放宽正则——
+ * 别的地方漏出中文仍然要当场失败。
+ */
+const INTENTIONAL_CHINESE = /中文/g
+
 function assertNoChinese(container: HTMLElement, componentName: string): void {
-  const text = container.textContent ?? ''
+  const text = (container.textContent ?? '').replace(INTENTIONAL_CHINESE, '')
   const hit = text.match(CHINESE_LEAK)
   expect(
     hit,
