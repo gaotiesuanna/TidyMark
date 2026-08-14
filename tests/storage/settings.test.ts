@@ -95,3 +95,21 @@ describe('domainGroups 设置', () => {
     expect((await loadSettings(p)).domainGroups).toEqual(['github', 'paper'])
   })
 })
+
+describe('uiLocale', () => {
+  it('默认跟随浏览器', () => {
+    expect(DEFAULT_SETTINGS.uiLocale).toBe('auto')
+  })
+
+  it('旧数据里没有这个字段时兜底成 auto——不需要迁移代码', async () => {
+    const p = ports()
+    await p.storage.set(SETTINGS_KEY, { rebuildStructure: true })
+    expect((await loadSettings(p)).uiLocale).toBe('auto')
+  })
+
+  it('存过的显式语言读得回来', async () => {
+    const p = ports()
+    await p.storage.set(SETTINGS_KEY, { uiLocale: 'en' })
+    expect((await loadSettings(p)).uiLocale).toBe('en')
+  })
+})

@@ -1,5 +1,5 @@
 import type { Ports } from '@/core/ports'
-import type { Locale } from '@/core/locale'
+import type { Locale, UiLocale } from '@/core/locale'
 import type { Classification } from '@/core/types'
 import { MAX_SIBLINGS } from '@/core/tree'
 import type { LlmConfig } from '@/llm/client'
@@ -20,6 +20,8 @@ export interface Settings {
   maxTopFolders: number
   /** 允许模型分出二级目录。关掉时强制单层。只在推翻重建模式下生效。 */
   allowSubfolders: boolean
+  /** 界面与产出的语言。'auto' 时跟随浏览器 UI 语言。 */
+  uiLocale: UiLocale
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -30,6 +32,7 @@ export const DEFAULT_SETTINGS: Settings = {
   rewriteGithubTitles: false,
   maxTopFolders: MAX_SIBLINGS,
   allowSubfolders: true,
+  uiLocale: 'auto',
 }
 
 /**
@@ -56,6 +59,7 @@ export async function loadSettings(ports: Ports): Promise<Settings> {
     rewriteGithubTitles: stored?.rewriteGithubTitles ?? DEFAULT_SETTINGS.rewriteGithubTitles,
     maxTopFolders: stored?.maxTopFolders ?? DEFAULT_SETTINGS.maxTopFolders,
     allowSubfolders: stored?.allowSubfolders ?? DEFAULT_SETTINGS.allowSubfolders,
+    uiLocale: stored?.uiLocale ?? DEFAULT_SETTINGS.uiLocale,
   }
 }
 

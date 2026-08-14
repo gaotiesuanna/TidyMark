@@ -9,6 +9,14 @@ export type Locale = 'zh_CN' | 'en'
 export const LOCALES: readonly Locale[] = ['en', 'zh_CN']
 
 /**
+ * 设置里存的语言取值。'auto' 表示跟随浏览器 UI 语言。
+ *
+ * 放在 core/ 而不是 storage/：i18n 层的 resolveLocale() 要收它当参数，
+ * 而 i18n 不该反向依赖 storage。
+ */
+export type UiLocale = 'auto' | Locale
+
+/**
  * 把 chrome.i18n.getUILanguage() 之类的 BCP 47 标签归一成受支持的 Locale。
  *
  * 繁体一并归到 zh_CN：只维护一套中文词条，繁体用户读简体好过掉到英文。
