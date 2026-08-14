@@ -14,7 +14,7 @@ import { createLlmClient, type LlmClient, type LlmConfig } from '@/llm/client'
 import { classifyBookmarks } from '@/llm/classify'
 import { collectTopics, designTagFolders, nameMergedFolder } from '@/llm/folders'
 import { extractTags, refineGroupTags } from '@/llm/tags'
-import { loadCache, loadSettings, saveCache, saveSettings } from '@/storage/settings'
+import { DEFAULT_SETTINGS, loadCache, loadSettings, saveCache, saveSettings } from '@/storage/settings'
 import { findBookmarksBar } from '@/core/import'
 import { importTree } from '@/engine/importTree'
 import type { EmitProgress, ProgressPhase } from './events'
@@ -45,9 +45,15 @@ export async function handle(
     emit({ phase, message: '', done, total })
   const isCancelled = deps.isCancelled ?? ((): boolean => false)
   // 每个请求进来先读设置再定语言：t() 是模块级状态，不先设好就会用上一次请求
-  // 留下的语言。这一次读到的 settings 下面 analyze 分支直接复用，不重复读。
-  const settings = await loadSettings(ports)
+  // 留下的语言。这一次读到的 settings 下面各分支直接复用，不重复读。
+  // 读不到设置只该影响语言，不该把与设置无关的请求（get_tree/undo/import）一起打挂——
+  // 那些请求改造前根本不碰存储，抛出去的还是没经过翻译的原文。
+  const settings = await loadSettings(ports).catch(() => DEFAULT_SETTINGS)
   setLocale(resolveLocale(settings.uiLocale))
+  // 这份 locale 是本次请求的常量，传给 core/llm 后不受后续 setLocale 影响：
+  // 用户在分析跑到一半时改语言，产出的目录名、提示词、规则理由仍然同源；
+  // 会跟着切的只有 t() 取的日志与错误文案，而且是剩下的整段分析都跟着切，
+  // 不是一瞬——analyze 可以跑好几分钟。只影响文案，不产生半中半英的数据。
   const locale = currentLocale()
   const CANCELLED: Response = { ok: false, error: t('errAnalysisCancelled'), cancelled: true }
 
@@ -235,7 +241,6 @@ export async function handle(
       }
 
       case 'apply': {
-        const settings = await loadSettings(ports)
         const result = await applyPlan(ports, request.plan, new Set(request.accepted), locale, {
           removeEmptyFolders: settings.removeEmptyFolders,
           onProgress: progress('apply'),
@@ -260,7 +265,7 @@ export async function handle(
       }
 
       case 'get_settings':
-        return { ok: true, kind: 'get_settings', settings: await loadSettings(ports) }
+        return { ok: true, kind: 'get_settings', settings }
 
       case 'save_settings':
         await saveSettings(ports, request.settings)
