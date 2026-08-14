@@ -34,13 +34,15 @@ const CHINESE_LEAK = /[一-鿿：。「」]/
 /**
  * 语言选择器里的「中文」是有意的中文：语言名永远用该语言自己的写法，
  * 否则界面已经切到用户看不懂的语言时，他找不到切回去的那一项。
- * 这是本守卫唯一的例外，写成精确字面量而不是放宽正则——
- * 别的地方漏出中文仍然要当场失败。
+ *
+ * 它是这条守卫唯一的例外，所以只作为参数传给设置页那两条用例，不做全局剥离——
+ * 全局剥离等于给每个组件都开了这个口子，别处漏出「中文」二字会被静默放过。
  */
 const INTENTIONAL_CHINESE = /中文/g
 
-function assertNoChinese(container: HTMLElement, componentName: string): void {
-  const text = (container.textContent ?? '').replace(INTENTIONAL_CHINESE, '')
+function assertNoChinese(container: HTMLElement, componentName: string, allow?: RegExp): void {
+  const rendered = container.textContent ?? ''
+  const text = allow === undefined ? rendered : rendered.replace(allow, '')
   const hit = text.match(CHINESE_LEAK)
   expect(
     hit,
@@ -269,7 +271,7 @@ describe('英文界面渲染守卫：设置页', () => {
       settings: { ...DEFAULT_SETTINGS, rebuildStructure: true },
     })
     const { container } = render(<SettingsPanel />)
-    assertNoChinese(container, 'SettingsPanel')
+    assertNoChinese(container, 'SettingsPanel', INTENTIONAL_CHINESE)
   })
 
   // 禁用态的说明文字与启用态不是同一批节点，两种都要过一遍
@@ -279,7 +281,7 @@ describe('英文界面渲染守卫：设置页', () => {
       settings: { ...DEFAULT_SETTINGS, rebuildStructure: false },
     })
     const { container } = render(<SettingsPanel />)
-    assertNoChinese(container, 'SettingsPanel')
+    assertNoChinese(container, 'SettingsPanel', INTENTIONAL_CHINESE)
   })
 })
 
