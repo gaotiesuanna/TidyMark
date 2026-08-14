@@ -1,4 +1,4 @@
-export interface MessageEntry {
+interface MessageEntry {
   message: string
   placeholders?: Record<string, { content: string }>
 }
@@ -15,8 +15,8 @@ const DOLLAR = '\uE000'
 /**
  * 复刻 chrome.i18n.getMessage 的替换语义。
  *
- * 这份实现原先是 tests/setup 里的测试桩，现在同一份代码同时充当生产实现与桩，
- * 「桩与线上语义不符导致测试全绿而文案错乱」这条风险从此不存在。
+ * 这份实现原先是 tests/setup 里的测试桩，改造时提升成了生产实现，那个桩也随之删掉：
+ * 测试与线上从此走同一段替换逻辑，「桩与线上语义不符导致测试全绿而文案错乱」不再可能。
  * 语义照规范：找不到键返回空串、具名占位符大小写不敏感、
  * content 里的 $1..$9 引用实参、$$ 转义、未声明的 $name$ 原样保留。
  */

@@ -7,7 +7,7 @@ import { CATALOGS, type MessageKey } from './messages'
  *
  * 为什么不用 chrome.i18n.getMessage：它的语言由浏览器 UI 语言决定，
  * 运行时没有任何覆盖办法，用户就永远选不了语言。所以自建词条表。
- * chrome.i18n 只剩 getUILanguage 还在用，且只在 uiLocale 为 'auto' 时问一次。
+ * chrome.i18n 只剩 getUILanguage 还在用，且只在 uiLocale 为 'auto' 时才问。
  *
  * core/ 与 llm/ 不许 import 它——那两层要保持零浏览器依赖、能在 node 环境测试，
  * 它们改为把 Locale 当参数接收。
@@ -40,7 +40,7 @@ export function t(key: MessageKey, ...args: string[]): string {
 }
 
 /**
- * chrome.i18n 没有复数支持，带数量的文案只能配两个键。
+ * 自建词条表同样不做复数，带数量的文案配两个键。
  * 中文两个键填相同内容即可。
  */
 export function plural(
