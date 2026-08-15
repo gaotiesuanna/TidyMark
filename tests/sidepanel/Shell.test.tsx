@@ -42,3 +42,28 @@ describe('Shell 设置入口', () => {
     expect(useStore.getState().busy).toBe('正在分析…')
   })
 })
+
+/**
+ * 步骤条是只读的进度指示，不是导航——所以它刻意不长成按钮的样子。
+ * 代价是「现在在第几步」只剩加粗与下划线在传达，读屏那边什么都收不到，
+ * aria-current 是唯一能被程序读到的载体，得有测试守着。
+ */
+describe('Shell 步骤条', () => {
+  it('只有当前步骤带 aria-current', () => {
+    useStore.setState({ step: 'review' })
+    render(<Shell><div>步骤内容</div></Shell>)
+    expect(screen.getByText('3. 预览').getAttribute('aria-current')).toBe('step')
+    expect(screen.getByText('1. 选范围').getAttribute('aria-current')).toBeNull()
+  })
+
+  it('步骤变了 aria-current 跟着走，不会留在原地', () => {
+    useStore.setState({ step: 'scope' })
+    const { rerender } = render(<Shell><div>步骤内容</div></Shell>)
+    expect(screen.getByText('1. 选范围').getAttribute('aria-current')).toBe('step')
+
+    useStore.setState({ step: 'result' })
+    rerender(<Shell><div>步骤内容</div></Shell>)
+    expect(screen.getByText('1. 选范围').getAttribute('aria-current')).toBeNull()
+    expect(screen.getByText('4. 结果').getAttribute('aria-current')).toBe('step')
+  })
+})

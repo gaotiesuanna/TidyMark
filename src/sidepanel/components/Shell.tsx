@@ -26,7 +26,11 @@ export function Shell({ children }: { children: ReactNode }) {
           {/* 设置页里步骤条不该出现：设置不是第几步，显示出来会误导。这个位置改放返回，
               省得下面正文再占一行，也和右边的齿轮凑成同一行的一进一出。
               侧栏可以被拖得很窄，四个步骤一行放不下。不换行就会在标签中间断词
-              （「1.」和「Scope」被拆成两行），所以让整条步骤条按项换行、项内不断词。 */}
+              （「1.」和「Scope」被拆成两行），所以让整条步骤条按项换行、项内不断词。
+
+              步骤条是只读的进度指示，不是导航：往前跳不可能（没分析过就没有预览），
+              往回退今天也只有「确认结构」那一步有专门的按钮。所以刻意不长成按钮的样子——
+              圆角加填充底色是按钮的视觉语言，会一直勾着人去点一个点不动的东西。 */}
           {settingsOpen ? (
             <button
               className="shrink-0 rounded border px-2 py-0.5 text-xs hover:bg-neutral-50"
@@ -35,17 +39,22 @@ export function Shell({ children }: { children: ReactNode }) {
               {t('settingsBack')}
             </button>
           ) : (
-            <ol className="flex min-w-0 flex-wrap gap-1 text-xs">
+            <ol className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
               {STEPS.map((each, i) => (
-                <li
-                  key={each.key}
-                  className={
-                    each.key === step
-                      ? 'whitespace-nowrap rounded bg-neutral-800 px-2 py-0.5 text-white'
-                      : 'whitespace-nowrap rounded bg-neutral-100 px-2 py-0.5 text-neutral-500'
-                  }
-                >
-                  {i + 1}. {t(each.labelKey)}
+                <li key={each.key} className="flex items-center gap-x-2 whitespace-nowrap">
+                  {/* 分隔点只是视觉上的断句，读屏念出来是噪音 */}
+                  {i > 0 && <span aria-hidden="true" className="text-neutral-300">·</span>}
+                  <span
+                    // 读屏靠它知道「现在在第几步」——视觉上的加粗与下划线传达不到那边
+                    {...(each.key === step ? { 'aria-current': 'step' as const } : {})}
+                    className={
+                      each.key === step
+                        ? 'font-medium text-neutral-800 underline underline-offset-4'
+                        : 'text-neutral-400'
+                    }
+                  >
+                    {i + 1}. {t(each.labelKey)}
+                  </span>
                 </li>
               ))}
             </ol>
