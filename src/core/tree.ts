@@ -22,9 +22,10 @@ export interface BuildTreeInput {
   tags: TagResult[]
   /** 同一层目录数上限。省略时用 MAX_SIBLINGS。 */
   maxTopFolders?: number
-  /** 允许二级目录。false 时忽略 secondaryTopic，只出一层。
+  /** 允许再往下分一层。false 时忽略 secondaryTopic，只出一层。
+      由调用方按绝对层级算好（见 core/level.ts）：已经建到 maxFolderDepth 那层就是 false。
       只作用于主题目录树——聚合组的两层结构是那个功能本身的定义，不受影响。 */
-  allowSubfolders?: boolean
+  allowChildren?: boolean
   /** 新目录挂载的范围根文件夹 id。 */
   rootId: string
   /**
@@ -81,7 +82,7 @@ function domainGroupOrder(key: string): number {
 
 export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
   const maxSiblings = input.maxTopFolders ?? MAX_SIBLINGS
-  const allowSubfolders = input.allowSubfolders ?? true
+  const allowChildren = input.allowChildren ?? true
   if (input.tags.length === 0) {
     return { candidates: [], newFolders: [], renameFolders: [], pinned: [], mergeRootTemporaryId: null }
   }
@@ -170,7 +171,7 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
     if (key === '') continue
     const group = groups.get(key) ?? { title: preferredName(tag.primaryTopic), count: 0, children: new Map() }
     group.count++
-    if (allowSubfolders && tag.secondaryTopic !== null && normalizeName(tag.secondaryTopic) !== '') {
+    if (allowChildren && tag.secondaryTopic !== null && normalizeName(tag.secondaryTopic) !== '') {
       const childKey = normalizeName(tag.secondaryTopic)
       const child = group.children.get(childKey) ?? { title: preferredName(tag.secondaryTopic), count: 0 }
       child.count++

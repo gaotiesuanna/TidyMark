@@ -3,10 +3,10 @@ import { buildCandidatesFromFolders, normalizeName, resolveByRules } from '@/cor
 import type { BookmarkItem, FolderItem } from '@/core/types'
 
 const folders: FolderItem[] = [
-  { id: '1', title: '书签栏', parentId: '0', index: 0, path: [], depth: 0 },
-  { id: '10', title: 'react', parentId: '1', index: 0, path: ['书签栏'], depth: 1 },
-  { id: '11', title: 'GitHub 项目', parentId: '1', index: 1, path: ['书签栏'], depth: 1 },
-  { id: '12', title: '论文', parentId: '1', index: 2, path: ['书签栏'], depth: 1 },
+  { id: '1', title: '书签栏', parentId: '0', index: 0, path: [], depth: 0, level: 0 },
+  { id: '10', title: 'react', parentId: '1', index: 0, path: ['书签栏'], depth: 1, level: 1 },
+  { id: '11', title: 'GitHub 项目', parentId: '1', index: 1, path: ['书签栏'], depth: 1, level: 1 },
+  { id: '12', title: '论文', parentId: '1', index: 2, path: ['书签栏'], depth: 1, level: 1 },
 ]
 
 function item(): BookmarkItem {

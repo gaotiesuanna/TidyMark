@@ -94,6 +94,18 @@ export async function handle(
           // 它们也删不掉、父节点是不可见的 '0'，排除后所有边界情况一并消失
           const hasPermanent = roots.some((r) => (r.parentId ?? '0') === '0')
           const merging = roots.length >= 2 && !hasPermanent
+          // 这批新目录会落在第几层，按绝对层级算（见 core/level.ts）：勾书签栏是 1、
+          // 勾「其他书签」是 2。
+          // 合并模式也是 +1 而不是 +2：新容器建在 roots[0] 的父目录下，占的正是
+          // roots[0] 原来那一层，主题目录进容器后仍是 rootLevel + 1。
+          // rootId 来自 roots[0]，而 scanTree 会把每个 root 自己也放进 folders，必然找得到；
+          // 万一没有，?? 0 让它退回改造前的行为，而不是把整次分析弄崩
+          const rootLevel = scan.folders.find((f) => f.id === rootId)?.level ?? 0
+          const startLevel = rootLevel + 1
+          // 上限只管「要不要再往下分」，不阻止在勾中处建第一层：用户勾了这里就是要在这里
+          // 整理，返回「一个目录都不建」看起来像坏了
+          const allowChildren = startLevel < settings.maxFolderDepth
+          const containerTitle = merging ? undefined : roots.find((r) => r.id === rootId)?.title
           log('tags', t('logTagsStart', String(scan.bookmarks.length)))
           tags = await extractTags(scan.bookmarks, client, locale, {
             onProgress: progress('tags'),
@@ -115,7 +127,9 @@ export async function handle(
             onLog: (message, level) => log('tree', message, level),
             isCancelled,
             maxTopFolders: settings.maxTopFolders,
-            allowSubfolders: settings.allowSubfolders,
+            allowChildren,
+            startLevel,
+            ...(containerTitle === undefined ? {} : { containerTitle }),
           })
           if (isCancelled()) return CANCELLED
           let mergeRoot: { parentId: string; title: string } | undefined
@@ -141,7 +155,7 @@ export async function handle(
             bookmarks: scan.bookmarks, domainGroups: settings.domainGroups, locale,
             mergeRoot,
             maxTopFolders: settings.maxTopFolders,
-            allowSubfolders: settings.allowSubfolders,
+            allowChildren,
           })
           if (mergeRoot !== undefined && tree_.mergeRootTemporaryId !== null) {
             planMergeRoot = {

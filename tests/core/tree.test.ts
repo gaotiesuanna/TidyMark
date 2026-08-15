@@ -497,7 +497,7 @@ describe('buildCategoryTree 二级目录开关', () => {
       ...Array.from({ length: 6 }, (_, i) => ['b' + i, '前端', 'Vue'] as [string, string, string]),
     ]
     const { candidates } = buildTree({
-      tags: tags(spec), rootId, existingFolders: [], allowSubfolders: false,
+      tags: tags(spec), rootId, existingFolders: [], allowChildren: false,
     })
     const paths = candidates.map((c) => c.path.map(base).join('/'))
     expect(paths).toContain('前端')
@@ -514,7 +514,7 @@ describe('buildCategoryTree 二级目录开关', () => {
   })
 
   // 聚合组的两层是那个功能本身的定义，用户勾了组就是明确要这个结构
-  it('allowSubfolders=false 不影响域名聚合组内部的细分', () => {
+  it('allowChildren=false 不影响域名聚合组内部的细分', () => {
     const a = githubFixture(3, 'RAG 检索')
     const b = githubFixture(3, '模型微调', 3)
     const { candidates } = buildTree({
@@ -523,7 +523,7 @@ describe('buildCategoryTree 二级目录开关', () => {
       existingFolders: [],
       bookmarks: [...a.bookmarks, ...b.bookmarks],
       domainGroups: ['github'],
-      allowSubfolders: false,
+      allowChildren: false,
     })
     const paths = candidates.map((c) => c.path.map(base).join('/'))
     expect(paths).toContain('GitHub/RAG 检索')

@@ -1,180 +1,908 @@
 {
-  "extName": { "message": "TidyMark" },
-  "extDescription": { "message": "用 AI 重构 Chrome 原生书签 —— 所有修改可预览、可确认、可撤销" },
-  "shellStepScope": { "message": "选范围" },
-  "shellStepPreferences": { "message": "偏好" },
-  "settingsGearLabel": { "message": "设置" },
-  "settingsTitle": { "message": "设置" },
-  "settingsBack": { "message": "返回" },
-  "settingsLangTitle": { "message": "语言" },
-  "settingsLangAuto": { "message": "跟随浏览器" },
-  "settingsLangBody": { "message": "同时决定界面文案和新建目录名的语言。" },
-  "settingsClassifyTitle": { "message": "分类偏好" },
-  "settingsRebuildOnly": { "message": "以下两项只在「推翻现有文件夹结构」开启时生效。" },
-  "settingsMaxFoldersTitle": { "message": "一级目录最多几个" },
-  "settingsMaxFoldersBody": { "message": "超出的主题会并入「其他」。范围 4 到 20。" },
-  "settingsSubfoldersTitle": { "message": "允许分出二级目录" },
-  "settingsSubfoldersBody": { "message": "关掉后一律只建一层。单独聚合的站点不受这一项影响，它们内部始终按主题细分。" },
-  "shellStepReview": { "message": "预览" },
-  "shellStepResult": { "message": "结果" },
-  "treeExpand": { "message": "展开 $name$", "placeholders": { "name": { "content": "$1" } } },
-  "treeCollapse": { "message": "收起 $name$", "placeholders": { "name": { "content": "$1" } } },
-  "scopeIntro": { "message": "勾选你想让 TidyMark 重构的文件夹。" },
-  "scopeSafety": { "message": "未勾选的部分不会被读取，也不会被修改——其中的书签不会移出，也不会有书签移入。" },
-  "scopeExpandAll": { "message": "全部展开" },
-  "scopeCollapseAll": { "message": "全部收起" },
-  "scopeScanOne": { "message": "扫描选中的 $count$ 个文件夹", "placeholders": { "count": { "content": "$1" } } },
-  "scopeScanOther": { "message": "扫描选中的 $count$ 个文件夹", "placeholders": { "count": { "content": "$1" } } },
-  "phaseScan": { "message": "扫描" },
-  "phaseTags": { "message": "抽取标签" },
-  "phaseTree": { "message": "设计目录" },
-  "phaseClassify": { "message": "分类" },
-  "phaseApply": { "message": "应用" },
-  "phaseUndo": { "message": "撤销" },
-  "phaseImport": { "message": "导入" },
-  "progressCancel": { "message": "取消" },
-  "progressLogsExpand": { "message": "展开运行日志" },
-  "progressLogsCollapse": { "message": "收起运行日志" },
-  "progressLogsTitleOne": { "message": "运行日志（$count$ 条）", "placeholders": { "count": { "content": "$1" } } },
-  "progressLogsTitleOther": { "message": "运行日志（$count$ 条）", "placeholders": { "count": { "content": "$1" } } },
-  "sendErrChannelClosed": { "message": "后台在返回结果前被中断了（扩展刚重新加载，或后台被浏览器回收）。请重试——已经跑完的批次有缓存，重试会快很多。" },
-  "sendErrContextInvalidated": { "message": "扩展已重新加载，这个侧栏面板已失效。请关掉侧栏重新打开。" },
-  "sendErrNoReceiver": { "message": "连不上后台。请在 chrome://extensions 里确认 TidyMark 已启用，然后重开侧栏。" },
-  "sendErrNoResponse": { "message": "后台没有返回结果，可能已被浏览器回收，请重试。" },
-  "exportGroupOne": { "message": "导出选中的 $count$ 条书签", "placeholders": { "count": { "content": "$1" } } },
-  "exportGroupOther": { "message": "导出选中的 $count$ 条书签", "placeholders": { "count": { "content": "$1" } } },
-  "exportTree": { "message": "带文件夹结构" },
-  "exportLinks": { "message": "纯链接清单" },
-  "exportHtml": { "message": "浏览器书签文件" },
-  "exportHtmlBusy": { "message": "正在取图标…" },
-  "importGroup": { "message": "导入别人分享的书签" },
-  "importPickFile": { "message": "选择文件…" },
-  "importPickerLabel": { "message": "选择导入文件" },
-  "importRetry": { "message": "重新选择" },
-  "importUntitled": { "message": "（无标题）" },
-  "importStatsOne": { "message": "$bookmarks$ 条书签、$folders$ 个文件夹", "placeholders": { "bookmarks": { "content": "$1" }, "folders": { "content": "$2" } } },
-  "importStatsOther": { "message": "$bookmarks$ 条书签、$folders$ 个文件夹", "placeholders": { "bookmarks": { "content": "$1" }, "folders": { "content": "$2" } } },
-  "importDuplicates": { "message": "其中 $count$ 条你已经收藏过", "placeholders": { "count": { "content": "$1" } } },
-  "importBlockedOne": { "message": "已拦下 $count$ 条不安全的链接", "placeholders": { "count": { "content": "$1" } } },
-  "importBlockedOther": { "message": "已拦下 $count$ 条不安全的链接", "placeholders": { "count": { "content": "$1" } } },
-  "importTarget": { "message": "将建到：$path$", "placeholders": { "path": { "content": "$1" } } },
-  "importConfirm": { "message": "确认导入" },
-  "importCancel": { "message": "取消" },
-  "importDoneOne": { "message": "已导入 $count$ 条书签到 $path$", "placeholders": { "count": { "content": "$1" }, "path": { "content": "$2" } } },
-  "importDoneOther": { "message": "已导入 $count$ 条书签到 $path$", "placeholders": { "count": { "content": "$1" }, "path": { "content": "$2" } } },
-  "importMissedOne": { "message": "$count$ 条没有进来：", "placeholders": { "count": { "content": "$1" } } },
-  "importMissedOther": { "message": "$count$ 条没有进来：", "placeholders": { "count": { "content": "$1" } } },
-  "importDeleteHint": { "message": "不需要的话，直接在 Chrome 里删掉这个文件夹即可。" },
-  "importFinish": { "message": "完成" },
-  "prefsScanTitle": { "message": "扫描结果" },
-  "prefsStatBookmarks": { "message": "书签" },
-  "prefsStatFolders": { "message": "文件夹" },
-  "prefsStatEmpty": { "message": "空文件夹" },
-  "prefsStatUntitled": { "message": "无标题书签" },
-  "prefsStatDuplicates": { "message": "重复链接组" },
-  "prefsStatDepth": { "message": "最深层级" },
-  "prefsModelTitle": { "message": "模型配置" },
-  "prefsPrivacyKey": { "message": "API Key 明文保存在本地浏览器存储中，不会上传到任何服务器。" },
-  "prefsPrivacyPayload": { "message": "发送给模型的内容仅包含书签标题、域名、路径与所在目录，不含 URL 参数与网页正文。" },
-  "prefsRebuildTitle": { "message": "推翻现有文件夹结构" },
-  "prefsRebuildOn": { "message": "开启后会重新设计整棵目录树，并给范围内每一个一级文件夹加上编号前缀（01、02…），包括你自己建的、以及本次一个书签都没移入的。二级只重排本来就带编号的目录。整理可一键撤销。" },
-  "prefsRebuildOff": { "message": "关闭时只把书签移进已有文件夹，绝不改名、合并或删除任何现有文件夹。" },
-  "prefsCleanTitle": { "message": "整理后清理空文件夹" },
-  "prefsCleanBody": { "message": "删除范围内不含任何书签的文件夹，包括子目录清空后变空的父目录。范围根目录不会被删除，撤销时会连同目录一起还原。合并多个文件夹时例外：源文件夹连同它内部的空目录一律清理，不受本开关约束，撤销同样会还原。" },
-  "prefsGithubTitle": { "message": "统一 GitHub 书签标题" },
-  "prefsGithubBody": { "message": "把标题按 URL 改写成「仓库名 (作者)」，收藏具体文件时保留文件名。这会改动书签本身的名字，不只是位置；可一键撤销。与上面的勾选无关，开启后范围内所有 GitHub 书签都会改。" },
-  "prefsGroupTitle": { "message": "单独聚合这些站点" },
-  "prefsGroupBody": { "message": "勾选的站点会各自成为一个顶级目录，目录内再按主题细分。只在「推翻现有文件夹结构」开启时生效。" },
-  "prefsBack": { "message": "返回" },
-  "prefsStart": { "message": "开始 AI 分析" },
-  "structureIntroOne": { "message": "AI 设计了 $folders$ 个一级目录，将容纳 $bookmarks$ 个书签。", "placeholders": { "folders": { "content": "$1" }, "bookmarks": { "content": "$2" } } },
-  "structureIntroOther": { "message": "AI 设计了 $folders$ 个一级目录，将容纳 $bookmarks$ 个书签。", "placeholders": { "folders": { "content": "$1" }, "bookmarks": { "content": "$2" } } },
-  "structureHint": { "message": "可以改名或删掉不想要的目录，确认后再查看逐条移动清单。编号会自动重排。" },
-  "structureMergeLabel": { "message": "合并到" },
-  "structureMergeNotice": { "message": "$names$ 会被清空并删除，里面的书签全部移进上面这个目录。整理后可一键撤销，这些文件夹会原样恢复。", "placeholders": { "names": { "content": "$1" } } },
-  "structureIncoming": { "message": "$count$ 条将移入", "placeholders": { "count": { "content": "$1" } } },
-  "structureDelete": { "message": "删除目录 $name$", "placeholders": { "name": { "content": "$1" } } },
-  "structureFallback": { "message": "删掉一级目录，里面的书签会落到「其他」；删掉子目录，书签留在它的上级目录。" },
-  "structureBack": { "message": "返回" },
-  "structureNext": { "message": "继续 → 查看移动清单" },
-  "reviewSummaryOne": { "message": "共 $total$ 条移动建议，已选中 $accepted$ 条。未选中的书签保持原位。", "placeholders": { "total": { "content": "$1" }, "accepted": { "content": "$2" } } },
-  "reviewSummaryOther": { "message": "共 $total$ 条移动建议，已选中 $accepted$ 条。未选中的书签保持原位。", "placeholders": { "total": { "content": "$1" }, "accepted": { "content": "$2" } } },
-  "reviewCreateFoldersOne": { "message": "将新建 $count$ 个目录", "placeholders": { "count": { "content": "$1" } } },
-  "reviewCreateFoldersOther": { "message": "将新建 $count$ 个目录", "placeholders": { "count": { "content": "$1" } } },
-  "reviewRenameFoldersOne": { "message": "，并给 $count$ 个已有目录加上编号前缀（可一键撤销）", "placeholders": { "count": { "content": "$1" } } },
-  "reviewRenameFoldersOther": { "message": "，并给 $count$ 个已有目录加上编号前缀（可一键撤销）", "placeholders": { "count": { "content": "$1" } } },
-  "reviewRenameBookmarksOne": { "message": "另有 $count$ 个 GitHub 书签的标题会被统一成「仓库名 (作者)」。这一项由设置开关决定，不受下方勾选影响。", "placeholders": { "count": { "content": "$1" } } },
-  "reviewRenameBookmarksOther": { "message": "另有 $count$ 个 GitHub 书签的标题会被统一成「仓库名 (作者)」。这一项由设置开关决定，不受下方勾选影响。", "placeholders": { "count": { "content": "$1" } } },
-  "reviewCleanNote": { "message": "整理后会清理范围内的空文件夹（可撤销）。" },
-  "reviewEmpty": { "message": "AI 认为所选范围内的书签都已在合适的位置，没有需要移动的。可以试试换一个更乱的文件夹，或开启「推翻现有文件夹结构」重新设计目录。" },
-  "reviewAcceptAll": { "message": "全部接受" },
-  "reviewAcceptHigh": { "message": "仅高置信度" },
-  "reviewRejectAll": { "message": "全部拒绝" },
-  "reviewLowConfidence": { "message": "低置信度" },
-  "reviewDiscard": { "message": "放弃" },
-  "reviewApplyOne": { "message": "应用 $count$ 项修改", "placeholders": { "count": { "content": "$1" } } },
-  "reviewApplyOther": { "message": "应用 $count$ 项修改", "placeholders": { "count": { "content": "$1" } } },
-  "reviewSummaryPeriod": { "message": "。" },
-  "resultTreeNew": { "message": "新建" },
-  "resultCompleted": { "message": "整理完成" },
-  "resultInterrupted": { "message": "整理中断" },
-  "resultStatExecuted": { "message": "已执行操作" },
-  "resultStatCreated": { "message": "新建文件夹" },
-  "resultStatRemoved": { "message": "清理空文件夹" },
-  "resultStatRenamed": { "message": "统一书签标题" },
-  "resultStatSkipped": { "message": "跳过" },
-  "resultRemovedDetails": { "message": "查看被清理的空文件夹" },
-  "resultMergedInto": { "message": "$count$ 个文件夹已合并为「$name$」", "placeholders": { "count": { "content": "$1" }, "name": { "content": "$2" } } },
-  "resultMergeSourcesRemoved": { "message": "原文件夹已删除：$names$", "placeholders": { "names": { "content": "$1" } } },
-  "resultFailedAt": { "message": "在第 $step$ 步失败：$error$", "placeholders": { "step": { "content": "$1" }, "error": { "content": "$2" } } },
-  "resultFailedHint": { "message": "已执行的部分可以通过下方按钮完整撤销。" },
-  "resultSkippedItem": { "message": "书签 $id$：$reason$", "placeholders": { "id": { "content": "$1" }, "reason": { "content": "$2" } } },
-  "resultUndoneSkippedItem": { "message": "$title$：$reason$", "placeholders": { "title": { "content": "$1" }, "reason": { "content": "$2" } } },
-  "resultTreeAfterApply": { "message": "整理后的结构" },
-  "resultTreeAfterUndo": { "message": "撤销后的结构" },
-  "resultTreeHint": { "message": "书签栏的真实结构，右侧数字为该目录下的书签数（含子目录）。未勾选的移动建议不会执行，那些书签仍留在原目录里。" },
-  "resultUndoneOne": { "message": "撤销完成：还原 $restored$ 项，删除新建文件夹 $folders$ 个。", "placeholders": { "restored": { "content": "$1" }, "folders": { "content": "$2" } } },
-  "resultUndoneOther": { "message": "撤销完成：还原 $restored$ 项，删除新建文件夹 $folders$ 个。", "placeholders": { "restored": { "content": "$1" }, "folders": { "content": "$2" } } },
-  "resultUndoButton": { "message": "撤销本次整理" },
-  "resultAgain": { "message": "再整理一次" },
-  "resultFinish": { "message": "结束整理" },
-  "busyCancelling": { "message": "正在取消，等当前批次结束…" },
-  "busyReading": { "message": "正在读取书签…" },
-  "busyScanning": { "message": "正在扫描…" },
-  "busyAnalyzing": { "message": "正在分析…" },
-  "busyApplying": { "message": "正在应用…" },
-  "busyUndoing": { "message": "正在撤销…" },
-  "busyImporting": { "message": "正在导入…" },
-  "errBackgroundRecycled": { "message": "后台已被浏览器回收，本次操作中断，请重试。" },
-  "errHostPermission": { "message": "需要授权访问模型接口所在的域名才能继续分析。请重试并允许该权限。" },
-  "errFileCorrupt": { "message": "文件结构损坏。" },
-  "errNoApiKey": { "message": "尚未配置 API Key，请先在设置中填写。" },
-  "errAnalysisCancelled": { "message": "分析已取消。" },
-  "errNoScope": { "message": "未选择任何范围。" },
-  "errNoTargetFolders": { "message": "所选范围内没有可用的目标文件夹。请开启「重建结构」或先选择包含子文件夹的范围。" },
-  "errNoBookmarksBar": { "message": "找不到书签栏，无法导入。" },
-  "errImportInvalidJson": { "message": "这个文件不是有效的 JSON。" },
-  "errImportUnsupportedFormat": { "message": "这不是 TidyMark 导出的文件，或者版本不支持。" },
-  "errImportUnknownKind": { "message": "无法识别的导出类型：$kind$", "placeholders": { "kind": { "content": "$1" } } },
-  "errImportMalformed": { "message": "文件结构损坏。" },
-  "importReasonUnsafe": { "message": "不安全的链接类型（$scheme$）", "placeholders": { "scheme": { "content": "$1" } } },
-  "importReasonCreateFailed": { "message": "创建失败：$detail$", "placeholders": { "detail": { "content": "$1" } } },
-  "importReasonFolderFailed": { "message": "文件夹创建失败：$detail$", "placeholders": { "detail": { "content": "$1" } } },
-  "errClassifyAllFailed": { "message": "AI 分析失败，没有任何书签完成分类。\n$reason$", "placeholders": { "reason": { "content": "$1" } } },
-  "logScanDone": { "message": "扫描完成：$bookmarks$ 个书签、$folders$ 个文件夹", "placeholders": { "bookmarks": { "content": "$1" }, "folders": { "content": "$2" } } },
-  "logTagsStart": { "message": "开始为 $count$ 个书签抽取主题标签", "placeholders": { "count": { "content": "$1" } } },
-  "logTreeStart": { "message": "开始设计目录：$count$ 个书签的标签", "placeholders": { "count": { "content": "$1" } } },
-  "logTreeDone": { "message": "目录设计完成：新建 $new$ 个目录，复用 $reused$ 个已有目录", "placeholders": { "new": { "content": "$1" }, "reused": { "content": "$2" } } },
-  "logMergeNamed": { "message": "合并目录命名为「$name$」", "placeholders": { "name": { "content": "$1" } } },
-  "logMergeNameFailed": { "message": "合并目录命名失败，使用「$name$」", "placeholders": { "name": { "content": "$1" } } },
-  "logPinnedSkip": { "message": "$count$ 个书签按域名聚合，跳过 AI 分类", "placeholders": { "count": { "content": "$1" } } },
-  "logClassifyStart": { "message": "开始分类：$bookmarks$ 个书签，$candidates$ 个候选目录", "placeholders": { "bookmarks": { "content": "$1" }, "candidates": { "content": "$2" } } },
-  "logClassifyFailed": { "message": "$count$ 个书签分类失败，已保持原位。原因：$reason$", "placeholders": { "count": { "content": "$1" }, "reason": { "content": "$2" } } },
-  "logTitleRewrites": { "message": "$count$ 个 GitHub 书签的标题会被统一", "placeholders": { "count": { "content": "$1" } } },
-  "logAnalyzeDone": { "message": "分析完成：$count$ 条移动建议", "placeholders": { "count": { "content": "$1" } } },
-  "logApplyDone": { "message": "整理完成：执行 $executed$ 步，清理空文件夹 $removed$ 个，按编号排位 $sorted$ 个目录", "placeholders": { "executed": { "content": "$1" }, "removed": { "content": "$2" }, "sorted": { "content": "$3" } } },
-  "logApplyInterrupted": { "message": "整理中断：执行 $executed$ 步，清理空文件夹 $removed$ 个，按编号排位 $sorted$ 个目录", "placeholders": { "executed": { "content": "$1" }, "removed": { "content": "$2" }, "sorted": { "content": "$3" } } },
-  "logUndoDone": { "message": "撤销完成：还原 $restored$ 项，删除新建目录 $folders$ 个", "placeholders": { "restored": { "content": "$1" }, "folders": { "content": "$2" } } },
-  "logImportDone": { "message": "导入完成：$bookmarks$ 条书签、$folders$ 个文件夹", "placeholders": { "bookmarks": { "content": "$1" }, "folders": { "content": "$2" } } },
-  "logCancelRequested": { "message": "已请求取消，正在结束当前批次…" }
+  "extName": {
+    "message": "TidyMark"
+  },
+  "extDescription": {
+    "message": "用 AI 重构 Chrome 原生书签 —— 所有修改可预览、可确认、可撤销"
+  },
+  "shellStepScope": {
+    "message": "选范围"
+  },
+  "shellStepPreferences": {
+    "message": "偏好"
+  },
+  "settingsGearLabel": {
+    "message": "设置"
+  },
+  "settingsTitle": {
+    "message": "设置"
+  },
+  "settingsBack": {
+    "message": "返回"
+  },
+  "settingsLangTitle": {
+    "message": "语言"
+  },
+  "settingsLangAuto": {
+    "message": "跟随浏览器"
+  },
+  "settingsLangBody": {
+    "message": "同时决定界面文案和新建目录名的语言。"
+  },
+  "settingsClassifyTitle": {
+    "message": "分类偏好"
+  },
+  "settingsRebuildOnly": {
+    "message": "以下两项只在「推翻现有文件夹结构」开启时生效。"
+  },
+  "settingsMaxFoldersTitle": {
+    "message": "同层目录最多几个"
+  },
+  "settingsMaxFoldersBody": {
+    "message": "超出上限的主题会并进「其他」。4 到 20 之间。"
+  },
+  "settingsDepthTitle": {
+    "message": "目录最深嵌套几层"
+  },
+  "settingsDepthBody": {
+    "message": "按书签库里的固定层级算：书签栏里的目录是一级，「其他书签」自己就是一级、它里面的是二级。所以填 2 时，勾书签栏能分出二级，勾「其他书签」就只建一层。1 到 4 之间。"
+  },
+  "shellStepReview": {
+    "message": "预览"
+  },
+  "shellStepResult": {
+    "message": "结果"
+  },
+  "treeExpand": {
+    "message": "展开 $name$",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "treeCollapse": {
+    "message": "收起 $name$",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "scopeIntro": {
+    "message": "勾选你想让 TidyMark 重构的文件夹。"
+  },
+  "scopeSafety": {
+    "message": "未勾选的部分不会被读取，也不会被修改——其中的书签不会移出，也不会有书签移入。"
+  },
+  "scopeExpandAll": {
+    "message": "全部展开"
+  },
+  "scopeCollapseAll": {
+    "message": "全部收起"
+  },
+  "scopeScanOne": {
+    "message": "扫描选中的 $count$ 个文件夹",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "scopeScanOther": {
+    "message": "扫描选中的 $count$ 个文件夹",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "phaseScan": {
+    "message": "扫描"
+  },
+  "phaseTags": {
+    "message": "抽取标签"
+  },
+  "phaseTree": {
+    "message": "设计目录"
+  },
+  "phaseClassify": {
+    "message": "分类"
+  },
+  "phaseApply": {
+    "message": "应用"
+  },
+  "phaseUndo": {
+    "message": "撤销"
+  },
+  "phaseImport": {
+    "message": "导入"
+  },
+  "progressCancel": {
+    "message": "取消"
+  },
+  "progressLogsExpand": {
+    "message": "展开运行日志"
+  },
+  "progressLogsCollapse": {
+    "message": "收起运行日志"
+  },
+  "progressLogsTitleOne": {
+    "message": "运行日志（$count$ 条）",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "progressLogsTitleOther": {
+    "message": "运行日志（$count$ 条）",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "sendErrChannelClosed": {
+    "message": "后台在返回结果前被中断了（扩展刚重新加载，或后台被浏览器回收）。请重试——已经跑完的批次有缓存，重试会快很多。"
+  },
+  "sendErrContextInvalidated": {
+    "message": "扩展已重新加载，这个侧栏面板已失效。请关掉侧栏重新打开。"
+  },
+  "sendErrNoReceiver": {
+    "message": "连不上后台。请在 chrome://extensions 里确认 TidyMark 已启用，然后重开侧栏。"
+  },
+  "sendErrNoResponse": {
+    "message": "后台没有返回结果，可能已被浏览器回收，请重试。"
+  },
+  "exportGroupOne": {
+    "message": "导出选中的 $count$ 条书签",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "exportGroupOther": {
+    "message": "导出选中的 $count$ 条书签",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "exportTree": {
+    "message": "带文件夹结构"
+  },
+  "exportLinks": {
+    "message": "纯链接清单"
+  },
+  "exportHtml": {
+    "message": "浏览器书签文件"
+  },
+  "exportHtmlBusy": {
+    "message": "正在取图标…"
+  },
+  "importGroup": {
+    "message": "导入别人分享的书签"
+  },
+  "importPickFile": {
+    "message": "选择文件…"
+  },
+  "importPickerLabel": {
+    "message": "选择导入文件"
+  },
+  "importRetry": {
+    "message": "重新选择"
+  },
+  "importUntitled": {
+    "message": "（无标题）"
+  },
+  "importStatsOne": {
+    "message": "$bookmarks$ 条书签、$folders$ 个文件夹",
+    "placeholders": {
+      "bookmarks": {
+        "content": "$1"
+      },
+      "folders": {
+        "content": "$2"
+      }
+    }
+  },
+  "importStatsOther": {
+    "message": "$bookmarks$ 条书签、$folders$ 个文件夹",
+    "placeholders": {
+      "bookmarks": {
+        "content": "$1"
+      },
+      "folders": {
+        "content": "$2"
+      }
+    }
+  },
+  "importDuplicates": {
+    "message": "其中 $count$ 条你已经收藏过",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "importBlockedOne": {
+    "message": "已拦下 $count$ 条不安全的链接",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "importBlockedOther": {
+    "message": "已拦下 $count$ 条不安全的链接",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "importTarget": {
+    "message": "将建到：$path$",
+    "placeholders": {
+      "path": {
+        "content": "$1"
+      }
+    }
+  },
+  "importConfirm": {
+    "message": "确认导入"
+  },
+  "importCancel": {
+    "message": "取消"
+  },
+  "importDoneOne": {
+    "message": "已导入 $count$ 条书签到 $path$",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "path": {
+        "content": "$2"
+      }
+    }
+  },
+  "importDoneOther": {
+    "message": "已导入 $count$ 条书签到 $path$",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "path": {
+        "content": "$2"
+      }
+    }
+  },
+  "importMissedOne": {
+    "message": "$count$ 条没有进来：",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "importMissedOther": {
+    "message": "$count$ 条没有进来：",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "importDeleteHint": {
+    "message": "不需要的话，直接在 Chrome 里删掉这个文件夹即可。"
+  },
+  "importFinish": {
+    "message": "完成"
+  },
+  "prefsScanTitle": {
+    "message": "扫描结果"
+  },
+  "prefsStatBookmarks": {
+    "message": "书签"
+  },
+  "prefsStatFolders": {
+    "message": "文件夹"
+  },
+  "prefsStatEmpty": {
+    "message": "空文件夹"
+  },
+  "prefsStatUntitled": {
+    "message": "无标题书签"
+  },
+  "prefsStatDuplicates": {
+    "message": "重复链接组"
+  },
+  "prefsStatDepth": {
+    "message": "最深层级"
+  },
+  "prefsModelTitle": {
+    "message": "模型配置"
+  },
+  "prefsPrivacyKey": {
+    "message": "API Key 明文保存在本地浏览器存储中，不会上传到任何服务器。"
+  },
+  "prefsPrivacyPayload": {
+    "message": "发送给模型的内容仅包含书签标题、域名、路径与所在目录，不含 URL 参数与网页正文。"
+  },
+  "prefsRebuildTitle": {
+    "message": "推翻现有文件夹结构"
+  },
+  "prefsRebuildOn": {
+    "message": "开启后会重新设计整棵目录树，并给范围内每一个一级文件夹加上编号前缀（01、02…），包括你自己建的、以及本次一个书签都没移入的。二级只重排本来就带编号的目录。整理可一键撤销。"
+  },
+  "prefsRebuildOff": {
+    "message": "关闭时只把书签移进已有文件夹，绝不改名、合并或删除任何现有文件夹。"
+  },
+  "prefsCleanTitle": {
+    "message": "整理后清理空文件夹"
+  },
+  "prefsCleanBody": {
+    "message": "删除范围内不含任何书签的文件夹，包括子目录清空后变空的父目录。范围根目录不会被删除，撤销时会连同目录一起还原。合并多个文件夹时例外：源文件夹连同它内部的空目录一律清理，不受本开关约束，撤销同样会还原。"
+  },
+  "prefsGithubTitle": {
+    "message": "统一 GitHub 书签标题"
+  },
+  "prefsGithubBody": {
+    "message": "把标题按 URL 改写成「仓库名 (作者)」，收藏具体文件时保留文件名。这会改动书签本身的名字，不只是位置；可一键撤销。与上面的勾选无关，开启后范围内所有 GitHub 书签都会改。"
+  },
+  "prefsGroupTitle": {
+    "message": "单独聚合这些站点"
+  },
+  "prefsGroupBody": {
+    "message": "勾选的站点会各自成为一个顶级目录，目录内再按主题细分。只在「推翻现有文件夹结构」开启时生效。"
+  },
+  "prefsBack": {
+    "message": "返回"
+  },
+  "prefsStart": {
+    "message": "开始 AI 分析"
+  },
+  "structureIntroOne": {
+    "message": "AI 设计了 $folders$ 个一级目录，将容纳 $bookmarks$ 个书签。",
+    "placeholders": {
+      "folders": {
+        "content": "$1"
+      },
+      "bookmarks": {
+        "content": "$2"
+      }
+    }
+  },
+  "structureIntroOther": {
+    "message": "AI 设计了 $folders$ 个一级目录，将容纳 $bookmarks$ 个书签。",
+    "placeholders": {
+      "folders": {
+        "content": "$1"
+      },
+      "bookmarks": {
+        "content": "$2"
+      }
+    }
+  },
+  "structureHint": {
+    "message": "可以改名或删掉不想要的目录，确认后再查看逐条移动清单。编号会自动重排。"
+  },
+  "structureMergeLabel": {
+    "message": "合并到"
+  },
+  "structureMergeNotice": {
+    "message": "$names$ 会被清空并删除，里面的书签全部移进上面这个目录。整理后可一键撤销，这些文件夹会原样恢复。",
+    "placeholders": {
+      "names": {
+        "content": "$1"
+      }
+    }
+  },
+  "structureIncoming": {
+    "message": "$count$ 条将移入",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "structureDelete": {
+    "message": "删除目录 $name$",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "structureFallback": {
+    "message": "删掉一级目录，里面的书签会落到「其他」；删掉子目录，书签留在它的上级目录。"
+  },
+  "structureBack": {
+    "message": "返回"
+  },
+  "structureNext": {
+    "message": "继续 → 查看移动清单"
+  },
+  "reviewSummaryOne": {
+    "message": "共 $total$ 条移动建议，已选中 $accepted$ 条。未选中的书签保持原位。",
+    "placeholders": {
+      "total": {
+        "content": "$1"
+      },
+      "accepted": {
+        "content": "$2"
+      }
+    }
+  },
+  "reviewSummaryOther": {
+    "message": "共 $total$ 条移动建议，已选中 $accepted$ 条。未选中的书签保持原位。",
+    "placeholders": {
+      "total": {
+        "content": "$1"
+      },
+      "accepted": {
+        "content": "$2"
+      }
+    }
+  },
+  "reviewCreateFoldersOne": {
+    "message": "将新建 $count$ 个目录",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewCreateFoldersOther": {
+    "message": "将新建 $count$ 个目录",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewRenameFoldersOne": {
+    "message": "，并给 $count$ 个已有目录加上编号前缀（可一键撤销）",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewRenameFoldersOther": {
+    "message": "，并给 $count$ 个已有目录加上编号前缀（可一键撤销）",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewRenameBookmarksOne": {
+    "message": "另有 $count$ 个 GitHub 书签的标题会被统一成「仓库名 (作者)」。这一项由设置开关决定，不受下方勾选影响。",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewRenameBookmarksOther": {
+    "message": "另有 $count$ 个 GitHub 书签的标题会被统一成「仓库名 (作者)」。这一项由设置开关决定，不受下方勾选影响。",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewCleanNote": {
+    "message": "整理后会清理范围内的空文件夹（可撤销）。"
+  },
+  "reviewEmpty": {
+    "message": "AI 认为所选范围内的书签都已在合适的位置，没有需要移动的。可以试试换一个更乱的文件夹，或开启「推翻现有文件夹结构」重新设计目录。"
+  },
+  "reviewAcceptAll": {
+    "message": "全部接受"
+  },
+  "reviewAcceptHigh": {
+    "message": "仅高置信度"
+  },
+  "reviewRejectAll": {
+    "message": "全部拒绝"
+  },
+  "reviewLowConfidence": {
+    "message": "低置信度"
+  },
+  "reviewDiscard": {
+    "message": "放弃"
+  },
+  "reviewApplyOne": {
+    "message": "应用 $count$ 项修改",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewApplyOther": {
+    "message": "应用 $count$ 项修改",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewSummaryPeriod": {
+    "message": "。"
+  },
+  "resultTreeNew": {
+    "message": "新建"
+  },
+  "resultCompleted": {
+    "message": "整理完成"
+  },
+  "resultInterrupted": {
+    "message": "整理中断"
+  },
+  "resultStatExecuted": {
+    "message": "已执行操作"
+  },
+  "resultStatCreated": {
+    "message": "新建文件夹"
+  },
+  "resultStatRemoved": {
+    "message": "清理空文件夹"
+  },
+  "resultStatRenamed": {
+    "message": "统一书签标题"
+  },
+  "resultStatSkipped": {
+    "message": "跳过"
+  },
+  "resultRemovedDetails": {
+    "message": "查看被清理的空文件夹"
+  },
+  "resultMergedInto": {
+    "message": "$count$ 个文件夹已合并为「$name$」",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "name": {
+        "content": "$2"
+      }
+    }
+  },
+  "resultMergeSourcesRemoved": {
+    "message": "原文件夹已删除：$names$",
+    "placeholders": {
+      "names": {
+        "content": "$1"
+      }
+    }
+  },
+  "resultFailedAt": {
+    "message": "在第 $step$ 步失败：$error$",
+    "placeholders": {
+      "step": {
+        "content": "$1"
+      },
+      "error": {
+        "content": "$2"
+      }
+    }
+  },
+  "resultFailedHint": {
+    "message": "已执行的部分可以通过下方按钮完整撤销。"
+  },
+  "resultSkippedItem": {
+    "message": "书签 $id$：$reason$",
+    "placeholders": {
+      "id": {
+        "content": "$1"
+      },
+      "reason": {
+        "content": "$2"
+      }
+    }
+  },
+  "resultUndoneSkippedItem": {
+    "message": "$title$：$reason$",
+    "placeholders": {
+      "title": {
+        "content": "$1"
+      },
+      "reason": {
+        "content": "$2"
+      }
+    }
+  },
+  "resultTreeAfterApply": {
+    "message": "整理后的结构"
+  },
+  "resultTreeAfterUndo": {
+    "message": "撤销后的结构"
+  },
+  "resultTreeHint": {
+    "message": "书签栏的真实结构，右侧数字为该目录下的书签数（含子目录）。未勾选的移动建议不会执行，那些书签仍留在原目录里。"
+  },
+  "resultUndoneOne": {
+    "message": "撤销完成：还原 $restored$ 项，删除新建文件夹 $folders$ 个。",
+    "placeholders": {
+      "restored": {
+        "content": "$1"
+      },
+      "folders": {
+        "content": "$2"
+      }
+    }
+  },
+  "resultUndoneOther": {
+    "message": "撤销完成：还原 $restored$ 项，删除新建文件夹 $folders$ 个。",
+    "placeholders": {
+      "restored": {
+        "content": "$1"
+      },
+      "folders": {
+        "content": "$2"
+      }
+    }
+  },
+  "resultUndoButton": {
+    "message": "撤销本次整理"
+  },
+  "resultAgain": {
+    "message": "再整理一次"
+  },
+  "resultFinish": {
+    "message": "结束整理"
+  },
+  "busyCancelling": {
+    "message": "正在取消，等当前批次结束…"
+  },
+  "busyReading": {
+    "message": "正在读取书签…"
+  },
+  "busyScanning": {
+    "message": "正在扫描…"
+  },
+  "busyAnalyzing": {
+    "message": "正在分析…"
+  },
+  "busyApplying": {
+    "message": "正在应用…"
+  },
+  "busyUndoing": {
+    "message": "正在撤销…"
+  },
+  "busyImporting": {
+    "message": "正在导入…"
+  },
+  "errBackgroundRecycled": {
+    "message": "后台已被浏览器回收，本次操作中断，请重试。"
+  },
+  "errHostPermission": {
+    "message": "需要授权访问模型接口所在的域名才能继续分析。请重试并允许该权限。"
+  },
+  "errFileCorrupt": {
+    "message": "文件结构损坏。"
+  },
+  "errNoApiKey": {
+    "message": "尚未配置 API Key，请先在设置中填写。"
+  },
+  "errAnalysisCancelled": {
+    "message": "分析已取消。"
+  },
+  "errNoScope": {
+    "message": "未选择任何范围。"
+  },
+  "errNoTargetFolders": {
+    "message": "所选范围内没有可用的目标文件夹。请开启「重建结构」或先选择包含子文件夹的范围。"
+  },
+  "errNoBookmarksBar": {
+    "message": "找不到书签栏，无法导入。"
+  },
+  "errImportInvalidJson": {
+    "message": "这个文件不是有效的 JSON。"
+  },
+  "errImportUnsupportedFormat": {
+    "message": "这不是 TidyMark 导出的文件，或者版本不支持。"
+  },
+  "errImportUnknownKind": {
+    "message": "无法识别的导出类型：$kind$",
+    "placeholders": {
+      "kind": {
+        "content": "$1"
+      }
+    }
+  },
+  "errImportMalformed": {
+    "message": "文件结构损坏。"
+  },
+  "importReasonUnsafe": {
+    "message": "不安全的链接类型（$scheme$）",
+    "placeholders": {
+      "scheme": {
+        "content": "$1"
+      }
+    }
+  },
+  "importReasonCreateFailed": {
+    "message": "创建失败：$detail$",
+    "placeholders": {
+      "detail": {
+        "content": "$1"
+      }
+    }
+  },
+  "importReasonFolderFailed": {
+    "message": "文件夹创建失败：$detail$",
+    "placeholders": {
+      "detail": {
+        "content": "$1"
+      }
+    }
+  },
+  "errClassifyAllFailed": {
+    "message": "AI 分析失败，没有任何书签完成分类。\n$reason$",
+    "placeholders": {
+      "reason": {
+        "content": "$1"
+      }
+    }
+  },
+  "logScanDone": {
+    "message": "扫描完成：$bookmarks$ 个书签、$folders$ 个文件夹",
+    "placeholders": {
+      "bookmarks": {
+        "content": "$1"
+      },
+      "folders": {
+        "content": "$2"
+      }
+    }
+  },
+  "logTagsStart": {
+    "message": "开始为 $count$ 个书签抽取主题标签",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "logTreeStart": {
+    "message": "开始设计目录：$count$ 个书签的标签",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "logTreeDone": {
+    "message": "目录设计完成：新建 $new$ 个目录，复用 $reused$ 个已有目录",
+    "placeholders": {
+      "new": {
+        "content": "$1"
+      },
+      "reused": {
+        "content": "$2"
+      }
+    }
+  },
+  "logMergeNamed": {
+    "message": "合并目录命名为「$name$」",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "logMergeNameFailed": {
+    "message": "合并目录命名失败，使用「$name$」",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "logPinnedSkip": {
+    "message": "$count$ 个书签按域名聚合，跳过 AI 分类",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "logClassifyStart": {
+    "message": "开始分类：$bookmarks$ 个书签，$candidates$ 个候选目录",
+    "placeholders": {
+      "bookmarks": {
+        "content": "$1"
+      },
+      "candidates": {
+        "content": "$2"
+      }
+    }
+  },
+  "logClassifyFailed": {
+    "message": "$count$ 个书签分类失败，已保持原位。原因：$reason$",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "reason": {
+        "content": "$2"
+      }
+    }
+  },
+  "logTitleRewrites": {
+    "message": "$count$ 个 GitHub 书签的标题会被统一",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "logAnalyzeDone": {
+    "message": "分析完成：$count$ 条移动建议",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "logApplyDone": {
+    "message": "整理完成：执行 $executed$ 步，清理空文件夹 $removed$ 个，按编号排位 $sorted$ 个目录",
+    "placeholders": {
+      "executed": {
+        "content": "$1"
+      },
+      "removed": {
+        "content": "$2"
+      },
+      "sorted": {
+        "content": "$3"
+      }
+    }
+  },
+  "logApplyInterrupted": {
+    "message": "整理中断：执行 $executed$ 步，清理空文件夹 $removed$ 个，按编号排位 $sorted$ 个目录",
+    "placeholders": {
+      "executed": {
+        "content": "$1"
+      },
+      "removed": {
+        "content": "$2"
+      },
+      "sorted": {
+        "content": "$3"
+      }
+    }
+  },
+  "logUndoDone": {
+    "message": "撤销完成：还原 $restored$ 项，删除新建目录 $folders$ 个",
+    "placeholders": {
+      "restored": {
+        "content": "$1"
+      },
+      "folders": {
+        "content": "$2"
+      }
+    }
+  },
+  "logImportDone": {
+    "message": "导入完成：$bookmarks$ 条书签、$folders$ 个文件夹",
+    "placeholders": {
+      "bookmarks": {
+        "content": "$1"
+      },
+      "folders": {
+        "content": "$2"
+      }
+    }
+  },
+  "logCancelRequested": {
+    "message": "已请求取消，正在结束当前批次…"
+  }
 }

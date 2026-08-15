@@ -21,10 +21,10 @@ describe('设置存取', () => {
     expect((await loadSettings(ports())).removeEmptyFolders).toBe(true)
   })
 
-  it('默认一级目录上限等于 MAX_SIBLINGS，默认允许二级目录', async () => {
+  it('默认同层目录上限等于 MAX_SIBLINGS，默认最深两层', async () => {
     const settings = await loadSettings(ports())
     expect(settings.maxTopFolders).toBe(MAX_SIBLINGS)
-    expect(settings.allowSubfolders).toBe(true)
+    expect(settings.maxFolderDepth).toBe(2)
   })
 
   // 老用户存储里没有这两个键，缺字段必须回落默认值而不是 undefined，
@@ -34,8 +34,30 @@ describe('设置存取', () => {
     await p.storage.set(SETTINGS_KEY, { rebuildStructure: true })
     const settings = await loadSettings(p)
     expect(settings.maxTopFolders).toBe(MAX_SIBLINGS)
-    expect(settings.allowSubfolders).toBe(true)
+    expect(settings.maxFolderDepth).toBe(2)
     expect(settings.rebuildStructure).toBe(true)
+  })
+
+  // allowSubfolders 这个布尔开关被 maxFolderDepth 取代了。上周关掉过它的人，
+  // 存储里躺着 false；不认这个旧键就等于把他的选择静默翻回默认，
+  // 而这是「会不会给我建二级目录」这种看得见的行为
+  it('旧的 allowSubfolders=false 认成最深一层', async () => {
+    const p = ports()
+    await p.storage.set(SETTINGS_KEY, { allowSubfolders: false })
+    expect((await loadSettings(p)).maxFolderDepth).toBe(1)
+  })
+
+  it('旧的 allowSubfolders=true 认成默认的两层', async () => {
+    const p = ports()
+    await p.storage.set(SETTINGS_KEY, { allowSubfolders: true })
+    expect((await loadSettings(p)).maxFolderDepth).toBe(2)
+  })
+
+  // 新键存在时它说了算，不再看旧键——否则改不动设置
+  it('新键存在时压过旧键', async () => {
+    const p = ports()
+    await p.storage.set(SETTINGS_KEY, { allowSubfolders: false, maxFolderDepth: 3 })
+    expect((await loadSettings(p)).maxFolderDepth).toBe(3)
   })
 
   it('保存后能读回', async () => {

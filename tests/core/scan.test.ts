@@ -96,3 +96,28 @@ describe('scanTree 去重', () => {
     expect(scan.folders.find((f) => f.id === '10')!.depth).toBe(1)
   })
 })
+
+/**
+ * depth 相对于勾选点、level 是书签库里的固定位置——两个数字必须都在，
+ * 且在勾了「其他书签」这种情况下会明显分叉：depth 归零重算，level 不变。
+ */
+describe('scanTree 带上绝对层级', () => {
+  it('勾书签栏时，栏里的目录 depth 与 level 都是 1', () => {
+    const folder = scanTree(tree, ['1']).folders.find((f) => f.id === '10')
+    expect(folder?.depth).toBe(1)
+    expect(folder?.level).toBe(1)
+  })
+
+  it('勾其他书签时 depth 归零重算，level 仍按书签库的位置算', () => {
+    const folders = scanTree(tree, ['2']).folders
+    const root = folders.find((f) => f.id === '2')
+    expect(root?.depth).toBe(0)
+    // 「其他书签」在栏的最右端显示成一个文件夹，所以它自己就是一级
+    expect(root?.level).toBe(1)
+  })
+
+  it('勾一个深层目录时，level 不会因为勾选点变化而变小', () => {
+    expect(scanTree(tree, ['10']).folders.find((f) => f.id === '10')?.level).toBe(1)
+    expect(scanTree(tree, ['1']).folders.find((f) => f.id === '10')?.level).toBe(1)
+  })
+})

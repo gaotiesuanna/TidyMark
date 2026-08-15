@@ -1,6 +1,6 @@
 import { t } from '@/i18n'
 import { useStore } from '../store'
-import type { Settings } from '@/storage/settings'
+import { MAX_FOLDER_DEPTH, MIN_FOLDER_DEPTH, type Settings } from '@/storage/settings'
 
 /** 上限的合法区间。低于 4 没有分类意义，高于 20 在书签栏里也找不着。 */
 const MIN_TOP_FOLDERS = 4
@@ -64,20 +64,26 @@ export function SettingsPanel() {
           </span>
         </label>
 
-        <label className={`flex items-start gap-2 text-sm ${enabled ? '' : 'text-neutral-300'}`}>
+        <label className={`block text-sm ${enabled ? '' : 'text-neutral-300'}`}>
+          {t('settingsDepthTitle')}
           <input
-            type="checkbox"
-            className="mt-1 h-3.5 w-3.5"
-            aria-label={t('settingsSubfoldersTitle')}
+            type="number"
+            className="mt-1 w-20 rounded border px-2 py-1 text-xs"
+            aria-label={t('settingsDepthTitle')}
+            min={MIN_FOLDER_DEPTH}
+            max={MAX_FOLDER_DEPTH}
             disabled={!enabled}
-            checked={settings.allowSubfolders}
-            onChange={(e) => void setSettings({ ...settings, allowSubfolders: e.target.checked })}
+            value={settings.maxFolderDepth}
+            onChange={(e) => {
+              // 与上面那个数字框同样的把关：越界值不写进存储，保持原值
+              const next = Number(e.target.value)
+              if (!Number.isInteger(next)) return
+              if (next < MIN_FOLDER_DEPTH || next > MAX_FOLDER_DEPTH) return
+              void setSettings({ ...settings, maxFolderDepth: next })
+            }}
           />
-          <span>
-            {t('settingsSubfoldersTitle')}
-            <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-400">
-              {t('settingsSubfoldersBody')}
-            </span>
+          <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-400">
+            {t('settingsDepthBody')}
           </span>
         </label>
       </section>

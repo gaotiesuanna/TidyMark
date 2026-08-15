@@ -16,13 +16,24 @@ export interface Settings {
   domainGroups: string[]
   /** 把 GitHub 书签的标题统一成 `repo (owner)`。 */
   rewriteGithubTitles: boolean
-  /** 一级目录数上限。只在推翻重建模式下生效。 */
+  /** 同一层的目录数上限。只在推翻重建模式下生效。 */
   maxTopFolders: number
-  /** 允许模型分出二级目录。关掉时强制单层。只在推翻重建模式下生效。 */
-  allowSubfolders: boolean
+  /**
+   * 目录最深嵌套到第几层，按**绝对**层级算（见 core/level.ts）：
+   * 书签栏里的目录是一级，「其他书签」自己是一级、它里面的是二级。
+   *
+   * 所以这个数字与「勾了哪里」无关：上限 2 时勾书签栏可以分出二级，
+   * 勾「其他书签」就只能建一层——那一层本身已经是二级了。
+   * 只在推翻重建模式下生效。
+   */
+  maxFolderDepth: number
   /** 界面与产出的语言。'auto' 时跟随浏览器 UI 语言。 */
   uiLocale: UiLocale
 }
+
+/** 嵌套层数的合法区间。1 就是完全不分子目录；超过 4 层在书签管理器里已经找不着东西。 */
+export const MIN_FOLDER_DEPTH = 1
+export const MAX_FOLDER_DEPTH = 4
 
 export const DEFAULT_SETTINGS: Settings = {
   llm: { baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-4o-mini' },
@@ -31,7 +42,7 @@ export const DEFAULT_SETTINGS: Settings = {
   domainGroups: [],
   rewriteGithubTitles: false,
   maxTopFolders: MAX_SIBLINGS,
-  allowSubfolders: true,
+  maxFolderDepth: 2,
   uiLocale: 'auto',
 }
 
@@ -49,8 +60,17 @@ export const PRESETS: Array<{ label: Record<Locale, string>; baseUrl: string; mo
   { label: { zh_CN: '本地 Ollama', en: 'Local Ollama' }, baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5' },
 ]
 
+/** 被 maxFolderDepth 取代的旧开关。只在读取时认，不再写出去。 */
+interface LegacySettings {
+  allowSubfolders?: boolean
+}
+
 export async function loadSettings(ports: Ports): Promise<Settings> {
-  const stored = await ports.storage.get<Partial<Settings>>(SETTINGS_KEY)
+  const stored = await ports.storage.get<Partial<Settings> & LegacySettings>(SETTINGS_KEY)
+  // 上周关掉过「允许二级目录」的人，存储里躺着 false。不认这个旧键就等于把他的选择
+  // 静默翻回默认，而这是「会不会给我建二级目录」这种一眼看得见的行为。
+  // 新键在场时它说了算，否则改不动设置。
+  const legacyDepth = stored?.allowSubfolders === false ? MIN_FOLDER_DEPTH : undefined
   return {
     llm: { ...DEFAULT_SETTINGS.llm, ...(stored?.llm ?? {}) },
     rebuildStructure: stored?.rebuildStructure ?? DEFAULT_SETTINGS.rebuildStructure,
@@ -58,7 +78,7 @@ export async function loadSettings(ports: Ports): Promise<Settings> {
     domainGroups: stored?.domainGroups ?? DEFAULT_SETTINGS.domainGroups,
     rewriteGithubTitles: stored?.rewriteGithubTitles ?? DEFAULT_SETTINGS.rewriteGithubTitles,
     maxTopFolders: stored?.maxTopFolders ?? DEFAULT_SETTINGS.maxTopFolders,
-    allowSubfolders: stored?.allowSubfolders ?? DEFAULT_SETTINGS.allowSubfolders,
+    maxFolderDepth: stored?.maxFolderDepth ?? legacyDepth ?? DEFAULT_SETTINGS.maxFolderDepth,
     uiLocale: stored?.uiLocale ?? DEFAULT_SETTINGS.uiLocale,
   }
 }

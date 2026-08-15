@@ -99,8 +99,12 @@ export interface DesignOptions {
   parentTitle?: string
   /** 同一层目录数上限。省略时用 MAX_SIBLINGS。 */
   maxTopFolders?: number
-  /** 允许二级目录。false 时提示词要求模型只输出一层。 */
-  allowSubfolders?: boolean
+  /** 允许再往下分一层。false 时提示词要求模型只输出一层。 */
+  allowChildren?: boolean
+  /** 这批目录的绝对层级（见 core/level.ts）。省略按 1 算。 */
+  startLevel?: number
+  /** 这批目录会被放进哪个目录。 */
+  containerTitle?: string
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => void
   /** 每摊设计开始前检查一次，返回 true 就跳过剩余摊子。 */
   isCancelled?: () => boolean
@@ -118,7 +122,9 @@ function buildDesignPrompt(topics: TopicCount[], options: DesignOptions, locale:
       total,
       parentTitle: options.oneLevel === true ? (options.parentTitle ?? '') : undefined,
       maxSiblings,
-      ...(options.allowSubfolders === undefined ? {} : { allowSubfolders: options.allowSubfolders }),
+      ...(options.allowChildren === undefined ? {} : { allowChildren: options.allowChildren }),
+      ...(options.startLevel === undefined ? {} : { startLevel: options.startLevel }),
+      ...(options.containerTitle === undefined ? {} : { containerTitle: options.containerTitle }),
     }),
     '',
     locale === 'zh_CN' ? '标签清单：' : 'Label list:',

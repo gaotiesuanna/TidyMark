@@ -18,7 +18,10 @@ export interface FolderItem {
   parentId: string | null
   index: number
   path: string[]
+  /** 相对于勾选点的深度，勾中的那个是 0。回答「这次要遍历多深」。 */
   depth: number
+  /** 在书签库里的固定层级，与勾了哪里无关。回答「这是几级目录」。见 core/level.ts。 */
+  level: number
 }
 
 export interface ScanStats {

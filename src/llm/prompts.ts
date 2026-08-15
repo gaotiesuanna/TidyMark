@@ -85,14 +85,40 @@ export function groupTagsPrompt(locale: Locale, groupTitle: string): string[] {
 }
 
 /**
+ * 层级的说法，按绝对层级（见 core/level.ts）。
+ *
+ * 英文第一级说 top-level 而不是 level-1：那是这个语言里的自然说法，
+ * 而更深的层级没有同样自然的词，只能编号。中文四级以内有现成说法，超出就退回编号。
+ */
+function levelName(locale: Locale, level: number): string {
+  if (locale === 'en') return level <= 1 ? 'top-level' : `level-${level}`
+  return ['一', '二', '三', '四'][level - 1] ?? String(level)
+}
+
+/**
  * `maxSiblings` 直接照数字写进提示词，不在这里做任何加减——`MAX_SIBLINGS - 1`
  * 这类换算（给「其他」目录留位）由调用方（folders.ts）算好了再传进来，这里只管渲染。
+ *
+ * `startLevel` 同理是算好的绝对层级：这批目录建出来会落在第几层。勾书签栏时是 1，
+ * 勾「其他书签」时是 2。不传按 1 算，也就是改造前唯一存在的那种情况。
  */
 export function foldersPrompt(
   locale: Locale,
-  opts: { total: number; parentTitle?: string; maxSiblings: number; allowSubfolders?: boolean },
+  opts: {
+    total: number
+    parentTitle?: string
+    maxSiblings: number
+    /** 允许模型用 children 再分一层。false 时提示词要求只输出一层。 */
+    allowChildren?: boolean
+    /** 这批目录的绝对层级。省略按 1 算。 */
+    startLevel?: number
+    /** 这批目录会被放进哪个目录，用于让模型知道自己在谁下面命名。 */
+    containerTitle?: string
+  },
 ): string[] {
-  const { total, parentTitle, maxSiblings, allowSubfolders = true } = opts
+  const { total, parentTitle, maxSiblings, allowChildren = true, startLevel = 1, containerTitle } = opts
+  const here = levelName(locale, startLevel)
+  const below = levelName(locale, startLevel + 1)
 
   if (locale === 'zh_CN') {
     const head = parentTitle !== undefined
@@ -100,7 +126,12 @@ export function foldersPrompt(
           `下面这些标签来自「${parentTitle}」目录里的 ${total} 个书签，需要为它们设计子目录。`,
           '这个共同点已经写在父目录名上，不要再拿它当分类依据。',
         ]
-      : [`下面是从 ${total} 个书签中抽出的主题标签，每个标签后面是它的书签数。请据此设计目录结构。`]
+      : [
+          `下面是从 ${total} 个书签中抽出的主题标签，每个标签后面是它的书签数。请据此设计目录结构。`,
+          ...(containerTitle === undefined
+            ? []
+            : [`这些目录会放进「${containerTitle}」里，它们是${here}级目录。`]),
+        ]
 
     const body = parentTitle !== undefined
       ? [
@@ -111,11 +142,11 @@ export function foldersPrompt(
         ]
       : [
           '1. 合并同义或高度重叠的标签，用一个目录容纳它们。',
-          `2. 一级目录不超过 ${maxSiblings} 个。`,
-          allowSubfolders
-            ? '3. 书签少时只给一层目录，不要硬凑二级目录；只有当某个一级目录下确实存在多个清晰的子主题、书签数量也撑得起来时，才用 children 分出二级。'
+          `2. ${here}级目录不超过 ${maxSiblings} 个。`,
+          allowChildren
+            ? `3. 书签少时只给一层目录，不要硬凑${below}级目录；只有当某个${here}级目录下确实存在多个清晰的子主题、书签数量也撑得起来时，才用 children 分出${below}级。`
             : '3. 只输出一层目录，children 一律返回空数组。',
-          `4. 一级目录名要具体，禁止使用这些宽泛词：${BROAD_WORDS.zh_CN}。「Claude Code」「LLM 原理」「终端工具」是好名字，「AI」「开发」不是。`,
+          `4. ${here}级目录名要具体，禁止使用这些宽泛词：${BROAD_WORDS.zh_CN}。「Claude Code」「LLM 原理」「终端工具」是好名字，「AI」「开发」不是。`,
         ]
 
     return [
@@ -123,7 +154,7 @@ export function foldersPrompt(
       '',
       '规则：',
       ...body,
-      '5. 每个标签必须出现在恰好一个目录的 topics 里，不要遗漏、不要重复。直接归入某个一级目录的标签写在它自己的 topics 里，归入子目录的写在子目录的 topics 里。',
+      `5. 每个标签必须出现在恰好一个目录的 topics 里，不要遗漏、不要重复。直接归入某个${parentTitle === undefined ? `${here}级` : ''}目录的标签写在它自己的 topics 里，归入子目录的写在子目录的 topics 里。`,
       '6. 目录名用中文，专有技术名词（React、RAG、MCP）可直接用原文。',
     ]
   }
@@ -133,7 +164,12 @@ export function foldersPrompt(
         `The labels below come from ${total} bookmarks inside the "${parentTitle}" folder. Design subfolders for them.`,
         'That shared trait is already in the parent folder name, so do not use it as the basis for classification.',
       ]
-    : [`Below are topic labels extracted from ${total} bookmarks, each followed by its bookmark count. Design a folder structure from them.`]
+    : [
+        `Below are topic labels extracted from ${total} bookmarks, each followed by its bookmark count. Design a folder structure from them.`,
+        ...(containerTitle === undefined
+          ? []
+          : [`These folders will go inside "${containerTitle}", which makes them ${here} folders.`]),
+      ]
 
   const body = parentTitle !== undefined
     ? [
@@ -144,11 +180,11 @@ export function foldersPrompt(
       ]
     : [
         '1. Merge synonymous or heavily overlapping labels into one folder.',
-        `2. At most ${maxSiblings} top-level folders.`,
-        allowSubfolders
-          ? '3. With few bookmarks, produce a single level. Only use children when a top-level folder genuinely contains several distinct subtopics with enough bookmarks to justify them.'
+        `2. At most ${maxSiblings} ${here} folders.`,
+        allowChildren
+          ? `3. With few bookmarks, produce a single level. Only use children when a ${here} folder genuinely contains several distinct subtopics with enough bookmarks to justify them as ${below} folders.`
           : '3. Output only one level. Always return an empty array for children.',
-        `4. Top-level folder names must be specific. Never use these vague words: ${BROAD_WORDS.en}. "Claude Code", "LLM internals", "Terminal tools" are good names; "AI", "Dev" are not.`,
+        `4. ${here === 'top-level' ? 'Top-level' : here} folder names must be specific. Never use these vague words: ${BROAD_WORDS.en}. "Claude Code", "LLM internals", "Terminal tools" are good names; "AI", "Dev" are not.`,
       ]
 
   return [
@@ -156,7 +192,7 @@ export function foldersPrompt(
     '',
     'Rules:',
     ...body,
-    '5. Every label must appear in the topics of exactly one folder — none missing, none duplicated. Labels going directly into a top-level folder belong in its own topics; labels going into a subfolder belong in that subfolder.',
+    `5. Every label must appear in the topics of exactly one folder — none missing, none duplicated. Labels going directly into a${parentTitle === undefined ? ` ${here}` : ''} folder belong in its own topics; labels going into a subfolder belong in that subfolder.`,
     '6. Write folder names in English. Established technical names (React, RAG, MCP) stay as they are.',
   ]
 }

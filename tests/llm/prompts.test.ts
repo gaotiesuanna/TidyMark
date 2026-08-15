@@ -76,11 +76,11 @@ describe('提示词双语', () => {
   })
 })
 
-describe('foldersPrompt 二级目录开关', () => {
-  it('allowSubfolders=false 时要求只输出一层', () => {
-    expect(foldersPrompt('zh_CN', { total: 10, maxSiblings: 8, allowSubfolders: false }).join(' '))
+describe('foldersPrompt 再分一层的开关', () => {
+  it('allowChildren=false 时要求只输出一层', () => {
+    expect(foldersPrompt('zh_CN', { total: 10, maxSiblings: 8, allowChildren: false }).join(' '))
       .toContain('children 一律返回空数组')
-    expect(foldersPrompt('en', { total: 10, maxSiblings: 8, allowSubfolders: false }).join(' '))
+    expect(foldersPrompt('en', { total: 10, maxSiblings: 8, allowChildren: false }).join(' '))
       .toMatch(/empty array for children/i)
   })
 
@@ -95,5 +95,48 @@ describe('foldersPrompt 二级目录开关', () => {
   it('聚合组内部（带 parentTitle）本来就是单层，不受开关影响', () => {
     const withParent = foldersPrompt('zh_CN', { total: 10, maxSiblings: 8, parentTitle: 'GitHub' })
     expect(withParent.join(' ')).toContain('children 一律返回空数组')
+  })
+})
+
+/**
+ * 层级按绝对位置算：勾「其他书签」时模型建的是二级目录，不是一级。
+ * 提示词里的称呼跟着走，否则模型会照着「一级目录要具体」的标准去命名一批二级目录。
+ */
+describe('foldersPrompt 绝对层级', () => {
+  it('不传 startLevel 时仍说「一级目录」——默认就是勾书签栏那种情况', () => {
+    expect(foldersPrompt('zh_CN', { total: 10, maxSiblings: 8 }).join(' ')).toContain('一级目录')
+    expect(foldersPrompt('en', { total: 10, maxSiblings: 8 }).join(' ')).toMatch(/top-level folders/i)
+  })
+
+  it('startLevel=2 时全篇改口叫二级目录，不再出现「一级目录」', () => {
+    const zh = foldersPrompt('zh_CN', { total: 10, maxSiblings: 8, startLevel: 2 }).join(' ')
+    expect(zh).toContain('二级目录')
+    expect(zh).not.toContain('一级目录')
+
+    const en = foldersPrompt('en', { total: 10, maxSiblings: 8, startLevel: 2 }).join(' ')
+    expect(en).toMatch(/level-2 folders/i)
+    expect(en).not.toMatch(/top-level folders/i)
+  })
+
+  it('允许再分时，下一层的称呼也跟着推——二级下面是三级', () => {
+    const zh = foldersPrompt('zh_CN', { total: 10, maxSiblings: 8, startLevel: 2, allowChildren: true }).join(' ')
+    expect(zh).toContain('三级')
+
+    const en = foldersPrompt('en', { total: 10, maxSiblings: 8, startLevel: 2, allowChildren: true }).join(' ')
+    expect(en).toMatch(/level-3/i)
+  })
+
+  it('给出容器名时告诉模型这批目录会落在哪儿', () => {
+    expect(foldersPrompt('zh_CN', { total: 10, maxSiblings: 8, startLevel: 2, containerTitle: '其他书签' }).join(' '))
+      .toContain('其他书签')
+    expect(foldersPrompt('en', { total: 10, maxSiblings: 8, startLevel: 2, containerTitle: 'Other Bookmarks' }).join(' '))
+      .toContain('Other Bookmarks')
+  })
+
+  // 聚合组内部是「某个目录下面的子目录」，那套文案本来就是相对的，不该被绝对层级搅进来
+  it('聚合组内部（带 parentTitle）不受 startLevel 影响', () => {
+    const zh = foldersPrompt('zh_CN', { total: 5, parentTitle: 'GitHub', maxSiblings: 8, startLevel: 3 }).join(' ')
+    expect(zh).toContain('子目录')
+    expect(zh).not.toContain('三级目录')
   })
 })

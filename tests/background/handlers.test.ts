@@ -191,13 +191,13 @@ describe('handle', () => {
     expect(prompts.some((prompt) => prompt.includes('一级目录不超过 4 个'))).toBe(true)
   })
 
-  it('关掉二级目录后，目录设计提示词要求只输出一层', async () => {
+  it('嵌套上限设成 1 时，目录设计提示词要求只输出一层', async () => {
     const { ports } = setup()
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       rebuildStructure: true,
-      allowSubfolders: false,
+      maxFolderDepth: 1,
     })
     const complete = vi.fn()
       .mockResolvedValueOnce({ results: [{ bookmark_id: '100', primary_topic: '前端' }] })
@@ -873,5 +873,76 @@ describe('后台按用户设置的语言产出文案', () => {
       settings: { ...DEFAULT_SETTINGS, uiLocale: 'en' },
     }, deps)
     expect(currentLocale()).toBe('en')
+  })
+})
+
+/**
+ * 层级按书签库里的固定位置算，不按勾选点算。这是整件事的要害：
+ * 「其他书签」在栏的最右端显示成一个文件夹、跟栏里的目录平级，所以它自己就是一级，
+ * 在它里面建的那批是二级。搞错了模型会拿「一级目录要具体」的标准去命名二级目录，
+ * 而且嵌套上限会在错误的层级上生效。
+ */
+describe('推翻模式按绝对层级告知模型', () => {
+  function twoRoots() {
+    const fake = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '11', title: '杂项', children: [{ id: '100', title: 'React 官网', url: 'https://react.dev' }] },
+        ]},
+        { id: '2', title: '其他书签', children: [
+          { id: '21', title: '收件箱', children: [{ id: '200', title: 'Vue 官网', url: 'https://vuejs.org' }] },
+        ]},
+      ]},
+    ])
+    return { bookmarks: fake.api, storage: createFakeStorage() }
+  }
+
+  async function promptsFor(scopeRootIds: string[], settings: Partial<Settings> = {}) {
+    const ports = twoRoots()
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: true,
+      ...settings,
+    })
+    const complete = vi.fn()
+      // 两个根各有一个书签，勾哪边都得有标签落地，否则设计目录那一轮根本不会发生
+      .mockResolvedValueOnce({ results: [
+        { bookmark_id: '100', primary_topic: '前端' },
+        { bookmark_id: '200', primary_topic: '前端' },
+      ]})
+      .mockResolvedValueOnce({ folders: [{ title: '前端', topics: ['前端'], children: [] }] })
+      .mockResolvedValueOnce({ results: [] })
+    await handle(ports, { kind: 'analyze', scopeRootIds }, { createClient: () => ({ complete }), now: () => 1 })
+    return complete.mock.calls.map((c) => c[0] as string).join('\n')
+  }
+
+  it('勾书签栏时告诉模型这是一级目录', async () => {
+    const prompts = await promptsFor(['1'])
+    expect(prompts).toContain('一级目录')
+    expect(prompts).not.toContain('二级目录不超过')
+  })
+
+  it('勾其他书签时告诉模型这是二级目录，并报出容器名', async () => {
+    const prompts = await promptsFor(['2'])
+    expect(prompts).toContain('二级目录不超过')
+    expect(prompts).toContain('其他书签')
+  })
+
+  // 上限 2 + 勾其他书签 = 已经在第二层，不该再往下分
+  it('默认上限 2 下，勾其他书签就只建一层', async () => {
+    expect(await promptsFor(['2'])).toContain('children 一律返回空数组')
+  })
+
+  // 同样是上限 2，勾书签栏时二级还开着——上限管的是绝对层级，不是「再分一层」
+  it('同样上限 2，勾书签栏时仍允许分出二级', async () => {
+    expect(await promptsFor(['1'])).not.toContain('children 一律返回空数组')
+  })
+
+  // 用户勾了这里就是要在这里整理，返回「一个目录都不建」看起来像坏了
+  it('勾中处已经到上限那一层时，仍然建一层，只是不再往下', async () => {
+    const prompts = await promptsFor(['21'], { maxFolderDepth: 2 })
+    expect(prompts).toContain('三级目录不超过')
+    expect(prompts).toContain('children 一律返回空数组')
   })
 })

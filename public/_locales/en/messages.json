@@ -1,180 +1,908 @@
 {
-  "extName": { "message": "TidyMark" },
-  "extDescription": { "message": "Reorganize your Chrome bookmarks with AI — every change is previewed, confirmed, and undoable" },
-  "shellStepScope": { "message": "Scope" },
-  "shellStepPreferences": { "message": "Preferences" },
-  "settingsGearLabel": { "message": "Settings" },
-  "settingsTitle": { "message": "Settings" },
-  "settingsBack": { "message": "Back" },
-  "settingsLangTitle": { "message": "Language" },
-  "settingsLangAuto": { "message": "Follow browser" },
-  "settingsLangBody": { "message": "Sets both the interface language and the language of newly created folder names." },
-  "settingsClassifyTitle": { "message": "Classification" },
-  "settingsRebuildOnly": { "message": "The two options below only take effect when \"Rebuild the folder structure\" is on." },
-  "settingsMaxFoldersTitle": { "message": "Top-level folder limit" },
-  "settingsMaxFoldersBody": { "message": "Topics beyond the limit go into \"Other\". Between 4 and 20." },
-  "settingsSubfoldersTitle": { "message": "Allow subfolders" },
-  "settingsSubfoldersBody": { "message": "When off, only one level is created. Sites given their own folders are not affected — they are always subdivided by topic." },
-  "shellStepReview": { "message": "Preview" },
-  "shellStepResult": { "message": "Result" },
-  "treeExpand": { "message": "Expand $name$", "placeholders": { "name": { "content": "$1" } } },
-  "treeCollapse": { "message": "Collapse $name$", "placeholders": { "name": { "content": "$1" } } },
-  "scopeIntro": { "message": "Check the folders you want TidyMark to reorganize." },
-  "scopeSafety": { "message": "Unchecked folders are never read and never modified — no bookmark moves out of them, and none moves in." },
-  "scopeExpandAll": { "message": "Expand all" },
-  "scopeCollapseAll": { "message": "Collapse all" },
-  "scopeScanOne": { "message": "Scan $count$ selected folder", "placeholders": { "count": { "content": "$1" } } },
-  "scopeScanOther": { "message": "Scan $count$ selected folders", "placeholders": { "count": { "content": "$1" } } },
-  "phaseScan": { "message": "Scanning" },
-  "phaseTags": { "message": "Extracting topics" },
-  "phaseTree": { "message": "Designing folders" },
-  "phaseClassify": { "message": "Classifying" },
-  "phaseApply": { "message": "Applying" },
-  "phaseUndo": { "message": "Undoing" },
-  "phaseImport": { "message": "Importing" },
-  "progressCancel": { "message": "Cancel" },
-  "progressLogsExpand": { "message": "Show log" },
-  "progressLogsCollapse": { "message": "Hide log" },
-  "progressLogsTitleOne": { "message": "Log ($count$ entry)", "placeholders": { "count": { "content": "$1" } } },
-  "progressLogsTitleOther": { "message": "Log ($count$ entries)", "placeholders": { "count": { "content": "$1" } } },
-  "sendErrChannelClosed": { "message": "The background stopped before returning a result (the extension was just reloaded, or the browser suspended it). Please retry — finished batches are cached, so a retry is much faster." },
-  "sendErrContextInvalidated": { "message": "The extension was reloaded, so this side panel is stale. Close it and open it again." },
-  "sendErrNoReceiver": { "message": "Cannot reach the background. Make sure TidyMark is enabled at chrome://extensions, then reopen the side panel." },
-  "sendErrNoResponse": { "message": "The background returned nothing — it may have been suspended. Please retry." },
-  "exportGroupOne": { "message": "Export $count$ selected bookmark", "placeholders": { "count": { "content": "$1" } } },
-  "exportGroupOther": { "message": "Export $count$ selected bookmarks", "placeholders": { "count": { "content": "$1" } } },
-  "exportTree": { "message": "With folder structure" },
-  "exportLinks": { "message": "Links only" },
-  "exportHtml": { "message": "Browser bookmarks file" },
-  "exportHtmlBusy": { "message": "Fetching icons…" },
-  "importGroup": { "message": "Import shared bookmarks" },
-  "importPickFile": { "message": "Choose a file…" },
-  "importPickerLabel": { "message": "Choose a file to import" },
-  "importRetry": { "message": "Choose another file" },
-  "importUntitled": { "message": "(untitled)" },
-  "importStatsOne": { "message": "$bookmarks$ bookmark, $folders$ folders", "placeholders": { "bookmarks": { "content": "$1" }, "folders": { "content": "$2" } } },
-  "importStatsOther": { "message": "$bookmarks$ bookmarks, $folders$ folders", "placeholders": { "bookmarks": { "content": "$1" }, "folders": { "content": "$2" } } },
-  "importDuplicates": { "message": "$count$ of them are already in your bookmarks", "placeholders": { "count": { "content": "$1" } } },
-  "importBlockedOne": { "message": "Blocked $count$ unsafe link", "placeholders": { "count": { "content": "$1" } } },
-  "importBlockedOther": { "message": "Blocked $count$ unsafe links", "placeholders": { "count": { "content": "$1" } } },
-  "importTarget": { "message": "Will be created under: $path$", "placeholders": { "path": { "content": "$1" } } },
-  "importConfirm": { "message": "Import" },
-  "importCancel": { "message": "Cancel" },
-  "importDoneOne": { "message": "Imported $count$ bookmark into $path$", "placeholders": { "count": { "content": "$1" }, "path": { "content": "$2" } } },
-  "importDoneOther": { "message": "Imported $count$ bookmarks into $path$", "placeholders": { "count": { "content": "$1" }, "path": { "content": "$2" } } },
-  "importMissedOne": { "message": "$count$ item did not make it:", "placeholders": { "count": { "content": "$1" } } },
-  "importMissedOther": { "message": "$count$ items did not make it:", "placeholders": { "count": { "content": "$1" } } },
-  "importDeleteHint": { "message": "Do not want it? Just delete that folder in Chrome." },
-  "importFinish": { "message": "Done" },
-  "prefsScanTitle": { "message": "Scan results" },
-  "prefsStatBookmarks": { "message": "Bookmarks" },
-  "prefsStatFolders": { "message": "Folders" },
-  "prefsStatEmpty": { "message": "Empty folders" },
-  "prefsStatUntitled": { "message": "Untitled bookmarks" },
-  "prefsStatDuplicates": { "message": "Duplicate URL groups" },
-  "prefsStatDepth": { "message": "Max depth" },
-  "prefsModelTitle": { "message": "Model settings" },
-  "prefsPrivacyKey": { "message": "Your API key is stored in plain text in local browser storage and is never uploaded anywhere." },
-  "prefsPrivacyPayload": { "message": "Only bookmark titles, domains, paths, and current folder names are sent to the model — never URL parameters or page contents." },
-  "prefsRebuildTitle": { "message": "Rebuild the folder structure" },
-  "prefsRebuildOn": { "message": "Redesigns the whole folder tree and adds a number prefix (01, 02…) to every top-level folder in scope — including ones you created yourself and ones that receive no bookmarks this run. Second-level folders are only reordered if they already had numbers. The whole run can be undone." },
-  "prefsRebuildOff": { "message": "Only moves bookmarks into folders that already exist. Never renames, merges, or deletes any existing folder." },
-  "prefsCleanTitle": { "message": "Remove empty folders afterwards" },
-  "prefsCleanBody": { "message": "Deletes folders in scope that contain no bookmarks, including parents left empty after their children were cleared. Scope roots are never deleted, and undo restores the folders along with the bookmarks. One exception: when several folders are merged into one, the source folders and the empty folders inside them are always removed regardless of this switch, and undo restores those too." },
-  "prefsGithubTitle": { "message": "Normalize GitHub bookmark titles" },
-  "prefsGithubBody": { "message": "Rewrites titles from the URL into \"repo (owner)\", keeping the file name when a specific file is bookmarked. This changes the bookmark's own name, not just its location, and can be undone. It is independent of the checkboxes above — once on, every GitHub bookmark in scope is rewritten." },
-  "prefsGroupTitle": { "message": "Give these sites their own folders" },
-  "prefsGroupBody": { "message": "Each checked site becomes its own top-level folder, subdivided by topic inside. Only takes effect when \"Rebuild the folder structure\" is on." },
-  "prefsBack": { "message": "Back" },
-  "prefsStart": { "message": "Start AI analysis" },
-  "structureIntroOne": { "message": "The AI designed $folders$ top-level folder to hold $bookmarks$ bookmarks.", "placeholders": { "folders": { "content": "$1" }, "bookmarks": { "content": "$2" } } },
-  "structureIntroOther": { "message": "The AI designed $folders$ top-level folders to hold $bookmarks$ bookmarks.", "placeholders": { "folders": { "content": "$1" }, "bookmarks": { "content": "$2" } } },
-  "structureHint": { "message": "Rename or delete any folder you do not want, then continue to the move list. Numbering is reassigned automatically." },
-  "structureMergeLabel": { "message": "Merge into" },
-  "structureMergeNotice": { "message": "$names$ will be emptied and deleted, and all their bookmarks move into the folder above. One click undoes the whole run and puts those folders back.", "placeholders": { "names": { "content": "$1" } } },
-  "structureIncoming": { "message": "$count$ incoming", "placeholders": { "count": { "content": "$1" } } },
-  "structureDelete": { "message": "Delete folder $name$", "placeholders": { "name": { "content": "$1" } } },
-  "structureFallback": { "message": "Delete a top-level folder and its bookmarks fall back to \"Other\"; delete a subfolder and they stay in its parent." },
-  "structureBack": { "message": "Back" },
-  "structureNext": { "message": "Continue → move list" },
-  "reviewSummaryOne": { "message": "$total$ suggested move, $accepted$ selected. Unselected bookmarks stay where they are.", "placeholders": { "total": { "content": "$1" }, "accepted": { "content": "$2" } } },
-  "reviewSummaryOther": { "message": "$total$ suggested moves, $accepted$ selected. Unselected bookmarks stay where they are.", "placeholders": { "total": { "content": "$1" }, "accepted": { "content": "$2" } } },
-  "reviewCreateFoldersOne": { "message": "Will create $count$ folder", "placeholders": { "count": { "content": "$1" } } },
-  "reviewCreateFoldersOther": { "message": "Will create $count$ folders", "placeholders": { "count": { "content": "$1" } } },
-  "reviewRenameFoldersOne": { "message": ", and add a number prefix to $count$ existing folder (undoable)", "placeholders": { "count": { "content": "$1" } } },
-  "reviewRenameFoldersOther": { "message": ", and add number prefixes to $count$ existing folders (undoable)", "placeholders": { "count": { "content": "$1" } } },
-  "reviewRenameBookmarksOne": { "message": "$count$ GitHub bookmark title will also be normalized to \"repo (owner)\". That is controlled by a setting and is not affected by the checkboxes below.", "placeholders": { "count": { "content": "$1" } } },
-  "reviewRenameBookmarksOther": { "message": "$count$ GitHub bookmark titles will also be normalized to \"repo (owner)\". That is controlled by a setting and is not affected by the checkboxes below.", "placeholders": { "count": { "content": "$1" } } },
-  "reviewCleanNote": { "message": "Empty folders in scope will be cleaned up afterwards (undoable)." },
-  "reviewEmpty": { "message": "The AI thinks every bookmark in scope is already in a sensible place, so there is nothing to move. Try a messier folder, or turn on \"Rebuild the folder structure\" to redesign the tree." },
-  "reviewAcceptAll": { "message": "Accept all" },
-  "reviewAcceptHigh": { "message": "High confidence only" },
-  "reviewRejectAll": { "message": "Reject all" },
-  "reviewLowConfidence": { "message": "Low confidence" },
-  "reviewDiscard": { "message": "Discard" },
-  "reviewApplyOne": { "message": "Apply $count$ change", "placeholders": { "count": { "content": "$1" } } },
-  "reviewApplyOther": { "message": "Apply $count$ changes", "placeholders": { "count": { "content": "$1" } } },
-  "reviewSummaryPeriod": { "message": "." },
-  "resultTreeNew": { "message": "New" },
-  "resultCompleted": { "message": "Done" },
-  "resultInterrupted": { "message": "Interrupted" },
-  "resultStatExecuted": { "message": "Operations run" },
-  "resultStatCreated": { "message": "Folders created" },
-  "resultStatRemoved": { "message": "Empty folders removed" },
-  "resultStatRenamed": { "message": "Titles normalized" },
-  "resultStatSkipped": { "message": "Skipped" },
-  "resultRemovedDetails": { "message": "Show removed empty folders" },
-  "resultMergedInto": { "message": "$count$ folders merged into \"$name$\"", "placeholders": { "count": { "content": "$1" }, "name": { "content": "$2" } } },
-  "resultMergeSourcesRemoved": { "message": "Original folders deleted: $names$", "placeholders": { "names": { "content": "$1" } } },
-  "resultFailedAt": { "message": "Failed at step $step$: $error$", "placeholders": { "step": { "content": "$1" }, "error": { "content": "$2" } } },
-  "resultFailedHint": { "message": "Everything already applied can be fully undone with the button below." },
-  "resultSkippedItem": { "message": "Bookmark $id$: $reason$", "placeholders": { "id": { "content": "$1" }, "reason": { "content": "$2" } } },
-  "resultUndoneSkippedItem": { "message": "$title$: $reason$", "placeholders": { "title": { "content": "$1" }, "reason": { "content": "$2" } } },
-  "resultTreeAfterApply": { "message": "Structure after reorganizing" },
-  "resultTreeAfterUndo": { "message": "Structure after undo" },
-  "resultTreeHint": { "message": "The real bookmark tree. The number on the right is how many bookmarks that folder holds, including subfolders. Unselected moves were not applied, so those bookmarks are still where they were." },
-  "resultUndoneOne": { "message": "Undo complete: $restored$ item restored, $folders$ created folders removed.", "placeholders": { "restored": { "content": "$1" }, "folders": { "content": "$2" } } },
-  "resultUndoneOther": { "message": "Undo complete: $restored$ items restored, $folders$ created folders removed.", "placeholders": { "restored": { "content": "$1" }, "folders": { "content": "$2" } } },
-  "resultUndoButton": { "message": "Undo this reorganization" },
-  "resultAgain": { "message": "Run again" },
-  "resultFinish": { "message": "Finish" },
-  "busyCancelling": { "message": "Cancelling — finishing the current batch…" },
-  "busyReading": { "message": "Reading bookmarks…" },
-  "busyScanning": { "message": "Scanning…" },
-  "busyAnalyzing": { "message": "Analyzing…" },
-  "busyApplying": { "message": "Applying…" },
-  "busyUndoing": { "message": "Undoing…" },
-  "busyImporting": { "message": "Importing…" },
-  "errBackgroundRecycled": { "message": "The browser suspended the background and interrupted this run. Please retry." },
-  "errHostPermission": { "message": "TidyMark needs permission to reach your model endpoint's domain. Retry and allow the permission." },
-  "errFileCorrupt": { "message": "This file is malformed." },
-  "errNoApiKey": { "message": "No API key configured yet. Add one in Settings first." },
-  "errAnalysisCancelled": { "message": "Analysis cancelled." },
-  "errNoScope": { "message": "No scope selected." },
-  "errNoTargetFolders": { "message": "No usable target folders in the selected scope. Turn on \"Rebuild the folder structure\", or pick a scope that contains subfolders." },
-  "errNoBookmarksBar": { "message": "Cannot find the bookmarks bar, so importing is not possible." },
-  "errImportInvalidJson": { "message": "This file is not valid JSON." },
-  "errImportUnsupportedFormat": { "message": "This is not a TidyMark export, or its version is not supported." },
-  "errImportUnknownKind": { "message": "Unrecognized export type: $kind$", "placeholders": { "kind": { "content": "$1" } } },
-  "errImportMalformed": { "message": "This file is malformed." },
-  "importReasonUnsafe": { "message": "Unsafe link type ($scheme$)", "placeholders": { "scheme": { "content": "$1" } } },
-  "importReasonCreateFailed": { "message": "Could not create: $detail$", "placeholders": { "detail": { "content": "$1" } } },
-  "importReasonFolderFailed": { "message": "Could not create folder: $detail$", "placeholders": { "detail": { "content": "$1" } } },
-  "errClassifyAllFailed": { "message": "AI analysis failed — no bookmark could be classified.\n$reason$", "placeholders": { "reason": { "content": "$1" } } },
-  "logScanDone": { "message": "Scan complete: $bookmarks$ bookmarks, $folders$ folders", "placeholders": { "bookmarks": { "content": "$1" }, "folders": { "content": "$2" } } },
-  "logTagsStart": { "message": "Extracting topic tags for $count$ bookmarks", "placeholders": { "count": { "content": "$1" } } },
-  "logTreeStart": { "message": "Designing folders from the tags of $count$ bookmarks", "placeholders": { "count": { "content": "$1" } } },
-  "logTreeDone": { "message": "Folder design complete: $new$ new folders created, $reused$ existing folders reused", "placeholders": { "new": { "content": "$1" }, "reused": { "content": "$2" } } },
-  "logMergeNamed": { "message": "Merged folder named \"$name$\"", "placeholders": { "name": { "content": "$1" } } },
-  "logMergeNameFailed": { "message": "Could not name the merged folder, using \"$name$\"", "placeholders": { "name": { "content": "$1" } } },
-  "logPinnedSkip": { "message": "$count$ bookmarks grouped by domain, skipping AI classification", "placeholders": { "count": { "content": "$1" } } },
-  "logClassifyStart": { "message": "Classifying $bookmarks$ bookmarks against $candidates$ candidate folders", "placeholders": { "bookmarks": { "content": "$1" }, "candidates": { "content": "$2" } } },
-  "logClassifyFailed": { "message": "$count$ bookmarks failed to classify and were left in place. Reason: $reason$", "placeholders": { "count": { "content": "$1" }, "reason": { "content": "$2" } } },
-  "logTitleRewrites": { "message": "$count$ GitHub bookmark titles will be normalized", "placeholders": { "count": { "content": "$1" } } },
-  "logAnalyzeDone": { "message": "Analysis complete: $count$ suggested moves", "placeholders": { "count": { "content": "$1" } } },
-  "logApplyDone": { "message": "Reorganization complete: $executed$ steps run, $removed$ empty folders removed, $sorted$ folders renumbered", "placeholders": { "executed": { "content": "$1" }, "removed": { "content": "$2" }, "sorted": { "content": "$3" } } },
-  "logApplyInterrupted": { "message": "Reorganization interrupted: $executed$ steps run, $removed$ empty folders removed, $sorted$ folders renumbered", "placeholders": { "executed": { "content": "$1" }, "removed": { "content": "$2" }, "sorted": { "content": "$3" } } },
-  "logUndoDone": { "message": "Undo complete: $restored$ items restored, $folders$ new folders removed", "placeholders": { "restored": { "content": "$1" }, "folders": { "content": "$2" } } },
-  "logImportDone": { "message": "Import complete: $bookmarks$ bookmarks, $folders$ folders", "placeholders": { "bookmarks": { "content": "$1" }, "folders": { "content": "$2" } } },
-  "logCancelRequested": { "message": "Cancellation requested — finishing the current batch…" }
+  "extName": {
+    "message": "TidyMark"
+  },
+  "extDescription": {
+    "message": "Reorganize your Chrome bookmarks with AI — every change is previewed, confirmed, and undoable"
+  },
+  "shellStepScope": {
+    "message": "Scope"
+  },
+  "shellStepPreferences": {
+    "message": "Preferences"
+  },
+  "settingsGearLabel": {
+    "message": "Settings"
+  },
+  "settingsTitle": {
+    "message": "Settings"
+  },
+  "settingsBack": {
+    "message": "Back"
+  },
+  "settingsLangTitle": {
+    "message": "Language"
+  },
+  "settingsLangAuto": {
+    "message": "Follow browser"
+  },
+  "settingsLangBody": {
+    "message": "Sets both the interface language and the language of newly created folder names."
+  },
+  "settingsClassifyTitle": {
+    "message": "Classification"
+  },
+  "settingsRebuildOnly": {
+    "message": "The two options below only take effect when \"Rebuild the folder structure\" is on."
+  },
+  "settingsMaxFoldersTitle": {
+    "message": "Folders per level"
+  },
+  "settingsMaxFoldersBody": {
+    "message": "Topics beyond the limit go into \"Other\". Between 4 and 20."
+  },
+  "settingsDepthTitle": {
+    "message": "Maximum folder depth"
+  },
+  "settingsDepthBody": {
+    "message": "Counted from the bookmark library, not from what you selected: folders on the bookmarks bar are level 1, and \"Other Bookmarks\" is itself level 1, so its contents are level 2. With 2, selecting the bar allows a second level, while selecting \"Other Bookmarks\" produces a single level. Between 1 and 4."
+  },
+  "shellStepReview": {
+    "message": "Preview"
+  },
+  "shellStepResult": {
+    "message": "Result"
+  },
+  "treeExpand": {
+    "message": "Expand $name$",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "treeCollapse": {
+    "message": "Collapse $name$",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "scopeIntro": {
+    "message": "Check the folders you want TidyMark to reorganize."
+  },
+  "scopeSafety": {
+    "message": "Unchecked folders are never read and never modified — no bookmark moves out of them, and none moves in."
+  },
+  "scopeExpandAll": {
+    "message": "Expand all"
+  },
+  "scopeCollapseAll": {
+    "message": "Collapse all"
+  },
+  "scopeScanOne": {
+    "message": "Scan $count$ selected folder",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "scopeScanOther": {
+    "message": "Scan $count$ selected folders",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "phaseScan": {
+    "message": "Scanning"
+  },
+  "phaseTags": {
+    "message": "Extracting topics"
+  },
+  "phaseTree": {
+    "message": "Designing folders"
+  },
+  "phaseClassify": {
+    "message": "Classifying"
+  },
+  "phaseApply": {
+    "message": "Applying"
+  },
+  "phaseUndo": {
+    "message": "Undoing"
+  },
+  "phaseImport": {
+    "message": "Importing"
+  },
+  "progressCancel": {
+    "message": "Cancel"
+  },
+  "progressLogsExpand": {
+    "message": "Show log"
+  },
+  "progressLogsCollapse": {
+    "message": "Hide log"
+  },
+  "progressLogsTitleOne": {
+    "message": "Log ($count$ entry)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "progressLogsTitleOther": {
+    "message": "Log ($count$ entries)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "sendErrChannelClosed": {
+    "message": "The background stopped before returning a result (the extension was just reloaded, or the browser suspended it). Please retry — finished batches are cached, so a retry is much faster."
+  },
+  "sendErrContextInvalidated": {
+    "message": "The extension was reloaded, so this side panel is stale. Close it and open it again."
+  },
+  "sendErrNoReceiver": {
+    "message": "Cannot reach the background. Make sure TidyMark is enabled at chrome://extensions, then reopen the side panel."
+  },
+  "sendErrNoResponse": {
+    "message": "The background returned nothing — it may have been suspended. Please retry."
+  },
+  "exportGroupOne": {
+    "message": "Export $count$ selected bookmark",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "exportGroupOther": {
+    "message": "Export $count$ selected bookmarks",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "exportTree": {
+    "message": "With folder structure"
+  },
+  "exportLinks": {
+    "message": "Links only"
+  },
+  "exportHtml": {
+    "message": "Browser bookmarks file"
+  },
+  "exportHtmlBusy": {
+    "message": "Fetching icons…"
+  },
+  "importGroup": {
+    "message": "Import shared bookmarks"
+  },
+  "importPickFile": {
+    "message": "Choose a file…"
+  },
+  "importPickerLabel": {
+    "message": "Choose a file to import"
+  },
+  "importRetry": {
+    "message": "Choose another file"
+  },
+  "importUntitled": {
+    "message": "(untitled)"
+  },
+  "importStatsOne": {
+    "message": "$bookmarks$ bookmark, $folders$ folders",
+    "placeholders": {
+      "bookmarks": {
+        "content": "$1"
+      },
+      "folders": {
+        "content": "$2"
+      }
+    }
+  },
+  "importStatsOther": {
+    "message": "$bookmarks$ bookmarks, $folders$ folders",
+    "placeholders": {
+      "bookmarks": {
+        "content": "$1"
+      },
+      "folders": {
+        "content": "$2"
+      }
+    }
+  },
+  "importDuplicates": {
+    "message": "$count$ of them are already in your bookmarks",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "importBlockedOne": {
+    "message": "Blocked $count$ unsafe link",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "importBlockedOther": {
+    "message": "Blocked $count$ unsafe links",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "importTarget": {
+    "message": "Will be created under: $path$",
+    "placeholders": {
+      "path": {
+        "content": "$1"
+      }
+    }
+  },
+  "importConfirm": {
+    "message": "Import"
+  },
+  "importCancel": {
+    "message": "Cancel"
+  },
+  "importDoneOne": {
+    "message": "Imported $count$ bookmark into $path$",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "path": {
+        "content": "$2"
+      }
+    }
+  },
+  "importDoneOther": {
+    "message": "Imported $count$ bookmarks into $path$",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "path": {
+        "content": "$2"
+      }
+    }
+  },
+  "importMissedOne": {
+    "message": "$count$ item did not make it:",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "importMissedOther": {
+    "message": "$count$ items did not make it:",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "importDeleteHint": {
+    "message": "Do not want it? Just delete that folder in Chrome."
+  },
+  "importFinish": {
+    "message": "Done"
+  },
+  "prefsScanTitle": {
+    "message": "Scan results"
+  },
+  "prefsStatBookmarks": {
+    "message": "Bookmarks"
+  },
+  "prefsStatFolders": {
+    "message": "Folders"
+  },
+  "prefsStatEmpty": {
+    "message": "Empty folders"
+  },
+  "prefsStatUntitled": {
+    "message": "Untitled bookmarks"
+  },
+  "prefsStatDuplicates": {
+    "message": "Duplicate URL groups"
+  },
+  "prefsStatDepth": {
+    "message": "Max depth"
+  },
+  "prefsModelTitle": {
+    "message": "Model settings"
+  },
+  "prefsPrivacyKey": {
+    "message": "Your API key is stored in plain text in local browser storage and is never uploaded anywhere."
+  },
+  "prefsPrivacyPayload": {
+    "message": "Only bookmark titles, domains, paths, and current folder names are sent to the model — never URL parameters or page contents."
+  },
+  "prefsRebuildTitle": {
+    "message": "Rebuild the folder structure"
+  },
+  "prefsRebuildOn": {
+    "message": "Redesigns the whole folder tree and adds a number prefix (01, 02…) to every top-level folder in scope — including ones you created yourself and ones that receive no bookmarks this run. Second-level folders are only reordered if they already had numbers. The whole run can be undone."
+  },
+  "prefsRebuildOff": {
+    "message": "Only moves bookmarks into folders that already exist. Never renames, merges, or deletes any existing folder."
+  },
+  "prefsCleanTitle": {
+    "message": "Remove empty folders afterwards"
+  },
+  "prefsCleanBody": {
+    "message": "Deletes folders in scope that contain no bookmarks, including parents left empty after their children were cleared. Scope roots are never deleted, and undo restores the folders along with the bookmarks. One exception: when several folders are merged into one, the source folders and the empty folders inside them are always removed regardless of this switch, and undo restores those too."
+  },
+  "prefsGithubTitle": {
+    "message": "Normalize GitHub bookmark titles"
+  },
+  "prefsGithubBody": {
+    "message": "Rewrites titles from the URL into \"repo (owner)\", keeping the file name when a specific file is bookmarked. This changes the bookmark's own name, not just its location, and can be undone. It is independent of the checkboxes above — once on, every GitHub bookmark in scope is rewritten."
+  },
+  "prefsGroupTitle": {
+    "message": "Give these sites their own folders"
+  },
+  "prefsGroupBody": {
+    "message": "Each checked site becomes its own top-level folder, subdivided by topic inside. Only takes effect when \"Rebuild the folder structure\" is on."
+  },
+  "prefsBack": {
+    "message": "Back"
+  },
+  "prefsStart": {
+    "message": "Start AI analysis"
+  },
+  "structureIntroOne": {
+    "message": "The AI designed $folders$ top-level folder to hold $bookmarks$ bookmarks.",
+    "placeholders": {
+      "folders": {
+        "content": "$1"
+      },
+      "bookmarks": {
+        "content": "$2"
+      }
+    }
+  },
+  "structureIntroOther": {
+    "message": "The AI designed $folders$ top-level folders to hold $bookmarks$ bookmarks.",
+    "placeholders": {
+      "folders": {
+        "content": "$1"
+      },
+      "bookmarks": {
+        "content": "$2"
+      }
+    }
+  },
+  "structureHint": {
+    "message": "Rename or delete any folder you do not want, then continue to the move list. Numbering is reassigned automatically."
+  },
+  "structureMergeLabel": {
+    "message": "Merge into"
+  },
+  "structureMergeNotice": {
+    "message": "$names$ will be emptied and deleted, and all their bookmarks move into the folder above. One click undoes the whole run and puts those folders back.",
+    "placeholders": {
+      "names": {
+        "content": "$1"
+      }
+    }
+  },
+  "structureIncoming": {
+    "message": "$count$ incoming",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "structureDelete": {
+    "message": "Delete folder $name$",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "structureFallback": {
+    "message": "Delete a top-level folder and its bookmarks fall back to \"Other\"; delete a subfolder and they stay in its parent."
+  },
+  "structureBack": {
+    "message": "Back"
+  },
+  "structureNext": {
+    "message": "Continue → move list"
+  },
+  "reviewSummaryOne": {
+    "message": "$total$ suggested move, $accepted$ selected. Unselected bookmarks stay where they are.",
+    "placeholders": {
+      "total": {
+        "content": "$1"
+      },
+      "accepted": {
+        "content": "$2"
+      }
+    }
+  },
+  "reviewSummaryOther": {
+    "message": "$total$ suggested moves, $accepted$ selected. Unselected bookmarks stay where they are.",
+    "placeholders": {
+      "total": {
+        "content": "$1"
+      },
+      "accepted": {
+        "content": "$2"
+      }
+    }
+  },
+  "reviewCreateFoldersOne": {
+    "message": "Will create $count$ folder",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewCreateFoldersOther": {
+    "message": "Will create $count$ folders",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewRenameFoldersOne": {
+    "message": ", and add a number prefix to $count$ existing folder (undoable)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewRenameFoldersOther": {
+    "message": ", and add number prefixes to $count$ existing folders (undoable)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewRenameBookmarksOne": {
+    "message": "$count$ GitHub bookmark title will also be normalized to \"repo (owner)\". That is controlled by a setting and is not affected by the checkboxes below.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewRenameBookmarksOther": {
+    "message": "$count$ GitHub bookmark titles will also be normalized to \"repo (owner)\". That is controlled by a setting and is not affected by the checkboxes below.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewCleanNote": {
+    "message": "Empty folders in scope will be cleaned up afterwards (undoable)."
+  },
+  "reviewEmpty": {
+    "message": "The AI thinks every bookmark in scope is already in a sensible place, so there is nothing to move. Try a messier folder, or turn on \"Rebuild the folder structure\" to redesign the tree."
+  },
+  "reviewAcceptAll": {
+    "message": "Accept all"
+  },
+  "reviewAcceptHigh": {
+    "message": "High confidence only"
+  },
+  "reviewRejectAll": {
+    "message": "Reject all"
+  },
+  "reviewLowConfidence": {
+    "message": "Low confidence"
+  },
+  "reviewDiscard": {
+    "message": "Discard"
+  },
+  "reviewApplyOne": {
+    "message": "Apply $count$ change",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewApplyOther": {
+    "message": "Apply $count$ changes",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewSummaryPeriod": {
+    "message": "."
+  },
+  "resultTreeNew": {
+    "message": "New"
+  },
+  "resultCompleted": {
+    "message": "Done"
+  },
+  "resultInterrupted": {
+    "message": "Interrupted"
+  },
+  "resultStatExecuted": {
+    "message": "Operations run"
+  },
+  "resultStatCreated": {
+    "message": "Folders created"
+  },
+  "resultStatRemoved": {
+    "message": "Empty folders removed"
+  },
+  "resultStatRenamed": {
+    "message": "Titles normalized"
+  },
+  "resultStatSkipped": {
+    "message": "Skipped"
+  },
+  "resultRemovedDetails": {
+    "message": "Show removed empty folders"
+  },
+  "resultMergedInto": {
+    "message": "$count$ folders merged into \"$name$\"",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "name": {
+        "content": "$2"
+      }
+    }
+  },
+  "resultMergeSourcesRemoved": {
+    "message": "Original folders deleted: $names$",
+    "placeholders": {
+      "names": {
+        "content": "$1"
+      }
+    }
+  },
+  "resultFailedAt": {
+    "message": "Failed at step $step$: $error$",
+    "placeholders": {
+      "step": {
+        "content": "$1"
+      },
+      "error": {
+        "content": "$2"
+      }
+    }
+  },
+  "resultFailedHint": {
+    "message": "Everything already applied can be fully undone with the button below."
+  },
+  "resultSkippedItem": {
+    "message": "Bookmark $id$: $reason$",
+    "placeholders": {
+      "id": {
+        "content": "$1"
+      },
+      "reason": {
+        "content": "$2"
+      }
+    }
+  },
+  "resultUndoneSkippedItem": {
+    "message": "$title$: $reason$",
+    "placeholders": {
+      "title": {
+        "content": "$1"
+      },
+      "reason": {
+        "content": "$2"
+      }
+    }
+  },
+  "resultTreeAfterApply": {
+    "message": "Structure after reorganizing"
+  },
+  "resultTreeAfterUndo": {
+    "message": "Structure after undo"
+  },
+  "resultTreeHint": {
+    "message": "The real bookmark tree. The number on the right is how many bookmarks that folder holds, including subfolders. Unselected moves were not applied, so those bookmarks are still where they were."
+  },
+  "resultUndoneOne": {
+    "message": "Undo complete: $restored$ item restored, $folders$ created folders removed.",
+    "placeholders": {
+      "restored": {
+        "content": "$1"
+      },
+      "folders": {
+        "content": "$2"
+      }
+    }
+  },
+  "resultUndoneOther": {
+    "message": "Undo complete: $restored$ items restored, $folders$ created folders removed.",
+    "placeholders": {
+      "restored": {
+        "content": "$1"
+      },
+      "folders": {
+        "content": "$2"
+      }
+    }
+  },
+  "resultUndoButton": {
+    "message": "Undo this reorganization"
+  },
+  "resultAgain": {
+    "message": "Run again"
+  },
+  "resultFinish": {
+    "message": "Finish"
+  },
+  "busyCancelling": {
+    "message": "Cancelling — finishing the current batch…"
+  },
+  "busyReading": {
+    "message": "Reading bookmarks…"
+  },
+  "busyScanning": {
+    "message": "Scanning…"
+  },
+  "busyAnalyzing": {
+    "message": "Analyzing…"
+  },
+  "busyApplying": {
+    "message": "Applying…"
+  },
+  "busyUndoing": {
+    "message": "Undoing…"
+  },
+  "busyImporting": {
+    "message": "Importing…"
+  },
+  "errBackgroundRecycled": {
+    "message": "The browser suspended the background and interrupted this run. Please retry."
+  },
+  "errHostPermission": {
+    "message": "TidyMark needs permission to reach your model endpoint's domain. Retry and allow the permission."
+  },
+  "errFileCorrupt": {
+    "message": "This file is malformed."
+  },
+  "errNoApiKey": {
+    "message": "No API key configured yet. Add one in Settings first."
+  },
+  "errAnalysisCancelled": {
+    "message": "Analysis cancelled."
+  },
+  "errNoScope": {
+    "message": "No scope selected."
+  },
+  "errNoTargetFolders": {
+    "message": "No usable target folders in the selected scope. Turn on \"Rebuild the folder structure\", or pick a scope that contains subfolders."
+  },
+  "errNoBookmarksBar": {
+    "message": "Cannot find the bookmarks bar, so importing is not possible."
+  },
+  "errImportInvalidJson": {
+    "message": "This file is not valid JSON."
+  },
+  "errImportUnsupportedFormat": {
+    "message": "This is not a TidyMark export, or its version is not supported."
+  },
+  "errImportUnknownKind": {
+    "message": "Unrecognized export type: $kind$",
+    "placeholders": {
+      "kind": {
+        "content": "$1"
+      }
+    }
+  },
+  "errImportMalformed": {
+    "message": "This file is malformed."
+  },
+  "importReasonUnsafe": {
+    "message": "Unsafe link type ($scheme$)",
+    "placeholders": {
+      "scheme": {
+        "content": "$1"
+      }
+    }
+  },
+  "importReasonCreateFailed": {
+    "message": "Could not create: $detail$",
+    "placeholders": {
+      "detail": {
+        "content": "$1"
+      }
+    }
+  },
+  "importReasonFolderFailed": {
+    "message": "Could not create folder: $detail$",
+    "placeholders": {
+      "detail": {
+        "content": "$1"
+      }
+    }
+  },
+  "errClassifyAllFailed": {
+    "message": "AI analysis failed — no bookmark could be classified.\n$reason$",
+    "placeholders": {
+      "reason": {
+        "content": "$1"
+      }
+    }
+  },
+  "logScanDone": {
+    "message": "Scan complete: $bookmarks$ bookmarks, $folders$ folders",
+    "placeholders": {
+      "bookmarks": {
+        "content": "$1"
+      },
+      "folders": {
+        "content": "$2"
+      }
+    }
+  },
+  "logTagsStart": {
+    "message": "Extracting topic tags for $count$ bookmarks",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "logTreeStart": {
+    "message": "Designing folders from the tags of $count$ bookmarks",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "logTreeDone": {
+    "message": "Folder design complete: $new$ new folders created, $reused$ existing folders reused",
+    "placeholders": {
+      "new": {
+        "content": "$1"
+      },
+      "reused": {
+        "content": "$2"
+      }
+    }
+  },
+  "logMergeNamed": {
+    "message": "Merged folder named \"$name$\"",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "logMergeNameFailed": {
+    "message": "Could not name the merged folder, using \"$name$\"",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "logPinnedSkip": {
+    "message": "$count$ bookmarks grouped by domain, skipping AI classification",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "logClassifyStart": {
+    "message": "Classifying $bookmarks$ bookmarks against $candidates$ candidate folders",
+    "placeholders": {
+      "bookmarks": {
+        "content": "$1"
+      },
+      "candidates": {
+        "content": "$2"
+      }
+    }
+  },
+  "logClassifyFailed": {
+    "message": "$count$ bookmarks failed to classify and were left in place. Reason: $reason$",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "reason": {
+        "content": "$2"
+      }
+    }
+  },
+  "logTitleRewrites": {
+    "message": "$count$ GitHub bookmark titles will be normalized",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "logAnalyzeDone": {
+    "message": "Analysis complete: $count$ suggested moves",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "logApplyDone": {
+    "message": "Reorganization complete: $executed$ steps run, $removed$ empty folders removed, $sorted$ folders renumbered",
+    "placeholders": {
+      "executed": {
+        "content": "$1"
+      },
+      "removed": {
+        "content": "$2"
+      },
+      "sorted": {
+        "content": "$3"
+      }
+    }
+  },
+  "logApplyInterrupted": {
+    "message": "Reorganization interrupted: $executed$ steps run, $removed$ empty folders removed, $sorted$ folders renumbered",
+    "placeholders": {
+      "executed": {
+        "content": "$1"
+      },
+      "removed": {
+        "content": "$2"
+      },
+      "sorted": {
+        "content": "$3"
+      }
+    }
+  },
+  "logUndoDone": {
+    "message": "Undo complete: $restored$ items restored, $folders$ new folders removed",
+    "placeholders": {
+      "restored": {
+        "content": "$1"
+      },
+      "folders": {
+        "content": "$2"
+      }
+    }
+  },
+  "logImportDone": {
+    "message": "Import complete: $bookmarks$ bookmarks, $folders$ folders",
+    "placeholders": {
+      "bookmarks": {
+        "content": "$1"
+      },
+      "folders": {
+        "content": "$2"
+      }
+    }
+  },
+  "logCancelRequested": {
+    "message": "Cancellation requested — finishing the current batch…"
+  }
 }

@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { setLocale } from '@/i18n'
 import { SettingsPanel } from '@/sidepanel/components/SettingsPanel'
 import { useStore } from '@/sidepanel/store'
@@ -16,7 +15,7 @@ beforeEach(() => {
 describe('SettingsPanel 分类参数', () => {
   it('展示当前的一级目录上限', () => {
     render(<SettingsPanel />)
-    expect(screen.getByLabelText('一级目录最多几个')).toHaveProperty('value', '12')
+    expect(screen.getByLabelText('同层目录最多几个')).toHaveProperty('value', '12')
   })
 
   // 受控数字框用 fireEvent.change 一次性赋值。userEvent.type 是逐字符输入，
@@ -24,7 +23,7 @@ describe('SettingsPanel 分类参数', () => {
   // 下一个字符就拼在原值后面，得到 '126' 这种结果
   it('改上限后写进设置', () => {
     render(<SettingsPanel />)
-    fireEvent.change(screen.getByLabelText('一级目录最多几个'), { target: { value: '6' } })
+    fireEvent.change(screen.getByLabelText('同层目录最多几个'), { target: { value: '6' } })
     expect(useStore.getState().settings.maxTopFolders).toBe(6)
   })
 
@@ -36,27 +35,39 @@ describe('SettingsPanel 分类参数', () => {
       settings: { ...DEFAULT_SETTINGS, rebuildStructure: true, maxTopFolders: 6 },
     })
     render(<SettingsPanel />)
-    const input = screen.getByLabelText('一级目录最多几个')
+    const input = screen.getByLabelText('同层目录最多几个')
     fireEvent.change(input, { target: { value: '99' } })
     expect(useStore.getState().settings.maxTopFolders).toBe(6)
     fireEvent.change(input, { target: { value: '' } })
     expect(useStore.getState().settings.maxTopFolders).toBe(6)
   })
 
-  it('二级目录开关默认开着，点一下关掉并写进设置', async () => {
+  it('嵌套层数默认两层，改了写进设置', () => {
     render(<SettingsPanel />)
-    const box = screen.getByRole('checkbox', { name: '允许分出二级目录' })
-    expect(box).toHaveProperty('checked', true)
-    await userEvent.click(box)
-    expect(useStore.getState().settings.allowSubfolders).toBe(false)
+    const input = screen.getByLabelText('目录最深嵌套几层')
+    expect(input).toHaveProperty('value', '2')
+    fireEvent.change(input, { target: { value: '1' } })
+    expect(useStore.getState().settings.maxFolderDepth).toBe(1)
+  })
+
+  // 与同层上限那个框同样的把关，理由见那条测试
+  it('嵌套层数越界或非数字的输入不写进设置，保持原值', () => {
+    render(<SettingsPanel />)
+    const input = screen.getByLabelText('目录最深嵌套几层')
+    fireEvent.change(input, { target: { value: '9' } })
+    expect(useStore.getState().settings.maxFolderDepth).toBe(2)
+    fireEvent.change(input, { target: { value: '0' } })
+    expect(useStore.getState().settings.maxFolderDepth).toBe(2)
+    fireEvent.change(input, { target: { value: '' } })
+    expect(useStore.getState().settings.maxFolderDepth).toBe(2)
   })
 
   // 沿用 PreferencesStep 里 domainGroups 的既有做法
   it('推翻重建关闭时两项都禁用', () => {
     useStore.setState({ settings: { ...DEFAULT_SETTINGS, rebuildStructure: false } })
     render(<SettingsPanel />)
-    expect(screen.getByLabelText('一级目录最多几个')).toHaveProperty('disabled', true)
-    expect(screen.getByRole('checkbox', { name: '允许分出二级目录' })).toHaveProperty('disabled', true)
+    expect(screen.getByLabelText('同层目录最多几个')).toHaveProperty('disabled', true)
+    expect(screen.getByLabelText('目录最深嵌套几层')).toHaveProperty('disabled', true)
   })
 })
 
