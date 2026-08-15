@@ -277,3 +277,99 @@ describe('refreshTree 剪掉已经不存在的勾选', () => {
     expect([...useStore.getState().checkedIds]).toEqual(['900'])
   })
 })
+
+/**
+ * 分析要跑好几分钟，而偏好页的「返回」在这期间是能点的。点了就是 reset()：
+ * 这一轮作废、退回选范围页。几分钟后分析回来，它的结果属于一个用户已经放弃的
+ * 轮次，不该再落地——落地的后果是 plan 有、scan 没了，结构页照常显示（它只要 plan），
+ * 从那儿一点返回就是整页空白的偏好页。
+ */
+describe('放弃这一轮之后，在途结果不再落地', () => {
+  // analyze 开头要问一次 host 权限，jsdom 里没有 chrome.permissions
+  const chromeGlobal = globalThis as unknown as { chrome: Record<string, unknown> }
+  const originalPermissions = chromeGlobal.chrome.permissions
+  beforeEach(() => {
+    chromeGlobal.chrome.permissions = { contains: () => Promise.resolve(true) }
+  })
+  afterEach(() => {
+    chromeGlobal.chrome.permissions = originalPermissions
+  })
+
+  const scan = {
+    bookmarks: [], folders: [],
+    stats: { totalBookmarks: 2, totalFolders: 1, emptyFolders: 0, untitledBookmarks: 0, duplicateUrlGroups: 0, maxDepth: 1 },
+  }
+
+  beforeEach(() => {
+    vi.mocked(send).mockReset()
+    useStore.setState({
+      step: 'preferences', scan, plan: null, checkedIds: new Set(['1']),
+      settings: { ...DEFAULT_SETTINGS, rebuildStructure: true, llm: { ...DEFAULT_SETTINGS.llm, apiKey: 'sk-x' } },
+      busy: null, busyKind: null, error: null, logs: [],
+    })
+  })
+
+  it('分析在途时 reset，分析回来不改步骤也不写 plan', async () => {
+    let finish: (v: unknown) => void = () => {}
+    vi.mocked(send).mockImplementation((req: { kind: string }) =>
+      req.kind === 'analyze'
+        ? (new Promise((r) => { finish = r }) as never)
+        : (Promise.resolve({ ok: true }) as never))
+
+    const running = useStore.getState().analyze()
+    await Promise.resolve()
+    useStore.getState().reset()
+
+    finish({ ok: true, kind: 'analyze', plan: makePlan() })
+    await running
+
+    expect(useStore.getState().step).toBe('scope')
+    expect(useStore.getState().plan).toBeNull()
+  })
+
+  // 作废也要把 busy 收掉，否则选范围页的扫描按钮被一个不存在的任务钉死
+  it('作废时 busy 归零，用户能立刻重新开始', async () => {
+    let finish: (v: unknown) => void = () => {}
+    vi.mocked(send).mockImplementation((req: { kind: string }) =>
+      req.kind === 'analyze'
+        ? (new Promise((r) => { finish = r }) as never)
+        : (Promise.resolve({ ok: true }) as never))
+
+    const running = useStore.getState().analyze()
+    await Promise.resolve()
+    useStore.getState().reset()
+    finish({ ok: true, kind: 'analyze', plan: makePlan() })
+    await running
+
+    expect(useStore.getState().busy).toBeNull()
+    expect(useStore.getState().busyKind).toBeNull()
+  })
+
+  it('扫描同理：在途时 reset，扫描回来不跳到偏好页', async () => {
+    useStore.setState({ step: 'scope', scan: null })
+    let finish: (v: unknown) => void = () => {}
+    vi.mocked(send).mockImplementation(() => new Promise((r) => { finish = r }) as never)
+
+    const running = useStore.getState().goScan()
+    await Promise.resolve()
+    useStore.getState().reset()
+
+    finish({ ok: true, kind: 'scan', scan })
+    await running
+
+    expect(useStore.getState().step).toBe('scope')
+    expect(useStore.getState().scan).toBeNull()
+  })
+
+  // 没人打断时一切照旧，别把正常路径也一起废掉
+  it('没有 reset 时结果正常落地', async () => {
+    vi.mocked(send).mockImplementation((req: { kind: string }) =>
+      req.kind === 'analyze'
+        ? (Promise.resolve({ ok: true, kind: 'analyze', plan: makePlan() }) as never)
+        : (Promise.resolve({ ok: true }) as never))
+
+    await useStore.getState().analyze()
+    expect(useStore.getState().step).toBe('structure')
+    expect(useStore.getState().plan).not.toBeNull()
+  })
+})

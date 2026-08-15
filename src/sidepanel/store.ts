@@ -22,6 +22,23 @@ import { applyDocumentLang } from './lib/documentLang'
 
 export type Step = 'scope' | 'preferences' | 'structure' | 'review' | 'result'
 
+/**
+ * 这次异步请求发出后，用户有没有把这一轮整理放弃掉（见 State.runSeq）。
+ *
+ * 过期时顺手把 busy 收掉：busy 是个单槽，同一时刻只可能有一个请求占着它，
+ * 而所有开始按钮都被 busy 禁用，所以这个 busy 一定是自己留下的。不收的话，
+ * 选范围页的扫描按钮会被一个用户已经放弃的任务永久钉死。
+ */
+function isStale(
+  get: () => State,
+  set: (partial: Partial<State>) => void,
+  run: number,
+): boolean {
+  if (get().runSeq === run) return false
+  set({ busy: null, busyKind: null })
+  return true
+}
+
 /** 分析完成后去哪一步：只有推翻模式才有新目录结构可确认。 */
 export function nextStepAfterAnalyze(rebuildStructure: boolean): Step {
   return rebuildStructure ? 'structure' : 'review'
@@ -121,6 +138,15 @@ interface State {
   tree: BookmarkNode[]
   checkedIds: Set<string>
   scan: ScanResult | null
+  /**
+   * 当前这一轮整理的序号，reset() 时 +1。
+   *
+   * 扫描和分析都是异步的，分析还能跑好几分钟，而这期间「返回」是能点的。
+   * 点了就是 reset()：这一轮作废。在途的请求回来时要拿它对一下自己还算不算数——
+   * 不对的话，一个属于已放弃轮次的 plan 会写进 store 并把用户拽到结构页，
+   * 而那时 scan 已经被清掉了，偏好页从此是一整页空白。
+   */
+  runSeq: number
   settings: Settings
   plan: OrganizePlan | null
   accepted: Set<string>
@@ -197,6 +223,7 @@ export const useStore = create<State>((set, get) => ({
   tree: [],
   checkedIds: new Set(),
   scan: null,
+  runSeq: 0,
   settings: DEFAULT_SETTINGS,
   plan: null,
   accepted: new Set(),
@@ -281,8 +308,10 @@ export const useStore = create<State>((set, get) => ({
   },
 
   async goScan() {
+    const run = get().runSeq
     set({ busy: t('busyScanning'), busyKind: 'scan', error: null, progress: null, logs: [] })
     const res = await send({ kind: 'scan', scopeRootIds: [...get().checkedIds] })
+    if (isStale(get, set, run)) return
     if (!res.ok) return set({ busy: null, busyKind: null, error: res.error })
     if (res.kind !== 'scan') return set({ busy: null, busyKind: null })
     set({ scan: res.scan, step: 'preferences', busy: null, busyKind: null })
@@ -294,7 +323,9 @@ export const useStore = create<State>((set, get) => ({
   },
 
   async analyze() {
+    const run = get().runSeq
     const granted = await ensureHostPermission(get().settings.llm.baseUrl)
+    if (isStale(get, set, run)) return
     if (!granted) {
       return set({ error: t('errHostPermission') })
     }
@@ -303,6 +334,7 @@ export const useStore = create<State>((set, get) => ({
     const stopKeepalive = startKeepalive(connection)
     const res = await send({ kind: 'analyze', scopeRootIds: [...get().checkedIds] })
       .finally(stopKeepalive)
+    if (isStale(get, set, run)) return
     // 主动取消不是错误，日志里已经有记录，不弹红条
     if (!res.ok && res.cancelled === true) {
       return set({ busy: null, busyKind: null, error: null })
@@ -457,6 +489,8 @@ export const useStore = create<State>((set, get) => ({
 
   reset() {
     set({
+      // 让在途的扫描/分析知道自己已经过期，回来时别再写 store
+      runSeq: get().runSeq + 1,
       step: 'scope', scan: null, plan: null, accepted: new Set(),
       structureEdits: EMPTY_EDITS,
       applyResult: null, undoResult: null, error: null,
