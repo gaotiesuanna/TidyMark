@@ -520,6 +520,9 @@
   "reviewRejectAll": {
     "message": "Reject all"
   },
+  "reviewExportPlan": {
+    "message": "Export plan"
+  },
   "reviewLowConfidence": {
     "message": "Low confidence"
   },

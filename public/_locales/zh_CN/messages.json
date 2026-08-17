@@ -520,6 +520,9 @@
   "reviewRejectAll": {
     "message": "全部拒绝"
   },
+  "reviewExportPlan": {
+    "message": "导出方案"
+  },
   "reviewLowConfidence": {
     "message": "低置信度"
   },

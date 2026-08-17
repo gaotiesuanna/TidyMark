@@ -1,9 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ReviewStep } from '@/sidepanel/steps/ReviewStep'
 import { useStore } from '@/sidepanel/store'
+import { downloadJson } from '@/sidepanel/lib/download'
+import { DEFAULT_SETTINGS } from '@/storage/settings'
 import type { OrganizePlan } from '@/core/types'
+
+vi.mock('@/sidepanel/lib/download', () => ({ downloadJson: vi.fn(), downloadText: vi.fn() }))
 
 const plan: OrganizePlan = {
   id: 'p1', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: false,
@@ -69,5 +73,23 @@ describe('ReviewStep', () => {
   it('应用按钮显示将要移动的数量', () => {
     render(<ReviewStep />)
     expect(screen.getByRole('button', { name: /应用 1 项修改/ })).toBeDefined()
+  })
+
+  it('导出方案带上勾选状态与设置，且不含 apiKey', async () => {
+    useStore.setState({
+      settings: { ...DEFAULT_SETTINGS, llm: { baseUrl: 'https://api.x.com/v1', apiKey: 'sk-secret', model: 'gpt-4o-mini' } },
+    })
+    render(<ReviewStep />)
+    await userEvent.click(screen.getByText('导出方案'))
+
+    const [filename, payload] = vi.mocked(downloadJson).mock.calls.at(-1)!
+    expect(filename).toMatch(/^tidymark-plan-\d{4}-\d{2}-\d{2}\.json$/)
+    const body = payload as { settings: { llm: Record<string, unknown> }; accepted: string[]; plan: OrganizePlan }
+    expect(body.accepted).toEqual(['100'])
+    expect(body.plan.rows).toHaveLength(2)
+    expect(body.settings.llm.model).toBe('gpt-4o-mini')
+    // 这个文件是要发出去给人看的，密钥一个字符都不能跟着走
+    expect(JSON.stringify(payload)).not.toContain('sk-secret')
+    expect('apiKey' in body.settings.llm).toBe(false)
   })
 })

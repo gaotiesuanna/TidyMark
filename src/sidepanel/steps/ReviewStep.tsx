@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
+import { localDate } from '@/core/export'
 import { LOW_CONFIDENCE, renumberPlan, summarize } from '@/core/plan'
 import { plural, t } from '@/i18n'
+import { downloadJson } from '../lib/download'
 import { useStore } from '../store'
 
 export function ReviewStep() {
@@ -12,6 +14,26 @@ export function ReviewStep() {
   )
   const summary = useMemo(() => (plan === null ? null : summarize(plan, accepted)), [plan, accepted])
   if (plan === null || summary === null) return null
+
+  /**
+   * 把这一轮的完整方案倒成 JSON，供离线排查整理效果。
+   *
+   * 导出的是 renumberPlan 之后的 plan，也就是界面上这一刻显示的那份——
+   * 拿它去对照结果树时编号才对得上。
+   *
+   * apiKey 必须剥掉：这个文件是要发给别人看的，而 baseUrl 与 model 留着有用，
+   * 一份方案好不好，很大程度取决于它是哪个模型产出的。
+   */
+  function exportPlan(): void {
+    const at = new Date()
+    const { apiKey: _apiKey, ...llm } = settings.llm
+    downloadJson(`tidymark-plan-${localDate(at)}.json`, {
+      exportedAt: at.toISOString(),
+      settings: { ...settings, llm },
+      accepted: [...accepted],
+      plan,
+    })
+  }
 
   return (
     <div className="space-y-3">
@@ -55,6 +77,10 @@ export function ReviewStep() {
         <button className="rounded border px-2 py-1 hover:bg-neutral-50" onClick={acceptAll}>{t('reviewAcceptAll')}</button>
         <button className="rounded border px-2 py-1 hover:bg-neutral-50" onClick={() => acceptHighConfidence(LOW_CONFIDENCE)}>{t('reviewAcceptHigh')}</button>
         <button className="rounded border px-2 py-1 hover:bg-neutral-50" onClick={rejectAll}>{t('reviewRejectAll')}</button>
+        {/* 勾选无关的一项，靠 ml-auto 推到另一头，不跟左边三个批量操作混成一排 */}
+        <button className="ml-auto rounded border px-2 py-1 text-neutral-500 hover:bg-neutral-50" onClick={exportPlan}>
+          {t('reviewExportPlan')}
+        </button>
       </div>
 
       <ul className="space-y-1">
