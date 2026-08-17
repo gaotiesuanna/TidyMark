@@ -2,6 +2,7 @@ import { currentLocale, resolveLocale, setLocale, t } from '@/i18n'
 import { buildCandidatesFromFolders, stripNumberPrefix } from '@/core/map'
 import type { Locale } from '@/core/locale'
 import { buildPlan, type NewFolderSpec, type RenameFolderSpec } from '@/core/plan'
+import { pruneSmallFolders } from '@/core/prune'
 import { findScopeRoots, scanTree } from '@/core/scan'
 import { planTitleRewrites } from '@/core/titles'
 import { buildCategoryTree } from '@/core/tree'
@@ -105,6 +106,9 @@ export async function handle(
           // 上限只管「要不要再往下分」，不阻止在勾中处建第一层：用户勾了这里就是要在这里
           // 整理，返回「一个目录都不建」看起来像坏了
           const allowChildren = startLevel < settings.maxFolderDepth
+          // 关掉开关时一路传 undefined，让下游各自保持改造前的行为，而不是传 1 让它们
+          // 多跑一遍恒真的判断
+          const minFolderSize = settings.enforceMinFolderSize ? settings.minFolderSize : undefined
           const containerTitle = merging ? undefined : roots.find((r) => r.id === rootId)?.title
           log('tags', t('logTagsStart', String(scan.bookmarks.length)))
           tags = await extractTags(scan.bookmarks, client, locale, {
@@ -130,6 +134,7 @@ export async function handle(
             allowChildren,
             startLevel,
             ...(containerTitle === undefined ? {} : { containerTitle }),
+            ...(minFolderSize === undefined ? {} : { minFolderSize }),
           })
           if (isCancelled()) return CANCELLED
           let mergeRoot: { parentId: string; title: string } | undefined
@@ -156,6 +161,7 @@ export async function handle(
             mergeRoot,
             maxTopFolders: settings.maxTopFolders,
             allowChildren,
+            ...(minFolderSize === undefined ? {} : { minFolderSize }),
           })
           if (mergeRoot !== undefined && tree_.mergeRootTemporaryId !== null) {
             planMergeRoot = {
@@ -201,7 +207,7 @@ export async function handle(
           isCancelled,
           locale,
         })
-        const classifications = [...pinned, ...llmResults]
+        let classifications = [...pinned, ...llmResults]
         // 已经跑完的批次仍然写进缓存，重来时不必再花一次钱
         await saveCache(ports, cache)
         if (isCancelled()) return CANCELLED
@@ -227,6 +233,22 @@ export async function handle(
                 ),
               ]
             : []
+        // 目录下限的最后一道：前两道只能按标签数预估，书签最终落在哪个目录是刚才那步定的。
+        // 只在推翻重建模式下做——非推翻模式的候选目录全是用户自己的，一个都不该撤。
+        if (settings.rebuildStructure && settings.enforceMinFolderSize) {
+          const pruned = pruneSmallFolders({
+            candidates, newFolders, classifications, locale,
+            minFolderSize: settings.minFolderSize,
+            mergeRootTemporaryId: planMergeRoot?.temporaryId ?? null,
+          })
+          candidates = pruned.candidates
+          newFolders = pruned.newFolders
+          classifications = pruned.classifications
+          if (pruned.prunedTitles.length > 0) {
+            log('classify', t('logPrunedSmall', String(pruned.prunedTitles.length), String(settings.minFolderSize)))
+          }
+        }
+
         // 标题统一与目录整理相互独立：它由自己的开关决定，不受移动建议的勾选影响
         const titleRewrites = settings.rewriteGithubTitles
           ? planTitleRewrites(scan.bookmarks)

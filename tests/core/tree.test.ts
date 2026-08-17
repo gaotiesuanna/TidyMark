@@ -530,3 +530,78 @@ describe('buildCategoryTree 二级目录开关', () => {
     expect(paths).toContain('GitHub/模型微调')
   })
 })
+
+/**
+ * 目录下限的第二道拦截：模型设计完目录后，标签数就等于该目录能收到的书签数上界。
+ * 这里按标签数把撑不起来的目录挡在建树之外，被挡下的书签没有候选目录，
+ * 分类阶段会把它们送进「其他」。第三道在 core/prune.ts。
+ */
+describe('buildCategoryTree 目录下限', () => {
+  it('标签数不足下限的主题不建目录', () => {
+    const spec: Array<[string, string, string | null]> = [
+      ...Array.from({ length: 4 }, (_, i) => ['a' + i, '前端', null] as [string, string, null]),
+      ['b0', '独苗', null],
+      ['b1', '两个也不够', null],
+      ['b2', '两个也不够', null],
+    ]
+    const { newFolders } = buildTree({
+      tags: tags(spec), rootId, existingFolders: [], minFolderSize: 3,
+    })
+    const titles = newFolders.map((f) => base(f.title))
+    expect(titles).toContain('前端')
+    expect(titles).not.toContain('独苗')
+    expect(titles).not.toContain('两个也不够')
+  })
+
+  it('不传 minFolderSize 时行为与改造前完全一致', () => {
+    const spec: Array<[string, string, string | null]> = [['b0', '独苗', null]]
+    expect(buildTree({ tags: tags(spec), rootId, existingFolders: [] }))
+      .toEqual(buildTree({ tags: tags(spec), rootId, existingFolders: [], minFolderSize: 1 }))
+  })
+
+  // 「其他」是收容所，本身没有标签数可言。把它一起筛掉，被挡下的书签就无处可去了
+  it('「其他」兜底目录不受下限影响', () => {
+    const { newFolders } = buildTree({
+      tags: tags([['b0', '独苗', null]]), rootId, existingFolders: [], minFolderSize: 3,
+    })
+    expect(newFolders.map((f) => base(f.title))).toEqual(['其他'])
+  })
+
+  it('二级主题标签数不足下限时不建子目录，一级目录照建', () => {
+    const spec: Array<[string, string, string | null]> = [
+      ...Array.from({ length: 4 }, (_, i) => ['a' + i, '前端', 'React'] as [string, string, string]),
+      ['a9', '前端', 'Svelte'],
+    ]
+    const { candidates } = buildTree({
+      tags: tags(spec), rootId, existingFolders: [], minFolderSize: 3,
+    })
+    const paths = candidates.map((c) => c.path.map(base).join('/'))
+    expect(paths).toContain('前端/React')
+    expect(paths).not.toContain('前端/Svelte')
+  })
+
+  // 组内的独苗子目录同样难看，但组目录自己是用户勾出来的，不能因为人少就撤掉
+  it('聚合组内不足下限的子目录不建，书签平铺在组根', () => {
+    const big = githubFixture(4, 'RAG 检索')
+    const small = githubFixture(1, '语音合成', 4)
+    const { candidates, pinned } = buildTree({
+      tags: [...big.tags, ...small.tags], rootId, existingFolders: [],
+      bookmarks: [...big.bookmarks, ...small.bookmarks],
+      domainGroups: ['github'], minFolderSize: 3,
+    })
+    const paths = candidates.map((c) => c.path.map(base).join('/'))
+    expect(paths).toContain('GitHub/RAG 检索')
+    expect(paths).not.toContain('GitHub/语音合成')
+    const groupRoot = candidates.find((c) => c.path.length === 1 && base(c.path[0]!) === 'GitHub')!
+    expect(pinned.find((p) => p.bookmarkId === 'g4')!.targetCategoryId).toBe(groupRoot.id)
+  })
+
+  it('聚合组目录本身不受下限影响——用户勾了这个组就是要它', () => {
+    const gh = githubFixture(1, '工具')
+    const { candidates } = buildTree({
+      tags: gh.tags, rootId, existingFolders: [],
+      bookmarks: gh.bookmarks, domainGroups: ['github'], minFolderSize: 3,
+    })
+    expect(candidates.map((c) => base(c.path[0]!))).toContain('GitHub')
+  })
+})

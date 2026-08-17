@@ -99,6 +99,48 @@ describe('foldersPrompt 再分一层的开关', () => {
 })
 
 /**
+ * 标签清单里带着每个标签的书签数，模型有依据判断某个目录会不会太小。
+ * 这是「不要出现只装一个链接的目录」在源头的第一道拦截，另两道在
+ * core/tree.ts（按标签数过滤）和 core/prune.ts（分类后按真实归属兜底）。
+ */
+describe('foldersPrompt 目录下限', () => {
+  it('给出 minFolderSize 时要求模型不要建装不满的目录，并报出这个数字', () => {
+    const zh = foldersPrompt('zh_CN', { total: 30, maxSiblings: 8, minFolderSize: 3 }).join(' ')
+    expect(zh).toContain('3')
+    expect(zh).toContain('不要建')
+
+    const en = foldersPrompt('en', { total: 30, maxSiblings: 8, minFolderSize: 3 }).join(' ')
+    expect(en).toContain('3')
+    expect(en).toMatch(/at least 3 bookmarks/i)
+  })
+
+  // 关掉开关时这条规则整个不该出现，否则模型仍会照它设计
+  it('不传 minFolderSize 时不提这回事', () => {
+    expect(foldersPrompt('zh_CN', { total: 30, maxSiblings: 8 }).join(' ')).not.toContain('不要建')
+    expect(foldersPrompt('en', { total: 30, maxSiblings: 8 }).join(' ')).not.toMatch(/at least \d+ bookmarks/i)
+  })
+
+  // 聚合组内部那一层同样会冒出独苗子目录，两个分支都要有
+  it('聚合组内部（带 parentTitle）也带上这条', () => {
+    const zh = foldersPrompt('zh_CN', { total: 30, parentTitle: 'GitHub', maxSiblings: 8, minFolderSize: 4 }).join(' ')
+    expect(zh).toContain('4')
+    expect(zh).toContain('不要建')
+
+    const en = foldersPrompt('en', { total: 30, parentTitle: 'GitHub', maxSiblings: 8, minFolderSize: 4 }).join(' ')
+    expect(en).toMatch(/at least 4 bookmarks/i)
+  })
+
+  // 规则是编号列表，插进去不能把后面几条的号码搞重或跳号
+  it('规则编号仍然连续', () => {
+    for (const locale of ['zh_CN', 'en'] as const) {
+      const text = foldersPrompt(locale, { total: 30, maxSiblings: 8, minFolderSize: 3 }).join('\n')
+      const numbers = [...text.matchAll(/^(\d+)\./gm)].map((m) => Number(m[1]))
+      expect(numbers).toEqual(numbers.map((_, i) => i + 1))
+    }
+  })
+})
+
+/**
  * 层级按绝对位置算：勾「其他书签」时模型建的是二级目录，不是一级。
  * 提示词里的称呼跟着走，否则模型会照着「一级目录要具体」的标准去命名一批二级目录。
  */

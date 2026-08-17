@@ -39,6 +39,17 @@ export interface BuildTreeInput {
   bookmarks?: BookmarkItem[]
   /** 已勾选的聚合组 key。省略或为空时不做聚合。 */
   domainGroups?: string[]
+  /**
+   * 目录至少要装下几个书签才值得建立。省略或填 1 等于不做这项约束。
+   *
+   * 标签数是该目录能收到的书签数上界——分类阶段只会把书签往别处送、不会往这里加，
+   * 所以撑不起来的主题在这里就不必建目录。被挡下的书签没有候选目录，
+   * 分类阶段会把它们送进「其他」。
+   *
+   * 两处豁免：「其他」自己（它是收容所，没有标签数可言，筛掉它被挡下的书签就无处可去），
+   * 以及聚合组目录本身（用户勾了那个组就是明确要这个结构，人少也要）。
+   */
+  minFolderSize?: number
   /** 聚合组目录名走哪种语言。必填——Record<Locale, string> 的强制在调用点这一侧也不能松口。 */
   locale: Locale
 }
@@ -83,6 +94,7 @@ function domainGroupOrder(key: string): number {
 export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
   const maxSiblings = input.maxTopFolders ?? MAX_SIBLINGS
   const allowChildren = input.allowChildren ?? true
+  const minFolderSize = input.minFolderSize ?? 1
   if (input.tags.length === 0) {
     return { candidates: [], newFolders: [], renameFolders: [], pinned: [], mergeRootTemporaryId: null }
   }
@@ -150,6 +162,7 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
       byTopic.set(topicKey, child)
     }
     const children = [...byTopic.values()]
+      .filter((c) => c.bookmarkIds.length >= minFolderSize)
       .sort((a, b) => b.bookmarkIds.length - a.bookmarkIds.length)
       .slice(0, maxSiblings)
     const placed = new Set(children.flatMap((c) => c.bookmarkIds))
@@ -181,6 +194,7 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
   }
 
   const ranked = [...groups.values()]
+    .filter((g) => g.count >= minFolderSize)
     .sort((a, b) => b.count - a.count)
     .slice(0, maxSiblings - 1) // 留一个位置给「其他」
 
@@ -193,6 +207,7 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
     title: group.title,
     domainGroup: null,
     children: [...group.children.values()]
+      .filter((c) => c.count >= minFolderSize)
       .sort((a, b) => b.count - a.count)
       .slice(0, maxSiblings)
       .map((c) => ({ title: c.title, bookmarkIds: [] })),

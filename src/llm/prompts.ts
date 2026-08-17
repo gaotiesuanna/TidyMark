@@ -114,11 +114,27 @@ export function foldersPrompt(
     startLevel?: number
     /** 这批目录会被放进哪个目录，用于让模型知道自己在谁下面命名。 */
     containerTitle?: string
+    /**
+     * 目录至少要装下几个书签。省略表示不做这项要求（用户关掉了开关）。
+     *
+     * 标签清单里带着每个标签的书签数，模型有依据算出某个目录会不会太小。
+     * 这只是第一道拦截：模型不一定照办，core/tree.ts 与 core/prune.ts 还会再收两次。
+     */
+    minFolderSize?: number
   },
 ): string[] {
-  const { total, parentTitle, maxSiblings, allowChildren = true, startLevel = 1, containerTitle } = opts
+  const {
+    total, parentTitle, maxSiblings, allowChildren = true, startLevel = 1, containerTitle, minFolderSize,
+  } = opts
   const here = levelName(locale, startLevel)
   const below = levelName(locale, startLevel + 1)
+  // 接在共有的第 5、6 条后面，编号才不会跟两个分支各自的 1-4 撞上
+  const sizeRule = (index: number): string[] => {
+    if (minFolderSize === undefined) return []
+    return locale === 'zh_CN'
+      ? [`${index}. 不要建只装得下不到 ${minFolderSize} 个书签的目录；凑不满的标签并进相近的目录，没有相近的就不必给它单独开目录。`]
+      : [`${index}. Only create a folder if it will hold at least ${minFolderSize} bookmarks. Merge labels that cannot fill one into a neighbouring folder; if none fits, leave them without a folder of their own.`]
+  }
 
   if (locale === 'zh_CN') {
     const head = parentTitle !== undefined
@@ -156,6 +172,7 @@ export function foldersPrompt(
       ...body,
       `5. 每个标签必须出现在恰好一个目录的 topics 里，不要遗漏、不要重复。直接归入某个${parentTitle === undefined ? `${here}级` : ''}目录的标签写在它自己的 topics 里，归入子目录的写在子目录的 topics 里。`,
       '6. 目录名用中文，专有技术名词（React、RAG、MCP）可直接用原文。',
+      ...sizeRule(7),
     ]
   }
 
@@ -194,6 +211,7 @@ export function foldersPrompt(
     ...body,
     `5. Every label must appear in the topics of exactly one folder — none missing, none duplicated. Labels going directly into a${parentTitle === undefined ? ` ${here}` : ''} folder belong in its own topics; labels going into a subfolder belong in that subfolder.`,
     '6. Write folder names in English. Established technical names (React, RAG, MCP) stay as they are.',
+    ...sizeRule(7),
   ]
 }
 

@@ -1,6 +1,8 @@
 import { t } from '@/i18n'
 import { useStore } from '../store'
-import { MAX_FOLDER_DEPTH, MIN_FOLDER_DEPTH, type Settings } from '@/storage/settings'
+import {
+  MAX_FOLDER_DEPTH, MAX_FOLDER_SIZE, MIN_FOLDER_DEPTH, MIN_FOLDER_SIZE, type Settings,
+} from '@/storage/settings'
 
 /** 上限的合法区间。低于 4 没有分类意义，高于 20 在书签栏里也找不着。 */
 const MIN_TOP_FOLDERS = 4
@@ -86,6 +88,42 @@ export function SettingsPanel() {
             {t('settingsDepthBody')}
           </span>
         </label>
+
+        {/* 勾选框沿用 PreferencesStep 里那几个的排版，数字框跟着它的勾选状态走 */}
+        <div className={enabled ? '' : 'text-neutral-300'}>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1 h-3.5 w-3.5"
+              disabled={!enabled}
+              checked={settings.enforceMinFolderSize}
+              onChange={(e) =>
+                void setSettings({ ...settings, enforceMinFolderSize: e.target.checked })
+              }
+            />
+            <span>{t('settingsMinSizeTitle')}</span>
+          </label>
+          <input
+            type="number"
+            className="mt-1 ml-5 w-20 rounded border px-2 py-1 text-xs"
+            aria-label={t('settingsMinSizeInput')}
+            min={MIN_FOLDER_SIZE}
+            max={MAX_FOLDER_SIZE}
+            disabled={!enabled || !settings.enforceMinFolderSize}
+            value={settings.minFolderSize}
+            onChange={(e) => {
+              // 与上面两个数字框同样的把关：越界值不写进存储，保持原值。
+              // 下界是 2 而不是 1——填 1 等于没开，那种意图该去取消勾选
+              const next = Number(e.target.value)
+              if (!Number.isInteger(next)) return
+              if (next < MIN_FOLDER_SIZE || next > MAX_FOLDER_SIZE) return
+              void setSettings({ ...settings, minFolderSize: next })
+            }}
+          />
+          <p className="mt-0.5 ml-5 text-[11px] leading-relaxed text-neutral-400">
+            {t('settingsMinSizeBody')}
+          </p>
+        </div>
       </section>
     </div>
   )

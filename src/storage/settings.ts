@@ -27,6 +27,13 @@ export interface Settings {
    * 只在推翻重建模式下生效。
    */
   maxFolderDepth: number
+  /**
+   * 是否要求目录至少装下 minFolderSize 个书签才值得单独建立。
+   * 关掉时完全不做这项约束。只在推翻重建模式下生效。
+   */
+  enforceMinFolderSize: boolean
+  /** 目录至少要装下几个书签。enforceMinFolderSize 关闭时这个值不被读取。 */
+  minFolderSize: number
   /** 界面与产出的语言。'auto' 时跟随浏览器 UI 语言。 */
   uiLocale: UiLocale
 }
@@ -34,6 +41,16 @@ export interface Settings {
 /** 嵌套层数的合法区间。1 就是完全不分子目录；超过 4 层在书签管理器里已经找不着东西。 */
 export const MIN_FOLDER_DEPTH = 1
 export const MAX_FOLDER_DEPTH = 4
+
+/**
+ * minFolderSize 这个数字自己的合法区间——不是「目录里的书签数」的区间。
+ *
+ * 下界 2 是这个功能的最弱形态（只赶走独苗目录）；填 1 等于没开，那种意图应该
+ * 去关开关而不是把阈值调到 1。上界 10 再往上，能活下来的目录太少，
+ * 整理结果会退化成一个巨大的「其他」。
+ */
+export const MIN_FOLDER_SIZE = 2
+export const MAX_FOLDER_SIZE = 10
 
 export const DEFAULT_SETTINGS: Settings = {
   llm: { baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-4o-mini' },
@@ -43,6 +60,8 @@ export const DEFAULT_SETTINGS: Settings = {
   rewriteGithubTitles: false,
   maxTopFolders: MAX_SIBLINGS,
   maxFolderDepth: 2,
+  enforceMinFolderSize: true,
+  minFolderSize: 3,
   uiLocale: 'auto',
 }
 
@@ -79,6 +98,8 @@ export async function loadSettings(ports: Ports): Promise<Settings> {
     rewriteGithubTitles: stored?.rewriteGithubTitles ?? DEFAULT_SETTINGS.rewriteGithubTitles,
     maxTopFolders: stored?.maxTopFolders ?? DEFAULT_SETTINGS.maxTopFolders,
     maxFolderDepth: stored?.maxFolderDepth ?? legacyDepth ?? DEFAULT_SETTINGS.maxFolderDepth,
+    enforceMinFolderSize: stored?.enforceMinFolderSize ?? DEFAULT_SETTINGS.enforceMinFolderSize,
+    minFolderSize: stored?.minFolderSize ?? DEFAULT_SETTINGS.minFolderSize,
     uiLocale: stored?.uiLocale ?? DEFAULT_SETTINGS.uiLocale,
   }
 }

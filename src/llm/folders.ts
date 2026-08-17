@@ -105,6 +105,8 @@ export interface DesignOptions {
   startLevel?: number
   /** 这批目录会被放进哪个目录。 */
   containerTitle?: string
+  /** 目录至少要装下几个书签。省略表示用户关掉了这项约束。 */
+  minFolderSize?: number
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => void
   /** 每摊设计开始前检查一次，返回 true 就跳过剩余摊子。 */
   isCancelled?: () => boolean
@@ -125,6 +127,7 @@ function buildDesignPrompt(topics: TopicCount[], options: DesignOptions, locale:
       ...(options.allowChildren === undefined ? {} : { allowChildren: options.allowChildren }),
       ...(options.startLevel === undefined ? {} : { startLevel: options.startLevel }),
       ...(options.containerTitle === undefined ? {} : { containerTitle: options.containerTitle }),
+      ...(options.minFolderSize === undefined ? {} : { minFolderSize: options.minFolderSize }),
     }),
     '',
     locale === 'zh_CN' ? '标签清单：' : 'Label list:',

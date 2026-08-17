@@ -60,6 +60,31 @@ describe('设置存取', () => {
     expect((await loadSettings(p)).maxFolderDepth).toBe(3)
   })
 
+  // 目录太小是这个功能要防的东西（一个目录里只躺一个链接），所以默认就开着
+  it('默认开启目录下限，阈值 3', async () => {
+    const settings = await loadSettings(ports())
+    expect(settings.enforceMinFolderSize).toBe(true)
+    expect(settings.minFolderSize).toBe(3)
+  })
+
+  // 旧存储里没有这两个键，回落默认值——也就是老用户下次整理会吃到这个新行为。
+  // 这是「默认开」的必然结果，不是遗漏
+  it('旧数据缺目录下限字段时回落默认值', async () => {
+    const p = ports()
+    await p.storage.set(SETTINGS_KEY, { rebuildStructure: true })
+    const settings = await loadSettings(p)
+    expect(settings.enforceMinFolderSize).toBe(true)
+    expect(settings.minFolderSize).toBe(3)
+  })
+
+  it('显式关掉的目录下限读得回来，不被默认值翻回去', async () => {
+    const p = ports()
+    await p.storage.set(SETTINGS_KEY, { enforceMinFolderSize: false, minFolderSize: 5 })
+    const settings = await loadSettings(p)
+    expect(settings.enforceMinFolderSize).toBe(false)
+    expect(settings.minFolderSize).toBe(5)
+  })
+
   it('保存后能读回', async () => {
     const p = ports()
     await saveSettings(p, {

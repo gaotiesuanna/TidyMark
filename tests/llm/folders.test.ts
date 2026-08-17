@@ -160,6 +160,20 @@ describe('designFolders', () => {
     expect(complete.mock.calls[0]![0]).toContain('一级目录不超过 4 个')
   })
 
+  // 下限不写进提示词的话，模型照样设计出一堆独苗目录，全靠后面两道兜底去撤，
+  // 等于白花了 token 又把结果推向「其他」
+  it('minFolderSize 写进提示词文本', async () => {
+    const complete = vi.fn().mockResolvedValue({ folders: [] })
+    await designFolders(topics, { complete }, { minFolderSize: 3 })
+    expect(complete.mock.calls[0]![0]).toContain('不到 3 个书签')
+  })
+
+  it('不传 minFolderSize 时提示词里没有这条', async () => {
+    const complete = vi.fn().mockResolvedValue({ folders: [] })
+    await designFolders(topics, { complete })
+    expect(complete.mock.calls[0]![0]).not.toContain('个书签的目录')
+  })
+
   it('folders 不是数组时返回 null，不抛错', async () => {
     const complete = vi.fn().mockResolvedValue({ folders: { oops: true } })
     await expect(designFolders(topics, { complete })).resolves.toBeNull()

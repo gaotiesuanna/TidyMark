@@ -33,7 +33,7 @@
     "message": "分类偏好"
   },
   "settingsRebuildOnly": {
-    "message": "以下两项只在「推翻现有文件夹结构」开启时生效。"
+    "message": "以下几项只在「推翻现有文件夹结构」开启时生效。"
   },
   "settingsMaxFoldersTitle": {
     "message": "同层目录最多几个"
@@ -46,6 +46,15 @@
   },
   "settingsDepthBody": {
     "message": "按书签库里的固定层级算：书签栏里的目录是一级，「其他书签」自己就是一级、它里面的是二级。所以填 2 时，勾书签栏能分出二级，勾「其他书签」就只建一层。1 到 4 之间。"
+  },
+  "settingsMinSizeTitle": {
+    "message": "不足几个书签的目录就不单独建立"
+  },
+  "settingsMinSizeInput": {
+    "message": "至少几个书签"
+  },
+  "settingsMinSizeBody": {
+    "message": "防止整理出只装着一个链接的目录。装不满的目录会被撤掉，里面的书签并进上一层，一级目录则并进「其他」。2 到 10 之间。"
   },
   "shellStepReview": {
     "message": "预览"
@@ -786,6 +795,17 @@
         "content": "$1"
       },
       "reused": {
+        "content": "$2"
+      }
+    }
+  },
+  "logPrunedSmall": {
+    "message": "撤掉 $count$ 个装不满 $min$ 个书签的目录，里面的书签并进上一层",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "min": {
         "content": "$2"
       }
     }

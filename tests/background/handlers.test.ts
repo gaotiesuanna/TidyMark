@@ -159,6 +159,9 @@ describe('handle', () => {
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
+      // 这条验的是「标签 -> 建树 -> 分类」这条链路本身。夹具只有一个书签，
+      // 开着目录下限就一个目录都建不出来，验不到想验的东西
+      enforceMinFolderSize: false,
     })
     const complete = vi.fn()
       .mockResolvedValueOnce({ results: [{ bookmark_id: '100', primary_topic: '前端', secondary_topic: 'React' }] })
@@ -283,6 +286,8 @@ describe('handle', () => {
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
+      // 同上：单书签夹具，这条验的是全局目录设计有没有跑，不是目录该不该建
+      enforceMinFolderSize: false,
     })
     const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: OrganizePlan }
     const tops = res.plan.candidates.filter((c) => c.path.length === 1).map((c) => c.path[0]!)
@@ -786,6 +791,8 @@ async function analyzeMerge(
     ...DEFAULT_SETTINGS,
     llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
     rebuildStructure, removeEmptyFolders: false, domainGroups: [], rewriteGithubTitles: false,
+    // 合并模式那组用例验的是容器目录的挂载关系，夹具书签数撑不起目录下限
+    enforceMinFolderSize: false,
   })
   const deps = { createClient: () => ({ complete: mergeClient(nameResponse) }), now: () => 1 }
   const res = await handle(ports, { kind: 'analyze', scopeRootIds }, deps) as { plan: OrganizePlan }
@@ -944,5 +951,117 @@ describe('推翻模式按绝对层级告知模型', () => {
     const prompts = await promptsFor(['21'], { maxFolderDepth: 2 })
     expect(prompts).toContain('三级目录不超过')
     expect(prompts).toContain('children 一律返回空数组')
+  })
+})
+
+/**
+ * 目录下限有三道：提示词、建树按标签数筛、分类后按真实归属兜底。
+ * 前两道各自有单测（llm/prompts、core/tree），这里验的是它们确实接进了 analyze。
+ */
+describe('handle analyze 目录下限', () => {
+  const sixBookmarks = [
+    { id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '11', title: '杂项', children: Array.from({ length: 6 }, (_, i) => ({
+          id: `20${i}`, title: `站点${i}`, url: `https://site${i}.dev`,
+        }))},
+      ]},
+    ]},
+  ]
+
+  function setupSix(complete: LlmClient['complete']) {
+    const fake = createFakeBookmarks(sixBookmarks)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    return { fake, ports, deps: { createClient: () => ({ complete }), now: () => 1 } }
+  }
+
+  const rebuild = (overrides: Partial<Settings> = {}): Settings => ({
+    ...DEFAULT_SETTINGS,
+    llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+    rebuildStructure: true,
+    ...overrides,
+  })
+
+  it('下限写进目录设计提示词', async () => {
+    const complete = vi.fn()
+      .mockResolvedValueOnce({ results: [{ bookmark_id: '200', primary_topic: '前端' }] })
+      .mockResolvedValueOnce({ folders: [{ title: '前端', topics: ['前端'], children: [] }] })
+      .mockResolvedValueOnce({ results: [] })
+    const { ports, deps } = setupSix(complete)
+    await saveSettings(ports, rebuild({ minFolderSize: 4 }))
+
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
+    const prompts = complete.mock.calls.map((c) => c[0] as string)
+    expect(prompts.some((prompt) => prompt.includes('不到 4 个书签'))).toBe(true)
+  })
+
+  it('开关关掉时提示词里没有这条', async () => {
+    const complete = vi.fn()
+      .mockResolvedValueOnce({ results: [{ bookmark_id: '200', primary_topic: '前端' }] })
+      .mockResolvedValueOnce({ folders: [{ title: '前端', topics: ['前端'], children: [] }] })
+      .mockResolvedValueOnce({ results: [] })
+    const { ports, deps } = setupSix(complete)
+    await saveSettings(ports, rebuild({ enforceMinFolderSize: false }))
+
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
+    const prompts = complete.mock.calls.map((c) => c[0] as string)
+    expect(prompts.some((prompt) => prompt.includes('个书签的目录'))).toBe(false)
+  })
+
+  // 标签数够、真实归属不够：模型把 6 个书签的两个子主题分成了 5 : 1，
+  // 只有数过分类结果才拦得住那个 1
+  it('分类后仍不足下限的目录不出现在计划里，书签并进父目录', async () => {
+    const tags = Array.from({ length: 6 }, (_, i) => ({
+      bookmark_id: `20${i}`, primary_topic: i < 3 ? 'React' : 'Vue',
+    }))
+    // 两个子主题各 3 个标签，都撑得起子目录——建树那道拦不住，得靠分类后再数一遍
+    const complete = vi.fn()
+      .mockResolvedValueOnce({ results: tags })
+      .mockResolvedValueOnce({ folders: [{ title: '前端', topics: [], children: [
+        { title: 'React', topics: ['React'] },
+        { title: 'Vue', topics: ['Vue'] },
+      ] }] })
+      .mockResolvedValueOnce({ results: Array.from({ length: 6 }, (_, i) => ({
+        bookmark_id: `20${i}`,
+        target_category_id: i === 5 ? 'tmp:3' : 'tmp:2',
+        confidence: 0.9,
+        reason: 'r',
+      })) })
+    const { ports, deps } = setupSix(complete)
+    await saveSettings(ports, rebuild({ minFolderSize: 3 }))
+
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: OrganizePlan }
+    const created = res.plan.operations.flatMap((o) => (o.type === 'create_folder' ? [o.title] : []))
+    expect(created.some((title) => title.includes('React'))).toBe(true)
+    expect(created.some((title) => title.includes('Vue'))).toBe(false)
+    // 那个书签落在父目录，而不是掉进「其他」或原地不动
+    const row = res.plan.rows.find((r) => r.bookmarkId === '205')!
+    expect(row.toPath.map((p) => p.replace(/^\d+ /, ''))).toEqual(['前端'])
+    expect(row.reason).toContain('不足 3 个')
+  })
+
+  it('开关关掉时那个只有一个书签的子目录照建', async () => {
+    const tags = Array.from({ length: 6 }, (_, i) => ({
+      bookmark_id: `20${i}`, primary_topic: i < 3 ? 'React' : 'Vue',
+    }))
+    // 两个子主题各 3 个标签，都撑得起子目录——建树那道拦不住，得靠分类后再数一遍
+    const complete = vi.fn()
+      .mockResolvedValueOnce({ results: tags })
+      .mockResolvedValueOnce({ folders: [{ title: '前端', topics: [], children: [
+        { title: 'React', topics: ['React'] },
+        { title: 'Vue', topics: ['Vue'] },
+      ] }] })
+      .mockResolvedValueOnce({ results: Array.from({ length: 6 }, (_, i) => ({
+        bookmark_id: `20${i}`,
+        target_category_id: i === 5 ? 'tmp:3' : 'tmp:2',
+        confidence: 0.9,
+        reason: 'r',
+      })) })
+    const { ports, deps } = setupSix(complete)
+    await saveSettings(ports, rebuild({ enforceMinFolderSize: false }))
+
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: OrganizePlan }
+    const created = res.plan.operations.flatMap((o) => (o.type === 'create_folder' ? [o.title] : []))
+    expect(created.some((title) => title.includes('Vue'))).toBe(true)
   })
 })

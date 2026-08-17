@@ -63,11 +63,56 @@ describe('SettingsPanel 分类参数', () => {
   })
 
   // 沿用 PreferencesStep 里 domainGroups 的既有做法
-  it('推翻重建关闭时两项都禁用', () => {
+  it('推翻重建关闭时三项都禁用', () => {
     useStore.setState({ settings: { ...DEFAULT_SETTINGS, rebuildStructure: false } })
     render(<SettingsPanel />)
     expect(screen.getByLabelText('同层目录最多几个')).toHaveProperty('disabled', true)
     expect(screen.getByLabelText('目录最深嵌套几层')).toHaveProperty('disabled', true)
+    expect(screen.getByLabelText('不足几个书签的目录就不单独建立')).toHaveProperty('disabled', true)
+    expect(screen.getByLabelText('至少几个书签')).toHaveProperty('disabled', true)
+  })
+})
+
+describe('SettingsPanel 目录下限', () => {
+  it('默认勾着，阈值 3', () => {
+    render(<SettingsPanel />)
+    expect(screen.getByLabelText('不足几个书签的目录就不单独建立')).toHaveProperty('checked', true)
+    expect(screen.getByLabelText('至少几个书签')).toHaveProperty('value', '3')
+  })
+
+  it('取消勾选后写进设置', () => {
+    render(<SettingsPanel />)
+    fireEvent.click(screen.getByLabelText('不足几个书签的目录就不单独建立'))
+    expect(useStore.getState().settings.enforceMinFolderSize).toBe(false)
+  })
+
+  it('改阈值后写进设置', () => {
+    render(<SettingsPanel />)
+    fireEvent.change(screen.getByLabelText('至少几个书签'), { target: { value: '5' } })
+    expect(useStore.getState().settings.minFolderSize).toBe(5)
+  })
+
+  // 与另外两个数字框同样的把关，理由见上面那条测试
+  it('阈值越界或非数字的输入不写进设置，保持原值', () => {
+    render(<SettingsPanel />)
+    const input = screen.getByLabelText('至少几个书签')
+    fireEvent.change(input, { target: { value: '11' } })
+    expect(useStore.getState().settings.minFolderSize).toBe(3)
+    // 填 1 等于没开，那种意图应该去取消勾选，不是把阈值调到 1
+    fireEvent.change(input, { target: { value: '1' } })
+    expect(useStore.getState().settings.minFolderSize).toBe(3)
+    fireEvent.change(input, { target: { value: '' } })
+    expect(useStore.getState().settings.minFolderSize).toBe(3)
+  })
+
+  // 数字框跟着勾选框走：没勾时那个数字不起作用，还能改就是在骗人
+  it('没勾开关时阈值输入框禁用，勾选框自己不禁用', () => {
+    useStore.setState({
+      settings: { ...DEFAULT_SETTINGS, rebuildStructure: true, enforceMinFolderSize: false },
+    })
+    render(<SettingsPanel />)
+    expect(screen.getByLabelText('至少几个书签')).toHaveProperty('disabled', true)
+    expect(screen.getByLabelText('不足几个书签的目录就不单独建立')).toHaveProperty('disabled', false)
   })
 })
 

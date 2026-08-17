@@ -33,7 +33,7 @@
     "message": "Classification"
   },
   "settingsRebuildOnly": {
-    "message": "The two options below only take effect when \"Rebuild the folder structure\" is on."
+    "message": "The options below only take effect when \"Rebuild the folder structure\" is on."
   },
   "settingsMaxFoldersTitle": {
     "message": "Folders per level"
@@ -46,6 +46,15 @@
   },
   "settingsDepthBody": {
     "message": "Counted from the bookmark library, not from what you selected: folders on the bookmarks bar are level 1, and \"Other Bookmarks\" is itself level 1, so its contents are level 2. With 2, selecting the bar allows a second level, while selecting \"Other Bookmarks\" produces a single level. Between 1 and 4."
+  },
+  "settingsMinSizeTitle": {
+    "message": "Minimum bookmarks per folder"
+  },
+  "settingsMinSizeInput": {
+    "message": "Minimum bookmarks"
+  },
+  "settingsMinSizeBody": {
+    "message": "Keeps the result free of folders holding a single link. A folder that stays under the threshold is dropped and its bookmarks move up one level; top-level ones move into \"Other\". Between 2 and 10."
   },
   "shellStepReview": {
     "message": "Preview"
@@ -786,6 +795,17 @@
         "content": "$1"
       },
       "reused": {
+        "content": "$2"
+      }
+    }
+  },
+  "logPrunedSmall": {
+    "message": "Dropped $count$ folders holding fewer than $min$ bookmarks; their bookmarks moved up one level",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "min": {
         "content": "$2"
       }
     }
