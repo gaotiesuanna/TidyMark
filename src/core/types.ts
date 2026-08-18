@@ -61,6 +61,21 @@ export interface Classification {
   source: 'rule' | 'llm' | 'none'
 }
 
+/**
+ * 缓存里存的分类结果。目标目录记**路径**不记 id——推翻模式下 id 是每轮重新
+ * 生成的临时值（tmp:N），存 id 等于把上一轮的编号分配套到这一轮头上。命中时
+ * 拿路径去当前候选里换回 id，换不到就当没命中。
+ *
+ * 不存 bookmarkId（key 里已经有 URL）也不存 source：只有 source === 'llm'
+ * 的结果才进缓存，命中时按 'llm' 还原即可。
+ */
+export interface CachedClassification {
+  /** 目标目录的完整路径；模型判「无合适目录」时为 null。 */
+  targetPath: string[] | null
+  confidence: number
+  reason: string
+}
+
 export type BookmarkOperation =
   | { type: 'create_folder'; temporaryId: string; parentId: string | null; parentTemporaryId: string | null; title: string }
   | { type: 'move_bookmark'; bookmarkId: string; fromParentId: string; originalIndex: number; toCategoryId: string; toTemporaryId: string | null; confidence: number; reason: string }

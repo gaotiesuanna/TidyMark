@@ -3,7 +3,7 @@ import { SETTINGS_KEY, loadSettings, saveSettings, loadCache, saveCache, DEFAULT
 import { MAX_SIBLINGS } from '@/core/tree'
 import { createFakeStorage } from '../fakes/fake-storage'
 import { createFakeBookmarks } from '../fakes/fake-bookmarks'
-import type { Classification } from '@/core/types'
+import type { CachedClassification } from '@/core/types'
 
 function ports() {
   return { bookmarks: createFakeBookmarks([]).api, storage: createFakeStorage() }
@@ -109,8 +109,8 @@ describe('设置存取', () => {
 })
 
 describe('分类缓存存取', () => {
-  const entry: Classification = {
-    bookmarkId: '1', targetCategoryId: '10', confidence: 0.9, reason: 'r', source: 'llm',
+  const entry: CachedClassification = {
+    targetPath: ['书签栏', 'react'], confidence: 0.9, reason: 'r',
   }
 
   it('无缓存时返回空 Map', async () => {
@@ -122,6 +122,32 @@ describe('分类缓存存取', () => {
     await saveCache(p, new Map([['k1', entry]]))
     const cache = await loadCache(p)
     expect(cache.get('k1')).toEqual(entry)
+  })
+
+  it('模型判「无合适目录」的 null 也能往返', async () => {
+    const p = ports()
+    const none: CachedClassification = { targetPath: null, confidence: 0, reason: '没有合适的目录' }
+    await saveCache(p, new Map([['k1', none]]))
+    expect((await loadCache(p)).get('k1')).toEqual(none)
+  })
+
+  it('旧格式（存 targetCategoryId 的那版）的存量条目一律丢弃', async () => {
+    const p = ports()
+    // 换 key 格式本身已经让旧条目不再命中，但它们的形状也不兼容，
+    // 读出来会是个没有 targetPath 的对象——宁可当没缓存。
+    await p.storage.set('tidymark:classify-cache', [
+      ['old', { bookmarkId: '1', targetCategoryId: '10', confidence: 0.9, reason: 'r', source: 'llm' }],
+      ['new', entry],
+    ])
+    const cache = await loadCache(p)
+    expect(cache.has('old')).toBe(false)
+    expect(cache.get('new')).toEqual(entry)
+  })
+
+  it('存储里躺着完全不是数组的东西时不炸', async () => {
+    const p = ports()
+    await p.storage.set('tidymark:classify-cache', { junk: true })
+    expect((await loadCache(p)).size).toBe(0)
   })
 })
 

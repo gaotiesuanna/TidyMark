@@ -1,6 +1,6 @@
 import type { Ports } from '@/core/ports'
 import type { Locale, UiLocale } from '@/core/locale'
-import type { Classification } from '@/core/types'
+import type { CachedClassification } from '@/core/types'
 import { MAX_SIBLINGS } from '@/core/tree'
 import type { LlmConfig } from '@/llm/client'
 
@@ -108,11 +108,30 @@ export async function saveSettings(ports: Ports, settings: Settings): Promise<vo
   await ports.storage.set(SETTINGS_KEY, settings)
 }
 
-export async function loadCache(ports: Ports): Promise<Map<string, Classification>> {
-  const stored = await ports.storage.get<Array<[string, Classification]>>(CACHE_KEY)
-  return new Map(stored ?? [])
+/**
+ * 旧格式（存 targetCategoryId 的那版）与任何结构不对的条目一律丢弃。
+ * 换 key 格式本身就等于全量失效，这里只是确保读出来的东西形状可信。
+ */
+function isCachedClassification(value: unknown): value is CachedClassification {
+  if (typeof value !== 'object' || value === null) return false
+  const entry = value as Partial<CachedClassification>
+  const pathOk =
+    entry.targetPath === null ||
+    (Array.isArray(entry.targetPath) && entry.targetPath.every((p) => typeof p === 'string'))
+  return pathOk && typeof entry.confidence === 'number' && typeof entry.reason === 'string'
 }
 
-export async function saveCache(ports: Ports, cache: Map<string, Classification>): Promise<void> {
+export async function loadCache(ports: Ports): Promise<Map<string, CachedClassification>> {
+  const stored = await ports.storage.get<unknown>(CACHE_KEY)
+  if (!Array.isArray(stored)) return new Map()
+  return new Map(
+    stored.filter(
+      (pair): pair is [string, CachedClassification] =>
+        Array.isArray(pair) && typeof pair[0] === 'string' && isCachedClassification(pair[1]),
+    ),
+  )
+}
+
+export async function saveCache(ports: Ports, cache: Map<string, CachedClassification>): Promise<void> {
   await ports.storage.set(CACHE_KEY, [...cache])
 }

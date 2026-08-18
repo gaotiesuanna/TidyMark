@@ -3,7 +3,7 @@ import type { Locale } from '@/core/locale'
 import { classifyByRules } from '@/core/rules'
 import { resolveByRules } from '@/core/map'
 import { sanitizeUrl } from '@/core/sanitize'
-import type { BookmarkItem, CategoryCandidate, Classification } from '@/core/types'
+import type { BookmarkItem, CachedClassification, CategoryCandidate, Classification } from '@/core/types'
 import type { LlmClient } from './client'
 import { fallbackReason, logBatchDone } from './logs'
 import { classifyPrompt } from './prompts'
@@ -12,7 +12,7 @@ export interface ClassifyInput {
   items: BookmarkItem[]
   candidates: CategoryCandidate[]
   client: LlmClient
-  cache: Map<string, Classification>
+  cache: Map<string, CachedClassification>
   batchSize?: number
   concurrency?: number
   onProgress?: (done: number, total: number) => void
@@ -21,12 +21,39 @@ export interface ClassifyInput {
   isCancelled?: () => boolean
   /** 规则表命中的标签走哪种语言。必填——Record<Locale, string> 的强制在调用点这一侧也不能松口。 */
   locale: Locale
+  /** 本轮用的模型名。进缓存 key——换模型就是换产出，不该沿用旧判断。 */
+  model: string
 }
 
 const MAX_RETRIES = 2
 
-export function cacheKey(item: BookmarkItem, candidates: CategoryCandidate[]): string {
-  const version = djb2(candidates.map((c) => c.id).join(','))
+/**
+ * 路径拼接用 \u0000 而不是 '/'：目录名里允许出现 '/'，用它当分隔符时
+ * ['a/b'] 与 ['a', 'b'] 拼出来一模一样。key 只是撞了会白算一次，
+ * 但 Task 2 里命中后要拿路径换回 id，认错了就是把书签送进另一个目录。
+ */
+function pathKey(path: string[]): string {
+  return path.join('\u0000')
+}
+
+/**
+ * 缓存 key = 书签 URL + 「模型看到的这批候选目录」。
+ *
+ * 只认路径，完全不碰 id。推翻模式下候选的 id 是 buildCategoryTree 顺序生成的
+ * tmp:N，跨轮次没有意义：两轮候选数量相同 key 就撞，上一轮的分类会被套用到
+ * 这一轮完全不同的目录上（跑一次不满意 → 放弃 → 改设置再跑，正好踩中）。
+ *
+ * sort() 让 key 与候选顺序无关——顺序变而集合不变时模型看到的是同一批目录，
+ * 本就该命中。locale 与 model 一并进 key：换语言或换模型就是换产出
+ * （缓存里连模型写的 reason 都存着），沿用旧判断没有道理。
+ */
+export function cacheKey(
+  item: BookmarkItem,
+  candidates: CategoryCandidate[],
+  locale: Locale,
+  model: string,
+): string {
+  const version = djb2([locale, model, ...candidates.map((c) => pathKey(c.path)).sort()].join('|'))
   return `${djb2(item.url)}:${version}`
 }
 
@@ -97,6 +124,32 @@ function unclassified(item: BookmarkItem, reason: string, detail?: string): Clas
   return { bookmarkId: item.id, targetCategoryId: null, confidence: 0, reason, detail, source: 'none' }
 }
 
+/**
+ * 把缓存条目还原成 Classification。targetPath 换不到当前候选里的 id 就返回 null
+ * ——当没命中，重新问模型。key 认的是排序后的路径集合，正常情况下必然换得到；
+ * 换不到只可能是 djb2（32 位）撞了，那时宁可白花一次调用也不能把书签
+ * 送进另一个目录。
+ */
+function fromCache(
+  item: BookmarkItem,
+  cached: CachedClassification,
+  idByPath: Map<string, string>,
+): Classification | null {
+  let target: string | null = null
+  if (cached.targetPath !== null) {
+    const id = idByPath.get(pathKey(cached.targetPath))
+    if (id === undefined) return null
+    target = id
+  }
+  return {
+    bookmarkId: item.id,
+    targetCategoryId: target,
+    confidence: cached.confidence,
+    reason: cached.reason,
+    source: 'llm',
+  }
+}
+
 async function runBatch(
   batch: BookmarkItem[],
   candidates: CategoryCandidate[],
@@ -146,17 +199,22 @@ async function runBatch(
 }
 
 export async function classifyBookmarks(input: ClassifyInput): Promise<Classification[]> {
-  const { items, candidates, client, cache, locale } = input
+  const { items, candidates, client, cache, locale, model } = input
   const batchSize = input.batchSize ?? 25
   const concurrency = input.concurrency ?? 4
+
+  // 缓存存的是路径，两个方向都要换：命中时路径 → id，写入时 id → 路径。
+  const idByPath = new Map(candidates.map((c) => [pathKey(c.path), c.id]))
+  const pathById = new Map(candidates.map((c) => [c.id, c.path]))
 
   const resolved = new Map<string, Classification>()
   const pending: BookmarkItem[] = []
 
   for (const item of items) {
-    const cached = cache.get(cacheKey(item, candidates))
-    if (cached) {
-      resolved.set(item.id, { ...cached, bookmarkId: item.id })
+    const cached = cache.get(cacheKey(item, candidates, locale, model))
+    const hit = cached ? fromCache(item, cached, idByPath) : null
+    if (hit) {
+      resolved.set(item.id, hit)
       continue
     }
     const rule = classifyByRules(item, locale)
@@ -194,7 +252,18 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
       for (let i = 0; i < results.length; i++) {
         const result = results[i]!
         resolved.set(result.bookmarkId, result)
-        if (result.source === 'llm') cache.set(cacheKey(batch[i]!, candidates), result)
+        if (result.source === 'llm') {
+          const path = result.targetCategoryId === null ? null : pathById.get(result.targetCategoryId)
+          // 目标 id 一定在候选里（runBatch 已按 validIds 过滤过），查不到就宁可不缓存：
+          // 不能把「查不到」存成 null，那是「无合适目录」的意思，是另一回事。
+          if (path !== undefined) {
+            cache.set(cacheKey(batch[i]!, candidates, locale, model), {
+              targetPath: path,
+              confidence: result.confidence,
+              reason: result.reason,
+            })
+          }
+        }
       }
       done += batch.length
       input.onProgress?.(done, items.length)

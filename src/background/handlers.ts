@@ -206,6 +206,7 @@ export async function handle(
           onLog: (message, level) => log('classify', message, level),
           isCancelled,
           locale,
+          model: settings.llm.model,
         })
         let classifications = [...pinned, ...llmResults]
         // 已经跑完的批次仍然写进缓存，重来时不必再花一次钱
