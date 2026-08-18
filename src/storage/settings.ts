@@ -111,6 +111,10 @@ export async function saveSettings(ports: Ports, settings: Settings): Promise<vo
 /**
  * 旧格式（存 targetCategoryId 的那版）与任何结构不对的条目一律丢弃。
  * 换 key 格式本身就等于全量失效，这里只是确保读出来的东西形状可信。
+ *
+ * url 是必需字段，这也意味着加 url 字段之前那版代码（只存路径不存 url）
+ * 写下的条目会被当成畸形数据一并丢弃——同样是全量失效的一部分，正确且
+ * 符合预期，不必单独兼容。
  */
 function isCachedClassification(value: unknown): value is CachedClassification {
   if (typeof value !== 'object' || value === null) return false
@@ -118,7 +122,12 @@ function isCachedClassification(value: unknown): value is CachedClassification {
   const pathOk =
     entry.targetPath === null ||
     (Array.isArray(entry.targetPath) && entry.targetPath.every((p) => typeof p === 'string'))
-  return pathOk && typeof entry.confidence === 'number' && typeof entry.reason === 'string'
+  return (
+    pathOk &&
+    typeof entry.url === 'string' &&
+    typeof entry.confidence === 'number' &&
+    typeof entry.reason === 'string'
+  )
 }
 
 export async function loadCache(ports: Ports): Promise<Map<string, CachedClassification>> {

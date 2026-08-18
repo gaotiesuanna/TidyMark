@@ -140,7 +140,7 @@ describe('classifyBookmarks', () => {
     const it1 = item('1', 'https://some-blog.dev/x')
     const cache = new Map<string, CachedClassification>([
       [cacheKey(it1, candidates, 'zh_CN', 'm'),
-        { targetPath: ['书签栏', 'react'], confidence: 0.8, reason: '缓存' }],
+        { targetPath: ['书签栏', 'react'], url: it1.url, confidence: 0.8, reason: '缓存' }],
     ])
     const results = await classify({ items: [it1], candidates, client: { complete }, cache })
     expect(complete).not.toHaveBeenCalled()
@@ -152,7 +152,7 @@ describe('classifyBookmarks', () => {
     const it1 = item('1', 'https://some-blog.dev/x')
     const cache = new Map<string, CachedClassification>([
       [cacheKey(it1, candidates, 'zh_CN', 'm'),
-        { targetPath: ['书签栏', 'react'], confidence: 0.8, reason: '缓存' }],
+        { targetPath: ['书签栏', 'react'], url: it1.url, confidence: 0.8, reason: '缓存' }],
     ])
     // 路径一模一样、id 全换（推翻模式下每轮重新生成 tmp:N 就是这个样子）
     const renumbered: CategoryCandidate[] = candidates.map((c, i) => ({ ...c, id: `tmp:${i + 1}` }))
@@ -170,11 +170,27 @@ describe('classifyBookmarks', () => {
     // 但 djb2 是 32 位，撞了不能把书签送进随便一个目录）
     const cache = new Map<string, CachedClassification>([
       [cacheKey(it1, candidates, 'zh_CN', 'm'),
-        { targetPath: ['书签栏', '早就删了的目录'], confidence: 0.8, reason: '缓存' }],
+        { targetPath: ['书签栏', '早就删了的目录'], url: it1.url, confidence: 0.8, reason: '缓存' }],
     ])
     const results = await classify({ items: [it1], candidates, client: { complete }, cache })
     expect(complete).toHaveBeenCalled()
     expect(results[0]!.targetCategoryId).toBe('11')
+  })
+
+  it('key 撞了但 url 对不上则当没命中，不套用另一个书签的结果', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      results: [{ bookmark_id: '1', target_category_id: '11', confidence: 0.7, reason: '重算' }],
+    })
+    const itA = item('1', 'https://a.example/x')
+    // 不去真的找一对 djb2 撞车的 URL：直接在同一个 key 下塞一条 url 不同的
+    // 缓存条目，模拟撞车现场——key 相同不代表 url 相同。
+    const cache = new Map<string, CachedClassification>([
+      [cacheKey(itA, candidates, 'zh_CN', 'm'),
+        { targetPath: ['书签栏', 'react'], url: 'https://b.example/y', confidence: 0.8, reason: '别的书签的结果' }],
+    ])
+    const results = await classify({ items: [itA], candidates, client: { complete }, cache })
+    expect(complete).toHaveBeenCalled()
+    expect(results[0]!).toMatchObject({ targetCategoryId: '11', reason: '重算' })
   })
 
   it('缓存里 targetPath 为 null 时命中，结果就是「无合适目录」', async () => {
@@ -182,7 +198,7 @@ describe('classifyBookmarks', () => {
     const it1 = item('1', 'https://some-blog.dev/x')
     const cache = new Map<string, CachedClassification>([
       [cacheKey(it1, candidates, 'zh_CN', 'm'),
-        { targetPath: null, confidence: 0, reason: '没有合适的目录' }],
+        { targetPath: null, url: it1.url, confidence: 0, reason: '没有合适的目录' }],
     ])
     const results = await classify({ items: [it1], candidates, client: { complete }, cache })
     expect(complete).not.toHaveBeenCalled()
@@ -197,7 +213,19 @@ describe('classifyBookmarks', () => {
     const it1 = item('1', 'https://some-blog.dev/x')
     await classify({ items: [it1], candidates, client, cache })
     expect(cache.get(cacheKey(it1, candidates, 'zh_CN', 'm'))).toEqual({
-      targetPath: ['书签栏', 'react'], confidence: 0.9, reason: 'r',
+      targetPath: ['书签栏', 'react'], url: it1.url, confidence: 0.9, reason: 'r',
+    })
+  })
+
+  it('模型判「无合适目录」也写进缓存，存成 targetPath: null', async () => {
+    const client = clientReturning({
+      results: [{ bookmark_id: '1', target_category_id: null, confidence: 0.2, reason: '无合适目录' }],
+    })
+    const cache = new Map<string, CachedClassification>()
+    const it1 = item('1', 'https://weird.site/x')
+    await classify({ items: [it1], candidates, client, cache })
+    expect(cache.get(cacheKey(it1, candidates, 'zh_CN', 'm'))).toEqual({
+      targetPath: null, url: it1.url, confidence: 0, reason: '无合适目录',
     })
   })
 

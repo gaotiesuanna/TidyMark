@@ -66,12 +66,18 @@ export interface Classification {
  * 生成的临时值（tmp:N），存 id 等于把上一轮的编号分配套到这一轮头上。命中时
  * 拿路径去当前候选里换回 id，换不到就当没命中。
  *
- * 不存 bookmarkId（key 里已经有 URL）也不存 source：只有 source === 'llm'
- * 的结果才进缓存，命中时按 'llm' 还原即可。
+ * 另存 url：key 里存的只是 djb2(url) 这个 32 位哈希，不是 url 本身，两个不同
+ * 的 URL 完全可能撞出同一个 key。命中时要比对 url 是否真的一致，不一致就当
+ * 没命中——不然会把另一个书签的分类结果套过来，比撞了白算一次更糟。
+ *
+ * 不存 bookmarkId（已经存了完整 url，够用）也不存 source：只有 source ===
+ * 'llm' 的结果才进缓存，命中时按 'llm' 还原即可。
  */
 export interface CachedClassification {
   /** 目标目录的完整路径；模型判「无合适目录」时为 null。 */
   targetPath: string[] | null
+  /** 书签的原始 URL，用于识别 key 撞车（djb2 是 32 位）——见上。 */
+  url: string
   confidence: number
   reason: string
 }

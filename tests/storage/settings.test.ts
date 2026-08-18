@@ -110,7 +110,7 @@ describe('设置存取', () => {
 
 describe('分类缓存存取', () => {
   const entry: CachedClassification = {
-    targetPath: ['书签栏', 'react'], confidence: 0.9, reason: 'r',
+    targetPath: ['书签栏', 'react'], url: 'https://react.dev', confidence: 0.9, reason: 'r',
   }
 
   it('无缓存时返回空 Map', async () => {
@@ -126,21 +126,27 @@ describe('分类缓存存取', () => {
 
   it('模型判「无合适目录」的 null 也能往返', async () => {
     const p = ports()
-    const none: CachedClassification = { targetPath: null, confidence: 0, reason: '没有合适的目录' }
+    const none: CachedClassification = {
+      targetPath: null, url: 'https://weird.site/x', confidence: 0, reason: '没有合适的目录',
+    }
     await saveCache(p, new Map([['k1', none]]))
     expect((await loadCache(p)).get('k1')).toEqual(none)
   })
 
-  it('旧格式（存 targetCategoryId 的那版）的存量条目一律丢弃', async () => {
+  it('旧格式的存量条目一律丢弃，包括缺 url 字段的上一版（1b0a95b）写的条目', async () => {
     const p = ports()
     // 换 key 格式本身已经让旧条目不再命中，但它们的形状也不兼容，
-    // 读出来会是个没有 targetPath 的对象——宁可当没缓存。
+    // 读出来会是个没有 targetPath / url 的对象——宁可当没缓存。
+    // 'no-url' 模拟的是加 url 字段之前那版代码写下的条目：形状里没有 url，
+    // 现在也一并当脏数据丢弃——同样是全量失效，不必单独兼容。
     await p.storage.set('tidymark:classify-cache', [
       ['old', { bookmarkId: '1', targetCategoryId: '10', confidence: 0.9, reason: 'r', source: 'llm' }],
+      ['no-url', { targetPath: ['书签栏', 'react'], confidence: 0.9, reason: 'r' }],
       ['new', entry],
     ])
     const cache = await loadCache(p)
     expect(cache.has('old')).toBe(false)
+    expect(cache.has('no-url')).toBe(false)
     expect(cache.get('new')).toEqual(entry)
   })
 

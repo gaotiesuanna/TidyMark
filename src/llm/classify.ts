@@ -30,7 +30,7 @@ const MAX_RETRIES = 2
 /**
  * 路径拼接用 \u0000 而不是 '/'：目录名里允许出现 '/'，用它当分隔符时
  * ['a/b'] 与 ['a', 'b'] 拼出来一模一样。key 只是撞了会白算一次，
- * 但 Task 2 里命中后要拿路径换回 id，认错了就是把书签送进另一个目录。
+ * 但命中后要拿路径换回 id，认错了就是把书签送进另一个目录。
  */
 function pathKey(path: string[]): string {
   return path.join('\u0000')
@@ -125,16 +125,22 @@ function unclassified(item: BookmarkItem, reason: string, detail?: string): Clas
 }
 
 /**
- * 把缓存条目还原成 Classification。targetPath 换不到当前候选里的 id 就返回 null
- * ——当没命中，重新问模型。key 认的是排序后的路径集合，正常情况下必然换得到；
- * 换不到只可能是 djb2（32 位）撞了，那时宁可白花一次调用也不能把书签
- * 送进另一个目录。
+ * 把缓存条目还原成 Classification。两道校验任何一道没过都返回 null——当没
+ * 命中，重新问模型：
+ *
+ * - url 对不上：key 里只有 djb2(item.url) 这个 32 位哈希，不是 url 本身，
+ *   两个不同的 URL 完全可能撞出同一个 key。这一道专门抓这种撞车，不然会把
+ *   另一个书签的分类结果套过来，比白算一次更糟。
+ * - targetPath 换不到当前候选里的 id：要么是 key 里 version 那段哈希撞了，
+ *   要么候选集里已经没有这个目录了（两轮之间目录被删/改了名）。两种情况
+ *   都宁可白花一次调用，也不能把书签送进另一个目录。
  */
 function fromCache(
   item: BookmarkItem,
   cached: CachedClassification,
   idByPath: Map<string, string>,
 ): Classification | null {
+  if (cached.url !== item.url) return null
   let target: string | null = null
   if (cached.targetPath !== null) {
     const id = idByPath.get(pathKey(cached.targetPath))
@@ -204,6 +210,9 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
   const concurrency = input.concurrency ?? 4
 
   // 缓存存的是路径，两个方向都要换：命中时路径 → id，写入时 id → 路径。
+  // 路径不保证唯一——两个同名同父的目录会撞出同一个 pathKey，new Map 按最后
+  // 一个赢，命中时只能换到其中一个 id。后果是同名同父、走错了那一个，
+  // 属于用路径当 key 这个设计本身带的代价，不是这里的疏漏。
   const idByPath = new Map(candidates.map((c) => [pathKey(c.path), c.id]))
   const pathById = new Map(candidates.map((c) => [c.id, c.path]))
 
@@ -256,9 +265,12 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
           const path = result.targetCategoryId === null ? null : pathById.get(result.targetCategoryId)
           // 目标 id 一定在候选里（runBatch 已按 validIds 过滤过），查不到就宁可不缓存：
           // 不能把「查不到」存成 null，那是「无合适目录」的意思，是另一回事。
+          // 注意：null 与 undefined 在这里意思不同，别改成真值判断（如 if (path)）
+          // ——那会把「无合适目录」也当成「查不到」，永远不缓存。
           if (path !== undefined) {
             cache.set(cacheKey(batch[i]!, candidates, locale, model), {
               targetPath: path,
+              url: batch[i]!.url,
               confidence: result.confidence,
               reason: result.reason,
             })
