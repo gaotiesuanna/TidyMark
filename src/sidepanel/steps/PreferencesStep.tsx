@@ -1,13 +1,17 @@
 import { PRESETS } from '@/storage/settings'
 import { DOMAIN_GROUPS, groupFolderTitle } from '@/core/domainGroups'
+import { detectMode } from '@/core/mode'
 import { currentLocale, t } from '@/i18n'
 import { useStore } from '../store'
 
 export function PreferencesStep() {
-  const { scan, settings, setSettings, analyze, busy, reset } = useStore()
+  const { scan, settings, setSettings, analyze, busy, reset, modeOverride, setModeOverride } = useStore()
   if (scan === null) return null
   const { stats } = scan
   const locale = currentLocale()
+  // 与后台是同一个纯函数、同一份扫描结果，两边的结论必然一致
+  const decision = detectMode(scan, locale)
+  const rebuild = (modeOverride ?? decision.mode) === 'rebuild'
 
   return (
     <div className="space-y-4">
@@ -66,22 +70,35 @@ export function PreferencesStep() {
       </section>
 
       <section className="rounded border p-3">
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            className="mt-1 h-3.5 w-3.5"
-            checked={settings.rebuildStructure}
-            onChange={(e) => void setSettings({ ...settings, rebuildStructure: e.target.checked })}
-          />
-          <span>
-            {t('prefsRebuildTitle')}
-            <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-400">
-              {t('prefsRebuildOn')}
-              <br />
-              {t('prefsRebuildOff')}
-            </span>
-          </span>
-        </label>
+        <div className="space-y-1 text-sm">
+          <p>{rebuild ? t('prefsModeRebuild') : t('prefsModeAdditive')}</p>
+          <p className="text-[11px] leading-relaxed text-neutral-400">
+            {rebuild ? t('prefsModeRebuildBody') : t('prefsModeAdditiveBody')}
+          </p>
+          {/* 推翻之后，那条理由讲的是已经被用户否掉的结论，再摆着只会跟上面那句打架 */}
+          <p className="text-[11px] leading-relaxed text-neutral-400">
+            {modeOverride === null ? decision.reason : t('prefsModeOverridden')}
+          </p>
+          {modeOverride === null ? (
+            // 逃生口只为「误判成已整理」那一个方向存在：反方向的误判用户在复核页
+            // 逐条看得见、拒得掉，不需要再给一个推翻整套判断的按钮
+            decision.mode === 'additive' && (
+              <button
+                className="text-xs text-neutral-500 underline hover:text-neutral-800"
+                onClick={() => setModeOverride('rebuild')}
+              >
+                {t('prefsModeOverride')}
+              </button>
+            )
+          ) : (
+            <button
+              className="text-xs text-neutral-500 underline hover:text-neutral-800"
+              onClick={() => setModeOverride(null)}
+            >
+              {t('prefsModeAuto')}
+            </button>
+          )}
+        </div>
 
         <label className="mt-3 flex items-start gap-2 text-sm">
           <input
@@ -124,15 +141,13 @@ export function PreferencesStep() {
             {DOMAIN_GROUPS.map((group) => (
               <label
                 key={group.key}
-                className={`flex items-center gap-1.5 text-xs ${
-                  settings.rebuildStructure ? '' : 'text-neutral-300'
-                }`}
+                className={`flex items-center gap-1.5 text-xs ${rebuild ? '' : 'text-neutral-300'}`}
               >
                 <input
                   type="checkbox"
                   aria-label={groupFolderTitle(group, locale)}
                   className="h-3.5 w-3.5"
-                  disabled={!settings.rebuildStructure}
+                  disabled={!rebuild}
                   checked={settings.domainGroups.includes(group.key)}
                   onChange={(e) => void setSettings({
                     ...settings,

@@ -16,7 +16,7 @@ import { useStore } from '@/sidepanel/store'
 import { EMPTY_EDITS } from '@/core/structure'
 import { DEFAULT_SETTINGS } from '@/storage/settings'
 import type { BookmarkNode } from '@/core/ports'
-import type { OrganizePlan } from '@/core/types'
+import type { BookmarkItem, FolderItem, OrganizePlan, ScanResult } from '@/core/types'
 import type { ApplyResult } from '@/engine/apply'
 
 /**
@@ -77,10 +77,35 @@ describe('英文界面渲染守卫：步骤组件', () => {
       stats: { totalBookmarks: 12, totalFolders: 3, emptyFolders: 1, untitledBookmarks: 0, duplicateUrlGroups: 0, maxDepth: 2 },
     }
     useStore.setState({
-      scan, settings: { ...DEFAULT_SETTINGS, rebuildStructure: true }, busy: null,
+      scan, settings: { ...DEFAULT_SETTINGS }, modeOverride: null, busy: null,
     })
     const { container } = render(<PreferencesStep />)
     assertNoChinese(container, 'PreferencesStep')
+  })
+
+  it('PreferencesStep（判已整理：结论、理由与逃生口都要是英文）', () => {
+    const ROOT: FolderItem = { id: '1', title: 'Bookmarks bar', parentId: null, index: 0, path: [], depth: 0, level: 0 }
+    const folder = (id: string, title: string): FolderItem =>
+      ({ id, title, parentId: '1', index: 0, path: [], depth: 1, level: 1 })
+    const bookmark = (id: string, parentId: string): BookmarkItem =>
+      ({ id, title: id, url: `https://example.com/${id}`, parentId, index: 0, currentPath: [] })
+    /** 两个带编号的目录各装 3 条，detectMode 判 additive。 */
+    const tidyScan: ScanResult = {
+      folders: [ROOT, folder('10', '01 Frontend'), folder('11', '02 Backend')],
+      bookmarks: [
+        ...Array.from({ length: 3 }, (_, i) => bookmark(`a${i}`, '10')),
+        ...Array.from({ length: 3 }, (_, i) => bookmark(`b${i}`, '11')),
+      ],
+      stats: {
+        totalBookmarks: 6, totalFolders: 3, emptyFolders: 0,
+        untitledBookmarks: 0, duplicateUrlGroups: 0, maxDepth: 1,
+      },
+    }
+    useStore.setState({
+      scan: tidyScan, settings: { ...DEFAULT_SETTINGS }, modeOverride: null, busy: null,
+    })
+    const { container } = render(<PreferencesStep />)
+    assertNoChinese(container, 'PreferencesStep（已整理）')
   })
 
   it('StructureStep', () => {

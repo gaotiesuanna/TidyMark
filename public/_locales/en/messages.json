@@ -341,14 +341,26 @@
   "prefsPrivacyPayload": {
     "message": "Only bookmark titles, domains, paths, and current folder names are sent to the model — never URL parameters or page contents."
   },
-  "prefsRebuildTitle": {
-    "message": "Rebuild the folder structure"
+  "prefsModeAdditive": {
+    "message": "These bookmarks look organized already, so this run only files them into the folders you have."
   },
-  "prefsRebuildOn": {
+  "prefsModeAdditiveBody": {
+    "message": "No existing folder is renamed, merged, or deleted. Bookmarks that fit nowhere are gathered into new folders by topic; the rest stay where they are. The whole run can be undone."
+  },
+  "prefsModeRebuild": {
+    "message": "These bookmarks have no usable structure yet, so this run redesigns the whole folder tree."
+  },
+  "prefsModeRebuildBody": {
     "message": "Redesigns the whole folder tree and adds a number prefix (01, 02…) to every top-level folder in scope — including ones you created yourself and ones that receive no bookmarks this run. Second-level folders are only reordered if they already had numbers. The whole run can be undone."
   },
-  "prefsRebuildOff": {
-    "message": "Only moves bookmarks into folders that already exist. Never renames, merges, or deletes any existing folder."
+  "prefsModeOverride": {
+    "message": "Not right — redesign it"
+  },
+  "prefsModeOverridden": {
+    "message": "Redesigning as you asked — the automatic judgment is skipped this run."
+  },
+  "prefsModeAuto": {
+    "message": "Back to the automatic judgment"
   },
   "prefsCleanTitle": {
     "message": "Remove empty folders afterwards"

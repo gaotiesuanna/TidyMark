@@ -341,14 +341,26 @@
   "prefsPrivacyPayload": {
     "message": "发送给模型的内容仅包含书签标题、域名、路径与所在目录，不含 URL 参数与网页正文。"
   },
-  "prefsRebuildTitle": {
-    "message": "推翻现有文件夹结构"
+  "prefsModeAdditive": {
+    "message": "看起来这批书签已经整理过，这次只把书签归进现有目录。"
   },
-  "prefsRebuildOn": {
-    "message": "开启后会重新设计整棵目录树，并给范围内每一个一级文件夹加上编号前缀（01、02…），包括你自己建的、以及本次一个书签都没移入的。二级只重排本来就带编号的目录。整理可一键撤销。"
+  "prefsModeAdditiveBody": {
+    "message": "不会改名、合并或删除任何现有文件夹。实在分不进去的书签会按主题攒成新目录，攒不够的留在原地。整理可一键撤销。"
   },
-  "prefsRebuildOff": {
-    "message": "关闭时只把书签移进已有文件夹，绝不改名、合并或删除任何现有文件夹。"
+  "prefsModeRebuild": {
+    "message": "这批书签还没有成形的结构，这次会重新设计整棵目录树。"
+  },
+  "prefsModeRebuildBody": {
+    "message": "会重新设计整棵目录树，并给范围内每一个一级文件夹加上编号前缀（01、02…），包括你自己建的、以及本次一个书签都没移入的。二级只重排本来就带编号的目录。整理可一键撤销。"
+  },
+  "prefsModeOverride": {
+    "message": "不对，重新设计"
+  },
+  "prefsModeOverridden": {
+    "message": "已按你的选择改成重新设计，本次不走自动判断。"
+  },
+  "prefsModeAuto": {
+    "message": "恢复自动判断"
   },
   "prefsCleanTitle": {
     "message": "整理后清理空文件夹"

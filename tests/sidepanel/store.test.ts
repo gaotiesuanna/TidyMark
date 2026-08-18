@@ -384,4 +384,44 @@ describe('放弃这一轮之后，在途结果不再落地', () => {
     await useStore.getState().analyze()
     expect(useStore.getState().step).toBe('review')
   })
+
+  it('推翻自动判断只随这一次请求走，不写进设置', async () => {
+    useStore.setState({ modeOverride: 'rebuild' })
+    vi.mocked(send).mockImplementation((req: { kind: string }) =>
+      req.kind === 'analyze'
+        ? (Promise.resolve({ ok: true, kind: 'analyze', plan: makePlan() }) as never)
+        : (Promise.resolve({ ok: true }) as never))
+
+    await useStore.getState().analyze()
+    expect(vi.mocked(send).mock.calls.some(
+      ([req]) => (req as { kind: string; modeOverride?: string }).kind === 'analyze'
+        && (req as { modeOverride?: string }).modeOverride === 'rebuild',
+    )).toBe(true)
+    expect(vi.mocked(send).mock.calls.some(([req]) => (req as { kind: string }).kind === 'save_settings')).toBe(false)
+  })
+
+  it('没推翻时请求里不带 modeOverride，后台自己判', async () => {
+    useStore.setState({ modeOverride: null })
+    vi.mocked(send).mockImplementation((req: { kind: string }) =>
+      req.kind === 'analyze'
+        ? (Promise.resolve({ ok: true, kind: 'analyze', plan: makePlan() }) as never)
+        : (Promise.resolve({ ok: true }) as never))
+
+    await useStore.getState().analyze()
+    const call = vi.mocked(send).mock.calls
+      .map(([req]) => req as { kind: string; modeOverride?: string })
+      .find((req) => req.kind === 'analyze')
+    expect(call?.modeOverride).toBeUndefined()
+  })
+
+  it('重新扫描与 reset 都会把推翻清掉——那是上一批书签的判断', async () => {
+    useStore.setState({ modeOverride: 'rebuild' })
+    useStore.getState().reset()
+    expect(useStore.getState().modeOverride).toBeNull()
+
+    useStore.setState({ modeOverride: 'rebuild' })
+    vi.mocked(send).mockImplementation(() => Promise.resolve({ ok: true, kind: 'scan', scan }) as never)
+    await useStore.getState().goScan()
+    expect(useStore.getState().modeOverride).toBeNull()
+  })
 })

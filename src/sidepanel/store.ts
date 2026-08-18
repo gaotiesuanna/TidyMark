@@ -5,6 +5,7 @@ import type { ProgressEvent, ProgressPhase } from '@/background/events'
 import type { BookmarkNode } from '@/core/ports'
 import { LOW_CONFIDENCE, renumberPlan } from '@/core/plan'
 import { applyStructureEdits, EMPTY_EDITS, type StructureEdits } from '@/core/structure'
+import type { OrganizeMode } from '@/core/mode'
 import type { OrganizePlan, ScanResult } from '@/core/types'
 import {
   buildImportPreview, parseImportFile,
@@ -162,6 +163,14 @@ interface State {
   logSeq: number
   /** 结构确认页的草稿态编辑，不写进 Settings，每次 analyze 重置。 */
   structureEdits: StructureEdits
+  /**
+   * 用户对自动判断的推翻，`null` 表示听判断的。
+   *
+   * 与 structureEdits 一样是草稿态，不进 Settings：一次推翻只对这一次整理生效
+   * （见 issues/14-mode-detection.md §5）。重新扫描或 reset 之后作废——
+   * 那时判断的对象已经换了一批书签。
+   */
+  modeOverride: OrganizeMode | null
   /** 已选中并解析成功的导入文件。 */
   importFile: { name: string; preview: ImportPreview } | null
   /** 文件级校验没过的原因，与 importFile 互斥。 */
@@ -186,6 +195,7 @@ interface State {
   toggle(id: string): void
   goScan(): Promise<void>
   setSettings(settings: Settings): Promise<void>
+  setModeOverride(mode: OrganizeMode | null): void
   analyze(): Promise<void>
   renameNode(id: string, title: string): void
   removeNode(id: string): void
@@ -237,6 +247,7 @@ export const useStore = create<State>((set, get) => ({
   logs: [],
   logSeq: 0,
   structureEdits: EMPTY_EDITS,
+  modeOverride: null,
   importFile: null,
   importError: null,
   importDone: null,
@@ -314,12 +325,16 @@ export const useStore = create<State>((set, get) => ({
     if (isStale(get, set, run)) return
     if (!res.ok) return set({ busy: null, busyKind: null, error: res.error })
     if (res.kind !== 'scan') return set({ busy: null, busyKind: null })
-    set({ scan: res.scan, step: 'preferences', busy: null, busyKind: null })
+    set({ scan: res.scan, step: 'preferences', modeOverride: null, busy: null, busyKind: null })
   },
 
   async setSettings(settings) {
     set({ settings, locale: syncLocale(settings) })
     await send({ kind: 'save_settings', settings })
+  },
+
+  setModeOverride(mode) {
+    set({ modeOverride: mode })
   },
 
   async analyze() {
@@ -332,8 +347,12 @@ export const useStore = create<State>((set, get) => ({
     set({ busy: t('busyAnalyzing'), busyKind: 'analyze', error: null, progress: null, logs: [] })
     // 分析可能跑好几分钟，期间持续 ping，别让后台因空闲被回收
     const stopKeepalive = startKeepalive(connection)
-    const res = await send({ kind: 'analyze', scopeRootIds: [...get().checkedIds] })
-      .finally(stopKeepalive)
+    const res = await send({
+      kind: 'analyze',
+      scopeRootIds: [...get().checkedIds],
+      // null 表示没推翻，这时候一个字段都不带，后台自己判
+      modeOverride: get().modeOverride ?? undefined,
+    }).finally(stopKeepalive)
     if (isStale(get, set, run)) return
     // 主动取消不是错误，日志里已经有记录，不弹红条
     if (!res.ok && res.cancelled === true) {
@@ -494,7 +513,7 @@ export const useStore = create<State>((set, get) => ({
       // 让在途的扫描/分析知道自己已经过期，回来时别再写 store
       runSeq: get().runSeq + 1,
       step: 'scope', scan: null, plan: null, accepted: new Set(),
-      structureEdits: EMPTY_EDITS,
+      structureEdits: EMPTY_EDITS, modeOverride: null,
       applyResult: null, undoResult: null, error: null,
     })
   },
