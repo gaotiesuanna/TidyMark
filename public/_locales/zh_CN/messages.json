@@ -897,6 +897,22 @@
       }
     }
   },
+  "logNewFoldersGrouped": {
+    "message": "$count$ 个主题的书签已经聚在同一个目录里了，不再重新分组建目录",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "logNewFoldersNameCollision": {
+    "message": "$count$ 个主题起的名字和已有目录重名，跳过建目录，书签保持原位",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
   "logNewFoldersCapped": {
     "message": "$count$ 个主题超出同层上限，暂未建目录，书签保持原位",
     "placeholders": {

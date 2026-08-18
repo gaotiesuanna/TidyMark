@@ -6,7 +6,7 @@ import { pruneSmallFolders } from '@/core/prune'
 import { findScopeRoots, scanTree } from '@/core/scan'
 import { planTitleRewrites } from '@/core/titles'
 import { buildCategoryTree } from '@/core/tree'
-import { clusterHomeless, planNewFolders, MIN_NEW_FOLDER_SIZE } from '@/core/newTopics'
+import { clusterHomeless, dropAlreadyGrouped, planNewFolders, MIN_NEW_FOLDER_SIZE } from '@/core/newTopics'
 import type { Ports } from '@/core/ports'
 import type { Classification, OrganizePlan, TagResult } from '@/core/types'
 import { applyPlan } from '@/engine/apply'
@@ -237,7 +237,15 @@ export async function handle(
         // 非推翻模式补上「新主题无处可去」这一块：规则定量、模型只负责起名。
         // 推翻模式不走这里——那条路的候选本来就是刚设计出来的，不存在放不进去。
         if (!settings.rebuildStructure) {
-          const clusters = clusterHomeless(classifications)
+          const rootIds = new Set(roots.map((r) => r.id))
+          const allClusters = clusterHomeless(classifications)
+          // 「已聚齐」这道幂等性闸赶在起名之前生效：命名要花一次模型请求，不该为
+          // 注定被丢弃的簇破费（见 core/newTopics.ts 的 dropAlreadyGrouped）
+          const clusters = dropAlreadyGrouped(allClusters, scan.bookmarks, scan.folders, rootIds)
+          const droppedByGuard = allClusters.length - clusters.length
+          if (droppedByGuard > 0) {
+            log('tree', t('logNewFoldersGrouped', String(droppedByGuard)))
+          }
           // 只数模型真正判过的「无合适目录」，请求失败落下的 source: 'none' 不算——
           // 那批已经在上面的全军覆没判断里处理过了，这里再数进去只会让日志说谎
           const homelessCount = classifications.filter(
@@ -252,7 +260,6 @@ export async function handle(
             if (roots.length > 1) {
               log('tree', t('logNewFoldersMultiRoot', roots[0]!.title))
             }
-            const rootIds = new Set(roots.map((r) => r.id))
             const names = await nameNewTopics(
               clusters,
               // 给全部范围根的直接子目录，不能只看新目录要挂的那一个根：漏了另一个根
@@ -262,9 +269,14 @@ export async function handle(
               { onLog: (message, level) => log('tree', message, level) },
             )
             if (isCancelled()) return CANCELLED
+            // 撞名被 nameNewTopics 整簇跳过的，不能悄悄消失——不然「N 本书签无处可去」
+            // 的日志后面跟着「新建 0 个目录」，用户看不出原因
+            const nameSkipped = clusters.filter((c) => !names.has(c.key)).length
+            if (nameSkipped > 0) {
+              log('tree', t('logNewFoldersNameCollision', String(nameSkipped)))
+            }
             const added = planNewFolders({
-              clusters, names, rootId, folders: scan.folders, classifications,
-              bookmarks: scan.bookmarks, locale,
+              clusters, names, rootId, folders: scan.folders, classifications, locale,
             })
             newFolders = [...newFolders, ...added.newFolders]
             candidates = [...candidates, ...added.candidates]
@@ -273,7 +285,9 @@ export async function handle(
             if (added.truncatedCount > 0) {
               log('tree', t('logNewFoldersCapped', String(added.truncatedCount)))
             }
-          } else if (homelessCount > 0) {
+          } else if (homelessCount > 0 && droppedByGuard === 0) {
+            // droppedByGuard > 0 时上面已经说明过原因（已聚齐），这里不再重复一句
+            // 「没有任何主题攒够」——那会跟已聚齐的真实原因矛盾
             log('tree', t('logNewFoldersNone', String(homelessCount), String(MIN_NEW_FOLDER_SIZE)))
           }
         }

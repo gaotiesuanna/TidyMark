@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { clusterHomeless, MIN_NEW_FOLDER_SIZE, planNewFolders } from '@/core/newTopics'
+import { clusterHomeless, dropAlreadyGrouped, MIN_NEW_FOLDER_SIZE, planNewFolders } from '@/core/newTopics'
 import { MAX_SIBLINGS } from '@/core/tree'
 import type { BookmarkItem, Classification } from '@/core/types'
 import type { FolderItem } from '@/core/types'
@@ -103,7 +103,7 @@ function folder(id: string, title: string, parentId: string | null, path: string
   return { id, title, parentId, index: 0, path, depth: 1, level: 1 }
 }
 
-/** 松散挂在 parentId 下的书签——用于喂 planNewFolders 判断「是否已经聚齐」。 */
+/** 松散挂在 parentId 下的书签——用于喂 dropAlreadyGrouped 判断「是否已聚齐」。 */
 function bm(id: string, parentId: string): BookmarkItem {
   return { id, title: id, url: `https://${id}.dev`, parentId, index: 0, currentPath: [] }
 }
@@ -117,13 +117,11 @@ describe('planNewFolders', () => {
   const homelessAll: Classification[] = ['1', '2', '3', '4', '5', '9'].map((id) => ({
     bookmarkId: id, targetCategoryId: null, confidence: 0, reason: '无合适目录', source: 'llm' as const,
   }))
-  // 全部松散挂在范围根下：guard 不该拦这批——它们的父目录就是范围根本身
-  const looseBookmarks = ['1', '2', '3', '4', '5', '9'].map((id) => bm(id, 'root'))
 
   it('每个簇建一个目录，一律挂在范围根下', () => {
     const out = planNewFolders({
       clusters, names, rootId: 'root', folders: [folder('root', '书签栏', null)],
-      classifications: homelessAll, bookmarks: looseBookmarks, locale: 'zh_CN',
+      classifications: homelessAll, locale: 'zh_CN',
     })
     expect(out.newFolders).toHaveLength(2)
     expect(out.newFolders.every((f) => f.parentId === 'root' && f.parentTemporaryId === null)).toBe(true)
@@ -133,7 +131,7 @@ describe('planNewFolders', () => {
     const out = planNewFolders({
       clusters, names, rootId: 'root',
       folders: [folder('root', '书签栏', null), folder('a', '01 GitHub', 'root'), folder('b', '07 其他', 'root')],
-      classifications: homelessAll, bookmarks: looseBookmarks, locale: 'zh_CN',
+      classifications: homelessAll, locale: 'zh_CN',
     })
     expect(out.newFolders.map((f) => f.title)).toEqual(['08 语音与音频', '09 竞赛数据'])
   })
@@ -142,7 +140,7 @@ describe('planNewFolders', () => {
     const out = planNewFolders({
       clusters, names, rootId: 'root',
       folders: [folder('root', '书签栏', null), folder('a', 'GitHub', 'root')],
-      classifications: homelessAll, bookmarks: looseBookmarks, locale: 'zh_CN',
+      classifications: homelessAll, locale: 'zh_CN',
     })
     expect(out.newFolders.map((f) => f.title)).toEqual(['语音与音频', '竞赛数据'])
   })
@@ -151,7 +149,7 @@ describe('planNewFolders', () => {
     const out = planNewFolders({
       clusters, names, rootId: 'root',
       folders: [folder('root', '书签栏', null), folder('a', 'GitHub', 'root'), folder('b', '05 深处', 'a')],
-      classifications: homelessAll, bookmarks: looseBookmarks, locale: 'zh_CN',
+      classifications: homelessAll, locale: 'zh_CN',
     })
     expect(out.newFolders[0]!.title).toBe('语音与音频')
   })
@@ -159,7 +157,7 @@ describe('planNewFolders', () => {
   it('簇成员被直接落进新目录，不必再问一次模型', () => {
     const out = planNewFolders({
       clusters, names, rootId: 'root', folders: [folder('root', '书签栏', null)],
-      classifications: homelessAll, bookmarks: looseBookmarks, locale: 'zh_CN',
+      classifications: homelessAll, locale: 'zh_CN',
     })
     const id = out.newFolders[0]!.temporaryId
     for (const b of ['1', '2', '3']) {
@@ -172,7 +170,7 @@ describe('planNewFolders', () => {
   it('不属于任何簇的无归属书签原样留着', () => {
     const out = planNewFolders({
       clusters, names, rootId: 'root', folders: [folder('root', '书签栏', null)],
-      classifications: homelessAll, bookmarks: looseBookmarks, locale: 'zh_CN',
+      classifications: homelessAll, locale: 'zh_CN',
     })
     expect(out.classifications.find((c) => c.bookmarkId === '9')).toMatchObject({ targetCategoryId: null })
   })
@@ -181,7 +179,7 @@ describe('planNewFolders', () => {
     const out = planNewFolders({
       clusters, names, rootId: 'root',
       folders: [folder('root', '书签栏', null), folder('a', '01 GitHub', 'root')],
-      classifications: homelessAll, bookmarks: looseBookmarks, locale: 'zh_CN',
+      classifications: homelessAll, locale: 'zh_CN',
     })
     expect(out.candidates.map((c) => c.path.join('/'))).toEqual([
       '书签栏/02 语音与音频', '书签栏/03 竞赛数据',
@@ -197,7 +195,7 @@ describe('planNewFolders', () => {
     const out = planNewFolders({
       clusters: [clusters[0]!], names, rootId: 'sub',
       folders: [folder('sub', '子目录', 'root', ['书签栏'])],
-      classifications: homelessAll, bookmarks: ['1', '2', '3'].map((id) => bm(id, 'sub')), locale: 'zh_CN',
+      classifications: homelessAll, locale: 'zh_CN',
     })
     expect(out.candidates[0]!.path).toEqual(['书签栏', '子目录', '语音与音频'])
   })
@@ -206,11 +204,10 @@ describe('planNewFolders', () => {
     const many = Array.from({ length: 15 }, (_, i) => ({
       key: `k${i}`, title: `T${i}`, bookmarkIds: [`${i}a`, `${i}b`, `${i}c`],
     }))
-    const manyBookmarks = many.flatMap((c) => c.bookmarkIds.map((id) => bm(id, 'root')))
     const manyNames = new Map(many.map((c) => [c.key, c.title]))
     const out = planNewFolders({
       clusters: many, names: manyNames, rootId: 'root',
-      folders: [folder('root', '书签栏', null)], classifications: [], bookmarks: manyBookmarks, locale: 'zh_CN',
+      folders: [folder('root', '书签栏', null)], classifications: [], locale: 'zh_CN',
     })
     expect(out.newFolders).toHaveLength(MAX_SIBLINGS)
     expect(out.truncatedCount).toBe(15 - MAX_SIBLINGS)
@@ -219,7 +216,7 @@ describe('planNewFolders', () => {
   it('没有簇时什么都不产出', () => {
     const out = planNewFolders({
       clusters: [], names: new Map(), rootId: 'root',
-      folders: [folder('root', '书签栏', null)], classifications: homelessAll, bookmarks: looseBookmarks, locale: 'zh_CN',
+      folders: [folder('root', '书签栏', null)], classifications: homelessAll, locale: 'zh_CN',
     })
     expect(out.newFolders).toEqual([])
     expect(out.candidates).toEqual([])
@@ -232,7 +229,7 @@ describe('planNewFolders', () => {
     const out = planNewFolders({
       clusters, names, rootId: 'root',
       folders: [folder('root', '书签栏', null), folder('a', '01 GitHub', 'root')],
-      classifications: homelessAll, bookmarks: looseBookmarks, locale: 'zh_CN',
+      classifications: homelessAll, locale: 'zh_CN',
     })
     // 返回结构里根本没有 renameFolders 这一项，已有目录的 id 也不出现在任何新建规格里
     expect(out.newFolders.some((f) => f.parentId === 'a')).toBe(false)
@@ -242,7 +239,7 @@ describe('planNewFolders', () => {
   it('落位的 classification 讲清楚为什么，不再是模型那句「无合适目录」', () => {
     const out = planNewFolders({
       clusters, names, rootId: 'root', folders: [folder('root', '书签栏', null)],
-      classifications: homelessAll, bookmarks: looseBookmarks, locale: 'zh_CN',
+      classifications: homelessAll, locale: 'zh_CN',
     })
     const row = out.classifications.find((c) => c.bookmarkId === '1')!
     expect(row.reason).toContain('语音与音频')
@@ -252,7 +249,7 @@ describe('planNewFolders', () => {
   it('英文 locale 下落位理由也是英文', () => {
     const out = planNewFolders({
       clusters, names, rootId: 'root', folders: [folder('root', '书签栏', null)],
-      classifications: homelessAll, bookmarks: looseBookmarks, locale: 'en',
+      classifications: homelessAll, locale: 'en',
     })
     const row = out.classifications.find((c) => c.bookmarkId === '1')!
     expect(row.reason).toContain('语音与音频')
@@ -263,7 +260,7 @@ describe('planNewFolders', () => {
     const namesMissingOne = new Map([['数据竞赛', '竞赛数据']]) // '语音合成' 撞名被 nameNewTopics 跳过了
     const out = planNewFolders({
       clusters, names: namesMissingOne, rootId: 'root', folders: [folder('root', '书签栏', null)],
-      classifications: homelessAll, bookmarks: looseBookmarks, locale: 'zh_CN',
+      classifications: homelessAll, locale: 'zh_CN',
     })
     expect(out.newFolders.map((f) => f.title)).toEqual(['竞赛数据'])
     for (const id of ['1', '2', '3']) {
@@ -271,48 +268,88 @@ describe('planNewFolders', () => {
     }
     expect(out.placedCount).toBe(2)
   })
+})
 
-  describe('已聚齐的簇不再建目录（幂等性第四道闸，见 review C1）', () => {
-    it('簇成员已经全挤在范围内同一个非根目录下——不建新目录，书签原地不动', () => {
-      const alreadyGrouped = ['1', '2', '3'].map((id) => bm(id, 'existing'))
-      const out = planNewFolders({
-        clusters: [clusters[0]!], names, rootId: 'root',
-        folders: [folder('root', '书签栏', null), folder('existing', '语音合成', 'root')],
-        classifications: homelessAll.filter((c) => ['1', '2', '3'].includes(c.bookmarkId)),
-        bookmarks: alreadyGrouped, locale: 'zh_CN',
-      })
-      expect(out.newFolders).toEqual([])
-      expect(out.classifications.every((c) => c.targetCategoryId === null)).toBe(true)
-    })
+// 幂等性第四道闸（见 review C1，以及二次复核对这道闸形状的收窄决定）：这道闸现在
+// 是一个独立的、在命名之前调用的纯函数，测试也从 planNewFolders 挪到这里来。
+describe('dropAlreadyGrouped', () => {
+  const clusterA = { key: '语音合成', title: '语音合成', bookmarkIds: ['1', '2', '3'] }
 
-    it('书签松散挂在范围根下不算已聚齐——guard 不能拦住真正无处可去的书签', () => {
-      const out = planNewFolders({
-        clusters: [clusters[0]!], names, rootId: 'root',
-        folders: [folder('root', '书签栏', null)],
-        classifications: homelessAll.filter((c) => ['1', '2', '3'].includes(c.bookmarkId)),
-        bookmarks: ['1', '2', '3'].map((id) => bm(id, 'root')), locale: 'zh_CN',
-      })
-      expect(out.newFolders).toHaveLength(1)
-    })
+  it('簇成员独占一个非根目录——目录里没有别的书签，也没有子目录——判定已聚齐，丢弃这个簇', () => {
+    const out = dropAlreadyGrouped(
+      [clusterA],
+      ['1', '2', '3'].map((id) => bm(id, 'existing')),
+      [folder('root', '书签栏', null), folder('existing', '语音合成', 'root')],
+      new Set(['root']),
+    )
+    expect(out).toEqual([])
+  })
 
-    it('簇成员分散在不同父目录下——不算已聚齐，照常建目录', () => {
-      const out = planNewFolders({
-        clusters: [clusters[0]!], names, rootId: 'root',
-        folders: [folder('root', '书签栏', null), folder('a', 'A', 'root'), folder('b', 'B', 'root')],
-        classifications: homelessAll.filter((c) => ['1', '2', '3'].includes(c.bookmarkId)),
-        bookmarks: [bm('1', 'a'), bm('2', 'a'), bm('3', 'b')], locale: 'zh_CN',
-      })
-      expect(out.newFolders).toHaveLength(1)
-    })
+  // 这是收窄这道闸的直接原因：用户的杂物目录（「杂项」「未分类」）通常混着不止一个
+  // 主题，簇成员只是恰好也在里面——旧规则（只看「共享一个非根父目录」）会连这种目录
+  // 也当成已聚齐，导致「从杂物目录里挑主题」这个最常见的用法直接失效
+  it('目录里除了簇成员还有别的书签——不算独占，照常保留这个簇', () => {
+    const out = dropAlreadyGrouped(
+      [clusterA],
+      [...['1', '2', '3'].map((id) => bm(id, 'existing')), bm('9', 'existing')],
+      [folder('root', '书签栏', null), folder('existing', '语音合成', 'root')],
+      new Set(['root']),
+    )
+    expect(out).toEqual([clusterA])
+  })
 
-    it('找不到书签归属信息时不拦——宁可多建一次也不误伤', () => {
-      const out = planNewFolders({
-        clusters: [clusters[0]!], names, rootId: 'root',
-        folders: [folder('root', '书签栏', null), folder('existing', '语音合成', 'root')],
-        classifications: homelessAll.filter((c) => ['1', '2', '3'].includes(c.bookmarkId)),
-        bookmarks: [], locale: 'zh_CN',
-      })
-      expect(out.newFolders).toHaveLength(1)
-    })
+  it('目录下还有子目录——不算「纯净」独占，照常保留这个簇', () => {
+    const out = dropAlreadyGrouped(
+      [clusterA],
+      ['1', '2', '3'].map((id) => bm(id, 'existing')),
+      [
+        folder('root', '书签栏', null),
+        folder('existing', '语音合成', 'root'),
+        folder('deep', '子目录', 'existing'),
+      ],
+      new Set(['root']),
+    )
+    expect(out).toEqual([clusterA])
+  })
+
+  it('书签松散挂在范围根下不算已聚齐——不能拦住真正无处可去的书签', () => {
+    const out = dropAlreadyGrouped(
+      [clusterA],
+      ['1', '2', '3'].map((id) => bm(id, 'root')),
+      [folder('root', '书签栏', null)],
+      new Set(['root']),
+    )
+    expect(out).toEqual([clusterA])
+  })
+
+  it('簇成员分散在不同父目录下——不算已聚齐，照常保留这个簇', () => {
+    const out = dropAlreadyGrouped(
+      [clusterA],
+      [bm('1', 'a'), bm('2', 'a'), bm('3', 'b')],
+      [folder('root', '书签栏', null), folder('a', 'A', 'root'), folder('b', 'B', 'root')],
+      new Set(['root']),
+    )
+    expect(out).toEqual([clusterA])
+  })
+
+  it('找不到书签归属信息时不拦——宁可多建一次也不误伤', () => {
+    const out = dropAlreadyGrouped(
+      [clusterA], [],
+      [folder('root', '书签栏', null), folder('existing', '语音合成', 'root')],
+      new Set(['root']),
+    )
+    expect(out).toEqual([clusterA])
+  })
+
+  // 二次复核发现的多根回归：guard 必须认得全部范围根，不能只认 roots[0]——书签散落
+  // 在第二个范围根下时，拿它的 parentId 去跟单个根比较会误判成「挤在一个已有目录里」
+  it('多个范围根——书签散落在第二个根下也不算已聚齐', () => {
+    const out = dropAlreadyGrouped(
+      [clusterA],
+      ['1', '2', '3'].map((id) => bm(id, 'root2')),
+      [folder('root', '书签栏', null), folder('root2', '其他书签', null)],
+      new Set(['root', 'root2']),
+    )
+    expect(out).toEqual([clusterA])
   })
 })

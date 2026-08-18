@@ -86,8 +86,6 @@ export interface PlanNewFoldersInput {
   rootId: string
   folders: FolderItem[]
   classifications: Classification[]
-  /** 用来判断簇成员是否已经挤在同一个目录下，见下方「已聚齐」的说明。 */
-  bookmarks: BookmarkItem[]
   /** 落位理由要讲哪种语言。 */
   locale: Locale
 }
@@ -108,6 +106,76 @@ function newFolderReason(locale: Locale, title: string): string {
 }
 
 /**
+ * 「已经独占一个目录」的簇不再建目录（幂等性第四道闸，见 issues review C1，
+ * 以及二次复核对这道闸形状的收窄决定）。
+ *
+ * 只有当一个簇的成员**独占**一个已有目录——目录里除了它们什么都没有、也没有子目录，
+ * 而且这个目录本身不是任何一个范围根——才判定「已聚齐」并丢弃这个簇：重新给它们建
+ * 目录不会带来任何变化，只会白建一个新目录、把书签再搬一趟。这正是「模型持续判定
+ * 无处可去」时会撞上的死循环——第一轮建了目录，第二轮模型又把同一批书签判成无归属、
+ * 还是那个主题，如果照样建目录，产出的要么是同名兄弟要么是二次搬家，两种都是 churn。
+ * 判定只看物理位置，不问模型这次给的 target_category_id 是不是 null——模型的判断
+ * 本就是触发这个流程的原因，不能再拿它当收敛条件。
+ *
+ * 这道闸比「只要共享一个非根父目录就算聚齐」窄得多，是刻意收窄的：旧规则连用户自己的
+ * 杂物目录（「杂项」「未分类」）也会当成「已聚齐」——那种目录通常混着不止一个主题，
+ * 簇成员只是恰好也在里面，一旦命中就会让「从杂物目录里挑出主题」这个最常见的用法直接
+ * 失效。窄化后，只有目录**恰好**只装着这一簇——也就是这条流程自己在上一轮建出来的
+ * 目录——才会被拦。
+ *
+ * 收敛性说明：第一轮书签是散的（或跟别的东西混在一起），这道闸不命中，正常建目录；
+ * 第二轮这些书签已经独居在新目录里，命中，什么都不做。如果后续又有第四本书签被分类
+ * 进这个新目录，这道闸会在下一轮因为「目录里不止这一簇」而不再命中，原来的三本会被
+ * 重新抽出来再建一次目录——这是刻意接受的代价：多一轮可界定的搬动，而不是无界的
+ * churn。
+ *
+ * `rootIds` 必须是**全部**范围根，不能只传其中一个：书签散落在第二个范围根下时，
+ * 拿它的 parentId 去跟单个根比较会误判成「挤在一个已有目录里」（见二次复核 I2）。
+ *
+ * 在命名（`nameNewTopics`）之前调用：命名要花一次模型请求，不该为注定被丢弃的簇
+ * 破费，日志也该在丢弃的第一时间说清楚，而不是等命名结束后才说「新建 0 个目录」。
+ */
+export function dropAlreadyGrouped(
+  clusters: TopicCluster[],
+  bookmarks: BookmarkItem[],
+  folders: FolderItem[],
+  rootIds: Set<string>,
+): TopicCluster[] {
+  const parentByBookmark = new Map(bookmarks.map((b) => [b.id, b.parentId]))
+  const folderIds = new Set(folders.map((f) => f.id))
+  const parentsWithSubfolder = new Set(
+    folders.flatMap((f) => (f.parentId === null ? [] : [f.parentId])),
+  )
+  const bookmarkCountByParent = new Map<string, number>()
+  for (const b of bookmarks) {
+    bookmarkCountByParent.set(b.parentId, (bookmarkCountByParent.get(b.parentId) ?? 0) + 1)
+  }
+
+  const isExclusivelyGrouped = (cluster: TopicCluster): boolean => {
+    let parentId: string | undefined
+    for (const id of cluster.bookmarkIds) {
+      const p = parentByBookmark.get(id)
+      // 找不到归属信息就不拦——宁可多建一次，也不能因为数据缺失误伤真正无处可去的书签
+      if (p === undefined) return false
+      if (parentId === undefined) parentId = p
+      else if (parentId !== p) return false
+    }
+    if (parentId === undefined) return false
+    // 是范围根本身：书签本来就散落在根下（哪个根都算），不算「已经聚齐」
+    if (rootIds.has(parentId)) return false
+    // 不在范围内的目录一律不拦
+    if (!folderIds.has(parentId)) return false
+    // 目录下还有子目录，不是簇独占的那种「纯净」目录
+    if (parentsWithSubfolder.has(parentId)) return false
+    // 前面的循环已经确认簇成员全部共享 parentId，这里只需比较数量：
+    // 相等就说明目录里没有多余的书签，簇独占了它
+    return bookmarkCountByParent.get(parentId) === cluster.bookmarkIds.length
+  }
+
+  return clusters.filter((c) => !isExclusivelyGrouped(c))
+}
+
+/**
  * 把主题簇变成「新建目录 + 书签落位」。
  *
  * 三条硬约束（见 issues/13-additive-mode-design.md）：
@@ -121,13 +189,8 @@ function newFolderReason(locale: Locale, title: string): string {
  * 落位是确定性的：簇成员直接进以它命名的目录，不再花一次重分类调用——那个目录本来就是
  * 按这批书签的主题起的名，再问一遍模型是同义反复。
  *
- * **「已聚齐」的簇不再建目录**（幂等性第四条闸，见 issues review C1）：如果一个簇的成员
- * 本来就已经全挤在范围内同一个非根目录下，重新给它们分组不会带来任何变化，只会白建一个
- * 新目录、把书签再搬一趟。这正是「模型持续判定无处可去」时会撞上的死循环——第一轮建了
- * 目录，第二轮模型又把同一批书签判成无归属、还是那个主题，如果照样建目录，产出的要么是
- * 同名兄弟要么是二次搬家，两种都是churn。判定只看物理位置（parentId），不问模型这次给的
- * target_category_id 是不是 null——模型的判断本就是触发这个流程的原因，不能再拿它当
- * 收敛条件。
+ * 传入的 `input.clusters` 已经在调用方经过 `dropAlreadyGrouped` 过滤——「已聚齐」这道
+ * 幂等性闸不在这里，是因为它要赶在命名调用之前生效（见 `dropAlreadyGrouped` 的说明）。
  */
 export function planNewFolders(input: PlanNewFoldersInput): PlanNewFoldersResult {
   const root = input.folders.find((f) => f.id === input.rootId)
@@ -138,26 +201,10 @@ export function planNewFolders(input: PlanNewFoldersInput): PlanNewFoldersResult
   const numbers = siblings.map((f) => folderNumber(f.title)).filter((n): n is number => n !== null)
   const startNumber = numbers.length === 0 ? null : Math.floor(Math.max(...numbers)) + 1
 
-  const parentByBookmark = new Map(input.bookmarks.map((b) => [b.id, b.parentId]))
-  const folderIds = new Set(input.folders.map((f) => f.id))
-  const isAlreadyGrouped = (cluster: TopicCluster): boolean => {
-    let parentId: string | undefined
-    for (const id of cluster.bookmarkIds) {
-      const p = parentByBookmark.get(id)
-      // 找不到归属信息就不拦——宁可多建一次，也不能因为数据缺失误伤真正无处可去的书签
-      if (p === undefined) return false
-      if (parentId === undefined) parentId = p
-      else if (parentId !== p) return false
-    }
-    // parentId 就是范围根本身：书签本来就散落在根下，不算「已经聚齐」，该走新建这条路
-    return parentId !== undefined && parentId !== input.rootId && folderIds.has(parentId)
-  }
-  const grouped = input.clusters.filter((c) => !isAlreadyGrouped(c))
-
   // 上限只约束本轮新建的：已有目录是用户的，撑爆了也只报告不改动。
   // 这里先用现成的同层上限兜住，清单第 5 项的形状推导落地后换成按 homeless 数量推导。
-  const chosen = grouped.slice(0, MAX_SIBLINGS)
-  const truncatedCount = Math.max(0, grouped.length - MAX_SIBLINGS)
+  const chosen = input.clusters.slice(0, MAX_SIBLINGS)
+  const truncatedCount = Math.max(0, input.clusters.length - MAX_SIBLINGS)
 
   // 命名阶段撞名的簇会被跳过、拿不到名字（见 llm/folders.ts 的 nameNewTopics）：
   // 这些书签也留在原地，不拿簇自己的主题名兜底——那正是造出重名兄弟的老路

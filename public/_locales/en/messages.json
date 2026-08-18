@@ -897,6 +897,22 @@
       }
     }
   },
+  "logNewFoldersGrouped": {
+    "message": "$count$ topics were left alone because those bookmarks already sit together in one folder",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "logNewFoldersNameCollision": {
+    "message": "$count$ topics' names collided with an existing folder and were skipped; those bookmarks stay in place",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
   "logNewFoldersCapped": {
     "message": "$count$ topics exceeded the per-level cap and were not turned into folders; those bookmarks stay in place",
     "placeholders": {
