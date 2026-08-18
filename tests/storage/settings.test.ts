@@ -155,6 +155,23 @@ describe('分类缓存存取', () => {
     await p.storage.set('tidymark:classify-cache', { junk: true })
     expect((await loadCache(p)).size).toBe(0)
   })
+
+  it('带 topic 的条目往返保持一致', async () => {
+    const p = ports()
+    const withTopic: CachedClassification = {
+      targetPath: null, url: 'https://weird.site/x', confidence: 0, reason: '无合适目录', topic: '语音合成',
+    }
+    await saveCache(p, new Map([['k1', withTopic]]))
+    expect((await loadCache(p)).get('k1')).toEqual(withTopic)
+  })
+
+  it('topic 不是字符串的条目丢弃', async () => {
+    const p = ports()
+    await p.storage.set('tidymark:classify-cache', [
+      ['bad', { targetPath: null, url: 'https://x.dev', confidence: 0, reason: 'r', topic: 42 }],
+    ])
+    expect((await loadCache(p)).size).toBe(0)
+  })
 })
 
 describe('domainGroups 设置', () => {

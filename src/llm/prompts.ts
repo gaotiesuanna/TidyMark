@@ -19,6 +19,7 @@ export function classifyPrompt(locale: Locale): string[] {
       '2. 如果没有任何目录合适，target_category_id 返回 null。',
       '3. confidence 是 0 到 1 之间的数字，表示你的把握程度。',
       '4. reason 用一句中文说明判断依据。',
+      '5. 只有在 target_category_id 为 null 时，额外给出 topic：一个不超过 8 个字的主题词，说明这个书签属于什么类别。有合适目录时不要填 topic。',
     ]
   }
   return [
@@ -29,6 +30,7 @@ export function classifyPrompt(locale: Locale): string[] {
     '2. If no folder fits, return null for target_category_id.',
     '3. confidence is a number between 0 and 1 expressing how sure you are.',
     '4. Write reason as one short sentence in English.',
+    '5. Only when target_category_id is null, also return topic: a short subject label (at most 3 words) describing what this bookmark is about. Leave topic out when a folder fits.',
   ]
 }
 

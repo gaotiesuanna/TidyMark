@@ -106,6 +106,7 @@ function buildSchema(candidates: CategoryCandidate[]): object {
             },
             confidence: { type: 'number' },
             reason: { type: 'string' },
+            topic: { type: 'string' },
           },
         },
       },
@@ -118,6 +119,7 @@ interface RawResult {
   target_category_id: string | null
   confidence: number
   reason: string
+  topic?: string
 }
 
 function unclassified(item: BookmarkItem, reason: string, detail?: string): Classification {
@@ -153,6 +155,7 @@ function fromCache(
     confidence: cached.confidence,
     reason: cached.reason,
     source: 'llm',
+    ...(cached.topic === undefined ? {} : { topic: cached.topic }),
   }
 }
 
@@ -182,12 +185,16 @@ async function runBatch(
           hit.target_category_id !== null && validIds.has(hit.target_category_id)
             ? hit.target_category_id
             : null
+        const topic = target === null ? String(hit.topic ?? '').trim() : ''
         return {
           bookmarkId: item.id,
           targetCategoryId: target,
           confidence: target === null ? 0 : hit.confidence,
           reason: hit.reason,
           source: 'llm',
+          // 有归属时不带 topic：那个字段只为无家可归的书签存在，
+          // 留着会让下游误以为这条书签还需要一个新目录。
+          ...(topic === '' ? {} : { topic }),
         }
       })
     } catch (error) {
@@ -273,6 +280,7 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
               url: batch[i]!.url,
               confidence: result.confidence,
               reason: result.reason,
+              ...(result.topic === undefined ? {} : { topic: result.topic }),
             })
           }
         }

@@ -140,6 +140,15 @@ describe('foldersPrompt 目录下限', () => {
   })
 })
 
+describe('classifyPrompt 的 topic 规则', () => {
+  it('中文提示词说明 null 时要带回主题', () => {
+    expect(classifyPrompt('zh_CN').join('\n')).toContain('topic')
+  })
+  it('英文提示词说明 null 时要带回主题', () => {
+    expect(classifyPrompt('en').join('\n')).toContain('topic')
+  })
+})
+
 /**
  * 层级按绝对位置算：勾「其他书签」时模型建的是二级目录，不是一级。
  * 提示词里的称呼跟着走，否则模型会照着「一级目录要具体」的标准去命名一批二级目录。

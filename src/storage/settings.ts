@@ -122,9 +122,11 @@ function isCachedClassification(value: unknown): value is CachedClassification {
   const pathOk =
     entry.targetPath === null ||
     (Array.isArray(entry.targetPath) && entry.targetPath.every((p) => typeof p === 'string'))
+  const topicOk = entry.topic === undefined || typeof entry.topic === 'string'
   return (
     pathOk &&
     typeof entry.url === 'string' &&
+    topicOk &&
     typeof entry.confidence === 'number' &&
     typeof entry.reason === 'string'
   )

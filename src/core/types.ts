@@ -58,6 +58,12 @@ export interface Classification {
    * 而不是 reason 全文时（例如结果页避免同一句话说两遍）用它。
    */
   detail?: string
+  /**
+   * 模型判「无合适目录」时顺手带回的简短主题。**只有 targetCategoryId === null 时才有。**
+   * 非推翻模式靠它把无家可归的书签聚类成新目录（见 core/newTopics.ts）；
+   * 让分类那一轮顺手带回，是为了不为抽标签另花一轮调用。
+   */
+  topic?: string
   source: 'rule' | 'llm' | 'none'
 }
 
@@ -80,6 +86,8 @@ export interface CachedClassification {
   url: string
   confidence: number
   reason: string
+  /** 同 Classification.topic。必须进缓存——否则第二轮命中缓存的书签会丢掉主题，永远攒不成新目录。 */
+  topic?: string
 }
 
 export type BookmarkOperation =

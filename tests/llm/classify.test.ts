@@ -314,6 +314,53 @@ describe('classifyBookmarks', () => {
     expect(second.complete).toHaveBeenCalled()
     expect(results[0]!.reason).toBe('数据竞赛')
   })
+
+  it('模型判「无合适目录」时带回的 topic 落进 Classification', async () => {
+    const client = clientReturning({
+      results: [{ bookmark_id: '1', target_category_id: null, confidence: 0.2, reason: '无合适目录', topic: '语音合成' }],
+    })
+    const results = await classify({
+      items: [item('1', 'https://weird.site/x')], candidates, client, cache: new Map(),
+    })
+    expect(results[0]!).toMatchObject({ targetCategoryId: null, topic: '语音合成' })
+  })
+
+  it('有归属时不带 topic——那个字段只为无家可归的书签存在', async () => {
+    const client = clientReturning({
+      results: [{ bookmark_id: '1', target_category_id: '10', confidence: 0.9, reason: 'r', topic: '不该出现' }],
+    })
+    const results = await classify({
+      items: [item('1', 'https://weird.site/x')], candidates, client, cache: new Map(),
+    })
+    expect(results[0]!.targetCategoryId).toBe('10')
+    expect(results[0]!.topic).toBeUndefined()
+  })
+
+  it('模型没给 topic 时不炸，只是没有主题可聚类', async () => {
+    const client = clientReturning({
+      results: [{ bookmark_id: '1', target_category_id: null, confidence: 0.2, reason: '无合适目录' }],
+    })
+    const results = await classify({
+      items: [item('1', 'https://weird.site/x')], candidates, client, cache: new Map(),
+    })
+    expect(results[0]!.topic).toBeUndefined()
+  })
+
+  it('topic 一并进缓存——否则第二轮命中缓存的书签会丢掉主题，永远攒不成新目录', async () => {
+    const client = clientReturning({
+      results: [{ bookmark_id: '1', target_category_id: null, confidence: 0.2, reason: '无合适目录', topic: '语音合成' }],
+    })
+    const cache = new Map<string, CachedClassification>()
+    const it1 = item('1', 'https://weird.site/x')
+    await classify({ items: [it1], candidates, client, cache })
+    expect(cache.get(cacheKey(it1, candidates, 'zh_CN', 'm'))).toMatchObject({ targetPath: null, topic: '语音合成' })
+
+    // 第二轮命中缓存，topic 必须还在
+    const complete = vi.fn().mockResolvedValue({ results: [] })
+    const again = await classify({ items: [it1], candidates, client: { complete }, cache })
+    expect(complete).not.toHaveBeenCalled()
+    expect(again[0]!.topic).toBe('语音合成')
+  })
 })
 
 describe('classifyBookmarks 取消', () => {
