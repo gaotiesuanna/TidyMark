@@ -103,10 +103,7 @@ export interface PlanNewFoldersResult {
  */
 export function planNewFolders(input: PlanNewFoldersInput): PlanNewFoldersResult {
   const root = input.folders.find((f) => f.id === input.rootId)
-  // root.path 为空说明范围根本身就是这次扫描的起点（如「书签栏」）：它自己的名字
-  // 是整页复核的隐含上下文，不必在每个新候选前面重复一遍；范围根若是扫描起点之下的
-  // 某个子目录，它的名字才是区分层级所必需的，要接在它自己的 path 后面一起带上。
-  const rootPath = root === undefined || root.path.length === 0 ? [] : [...root.path, root.title]
+  const rootPath = root === undefined ? [] : [...root.path, root.title]
 
   // 只看范围根的直接子目录：更深层的编号是别人的习惯，不代表这一层
   const siblings = input.folders.filter((f) => f.parentId === input.rootId)

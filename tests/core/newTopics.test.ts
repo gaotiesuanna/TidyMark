@@ -159,10 +159,16 @@ describe('planNewFolders', () => {
       folders: [folder('root', '书签栏', null), folder('a', '01 GitHub', 'root')],
       classifications: homelessAll,
     })
-    expect(out.candidates.map((c) => c.path.join('/'))).toEqual(['02 语音与音频', '03 竞赛数据'])
+    expect(out.candidates.map((c) => c.path.join('/'))).toEqual([
+      '书签栏/02 语音与音频', '书签栏/03 竞赛数据',
+    ])
     expect(out.candidates[0]!.id).toBe(out.newFolders[0]!.temporaryId)
   })
 
+  // 这个 fixture 里 root 自己的 path 是 ['书签栏']，但 scanTree 里任何真正的范围根
+  // 都是以 path: [] 被扫描到的（见 scan.ts 的 `walk(root, [], 0)`）——所以这条用例
+  // 记录的是公式本身（范围根的 path 拼上它自己的 title，再拼上新目录名），而不是一个
+  // 生产环境里真的会出现的状态。
   it('新目录路径接在范围根的路径后面', () => {
     const out = planNewFolders({
       clusters: [clusters[0]!], names, rootId: 'sub',
