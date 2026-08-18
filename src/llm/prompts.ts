@@ -243,3 +243,41 @@ export function mergeNamePrompt(locale: Locale, sourceTitles: string[]): string[
     '按 JSON 回复：{"name": "..."}',
   ]
 }
+
+/**
+ * 给非推翻模式新建的目录起名。已有目录名一并给出，让模型别造重名或近义的目录——
+ * 新目录是要长期与它们并排站着的。
+ */
+export function newFolderNamesPrompt(locale: Locale, existingTitles: string[]): string[] {
+  const listed = existingTitles.length === 0
+    ? (locale === 'zh_CN' ? '（这个范围下还没有目录）' : '(no folders here yet)')
+    : existingTitles.map((title) => `- ${title}`).join('\n')
+  if (locale === 'en') {
+    return [
+      'A bookmark folder already contains these folders:',
+      listed,
+      '',
+      'The bookmarks below fit none of them, so new folders will be created for them.',
+      'Give each topic ONE short folder name (at most 3 words).',
+      'Rules:',
+      '1. Never reuse or paraphrase any existing folder name listed above.',
+      '2. Never give two topics the same name.',
+      '3. No numbering prefix, no quotes, no explanation.',
+      '4. Echo back the key you were given, unchanged.',
+      'Reply with JSON: {"names": [{"key": "...", "name": "..."}]}',
+    ]
+  }
+  return [
+    '一个书签目录下已经有这些文件夹：',
+    listed,
+    '',
+    '下面这些书签哪个都放不进去，将为它们新建目录。',
+    '请给每个主题起一个短目录名，不超过 8 个字。',
+    '规则：',
+    '1. 绝不能重复或改写上面已有的任何目录名。',
+    '2. 绝不能给两个主题起同一个名字。',
+    '3. 不要编号前缀，不要引号，不要解释。',
+    '4. key 原样回传，不要改动。',
+    '按 JSON 回复：{"names": [{"key": "...", "name": "..."}]}',
+  ]
+}

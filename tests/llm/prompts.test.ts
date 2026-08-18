@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { BROAD_WORDS, classifyPrompt, foldersPrompt, groupTagsPrompt, mergeNamePrompt, tagsPrompt } from '@/llm/prompts'
+import {
+  BROAD_WORDS,
+  classifyPrompt,
+  foldersPrompt,
+  groupTagsPrompt,
+  mergeNamePrompt,
+  newFolderNamesPrompt,
+  tagsPrompt,
+} from '@/llm/prompts'
 import { LOCALES } from '@/core/locale'
 
 describe('提示词双语', () => {
@@ -189,5 +197,15 @@ describe('foldersPrompt 绝对层级', () => {
     const zh = foldersPrompt('zh_CN', { total: 5, parentTitle: 'GitHub', maxSiblings: 8, startLevel: 3 }).join(' ')
     expect(zh).toContain('子目录')
     expect(zh).not.toContain('三级目录')
+  })
+})
+
+describe('newFolderNamesPrompt', () => {
+  it('两种语言都把已有目录名列出来，并要求不要重名', () => {
+    for (const locale of ['zh_CN', 'en'] as const) {
+      const text = newFolderNamesPrompt(locale, ['01 GitHub', '02 语音合成']).join('\n')
+      expect(text).toContain('01 GitHub')
+      expect(text).toContain('02 语音合成')
+    }
   })
 })

@@ -5,6 +5,7 @@ import {
   designFolders as designFoldersRaw,
   designTagFolders as designTagFoldersRaw,
   nameMergedFolder,
+  nameNewTopics,
   type FolderDesign,
   type DesignOptions,
 } from '@/llm/folders'
@@ -397,5 +398,66 @@ describe('nameMergedFolder', () => {
   it('返回的名字去掉编号前缀与首尾空白', async () => {
     const client = { complete: vi.fn().mockResolvedValue({ name: ' 01 AI 学习 ' }) }
     expect(await nameMergedFolder(topics, ['a', 'b'], client, 'zh_CN')).toBe('AI 学习')
+  })
+})
+
+describe('nameNewTopics', () => {
+  const clusters = [
+    { key: '语音合成', title: '语音合成', bookmarkIds: ['1', '2', '3'] },
+    { key: '数据竞赛', title: '数据竞赛', bookmarkIds: ['4', '5', '6'] },
+  ]
+
+  it('每个簇都拿到模型给的名字', async () => {
+    const client = {
+      complete: vi.fn().mockResolvedValue({
+        names: [{ key: '语音合成', name: '语音与音频' }, { key: '数据竞赛', name: '竞赛与数据集' }],
+      }),
+    }
+    const names = await nameNewTopics(clusters, ['01 GitHub'], client, 'zh_CN')
+    expect(names.get('语音合成')).toBe('语音与音频')
+    expect(names.get('数据竞赛')).toBe('竞赛与数据集')
+  })
+
+  it('模型漏了某个簇，那个簇退回自己的主题名', async () => {
+    const client = { complete: vi.fn().mockResolvedValue({ names: [{ key: '语音合成', name: '语音与音频' }] }) }
+    const names = await nameNewTopics(clusters, [], client, 'zh_CN')
+    expect(names.get('数据竞赛')).toBe('数据竞赛')
+  })
+
+  it('整个调用失败时全部退回主题名，不抛出——一次起名失败不该毁掉整次分析', async () => {
+    const client = { complete: vi.fn().mockRejectedValue(new Error('boom')) }
+    const names = await nameNewTopics(clusters, [], client, 'zh_CN')
+    expect(names.get('语音合成')).toBe('语音合成')
+    expect(names.get('数据竞赛')).toBe('数据竞赛')
+  })
+
+  it('模型给的名字撞上已有目录名时退回主题名——新目录绝不能与已有目录重名', async () => {
+    const client = { complete: vi.fn().mockResolvedValue({ names: [{ key: '语音合成', name: '01 GitHub' }] }) }
+    const names = await nameNewTopics(clusters, ['01 GitHub'], client, 'zh_CN')
+    expect(names.get('语音合成')).toBe('语音合成')
+  })
+
+  it('两个簇拿到同一个名字时，后一个退回自己的主题名', async () => {
+    const client = {
+      complete: vi.fn().mockResolvedValue({
+        names: [{ key: '语音合成', name: '通用' }, { key: '数据竞赛', name: '通用' }],
+      }),
+    }
+    const names = await nameNewTopics(clusters, [], client, 'zh_CN')
+    expect(names.get('语音合成')).toBe('通用')
+    expect(names.get('数据竞赛')).toBe('数据竞赛')
+  })
+
+  it('剥掉模型带上的编号前缀', async () => {
+    const client = { complete: vi.fn().mockResolvedValue({ names: [{ key: '语音合成', name: '07 语音与音频' }] }) }
+    const names = await nameNewTopics(clusters, [], client, 'zh_CN')
+    expect(names.get('语音合成')).toBe('语音与音频')
+  })
+
+  it('没有簇时一次调用都不发', async () => {
+    const complete = vi.fn()
+    const names = await nameNewTopics([], [], { complete }, 'zh_CN')
+    expect(complete).not.toHaveBeenCalled()
+    expect(names.size).toBe(0)
   })
 })

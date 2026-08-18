@@ -2,11 +2,12 @@ import { normalizeName, stripNumberPrefix } from '@/core/map'
 import { groupFolderTitle, matchDomainGroup } from '@/core/domainGroups'
 import type { Locale } from '@/core/locale'
 import type { BookmarkItem, TagResult } from '@/core/types'
+import type { TopicCluster } from '@/core/newTopics'
 import { MAX_SIBLINGS } from '@/core/tree'
 import { NO_TOPIC } from './tags'
 import type { LlmClient } from './client'
 import { logDuplicateTopics, logFoldersDone, logFoldersFailed } from './logs'
-import { foldersPrompt, mergeNamePrompt } from './prompts'
+import { foldersPrompt, mergeNamePrompt, newFolderNamesPrompt } from './prompts'
 
 export interface TopicCount {
   topic: string
@@ -335,4 +336,72 @@ export async function nameMergedFolder(
     options.onLog?.(String(error), 'warn')
     return null
   }
+}
+
+const NEW_FOLDER_NAMES_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['names'],
+  properties: {
+    names: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['key', 'name'],
+        properties: { key: { type: 'string' }, name: { type: 'string' } },
+      },
+    },
+  },
+}
+
+/**
+ * 给非推翻模式要新建的目录起名。一次调用。
+ *
+ * **每个簇一定拿得到名字**：模型漏了、起了重名、或整个调用失败，都退回簇自己的主题名。
+ * 起名失败不该毁掉整次分析——那批书签宁可进一个名字朴素的目录，也好过留在原地找不到。
+ */
+export async function nameNewTopics(
+  clusters: TopicCluster[],
+  existingTitles: string[],
+  client: LlmClient,
+  locale: Locale,
+  options: { onLog?: (message: string, level: 'info' | 'warn' | 'error') => void } = {},
+): Promise<Map<string, string>> {
+  const names = new Map<string, string>()
+  if (clusters.length === 0) return names
+
+  // 已有目录名与本轮已定的新名字共用一张表：既不能撞已有目录，也不能两个簇同名
+  const taken = new Set(existingTitles.map((t) => normalizeName(stripNumberPrefix(t))))
+  let proposed = new Map<string, string>()
+  try {
+    const prompt = [
+      ...newFolderNamesPrompt(locale, existingTitles),
+      '',
+      locale === 'zh_CN' ? '待命名的主题：' : 'Topics to name:',
+      JSON.stringify(clusters.map((c) => ({ key: c.key, topic: c.title, count: c.bookmarkIds.length })), null, 2),
+    ].join('\n')
+    const response = (await client.complete(prompt, NEW_FOLDER_NAMES_SCHEMA)) as {
+      names?: Array<{ key?: unknown; name?: unknown }>
+    }
+    proposed = new Map(
+      (response.names ?? []).map((n) => [String(n.key ?? ''), String(n.name ?? '')]),
+    )
+  } catch (error) {
+    // 只进开发者控制台，不必双语，与 nameMergedFolder 的失败兜底同一套形态。
+    console.error('[TidyMark] 新目录命名失败：', error)
+    options.onLog?.(String(error), 'warn')
+  }
+
+  for (const cluster of clusters) {
+    const raw = stripNumberPrefix(String(proposed.get(cluster.key) ?? '').trim()).trim()
+    const fallback = cluster.title
+    const candidate = raw === '' ? fallback : raw
+    // 撞名就退回主题名；主题名自己也撞的话只能让它撞——那说明已有目录里
+    // 本来就有一个同名的，而它没被选中，硬改名字只会更难认
+    const chosen = taken.has(normalizeName(candidate)) ? fallback : candidate
+    taken.add(normalizeName(chosen))
+    names.set(cluster.key, chosen)
+  }
+  return names
 }
