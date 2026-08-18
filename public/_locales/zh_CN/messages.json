@@ -775,6 +775,17 @@
       }
     }
   },
+  "logModeAdditive": {
+    "message": "这批书签已经整理过，这次只把书签归进现有目录：$reason$",
+    "placeholders": { "reason": { "content": "$1" } }
+  },
+  "logModeRebuild": {
+    "message": "这批书签还没有成形的结构，这次重新设计整棵目录树：$reason$",
+    "placeholders": { "reason": { "content": "$1" } }
+  },
+  "logModeOverridden": {
+    "message": "按你的选择重新设计整棵目录树，本次不走自动判断。"
+  },
   "logTagsStart": {
     "message": "开始为 $count$ 个书签抽取主题标签",
     "placeholders": {

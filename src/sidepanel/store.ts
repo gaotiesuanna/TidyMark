@@ -345,7 +345,9 @@ export const useStore = create<State>((set, get) => ({
       plan: res.plan,
       accepted: new Set(res.plan.rows.filter((r) => r.confidence >= LOW_CONFIDENCE).map((r) => r.bookmarkId)),
       structureEdits: EMPTY_EDITS,
-      step: nextStepAfterAnalyze(get().settings.rebuildStructure),
+      // 走哪条路由后台判定并记在 plan 上，界面不再自己猜——
+      // 设置里已经没有那个开关了，猜出来的必然是错的
+      step: nextStepAfterAnalyze(res.plan.rebuildStructure),
       busy: null,
       busyKind: null,
     })

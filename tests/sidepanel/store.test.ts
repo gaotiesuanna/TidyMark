@@ -372,4 +372,16 @@ describe('放弃这一轮之后，在途结果不再落地', () => {
     expect(useStore.getState().step).toBe('structure')
     expect(useStore.getState().plan).not.toBeNull()
   })
+
+  it('分析后去哪一步由 plan 说了算，不看设置——模式是后台判的', async () => {
+    vi.mocked(send).mockImplementation((req: { kind: string }) =>
+      req.kind === 'analyze'
+        ? (Promise.resolve({
+            ok: true, kind: 'analyze', plan: { ...makePlan(), rebuildStructure: false },
+          }) as never)
+        : (Promise.resolve({ ok: true }) as never))
+
+    await useStore.getState().analyze()
+    expect(useStore.getState().step).toBe('review')
+  })
 })

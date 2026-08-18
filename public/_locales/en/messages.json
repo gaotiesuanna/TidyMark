@@ -775,6 +775,17 @@
       }
     }
   },
+  "logModeAdditive": {
+    "message": "These bookmarks are already organized — this run only files them into existing folders: $reason$",
+    "placeholders": { "reason": { "content": "$1" } }
+  },
+  "logModeRebuild": {
+    "message": "These bookmarks have no usable structure yet — this run redesigns the whole folder tree: $reason$",
+    "placeholders": { "reason": { "content": "$1" } }
+  },
+  "logModeOverridden": {
+    "message": "Redesigning the whole folder tree as you asked — the automatic judgment is skipped this run."
+  },
   "logTagsStart": {
     "message": "Extracting topic tags for $count$ bookmarks",
     "placeholders": {

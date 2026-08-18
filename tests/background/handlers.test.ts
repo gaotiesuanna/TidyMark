@@ -1,6 +1,6 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import { handle } from '@/background/handlers'
-import { createFakeBookmarks } from '../fakes/fake-bookmarks'
+import { createFakeBookmarks, type TreeSpec } from '../fakes/fake-bookmarks'
 import { createFakeStorage } from '../fakes/fake-storage'
 import { DEFAULT_SETTINGS, loadCache, saveSettings, type Settings } from '@/storage/settings'
 import { currentLocale, setLocale } from '@/i18n'
@@ -8,6 +8,7 @@ import type { LlmClient } from '@/llm/client'
 import type { OrganizePlan } from '@/core/types'
 import type { ProgressEvent } from '@/background/events'
 import { MAX_SIBLINGS } from '@/core/tree'
+import type { OrganizeMode } from '@/core/mode'
 
 const tree = [
   { id: '0', title: '', children: [
@@ -57,12 +58,11 @@ describe('handle', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
     })
-    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: { rows: unknown[] } }
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps) as { plan: { rows: unknown[] } }
     expect(res.plan.rows).toHaveLength(1)
   })
 
@@ -75,12 +75,11 @@ describe('handle', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
     })
-    const analyzed = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: { rows: Array<{ bookmarkId: string }> } }
+    const analyzed = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps) as { plan: { rows: Array<{ bookmarkId: string }> } }
     const res = await handle(
       ports,
       { kind: 'apply', plan: analyzed.plan as never, accepted: ['100'] },
@@ -99,12 +98,11 @@ describe('handle', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
       removeEmptyFolders: true,
       domainGroups: [],
       rewriteGithubTitles: false,
     })
-    const analyzed = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: unknown }
+    const analyzed = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps) as { plan: unknown }
     const res = await handle(
       ports,
       { kind: 'apply', plan: analyzed.plan as never, accepted: ['100'] },
@@ -129,7 +127,6 @@ describe('handle', () => {
     const settings: Settings = {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-d', model: 'deepseek-chat' },
-      rebuildStructure: true,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -156,7 +153,6 @@ describe('handle', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: true,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -170,7 +166,7 @@ describe('handle', () => {
       .mockResolvedValueOnce({ results: [{ bookmark_id: '100', target_category_id: 'tmp:1', confidence: 0.9, reason: 'r' }] })
     const deps = { createClient: () => ({ complete }), now: () => 1 }
 
-    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: { operations: Array<{ type: string }> } }
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps) as { plan: { operations: Array<{ type: string }> } }
     expect(complete).toHaveBeenCalledTimes(3)
     expect(res.plan.operations.some((o) => o.type === 'create_folder')).toBe(true)
   })
@@ -184,7 +180,6 @@ describe('handle', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: true,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -201,7 +196,7 @@ describe('handle', () => {
     })
     const deps = { createClient: () => ({ complete }), now: () => 1 }
 
-    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps)
     expect(classifyPrompts).toHaveLength(1)
     expect(classifyPrompts[0]).not.toContain('topic')
   })
@@ -211,7 +206,6 @@ describe('handle', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: true,
       maxTopFolders: 5,
     })
     const complete = vi.fn()
@@ -220,7 +214,7 @@ describe('handle', () => {
       .mockResolvedValueOnce({ results: [{ bookmark_id: '100', target_category_id: 'tmp:1', confidence: 0.9, reason: 'r' }] })
     const deps = { createClient: () => ({ complete }), now: () => 1 }
 
-    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps)
     const prompts = complete.mock.calls.map((c) => c[0] as string)
     // 上限 5 减去给「其他」留的那一位 = 4
     expect(prompts.some((prompt) => prompt.includes('一级目录不超过 4 个'))).toBe(true)
@@ -231,7 +225,6 @@ describe('handle', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: true,
       maxFolderDepth: 1,
     })
     const complete = vi.fn()
@@ -240,7 +233,7 @@ describe('handle', () => {
       .mockResolvedValueOnce({ results: [{ bookmark_id: '100', target_category_id: 'tmp:1', confidence: 0.9, reason: 'r' }] })
     const deps = { createClient: () => ({ complete }), now: () => 1 }
 
-    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps)
     const prompts = complete.mock.calls.map((c) => c[0] as string)
     expect(prompts.some((prompt) => prompt.includes('children 一律返回空数组'))).toBe(true)
   })
@@ -258,7 +251,6 @@ describe('handle', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: true,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -279,7 +271,7 @@ describe('handle', () => {
     })
     const deps = { createClient: () => ({ complete }), now: () => 1 }
 
-    const first = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as {
+    const first = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps) as {
       plan: { operations: Array<{ type: string; title?: string }> }
     }
     await handle(
@@ -289,7 +281,7 @@ describe('handle', () => {
     )
     expect(fake.structure()).toContain('书签栏/01 前端/站点0')
 
-    const second = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as {
+    const second = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps) as {
       plan: { operations: Array<{ type: string; title?: string }>; rows: unknown[] }
     }
     const created = second.plan.operations
@@ -314,14 +306,13 @@ describe('handle', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: true,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
       // 同上：单书签夹具，这条验的是全局目录设计有没有跑，不是目录该不该建
       enforceMinFolderSize: false,
     })
-    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: OrganizePlan }
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps) as { plan: OrganizePlan }
     const tops = res.plan.candidates.filter((c) => c.path.length === 1).map((c) => c.path[0]!)
     expect(tops).toContain('01 前端框架')
     expect(res.plan.tags[0]!.primaryTopic).toBe('前端框架')
@@ -341,12 +332,11 @@ describe('handle', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: true,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
     })
-    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps)
     expect(res).toMatchObject({ ok: true })
     expect((res as { plan: OrganizePlan }).plan.tags[0]!.primaryTopic).toBe('React 生态')
   })
@@ -367,7 +357,6 @@ describe('handle', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -383,7 +372,7 @@ describe('handle', () => {
       onEvent: (event: ProgressEvent) => events.push(event),
     }
 
-    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps)
 
     // 进度事件按批推进，最后一条覆盖全部书签
     const progress = events.filter((e) => e.message === '' && e.phase === 'classify')
@@ -399,7 +388,6 @@ describe('handle', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -408,7 +396,7 @@ describe('handle', () => {
     const complete = vi.fn().mockRejectedValue(
       Object.assign(new Error('模型接口返回 400'), { retryable: false }),
     )
-    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, {
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, {
       createClient: () => ({ complete }), now: () => 1,
       onEvent: (event: ProgressEvent) => events.push(event),
     })
@@ -434,7 +422,6 @@ describe('handle', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -445,7 +432,7 @@ describe('handle', () => {
       return { results: [] }
     })
 
-    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, {
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, {
       createClient: () => ({ complete }), now: () => 1, batchSize: 1,
       isCancelled: () => cancelled,
     })
@@ -459,7 +446,6 @@ describe('handle', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -471,7 +457,7 @@ describe('handle', () => {
         results: [{ bookmark_id: '100', target_category_id: '10', confidence: 0.9, reason: 'r' }],
       }
     })
-    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, {
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, {
       createClient: () => ({ complete }), now: () => 1, isCancelled: () => cancelled,
     })
     expect(await loadCache(ports)).not.toEqual(new Map())
@@ -483,7 +469,6 @@ describe('handle', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -495,7 +480,7 @@ describe('handle', () => {
     )
     const deps = { createClient: () => ({ complete }), now: () => 1 }
 
-    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps)
     expect(res.ok).toBe(false)
     expect((res as { error: string }).error).toContain('response_format')
   })
@@ -519,7 +504,6 @@ describe('handle', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -538,7 +522,7 @@ describe('handle', () => {
       onEvent: (event: ProgressEvent) => events.push(event),
     }
 
-    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { ok: boolean; plan: OrganizePlan }
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps) as { ok: boolean; plan: OrganizePlan }
     expect(res.ok).toBe(true)
     const startLog = events.find((e) => e.message.includes('正在为它们起名'))
     expect(startLog?.message).toMatch(/^3 /)
@@ -567,7 +551,6 @@ describe('handle', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -591,7 +574,7 @@ describe('handle', () => {
       onEvent: (event: ProgressEvent) => events.push(event),
     }
 
-    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { ok: boolean; plan: OrganizePlan }
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps) as { ok: boolean; plan: OrganizePlan }
     expect(res.ok).toBe(true)
     expect(res.plan.operations.filter((o) => o.type === 'create_folder')).toHaveLength(MAX_SIBLINGS)
     const cappedLog = events.find((e) => e.message.includes('超出同层上限'))
@@ -614,7 +597,6 @@ describe('handle', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -629,7 +611,7 @@ describe('handle', () => {
 
     const res = await handle(
       ports,
-      { kind: 'analyze', scopeRootIds: ['1'] },
+      { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' },
       { ...deps, batchSize: 1 },
     ) as { ok: true; plan: { warnings: string[]; rows: unknown[] } }
 
@@ -731,8 +713,11 @@ function setupAnalyze(urls: Record<string, string>) {
 async function analyzePlan(
   ports: { bookmarks: unknown; storage: unknown },
   deps: unknown,
+  // 用例要验的是某条路上的行为，模式必须钉死：让它跟着自动判断走，
+  // 会把「阈值调了一下」变成一堆无关用例的红叉
+  modeOverride: OrganizeMode,
 ): Promise<OrganizePlan> {
-  const res = await handle(ports as never, { kind: 'analyze', scopeRootIds: ['1'] }, deps as never)
+  const res = await handle(ports as never, { kind: 'analyze', scopeRootIds: ['1'], modeOverride }, deps as never)
   if (!res.ok || res.kind !== 'analyze') throw new Error(`analyze 应当成功：${JSON.stringify(res)}`)
   return res.plan
 }
@@ -750,10 +735,9 @@ describe('analyze 的域名聚合', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: true,
       domainGroups: ['github'],
     })
-    await analyzePlan(ports, deps)
+    await analyzePlan(ports, deps, 'rebuild')
 
     expect(classifyPrompts.length).toBeGreaterThan(0)
     for (const prompt of classifyPrompts) {
@@ -768,10 +752,9 @@ describe('analyze 的域名聚合', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: true,
       domainGroups: ['github'],
     })
-    const plan = await analyzePlan(ports, deps)
+    const plan = await analyzePlan(ports, deps, 'rebuild')
     expect(plan.rows).toHaveLength(3)
     expect(plan.rows.every((r) => r.confidence === 1)).toBe(true)
     expect(plan.rows.every((r) => r.toPath[0]!.endsWith('GitHub'))).toBe(true)
@@ -782,9 +765,8 @@ describe('analyze 的域名聚合', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: true,
     })
-    const plan = await analyzePlan(ports, deps)
+    const plan = await analyzePlan(ports, deps, 'rebuild')
     expect(plan.tags.map((t) => t.bookmarkId).sort()).toEqual(['n0', 'n1'])
   })
 
@@ -793,9 +775,8 @@ describe('analyze 的域名聚合', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
     })
-    const plan = await analyzePlan(ports, deps)
+    const plan = await analyzePlan(ports, deps, 'additive')
     expect(plan.tags).toEqual([])
   })
 })
@@ -806,10 +787,9 @@ describe('analyze 对聚合组做细分抽取', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: true,
       domainGroups: ['github'],
     })
-    await analyzePlan(ports, deps)
+    await analyzePlan(ports, deps, 'rebuild')
     const prompts = (deps.createClient().complete as ReturnType<typeof vi.fn>).mock.calls
       .map((call) => call[0] as string)
     expect(prompts.some((p) => p.includes('功能域'))).toBe(true)
@@ -820,9 +800,8 @@ describe('analyze 对聚合组做细分抽取', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: true,
     })
-    await analyzePlan(ports, deps)
+    await analyzePlan(ports, deps, 'rebuild')
     const prompts = (deps.createClient().complete as ReturnType<typeof vi.fn>).mock.calls
       .map((call) => call[0] as string)
     expect(prompts.some((p) => p.includes('功能域'))).toBe(false)
@@ -835,9 +814,8 @@ describe('analyze 统一 GitHub 书签标题', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
     })
-    const plan = await analyzePlan(ports, deps)
+    const plan = await analyzePlan(ports, deps, 'additive')
     expect(plan.operations.some((o) => o.type === 'rename_bookmark')).toBe(false)
   })
 
@@ -849,10 +827,9 @@ describe('analyze 统一 GitHub 书签标题', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
       rewriteGithubTitles: true,
     })
-    const plan = await analyzePlan(ports, deps)
+    const plan = await analyzePlan(ports, deps, 'additive')
     const renames = plan.operations.flatMap((o) => (o.type === 'rename_bookmark' ? [o] : []))
     expect(renames).toEqual([
       { type: 'rename_bookmark', bookmarkId: 'g0', oldTitle: '书签 g0', newTitle: 'opencode (sst)' },
@@ -912,7 +889,7 @@ function mergeClient(nameResponse: () => Promise<{ name: string }>) {
 
 async function analyzeMerge(
   scopeRootIds: string[],
-  rebuildStructure: boolean,
+  modeOverride: OrganizeMode,
   nameResponse: () => Promise<{ name: string }> = async () => ({ name: 'AI 学习' }),
 ): Promise<OrganizePlan> {
   const fake = createFakeBookmarks(mergeTree)
@@ -920,18 +897,18 @@ async function analyzeMerge(
   await saveSettings(ports, {
     ...DEFAULT_SETTINGS,
     llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-    rebuildStructure, removeEmptyFolders: false, domainGroups: [], rewriteGithubTitles: false,
+    removeEmptyFolders: false, domainGroups: [], rewriteGithubTitles: false,
     // 合并模式那组用例验的是容器目录的挂载关系，夹具书签数撑不起目录下限
     enforceMinFolderSize: false,
   })
   const deps = { createClient: () => ({ complete: mergeClient(nameResponse) }), now: () => 1 }
-  const res = await handle(ports, { kind: 'analyze', scopeRootIds }, deps) as { plan: OrganizePlan }
+  const res = await handle(ports, { kind: 'analyze', scopeRootIds, modeOverride }, deps) as { plan: OrganizePlan }
   return res.plan
 }
 
 describe('analyze 合并模式', () => {
   it('勾选多个平级目录时新建合并根，名字来自模型', async () => {
-    const plan = await analyzeMerge(['10', '11'], true)
+    const plan = await analyzeMerge(['10', '11'], 'rebuild')
     expect(plan.mergeRoot).toMatchObject({ title: 'AI 学习' })
     const create = plan.operations.find(
       (o) => o.type === 'create_folder' && o.temporaryId === plan.mergeRoot!.temporaryId,
@@ -940,7 +917,7 @@ describe('analyze 合并模式', () => {
   })
 
   it('一级目录挂在合并根下，不再直接挂书签栏', async () => {
-    const plan = await analyzeMerge(['10', '11'], true)
+    const plan = await analyzeMerge(['10', '11'], 'rebuild')
     const others = plan.operations.filter(
       (o) => o.type === 'create_folder' && o.temporaryId !== plan.mergeRoot!.temporaryId,
     )
@@ -951,22 +928,22 @@ describe('analyze 合并模式', () => {
   })
 
   it('只勾选一个目录时不合并', async () => {
-    expect((await analyzeMerge(['10'], true)).mergeRoot).toBeNull()
+    expect((await analyzeMerge(['10'], 'rebuild')).mergeRoot).toBeNull()
   })
 
   it('勾中永久目录时不合并', async () => {
-    expect((await analyzeMerge(['1', '10', '11'], true)).mergeRoot).toBeNull()
+    expect((await analyzeMerge(['1', '10', '11'], 'rebuild')).mergeRoot).toBeNull()
   })
 
   // 上一条里 '10'、'11' 是 '1' 的后代，findScopeRoots 只会返回 '1' 一项，
   // roots.length >= 2 自己就把结果定死了，hasPermanent 那半边条件根本没被问到。
   // 「书签栏 + 其他书签」是互不包含的两个永久目录，只有这条能盯住那道闸。
   it('勾中两个永久目录时不合并', async () => {
-    expect((await analyzeMerge(['1', '2'], true)).mergeRoot).toBeNull()
+    expect((await analyzeMerge(['1', '2'], 'rebuild')).mergeRoot).toBeNull()
   })
 
   it('跨父目录合并时容器落在树序第一个根的父目录下', async () => {
-    const plan = await analyzeMerge(['20', '10'], true)
+    const plan = await analyzeMerge(['20', '10'], 'rebuild')
     const create = plan.operations.find(
       (o) => o.type === 'create_folder' && o.temporaryId === plan.mergeRoot!.temporaryId,
     )
@@ -976,18 +953,18 @@ describe('analyze 合并模式', () => {
   })
 
   it('推翻重建关闭时不合并', async () => {
-    expect((await analyzeMerge(['10', '11'], false)).mergeRoot).toBeNull()
+    expect((await analyzeMerge(['10', '11'], 'additive')).mergeRoot).toBeNull()
   })
 
   it('命名失败时用源目录名拼接兜底', async () => {
-    const plan = await analyzeMerge(['10', '11'], true, async () => { throw new Error('boom') })
+    const plan = await analyzeMerge(['10', '11'], 'rebuild', async () => { throw new Error('boom') })
     expect(plan.mergeRoot!.title).toBe('NiceG + b_llm')
   })
 
   // 反复整理同一批目录时源目录名上会积编号，兜底名字不去掉的话
   // 会真建出一个叫「NiceG + 01 前端」的目录，下一轮再拼一层
   it('兜底拼接前先去掉源目录名上的编号前缀', async () => {
-    const plan = await analyzeMerge(['10', '13'], true, async () => { throw new Error('boom') })
+    const plan = await analyzeMerge(['10', '13'], 'rebuild', async () => { throw new Error('boom') })
     expect(plan.mergeRoot!.title).toBe('NiceG + 前端')
   })
 })
@@ -1039,7 +1016,6 @@ describe('推翻模式按绝对层级告知模型', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: true,
       ...settings,
     })
     const complete = vi.fn()
@@ -1050,7 +1026,11 @@ describe('推翻模式按绝对层级告知模型', () => {
       ]})
       .mockResolvedValueOnce({ folders: [{ title: '前端', topics: ['前端'], children: [] }] })
       .mockResolvedValueOnce({ results: [] })
-    await handle(ports, { kind: 'analyze', scopeRootIds }, { createClient: () => ({ complete }), now: () => 1 })
+    await handle(
+      ports,
+      { kind: 'analyze', scopeRootIds, modeOverride: 'rebuild' },
+      { createClient: () => ({ complete }), now: () => 1 },
+    )
     return complete.mock.calls.map((c) => c[0] as string).join('\n')
   }
 
@@ -1108,7 +1088,6 @@ describe('handle analyze 目录下限', () => {
   const rebuild = (overrides: Partial<Settings> = {}): Settings => ({
     ...DEFAULT_SETTINGS,
     llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-    rebuildStructure: true,
     ...overrides,
   })
 
@@ -1120,7 +1099,7 @@ describe('handle analyze 目录下限', () => {
     const { ports, deps } = setupSix(complete)
     await saveSettings(ports, rebuild({ minFolderSize: 4 }))
 
-    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps)
     const prompts = complete.mock.calls.map((c) => c[0] as string)
     expect(prompts.some((prompt) => prompt.includes('不到 4 个书签'))).toBe(true)
   })
@@ -1133,7 +1112,7 @@ describe('handle analyze 目录下限', () => {
     const { ports, deps } = setupSix(complete)
     await saveSettings(ports, rebuild({ enforceMinFolderSize: false }))
 
-    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps)
     const prompts = complete.mock.calls.map((c) => c[0] as string)
     expect(prompts.some((prompt) => prompt.includes('个书签的目录'))).toBe(false)
   })
@@ -1160,7 +1139,7 @@ describe('handle analyze 目录下限', () => {
     const { ports, deps } = setupSix(complete)
     await saveSettings(ports, rebuild({ minFolderSize: 3 }))
 
-    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: OrganizePlan }
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps) as { plan: OrganizePlan }
     const created = res.plan.operations.flatMap((o) => (o.type === 'create_folder' ? [o.title] : []))
     expect(created.some((title) => title.includes('React'))).toBe(true)
     expect(created.some((title) => title.includes('Vue'))).toBe(false)
@@ -1190,7 +1169,7 @@ describe('handle analyze 目录下限', () => {
     const { ports, deps } = setupSix(complete)
     await saveSettings(ports, rebuild({ enforceMinFolderSize: false }))
 
-    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: OrganizePlan }
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps) as { plan: OrganizePlan }
     const created = res.plan.operations.flatMap((o) => (o.type === 'create_folder' ? [o.title] : []))
     expect(created.some((title) => title.includes('Vue'))).toBe(true)
   })
@@ -1230,7 +1209,6 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -1250,7 +1228,7 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
     const { ports, deps } = setupHomeless(complete)
     await saveNonRebuild(ports)
 
-    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: OrganizePlan }
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps) as { plan: OrganizePlan }
     const created = res.plan.operations.filter((o) => o.type === 'create_folder')
     expect(created.map((o) => o.title)).toContain('语音与音频')
     expect(res.plan.rows).toHaveLength(3)
@@ -1266,7 +1244,7 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
     const { ports, deps } = setupHomeless(complete)
     await saveNonRebuild(ports)
 
-    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: OrganizePlan }
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps) as { plan: OrganizePlan }
     expect(res.plan.operations.filter((o) => o.type === 'create_folder')).toHaveLength(0)
     // 起名那一次调用根本不该发出去
     expect(complete).toHaveBeenCalledTimes(1)
@@ -1283,7 +1261,7 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
     const { ports, deps } = setupHomeless(complete)
     await saveNonRebuild(ports)
 
-    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: OrganizePlan }
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps) as { plan: OrganizePlan }
     expect(res.plan.operations.filter((o) => o.type === 'rename_folder')).toEqual([])
   })
 
@@ -1298,7 +1276,7 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
     const { ports, deps } = setupHomeless(complete)
     await saveNonRebuild(ports)
 
-    const first = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { ok: boolean; plan: OrganizePlan }
+    const first = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps) as { ok: boolean; plan: OrganizePlan }
     expect(first.ok).toBe(true)
     await handle(ports, {
       kind: 'apply', plan: first.plan as never, accepted: first.plan.rows.map((r) => r.bookmarkId),
@@ -1316,7 +1294,7 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
         })),
       }
     })
-    const second = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { ok: boolean; plan: OrganizePlan }
+    const second = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps) as { ok: boolean; plan: OrganizePlan }
     expect(second.ok).toBe(true)
     expect(second.plan.operations.filter((o) => o.type === 'create_folder')).toEqual([])
     expect(second.plan.operations.filter((o) => o.type === 'rename_folder')).toEqual([])
@@ -1347,14 +1325,14 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
     const { ports, deps } = setupHomeless(complete)
     await saveNonRebuild(ports)
 
-    const first = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { ok: boolean; plan: OrganizePlan }
+    const first = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps) as { ok: boolean; plan: OrganizePlan }
     expect(first.ok).toBe(true)
     expect(first.plan.operations.filter((o) => o.type === 'create_folder')).toHaveLength(1)
     await handle(ports, {
       kind: 'apply', plan: first.plan as never, accepted: first.plan.rows.map((r) => r.bookmarkId),
     }, deps)
 
-    const second = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { ok: boolean; plan: OrganizePlan }
+    const second = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps) as { ok: boolean; plan: OrganizePlan }
     expect(second.ok).toBe(true)
     expect(second.plan.operations.filter((o) => o.type === 'create_folder')).toEqual([])
     expect(second.plan.operations.filter((o) => o.type === 'rename_folder')).toEqual([])
@@ -1363,7 +1341,7 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
       kind: 'apply', plan: second.plan as never, accepted: second.plan.rows.map((r) => r.bookmarkId),
     }, deps)
 
-    const third = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { ok: boolean; plan: OrganizePlan }
+    const third = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps) as { ok: boolean; plan: OrganizePlan }
     expect(third.ok).toBe(true)
     expect(third.plan.operations.filter((o) => o.type === 'create_folder')).toEqual([])
     expect(third.plan.operations.filter((o) => o.type === 'rename_folder')).toEqual([])
@@ -1405,13 +1383,12 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
       removeEmptyFolders: true,
       domainGroups: [],
       rewriteGithubTitles: false,
     })
 
-    const analyzed = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { ok: boolean; plan: OrganizePlan }
+    const analyzed = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps) as { ok: boolean; plan: OrganizePlan }
     expect(analyzed.ok).toBe(true)
     const res = await handle(ports, {
       kind: 'apply', plan: analyzed.plan as never, accepted: analyzed.plan.rows.map((r) => r.bookmarkId),
@@ -1435,7 +1412,7 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
     const { ports, deps } = setupHomeless(complete)
     await saveNonRebuild(ports)
 
-    const first = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { ok: boolean; plan: OrganizePlan }
+    const first = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps) as { ok: boolean; plan: OrganizePlan }
     expect(first.ok).toBe(true)
     await handle(ports, {
       kind: 'apply', plan: first.plan as never, accepted: first.plan.rows.map((r) => r.bookmarkId),
@@ -1447,7 +1424,7 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
         bookmark_id: id, target_category_id: null, confidence: 0.2, reason: '无合适目录', topic: '语音合成',
       })),
     }))
-    const second = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, {
+    const second = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, {
       ...deps, onEvent: (event: ProgressEvent) => events.push(event),
     }) as { ok: boolean; plan: OrganizePlan }
 
@@ -1484,14 +1461,13 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
     })
     const events: ProgressEvent[] = []
 
-    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, {
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, {
       ...deps, onEvent: (event: ProgressEvent) => events.push(event),
     }) as { ok: boolean; plan: OrganizePlan }
 
@@ -1516,14 +1492,13 @@ describe('analyze 非推翻模式：级联勾选（review C2）', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
     })
     // 用 tree 夹具：书签栏(1) 下有 react(10)、杂项(11)——级联勾选会把三个 id
     // 全部送过来，先勾的是根（1），子目录顺序不定
-    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1', '10', '11'] }, deps) as {
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1', '10', '11'], modeOverride: 'additive' }, deps) as {
       ok: boolean
       plan?: OrganizePlan
       error?: string
@@ -1575,13 +1550,12 @@ describe('analyze 非推翻模式：多个范围根（review I2）', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
     })
 
-    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1', '2'] }, deps) as { ok: boolean; plan: OrganizePlan }
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1', '2'], modeOverride: 'additive' }, deps) as { ok: boolean; plan: OrganizePlan }
     expect(res.ok).toBe(true)
     expect(namePrompts).toHaveLength(1)
     // 「其他书签」下的「语音合成」目录名出现在了起名提示词里
@@ -1602,13 +1576,12 @@ describe('analyze 非推翻模式：多个范围根（review I2）', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
     })
     const events: ProgressEvent[] = []
-    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1', '2'] }, {
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1', '2'], modeOverride: 'additive' }, {
       ...deps, onEvent: (event: ProgressEvent) => events.push(event),
     }) as { ok: boolean; plan: OrganizePlan }
 
@@ -1652,15 +1625,112 @@ describe('analyze 非推翻模式：多个范围根（review I2）', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      rebuildStructure: false,
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
     })
 
-    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1', '2'] }, deps) as { ok: boolean; plan: OrganizePlan }
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1', '2'], modeOverride: 'additive' }, deps) as { ok: boolean; plan: OrganizePlan }
     expect(res.ok).toBe(true)
     expect(res.plan.operations.filter((o) => o.type === 'create_folder')).toHaveLength(1)
     expect(res.plan.rows).toHaveLength(3)
+  })
+})
+
+/** 按提示词分流的 client：推翻模式要经过抽标签、设计目录、分类三轮。 */
+function modeClient() {
+  return vi.fn(async (prompt: string) => {
+    const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+    if (prompt.includes('候选目录')) {
+      const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)]
+      return { results: bookmarkIds.map((id) => (
+        { bookmark_id: id, target_category_id: ids[0]?.[1] ?? null, confidence: 0.9, reason: 'r' }
+      ))}
+    }
+    if (prompt.includes('标签清单')) {
+      return { folders: [{ title: '前端', topics: ['前端'], children: [] }] }
+    }
+    return { results: bookmarkIds.map((id) => (
+      { bookmark_id: id, primary_topic: '前端', secondary_topic: null }
+    ))}
+  })
+}
+
+async function analyzeWith(tree: TreeSpec[], modeOverride?: OrganizeMode): Promise<OrganizePlan> {
+  const fake = createFakeBookmarks(tree)
+  const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+  await saveSettings(ports, {
+    ...DEFAULT_SETTINGS,
+    llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+    removeEmptyFolders: false,
+    enforceMinFolderSize: false,
+  })
+  const deps = { createClient: () => ({ complete: modeClient() }), now: () => 1 }
+  // modeOverride 是可选字段，缺省与显式传 undefined 在这里等价（tsconfig 没开
+  // exactOptionalPropertyTypes），直接传下去即可
+  const res = await handle(
+    ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride }, deps,
+  ) as { plan: OrganizePlan }
+  return res.plan
+}
+
+/** 已整理过的样子：两个带编号的目录，各装 3 条。 */
+const tidyTree: TreeSpec[] = [
+  { id: '0', title: '', children: [
+    { id: '1', title: '书签栏', children: [
+      { id: '10', title: '01 前端', children: Array.from({ length: 3 }, (_, i) => (
+        { id: `a${i}`, title: `书签 a${i}`, url: `https://a${i}.dev` }
+      )) },
+      { id: '11', title: '02 后端', children: Array.from({ length: 3 }, (_, i) => (
+        { id: `b${i}`, title: `书签 b${i}`, url: `https://b${i}.dev` }
+      )) },
+    ]},
+  ]},
+]
+
+/** 一团乱麻的样子：书签全散在书签栏底下，只有一个装了一条的目录。 */
+const messyTree: TreeSpec[] = [
+  { id: '0', title: '', children: [
+    { id: '1', title: '书签栏', children: [
+      ...Array.from({ length: 5 }, (_, i) => (
+        { id: `l${i}`, title: `书签 l${i}`, url: `https://l${i}.dev` }
+      )),
+      { id: '10', title: '待归档', children: [
+        { id: 'x0', title: '书签 x0', url: 'https://x0.dev' },
+      ]},
+    ]},
+  ]},
+]
+
+describe('analyze 自己判断走哪条路', () => {
+  it('已整理过的书签库走归入现有：plan 记的是非推翻模式', async () => {
+    const plan = await analyzeWith(tidyTree)
+    expect(plan.rebuildStructure).toBe(false)
+  })
+
+  it('一团乱麻走重新设计：plan 记的是推翻模式', async () => {
+    const plan = await analyzeWith(messyTree)
+    expect(plan.rebuildStructure).toBe(true)
+  })
+
+  it('用户推翻自动判断时以他为准', async () => {
+    const plan = await analyzeWith(tidyTree, 'rebuild')
+    expect(plan.rebuildStructure).toBe(true)
+  })
+
+  it('判断理由写进日志，用户看得见凭什么这么判', async () => {
+    const fake = createFakeBookmarks(tidyTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+    })
+    const events: ProgressEvent[] = []
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, {
+      createClient: () => ({ complete: modeClient() }), now: () => 1, onEvent: (e) => events.push(e),
+    })
+
+    const line = events.find((e) => e.message.includes('编号前缀'))
+    expect(line).toBeDefined()
   })
 })

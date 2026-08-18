@@ -5,11 +5,22 @@ import type { BookmarkNode } from '@/core/ports'
 import type { Settings } from '@/storage/settings'
 import type { ExportNode } from '@/core/export'
 import type { ImportResult } from '@/engine/importTree'
+import type { OrganizeMode } from '@/core/mode'
 
 export type Request =
   | { kind: 'get_tree' }
   | { kind: 'scan'; scopeRootIds: string[] }
-  | { kind: 'analyze'; scopeRootIds: string[] }
+  | {
+      kind: 'analyze'
+      scopeRootIds: string[]
+      /**
+       * 用户在偏好页推翻了自动判断时才带上；缺省表示由后台按这次扫描的结果自己判。
+       *
+       * 不进 Settings：存下来就等于把删掉的开关偷偷留着，一次推翻只对这一次整理生效
+       * （见 issues/14-mode-detection.md §5）。
+       */
+      modeOverride?: OrganizeMode
+    }
   | { kind: 'apply'; plan: OrganizePlan; accepted: string[] }
   | { kind: 'undo' }
   | { kind: 'get_settings' }

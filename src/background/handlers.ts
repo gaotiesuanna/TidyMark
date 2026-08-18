@@ -4,6 +4,7 @@ import type { Locale } from '@/core/locale'
 import { buildPlan, type NewFolderSpec, type RenameFolderSpec } from '@/core/plan'
 import { pruneSmallFolders } from '@/core/prune'
 import { findScopeRoots, scanTree } from '@/core/scan'
+import { detectMode } from '@/core/mode'
 import { planTitleRewrites } from '@/core/titles'
 import { buildCategoryTree } from '@/core/tree'
 import { clusterHomeless, dropAlreadyGrouped, planNewFolders, MIN_NEW_FOLDER_SIZE } from '@/core/newTopics'
@@ -81,6 +82,14 @@ export async function handle(
         // 直接取 scopeRootIds[0] 拿到的是用户的点击顺序，先点子目录时甚至不是真正的根
         const roots = findScopeRoots(tree, request.scopeRootIds)
 
+        // 走哪条路由产品自己判，不推给用户拨开关（见 issues/14-mode-detection.md）。
+        // 判断只看这次扫描的结果，与设置无关；用户在偏好页推翻时才带 modeOverride 过来。
+        const decision = detectMode(scan, locale)
+        const rebuild = (request.modeOverride ?? decision.mode) === 'rebuild'
+        log('scan', request.modeOverride !== undefined
+          ? t('logModeOverridden')
+          : t(decision.mode === 'rebuild' ? 'logModeRebuild' : 'logModeAdditive', decision.reason))
+
         const client = createClient(settings.llm, locale)
         // 候选目录要排除的是「范围根自己」，不是勾选界面级联勾上的整个 id 集合——
         // 勾书签栏会把它所有子目录的 id 也塞进 scopeRootIds，照单排除就是排除了一切，
@@ -93,7 +102,7 @@ export async function handle(
         let tags: TagResult[] = []
         let planMergeRoot: NonNullable<OrganizePlan['mergeRoot']> | undefined
 
-        if (settings.rebuildStructure) {
+        if (rebuild) {
           const rootId = roots[0]?.id
           if (rootId === undefined) return { ok: false, error: t('errNoScope') }
           // 勾中「书签栏」这类永久目录表达的是「整理这里面」，不是「把这两个并起来」；
@@ -215,7 +224,7 @@ export async function handle(
           isCancelled,
           locale,
           model: settings.llm.model,
-          includeTopicRule: !settings.rebuildStructure,
+          includeTopicRule: !rebuild,
         })
         let classifications = [...pinned, ...llmResults]
         // 已经跑完的批次仍然写进缓存，重来时不必再花一次钱
@@ -236,7 +245,7 @@ export async function handle(
 
         // 非推翻模式补上「新主题无处可去」这一块：规则定量、模型只负责起名。
         // 推翻模式不走这里——那条路的候选本来就是刚设计出来的，不存在放不进去。
-        if (!settings.rebuildStructure) {
+        if (!rebuild) {
           const rootIds = new Set(roots.map((r) => r.id))
           const allClusters = clusterHomeless(classifications)
           // 「已聚齐」这道幂等性闸赶在起名之前生效：命名要花一次模型请求，不该为
@@ -306,7 +315,7 @@ export async function handle(
             : []
         // 目录下限的最后一道：前两道只能按标签数预估，书签最终落在哪个目录是刚才那步定的。
         // 只在推翻重建模式下做——非推翻模式的候选目录全是用户自己的，一个都不该撤。
-        if (settings.rebuildStructure && settings.enforceMinFolderSize) {
+        if (rebuild && settings.enforceMinFolderSize) {
           const pruned = pruneSmallFolders({
             candidates, newFolders, classifications, locale,
             minFolderSize: settings.minFolderSize,
@@ -331,7 +340,7 @@ export async function handle(
           id: `plan-${now()}`,
           createdAt: now(),
           scopeRootIds: request.scopeRootIds,
-          rebuildStructure: settings.rebuildStructure,
+          rebuildStructure: rebuild,
           items: scan.bookmarks,
           candidates,
           classifications,
