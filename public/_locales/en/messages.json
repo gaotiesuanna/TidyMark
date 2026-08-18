@@ -859,6 +859,36 @@
       }
     }
   },
+  "logNewFoldersStart": {
+    "message": "$count$ bookmarks fit no existing folder; naming new folders",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "logNewFoldersDone": {
+    "message": "Created $folders$ folders holding $bookmarks$ bookmarks",
+    "placeholders": {
+      "folders": {
+        "content": "$1"
+      },
+      "bookmarks": {
+        "content": "$2"
+      }
+    }
+  },
+  "logNewFoldersNone": {
+    "message": "$count$ bookmarks fit no existing folder, but no topic reached $min$; leaving them in place",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "min": {
+        "content": "$2"
+      }
+    }
+  },
   "logTitleRewrites": {
     "message": "$count$ GitHub bookmark titles will be normalized",
     "placeholders": {

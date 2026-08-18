@@ -6,6 +6,7 @@ import { pruneSmallFolders } from '@/core/prune'
 import { findScopeRoots, scanTree } from '@/core/scan'
 import { planTitleRewrites } from '@/core/titles'
 import { buildCategoryTree } from '@/core/tree'
+import { clusterHomeless, planNewFolders, MIN_NEW_FOLDER_SIZE } from '@/core/newTopics'
 import type { Ports } from '@/core/ports'
 import type { Classification, OrganizePlan, TagResult } from '@/core/types'
 import { applyPlan } from '@/engine/apply'
@@ -13,7 +14,7 @@ import { loadSnapshot } from '@/engine/snapshot'
 import { undoLast } from '@/engine/undo'
 import { createLlmClient, type LlmClient, type LlmConfig } from '@/llm/client'
 import { classifyBookmarks } from '@/llm/classify'
-import { collectTopics, designTagFolders, nameMergedFolder } from '@/llm/folders'
+import { collectTopics, designTagFolders, nameMergedFolder, nameNewTopics } from '@/llm/folders'
 import { extractTags, refineGroupTags } from '@/llm/tags'
 import { DEFAULT_SETTINGS, loadCache, loadSettings, saveCache, saveSettings } from '@/storage/settings'
 import { findBookmarksBar } from '@/core/import'
@@ -212,6 +213,38 @@ export async function handle(
         // 已经跑完的批次仍然写进缓存，重来时不必再花一次钱
         await saveCache(ports, cache)
         if (isCancelled()) return CANCELLED
+
+        // 非推翻模式补上「新主题无处可去」这一块：规则定量、模型只负责起名。
+        // 推翻模式不走这里——那条路的候选本来就是刚设计出来的，不存在放不进去。
+        if (!settings.rebuildStructure) {
+          const clusters = clusterHomeless(classifications)
+          const homelessCount = classifications.filter((c) => c.targetCategoryId === null).length
+          if (clusters.length > 0) {
+            log('tree', t('logNewFoldersStart', String(homelessCount)))
+            const rootId = roots[0]?.id
+            if (rootId === undefined) return { ok: false, error: t('errNoScope') }
+            const names = await nameNewTopics(
+              clusters,
+              // 只给范围根的直接子目录，与 planNewFolders 判断编号习惯时看的是同一批
+              scan.folders.filter((f) => f.parentId === rootId).map((f) => f.title),
+              client, locale,
+              { onLog: (message, level) => log('tree', message, level) },
+            )
+            if (isCancelled()) return CANCELLED
+            const added = planNewFolders({
+              clusters, names, rootId, folders: scan.folders, classifications,
+            })
+            newFolders = added.newFolders
+            candidates = [...candidates, ...added.candidates]
+            classifications = added.classifications
+            const placed = added.newFolders.length === 0
+              ? 0
+              : clusters.slice(0, added.newFolders.length).reduce((sum, c) => sum + c.bookmarkIds.length, 0)
+            log('tree', t('logNewFoldersDone', String(added.newFolders.length), String(placed)))
+          } else if (homelessCount > 0) {
+            log('tree', t('logNewFoldersNone', String(homelessCount), String(MIN_NEW_FOLDER_SIZE)))
+          }
+        }
 
         // source === 'none' 只在请求失败或模型漏返回时出现——模型判定"无合适目录"
         // 走的是 source === 'llm' + targetCategoryId === null 这条路。

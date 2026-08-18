@@ -859,6 +859,36 @@
       }
     }
   },
+  "logNewFoldersStart": {
+    "message": "$count$ 本书签放不进已有目录，正在为它们起名",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "logNewFoldersDone": {
+    "message": "新建 $folders$ 个目录，收进 $bookmarks$ 本书签",
+    "placeholders": {
+      "folders": {
+        "content": "$1"
+      },
+      "bookmarks": {
+        "content": "$2"
+      }
+    }
+  },
+  "logNewFoldersNone": {
+    "message": "$count$ 本书签放不进已有目录，但没有任何主题攒够 $min$ 本，保持原位",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "min": {
+        "content": "$2"
+      }
+    }
+  },
   "logTitleRewrites": {
     "message": "$count$ 个 GitHub 书签的标题会被统一",
     "placeholders": {

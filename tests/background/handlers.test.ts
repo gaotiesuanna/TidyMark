@@ -1065,3 +1065,87 @@ describe('handle analyze 目录下限', () => {
     expect(created.some((title) => title.includes('Vue'))).toBe(true)
   })
 })
+
+describe('analyze 非推翻模式：新主题无处可去', () => {
+  // 已有 react、杂项两个目录，三本关于「语音合成」的书签哪个都放不进去，
+  // 模型分类时把它们的 target_category_id 判成 null，同时带回同一个 topic
+  const homelessTree = [
+    { id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '10', title: 'react', children: [] },
+        { id: '11', title: '杂项', children: [
+          { id: '100', title: '语音合成教程 A', url: 'https://a.dev' },
+          { id: '101', title: '语音合成教程 B', url: 'https://b.dev' },
+          { id: '102', title: '语音合成教程 C', url: 'https://c.dev' },
+        ]},
+      ]},
+    ]},
+  ]
+
+  function setupHomeless(complete: LlmClient['complete']) {
+    const fake = createFakeBookmarks(homelessTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    return { fake, ports, deps: { createClient: () => ({ complete }), now: () => 1 } }
+  }
+
+  async function saveNonRebuild(ports: ReturnType<typeof setupHomeless>['ports']): Promise<void> {
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: false,
+      removeEmptyFolders: false,
+      domainGroups: [],
+      rewriteGithubTitles: false,
+    })
+  }
+
+  it('非推翻模式：分不进已有目录的书签攒够数就建新目录', async () => {
+    const complete = vi.fn()
+      .mockResolvedValueOnce({
+        results: [
+          { bookmark_id: '100', target_category_id: null, confidence: 0.2, reason: '无合适目录', topic: '语音合成' },
+          { bookmark_id: '101', target_category_id: null, confidence: 0.2, reason: '无合适目录', topic: '语音合成' },
+          { bookmark_id: '102', target_category_id: null, confidence: 0.2, reason: '无合适目录', topic: '语音合成' },
+        ],
+      })
+      .mockResolvedValueOnce({ names: [{ key: '语音合成', name: '语音与音频' }] })
+    const { ports, deps } = setupHomeless(complete)
+    await saveNonRebuild(ports)
+
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: OrganizePlan }
+    const created = res.plan.operations.filter((o) => o.type === 'create_folder')
+    expect(created.map((o) => o.title)).toContain('语音与音频')
+    expect(res.plan.rows).toHaveLength(3)
+  })
+
+  it('非推翻模式：攒不够下限就不建目录，书签原地不动', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      results: [
+        { bookmark_id: '100', target_category_id: null, confidence: 0.2, reason: '无合适目录', topic: '语音合成' },
+        { bookmark_id: '101', target_category_id: null, confidence: 0.2, reason: '无合适目录', topic: '数据竞赛' },
+      ],
+    })
+    const { ports, deps } = setupHomeless(complete)
+    await saveNonRebuild(ports)
+
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: OrganizePlan }
+    expect(res.plan.operations.filter((o) => o.type === 'create_folder')).toHaveLength(0)
+    // 起名那一次调用根本不该发出去
+    expect(complete).toHaveBeenCalledTimes(1)
+  })
+
+  it('非推翻模式：新建目录不产生任何改名操作', async () => {
+    const complete = vi.fn()
+      .mockResolvedValueOnce({
+        results: ['100', '101', '102'].map((id) => ({
+          bookmark_id: id, target_category_id: null, confidence: 0.2, reason: '无合适目录', topic: '语音合成',
+        })),
+      })
+      .mockResolvedValueOnce({ names: [{ key: '语音合成', name: '语音与音频' }] })
+    const { ports, deps } = setupHomeless(complete)
+    await saveNonRebuild(ports)
+
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: OrganizePlan }
+    expect(res.plan.operations.filter((o) => o.type === 'rename_folder')).toEqual([])
+  })
+})
