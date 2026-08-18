@@ -155,6 +155,25 @@ describe('classifyPrompt 的 topic 规则', () => {
   it('英文提示词说明 null 时要带回主题', () => {
     expect(classifyPrompt('en').join('\n')).toContain('topic')
   })
+
+  // 推翻模式传 includeTopicRule=false：候选目录是刚设计出来的，用不上这条规则，
+  // 提示词也不该因为这个工作流而发生任何变化——推翻模式的分类稳定性正是要保护的东西。
+  it('includeTopicRule 为 false 时不出现第 5 条规则，也不提 topic', () => {
+    for (const locale of ['zh_CN', 'en'] as const) {
+      const withRule = classifyPrompt(locale, true)
+      const withoutRule = classifyPrompt(locale, false)
+      expect(withoutRule.join('\n')).not.toContain('topic')
+      expect(withoutRule).toHaveLength(withRule.length - 1)
+      // 前 4 条规则逐字节不变——不是重新组织了句子，只是少了最后一条
+      expect(withoutRule).toEqual(withRule.slice(0, -1))
+    }
+  })
+
+  it('不传第二个参数时默认带上第 5 条——调用点省略参数不能悄悄改变行为', () => {
+    for (const locale of ['zh_CN', 'en'] as const) {
+      expect(classifyPrompt(locale)).toEqual(classifyPrompt(locale, true))
+    }
+  })
 })
 
 /**

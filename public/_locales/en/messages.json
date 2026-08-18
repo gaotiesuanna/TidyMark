@@ -889,6 +889,22 @@
       }
     }
   },
+  "logNewFoldersMultiRoot": {
+    "message": "Multiple scope roots selected; new folders are all created under \"$root$\"",
+    "placeholders": {
+      "root": {
+        "content": "$1"
+      }
+    }
+  },
+  "logNewFoldersCapped": {
+    "message": "$count$ topics exceeded the per-level cap and were not turned into folders; those bookmarks stay in place",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
   "logTitleRewrites": {
     "message": "$count$ GitHub bookmark titles will be normalized",
     "placeholders": {

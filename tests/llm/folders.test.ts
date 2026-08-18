@@ -460,4 +460,18 @@ describe('nameNewTopics', () => {
     expect(complete).not.toHaveBeenCalled()
     expect(names.size).toBe(0)
   })
+
+  it('主题名自己也撞了已有目录名——整簇跳过，不造重名兄弟', async () => {
+    const client = { complete: vi.fn().mockResolvedValue({ names: [{ key: '语音合成', name: '语音合成' }] }) }
+    const names = await nameNewTopics(clusters, ['语音合成'], client, 'zh_CN')
+    expect(names.has('语音合成')).toBe(false)
+    // 没撞名的簇不受影响
+    expect(names.get('数据竞赛')).toBe('数据竞赛')
+  })
+
+  it('模型的提议与退回的主题名都撞了——同样整簇跳过', async () => {
+    const client = { complete: vi.fn().mockResolvedValue({ names: [{ key: '语音合成', name: '语音与音频' }] }) }
+    const names = await nameNewTopics(clusters, ['语音与音频', '语音合成'], client, 'zh_CN')
+    expect(names.has('语音合成')).toBe(false)
+  })
 })

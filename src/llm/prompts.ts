@@ -9,7 +9,13 @@ export const BROAD_WORDS: Record<Locale, string> = {
   en: 'AI, tech, technology, tools, dev, development, learning, resources, misc, other',
 }
 
-export function classifyPrompt(locale: Locale): string[] {
+/**
+ * 第 5 条（无归属时带回 topic）只有非推翻模式用得上——推翻模式的候选目录是刚设计出来的，
+ * 不存在放不进去。推翻模式的分类稳定性正是这个工作流要修的老问题，多一条模型用不上的
+ * 规则也是对提示词的一次扰动，所以用参数把它挡在外面，让推翻模式拿到的提示词与加这条
+ * 规则之前逐字节相同（调用点见 llm/classify.ts 的 buildBatchPrompt/ClassifyInput）。
+ */
+export function classifyPrompt(locale: Locale, includeTopicRule = true): string[] {
   if (locale === 'zh_CN') {
     return [
       '你是一个书签整理助手。为每个书签从下面的候选目录中选择最合适的一个。',
@@ -19,7 +25,9 @@ export function classifyPrompt(locale: Locale): string[] {
       '2. 如果没有任何目录合适，target_category_id 返回 null。',
       '3. confidence 是 0 到 1 之间的数字，表示你的把握程度。',
       '4. reason 用一句中文说明判断依据。',
-      '5. 只有在 target_category_id 为 null 时，额外给出 topic：一个不超过 8 个字的主题词，说明这个书签属于什么类别。有合适目录时不要填 topic。',
+      ...(includeTopicRule
+        ? ['5. 只有在 target_category_id 为 null 时，额外给出 topic：一个不超过 8 个字的主题词，说明这个书签属于什么类别。有合适目录时不要填 topic。']
+        : []),
     ]
   }
   return [
@@ -30,7 +38,9 @@ export function classifyPrompt(locale: Locale): string[] {
     '2. If no folder fits, return null for target_category_id.',
     '3. confidence is a number between 0 and 1 expressing how sure you are.',
     '4. Write reason as one short sentence in English.',
-    '5. Only when target_category_id is null, also return topic: a short subject label (at most 3 words) describing what this bookmark is about. Leave topic out when a folder fits.',
+    ...(includeTopicRule
+      ? ['5. Only when target_category_id is null, also return topic: a short subject label (at most 3 words) describing what this bookmark is about. Leave topic out when a folder fits.']
+      : []),
   ]
 }
 

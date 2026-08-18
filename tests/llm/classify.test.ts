@@ -87,6 +87,16 @@ describe('buildBatchPrompt', () => {
     expect(prompt).toContain('10')
     expect(prompt).toContain('书签栏 / react')
   })
+
+  it('省略第四个参数时默认带上 topic 规则', () => {
+    const prompt = buildBatchPrompt([item('1', 'https://x.com')], candidates, 'zh_CN')
+    expect(prompt).toContain('topic')
+  })
+
+  it('includeTopicRule 传 false 时提示词里不出现 topic 规则——推翻模式用这条', () => {
+    const prompt = buildBatchPrompt([item('1', 'https://x.com')], candidates, 'zh_CN', false)
+    expect(prompt).not.toContain('topic')
+  })
 })
 
 describe('classifyBookmarks', () => {

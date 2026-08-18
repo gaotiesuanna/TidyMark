@@ -7,6 +7,7 @@ import { currentLocale, setLocale } from '@/i18n'
 import type { LlmClient } from '@/llm/client'
 import type { OrganizePlan } from '@/core/types'
 import type { ProgressEvent } from '@/background/events'
+import { MAX_SIBLINGS } from '@/core/tree'
 
 const tree = [
   { id: '0', title: '', children: [
@@ -172,6 +173,37 @@ describe('handle', () => {
     const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: { operations: Array<{ type: string }> } }
     expect(complete).toHaveBeenCalledTimes(3)
     expect(res.plan.operations.some((o) => o.type === 'create_folder')).toBe(true)
+  })
+
+  // review M9：非推翻模式新加的「无归属带回 topic」规则不该悄悄改变推翻模式的分类
+  // 提示词——推翻模式的候选是刚设计出来的，用不上这条规则，而推翻模式的分类稳定性
+  // 正是这整个工作流存在的理由，提示词不该因为一个它用不上的功能而发生任何变化。
+  it('推翻模式下发给模型的分类提示词不带 topic 规则——那条只有非推翻模式用得上', async () => {
+    const fake = createFakeBookmarks(tree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: true,
+      removeEmptyFolders: false,
+      domainGroups: [],
+      rewriteGithubTitles: false,
+      enforceMinFolderSize: false,
+    })
+    const classifyPrompts: string[] = []
+    const complete = vi.fn(async (prompt: string) => {
+      if (prompt.includes('候选目录：')) {
+        classifyPrompts.push(prompt)
+        return { results: [{ bookmark_id: '100', target_category_id: 'tmp:1', confidence: 0.9, reason: 'r' }] }
+      }
+      if (prompt.includes('标签清单：')) return { folders: [{ title: '前端', topics: ['前端'], children: [] }] }
+      return { results: [{ bookmark_id: '100', primary_topic: '前端', secondary_topic: 'React' }] }
+    })
+    const deps = { createClient: () => ({ complete }), now: () => 1 }
+
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
+    expect(classifyPrompts).toHaveLength(1)
+    expect(classifyPrompts[0]).not.toContain('topic')
   })
 
   it('一级目录上限从设置里读，并写进发给模型的目录设计提示词', async () => {
@@ -466,6 +498,104 @@ describe('handle', () => {
     const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
     expect(res.ok).toBe(false)
     expect((res as { error: string }).error).toContain('response_format')
+  })
+
+  // review M2：homelessCount 曾经把请求失败落下的 source: 'none' 也数进「放不进已有
+  // 目录」，一批彻底失败时会在真正的错误前面先打一行误导性的日志。这里验部分失败：
+  // 3 条模型真判了「无合适目录」，1 条是请求失败，日志只该数前者。
+  it('部分批次请求失败时，新目录日志只数模型真正判定的「无处可去」，失败的那条不算', async () => {
+    const fake = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: 'react', children: [] },
+          { id: '100', title: '语音合成教程 A', url: 'https://a.dev' },
+          { id: '101', title: '语音合成教程 B', url: 'https://b.dev' },
+          { id: '102', title: '语音合成教程 C', url: 'https://c.dev' },
+          { id: '103', title: '某书签', url: 'https://d.dev' },
+        ]},
+      ]},
+    ])
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: false,
+      removeEmptyFolders: false,
+      domainGroups: [],
+      rewriteGithubTitles: false,
+    })
+    // 批次并发派发，谁先到达 complete() 顺序不定，按 prompt 里的 bookmark_id 路由
+    // 而不是按调用顺序写死，才不会因为并发调度偶发翻车
+    const complete = vi.fn(async (prompt: string) => {
+      if (prompt.includes('将为它们新建目录')) return { names: [{ key: '语音合成', name: '语音与音频' }] }
+      if (prompt.includes('"103"')) throw Object.assign(new Error('boom'), { retryable: false })
+      const id = /"bookmark_id": "(\d+)"/.exec(prompt)![1]!
+      return { results: [{ bookmark_id: id, target_category_id: null, confidence: 0.2, reason: '无合适目录', topic: '语音合成' }] }
+    })
+    const events: ProgressEvent[] = []
+    const deps = {
+      createClient: () => ({ complete }), now: () => 1, batchSize: 1,
+      onEvent: (event: ProgressEvent) => events.push(event),
+    }
+
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { ok: boolean; plan: OrganizePlan }
+    expect(res.ok).toBe(true)
+    const startLog = events.find((e) => e.message.includes('正在为它们起名'))
+    expect(startLog?.message).toMatch(/^3 /)
+    expect(res.plan.operations.filter((o) => o.type === 'create_folder')).toHaveLength(1)
+  })
+
+  // review M4：超过同层上限（MAX_SIBLINGS）被压下的主题此前完全沉默，用户
+  // 看不出「怎么少了几个目录」。这里造 15 个都够格的主题，验证只建 12 个、
+  // 剩下 3 个被压下时记了一条日志。
+  it('簇数超过同层上限时记一条日志，说明有几个主题被压下、没建目录', async () => {
+    const bookmarks = []
+    for (let c = 0; c < 15; c++) {
+      for (let i = 0; i < 3; i++) {
+        bookmarks.push({ id: `${c}-${i}`, title: `书签${c}-${i}`, url: `https://x${c}-${i}.dev` })
+      }
+    }
+    const fake = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: 'react', children: [] },
+          ...bookmarks,
+        ]},
+      ]},
+    ])
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: false,
+      removeEmptyFolders: false,
+      domainGroups: [],
+      rewriteGithubTitles: false,
+    })
+    const complete = vi.fn(async (prompt: string) => {
+      if (prompt.includes('将为它们新建目录')) {
+        const keys = [...prompt.matchAll(/"key": "([^"]+)"/g)].map((m) => m[1]!)
+        return { names: keys.map((key) => ({ key, name: `主题${key}` })) }
+      }
+      const ids = [...prompt.matchAll(/"bookmark_id": "(\d+-\d+)"/g)].map((m) => m[1]!)
+      return {
+        results: ids.map((id) => ({
+          bookmark_id: id, target_category_id: null, confidence: 0.2, reason: '无合适目录',
+          topic: `T${id.split('-')[0]}`,
+        })),
+      }
+    })
+    const events: ProgressEvent[] = []
+    const deps = {
+      createClient: () => ({ complete }), now: () => 1,
+      onEvent: (event: ProgressEvent) => events.push(event),
+    }
+
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { ok: boolean; plan: OrganizePlan }
+    expect(res.ok).toBe(true)
+    expect(res.plan.operations.filter((o) => o.type === 'create_folder')).toHaveLength(MAX_SIBLINGS)
+    const cappedLog = events.find((e) => e.message.includes('超出同层上限'))
+    expect(cappedLog?.message).toMatch(/^3 /)
   })
 
   it('部分书签分类失败时仍返回 Plan，但带上警告', async () => {
@@ -1067,17 +1197,24 @@ describe('handle analyze 目录下限', () => {
 })
 
 describe('analyze 非推翻模式：新主题无处可去', () => {
-  // 已有 react、杂项两个目录，三本关于「语音合成」的书签哪个都放不进去，
-  // 模型分类时把它们的 target_category_id 判成 null，同时带回同一个 topic
+  // 已有 react、杂项两个目录，三本关于「语音合成」的书签松散挂在书签栏下——
+  // 这才是「真正无处可去」的典型状态：没有一个已有目录能装下它们，也没有人
+  // 手工把它们攒在一起过。哪个已有目录都放不进去，模型分类时把它们的
+  // target_category_id 判成 null，同时带回同一个 topic。
+  //
+  // 三本书签不能预先挤在同一个非根目录下：planNewFolders 的「已聚齐」guard
+  // （见 core/newTopics.ts）专门拦这种情况——不是因为它们不该建目录，而是
+  // guard 分不清「凑巧挤在同一个已有目录里」和「上一轮就是为它们建的目录」，
+  // 保守地一律不碰。松散挂在范围根下是 guard 明确放行的那一种（其父就是范围
+  // 根本身），也是「新主题」这个功能本该覆盖的主场景。
   const homelessTree = [
     { id: '0', title: '', children: [
       { id: '1', title: '书签栏', children: [
         { id: '10', title: 'react', children: [] },
-        { id: '11', title: '杂项', children: [
-          { id: '100', title: '语音合成教程 A', url: 'https://a.dev' },
-          { id: '101', title: '语音合成教程 B', url: 'https://b.dev' },
-          { id: '102', title: '语音合成教程 C', url: 'https://c.dev' },
-        ]},
+        { id: '11', title: '杂项', children: [] },
+        { id: '100', title: '语音合成教程 A', url: 'https://a.dev' },
+        { id: '101', title: '语音合成教程 B', url: 'https://b.dev' },
+        { id: '102', title: '语音合成教程 C', url: 'https://c.dev' },
       ]},
     ]},
   ]
@@ -1183,5 +1320,216 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
     expect(second.plan.operations.filter((o) => o.type === 'create_folder')).toEqual([])
     expect(second.plan.operations.filter((o) => o.type === 'rename_folder')).toEqual([])
     expect(second.plan.rows).toHaveLength(0)
+  })
+
+  // review C1：模型一直判定「无处可去」、每轮都带回同一个 topic，是这条分支
+  // 唯一会持续触发的场景——表现良好的模型第二轮就会正确归位（上面那条用例），
+  // 不会一直触发新建。这里驱动三轮，模型故意「表现不好」，验证 planNewFolders
+  // 的「已聚齐」guard 与 nameNewTopics 的撞名跳过两道闸联手挡住 churn。
+  it('模型持续判定无处可去也不 churn：三轮下来只建一次目录，之后不再新建、不改名、不移动', async () => {
+    const complete = vi.fn(async (prompt: string) => {
+      // 起名那次调用的提示词固定带着这句开场白；分类调用带的是候选目录清单
+      if (prompt.includes('将为它们新建目录')) {
+        return { names: [{ key: '语音合成', name: '语音合成' }] }
+      }
+      return {
+        results: ['100', '101', '102'].map((id) => ({
+          bookmark_id: id, target_category_id: null, confidence: 0.2, reason: '无合适目录', topic: '语音合成',
+        })),
+      }
+    })
+    const { ports, deps } = setupHomeless(complete)
+    await saveNonRebuild(ports)
+
+    const first = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { ok: boolean; plan: OrganizePlan }
+    expect(first.ok).toBe(true)
+    expect(first.plan.operations.filter((o) => o.type === 'create_folder')).toHaveLength(1)
+    await handle(ports, {
+      kind: 'apply', plan: first.plan as never, accepted: first.plan.rows.map((r) => r.bookmarkId),
+    }, deps)
+
+    const second = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { ok: boolean; plan: OrganizePlan }
+    expect(second.ok).toBe(true)
+    expect(second.plan.operations.filter((o) => o.type === 'create_folder')).toEqual([])
+    expect(second.plan.operations.filter((o) => o.type === 'rename_folder')).toEqual([])
+    expect(second.plan.operations.filter((o) => o.type === 'move_bookmark')).toEqual([])
+    await handle(ports, {
+      kind: 'apply', plan: second.plan as never, accepted: second.plan.rows.map((r) => r.bookmarkId),
+    }, deps)
+
+    const third = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { ok: boolean; plan: OrganizePlan }
+    expect(third.ok).toBe(true)
+    expect(third.plan.operations.filter((o) => o.type === 'create_folder')).toEqual([])
+    expect(third.plan.operations.filter((o) => o.type === 'rename_folder')).toEqual([])
+    expect(third.plan.operations.filter((o) => o.type === 'move_bookmark')).toEqual([])
+  })
+
+  // review I1：每条新用例都关掉 removeEmptyFolders，谁都没验过默认设置（开启）下
+  // 新建目录会不会顺手删掉被搬空的旧目录。这条钉住现状——不改行为，只让它可见：
+  // 用户开着清理，旧目录被搬空后就该被清理，这是他自己打开的开关。
+  it('removeEmptyFolders 开着时，新建目录搬空的旧目录会被按设置清理掉——钉住现状，不是新引入的行为', async () => {
+    const complete = vi.fn()
+      .mockResolvedValueOnce({
+        results: ['100', '101', '102'].map((id) => ({
+          bookmark_id: id, target_category_id: null, confidence: 0.2, reason: '无合适目录', topic: '语音合成',
+        })),
+      })
+      .mockResolvedValueOnce({ names: [{ key: '语音合成', name: '语音与音频' }] })
+    const fake = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          // react 本身放一本书签，不然它作为一个本来就空的目录也会被 removeEmpty
+          // 顺手扫掉，混淆了「谁是被这次新建搬空的」
+          { id: '10', title: 'react', children: [
+            { id: '90', title: 'React 官网', url: 'https://react.dev' },
+          ]},
+          // 102 松散挂在书签栏下，不与 100/101 共享父目录——三本一起共享同一个
+          // 父目录会被 planNewFolders 的「已聚齐」guard 拦下（见 core/newTopics.ts），
+          // 这条用例要验的是清理这一步，不是那道 guard，两者不能混在一起测
+          { id: '11', title: '专题', children: [
+            { id: '100', title: '语音合成教程 A', url: 'https://a.dev' },
+            { id: '101', title: '语音合成教程 B', url: 'https://b.dev' },
+          ]},
+          { id: '102', title: '语音合成教程 C', url: 'https://c.dev' },
+        ]},
+      ]},
+    ])
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    const deps = { createClient: () => ({ complete }), now: () => 1 }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: false,
+      removeEmptyFolders: true,
+      domainGroups: [],
+      rewriteGithubTitles: false,
+    })
+
+    const analyzed = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { ok: boolean; plan: OrganizePlan }
+    expect(analyzed.ok).toBe(true)
+    const res = await handle(ports, {
+      kind: 'apply', plan: analyzed.plan as never, accepted: analyzed.plan.rows.map((r) => r.bookmarkId),
+    }, deps) as { result: { removedFolders: Array<{ title: string }> } }
+
+    expect(res.result.removedFolders.map((f) => f.title)).toEqual(['专题'])
+    expect(fake.structure()).not.toContain('专题')
+    expect(fake.structure()).toContain('语音与音频')
+  })
+})
+
+describe('analyze 非推翻模式：级联勾选（review C2）', () => {
+  // 勾选界面会把选中目录的所有子目录 id 一并塞进 scopeRootIds（级联勾选），
+  // 而不是只送选中的那一个根。非推翻模式的候选目录如果照单排除 scopeRootIds
+  // 里的每一个 id，就会把范围内所有目录都当成「范围根」排除掉，候选表变空，
+  // analyze 直接报错——是这条分支在生产环境里彻底不可用的原因。
+  it('scopeRootIds 同时带着根与它的子目录时，非推翻模式仍能产出候选而不是报错', async () => {
+    const { ports, deps } = setup({
+      complete: vi.fn().mockResolvedValue({
+        results: [{ bookmark_id: '100', target_category_id: '10', confidence: 0.9, reason: 'r' }],
+      }),
+    })
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: false,
+      removeEmptyFolders: false,
+      domainGroups: [],
+      rewriteGithubTitles: false,
+    })
+    // 用 tree 夹具：书签栏(1) 下有 react(10)、杂项(11)——级联勾选会把三个 id
+    // 全部送过来，先勾的是根（1），子目录顺序不定
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1', '10', '11'] }, deps) as {
+      ok: boolean
+      plan?: OrganizePlan
+      error?: string
+    }
+    expect(res.ok).toBe(true)
+    expect(res.plan!.candidates.length).toBeGreaterThan(0)
+    expect(res.plan!.rows).toHaveLength(1)
+  })
+})
+
+describe('analyze 非推翻模式：多个范围根（review I2）', () => {
+  // 三本homeless书签松散挂在书签栏下（不共享某个已有子目录），避免撞上
+  // planNewFolders 的「已聚齐」guard——这里要单独测的是多根场景，不是那道 guard。
+  const multiRootTree = [
+    { id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '100', title: '语音合成教程 A', url: 'https://a.dev' },
+        { id: '101', title: '语音合成教程 B', url: 'https://b.dev' },
+        { id: '102', title: '语音合成教程 C', url: 'https://c.dev' },
+      ]},
+      { id: '2', title: '其他书签', children: [
+        // 只挂在「其他书签」下的已有目录：起名这一步如果只看 roots[0]（书签栏）
+        // 的直接子目录，就看不到它，可能撞出一个别处已经在用的名字
+        { id: '20', title: '语音合成', children: [] },
+      ]},
+    ]},
+  ]
+
+  function setupMultiRoot(complete: LlmClient['complete']) {
+    const fake = createFakeBookmarks(multiRootTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    return { fake, ports, deps: { createClient: () => ({ complete }), now: () => 1 } }
+  }
+
+  it('起名时把所有范围根的直接子目录都算进已有目录名——不能只看新目录要挂的那个根', async () => {
+    const namePrompts: string[] = []
+    const complete = vi.fn(async (prompt: string) => {
+      if (prompt.includes('将为它们新建目录')) {
+        namePrompts.push(prompt)
+        return { names: [{ key: '语音合成', name: '语音合成' }] }
+      }
+      return {
+        results: ['100', '101', '102'].map((id) => ({
+          bookmark_id: id, target_category_id: null, confidence: 0.2, reason: '无合适目录', topic: '语音合成',
+        })),
+      }
+    })
+    const { ports, deps } = setupMultiRoot(complete)
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: false,
+      removeEmptyFolders: false,
+      domainGroups: [],
+      rewriteGithubTitles: false,
+    })
+
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1', '2'] }, deps) as { ok: boolean; plan: OrganizePlan }
+    expect(res.ok).toBe(true)
+    expect(namePrompts).toHaveLength(1)
+    // 「其他书签」下的「语音合成」目录名出现在了起名提示词里
+    expect(namePrompts[0]).toContain('语音合成')
+    // 撞了已有目录名，模型的提议（同样是「语音合成」）应当被跳过而不是硬建重名目录
+    expect(res.plan.operations.filter((o) => o.type === 'create_folder')).toEqual([])
+  })
+
+  it('勾了多个范围根时记一条日志说明新目录固定挂在第一个根下', async () => {
+    const complete = vi.fn()
+      .mockResolvedValueOnce({
+        results: ['100', '101', '102'].map((id) => ({
+          bookmark_id: id, target_category_id: null, confidence: 0.2, reason: '无合适目录', topic: '数据竞赛',
+        })),
+      })
+      .mockResolvedValueOnce({ names: [{ key: '数据竞赛', name: '竞赛数据' }] })
+    const { ports, deps } = setupMultiRoot(complete)
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      rebuildStructure: false,
+      removeEmptyFolders: false,
+      domainGroups: [],
+      rewriteGithubTitles: false,
+    })
+    const events: ProgressEvent[] = []
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1', '2'] }, {
+      ...deps, onEvent: (event: ProgressEvent) => events.push(event),
+    }) as { ok: boolean; plan: OrganizePlan }
+
+    expect(res.ok).toBe(true)
+    expect(res.plan.operations.filter((o) => o.type === 'create_folder')).toHaveLength(1)
+    const multiRootLog = events.find((e) => e.message.includes('书签栏') && e.message.includes('范围根'))
+    expect(multiRootLog).toBeDefined()
   })
 })

@@ -358,8 +358,13 @@ const NEW_FOLDER_NAMES_SCHEMA = {
 /**
  * 给非推翻模式要新建的目录起名。一次调用。
  *
- * **每个簇一定拿得到名字**：模型漏了、起了重名、或整个调用失败，都退回簇自己的主题名。
- * 起名失败不该毁掉整次分析——那批书签宁可进一个名字朴素的目录，也好过留在原地找不到。
+ * **绝大多数簇能拿到名字**：模型漏了、起了重名，都退回簇自己的主题名；整个调用失败，
+ * 全部退回主题名。起名本身失败不该毁掉整次分析——那批书签宁可进一个名字朴素的目录，
+ * 也好过留在原地找不到。
+ *
+ * **唯一的例外：连主题名自己也撞了已有目录名（或本轮另一个簇）时，这个簇整个不出现在
+ * 返回的 map 里。** 调用方（`core/newTopics.ts` 的 `planNewFolders`）据此不给它建目录——
+ * 撞名建出的重名兄弟会在下一轮把 `classify.ts` 的 idByPath 搞坏，是幂等性 churn 的种子。
  */
 export async function nameNewTopics(
   clusters: TopicCluster[],
@@ -396,10 +401,18 @@ export async function nameNewTopics(
   for (const cluster of clusters) {
     const raw = stripNumberPrefix(String(proposed.get(cluster.key) ?? '').trim()).trim()
     const fallback = cluster.title
-    const candidate = raw === '' ? fallback : raw
-    // 撞名就退回主题名；主题名自己也撞的话只能让它撞——那说明已有目录里
-    // 本来就有一个同名的，而它没被选中，硬改名字只会更难认
-    const chosen = taken.has(normalizeName(candidate)) ? fallback : candidate
+    const primary = raw === '' ? fallback : raw
+    // 撞名就退回主题名；主题名自己也撞的话——不能再「让它撞」了：一个重名兄弟会在
+    // 下一轮把 classify.ts 的 idByPath 搞坏（那边的注释已经警告过，同路径只留最后一个），
+    // 而重名兄弟正是幂等性 churn 的种子（见 issues review C1）。整簇跳过，这批书签
+    // 留在原地，比造一个认不出的重名目录更安全。
+    let chosen: string | null = null
+    if (!taken.has(normalizeName(primary))) {
+      chosen = primary
+    } else if (primary !== fallback && !taken.has(normalizeName(fallback))) {
+      chosen = fallback
+    }
+    if (chosen === null) continue
     taken.add(normalizeName(chosen))
     names.set(cluster.key, chosen)
   }

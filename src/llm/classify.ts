@@ -23,6 +23,12 @@ export interface ClassifyInput {
   locale: Locale
   /** 本轮用的模型名。进缓存 key——换模型就是换产出，不该沿用旧判断。 */
   model: string
+  /**
+   * 提示词里带不带「无归属时回传 topic」那条规则（classifyPrompt 的第 5 条）。
+   * 推翻模式的候选是刚设计出来的，用不上这条、也不该让它的提示词因此变化——
+   * 省略时默认 true，只有 background/handlers.ts 在推翻模式下显式传 false。
+   */
+  includeTopicRule?: boolean
 }
 
 const MAX_RETRIES = 2
@@ -61,6 +67,7 @@ export function buildBatchPrompt(
   items: BookmarkItem[],
   candidates: CategoryCandidate[],
   locale: Locale,
+  includeTopicRule = true,
 ): string {
   const folderLabel = locale === 'zh_CN' ? '目录' : 'folder'
   const catalog = candidates.map((c) => `- id=${c.id} ${folderLabel}=${c.path.join(' / ')}`).join('\n')
@@ -76,7 +83,7 @@ export function buildBatchPrompt(
   })
 
   return [
-    ...classifyPrompt(locale),
+    ...classifyPrompt(locale, includeTopicRule),
     '',
     locale === 'zh_CN' ? '候选目录：' : 'Candidate folders:',
     catalog,
@@ -164,6 +171,7 @@ async function runBatch(
   candidates: CategoryCandidate[],
   client: LlmClient,
   locale: Locale,
+  includeTopicRule: boolean,
 ): Promise<Classification[]> {
   const validIds = new Set(candidates.map((c) => c.id))
   // 仅用于满足类型初始化：正常执行路径下，走到最终 return 之前必然先经过下面的
@@ -173,7 +181,7 @@ async function runBatch(
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const raw = (await client.complete(
-        buildBatchPrompt(batch, candidates, locale),
+        buildBatchPrompt(batch, candidates, locale, includeTopicRule),
         buildSchema(candidates),
       )) as { results?: RawResult[] }
       const byId = new Map((raw.results ?? []).map((r) => [r.bookmark_id, r]))
@@ -215,6 +223,7 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
   const { items, candidates, client, cache, locale, model } = input
   const batchSize = input.batchSize ?? 25
   const concurrency = input.concurrency ?? 4
+  const includeTopicRule = input.includeTopicRule ?? true
 
   // 缓存存的是路径，两个方向都要换：命中时路径 → id，写入时 id → 路径。
   // 路径不保证唯一——两个同名同父的目录会撞出同一个 pathKey，new Map 按最后
@@ -255,7 +264,7 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
       const index = cursor++
       const batch = batches[index]!
       const startedAt = Date.now()
-      const results = await runBatch(batch, candidates, client, locale)
+      const results = await runBatch(batch, candidates, client, locale, includeTopicRule)
       const ok = results.filter((r) => r.source === 'llm').length
       const summary = logBatchDone(locale, index, batches.length, batch.length, ok, Date.now() - startedAt)
       // 只进开发者控制台，不必双语。
