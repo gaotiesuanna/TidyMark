@@ -9,7 +9,6 @@ export const CACHE_KEY = 'tidymark:classify-cache'
 
 export interface Settings {
   llm: LlmConfig
-  rebuildStructure: boolean
   /** 整理完成后清理范围内不含任何书签的目录。 */
   removeEmptyFolders: boolean
   /** 勾选的域名聚合组 key，见 core/domainGroups.ts。为空表示不聚合。 */
@@ -54,7 +53,6 @@ export const MAX_FOLDER_SIZE = 10
 
 export const DEFAULT_SETTINGS: Settings = {
   llm: { baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-4o-mini' },
-  rebuildStructure: false,
   removeEmptyFolders: true,
   domainGroups: [],
   rewriteGithubTitles: false,
@@ -79,7 +77,13 @@ export const PRESETS: Array<{ label: Record<Locale, string>; baseUrl: string; mo
   { label: { zh_CN: '本地 Ollama', en: 'Local Ollama' }, baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5' },
 ]
 
-/** 被 maxFolderDepth 取代的旧开关。只在读取时认，不再写出去。 */
+/**
+ * 被 maxFolderDepth 取代的旧开关。只在读取时认，不再写出去。
+ *
+ * `rebuildStructure` 不在这里：那是**有意不认**。走哪条路现在由 TidyMark 每次按扫描
+ * 结果现判（见 core/mode.ts），继续认旧值等于把删掉的开关偷偷留着。存储里遗留的那个
+ * 键读都不读，下次保存设置时自然被覆盖掉。
+ */
 interface LegacySettings {
   allowSubfolders?: boolean
 }
@@ -92,7 +96,6 @@ export async function loadSettings(ports: Ports): Promise<Settings> {
   const legacyDepth = stored?.allowSubfolders === false ? MIN_FOLDER_DEPTH : undefined
   return {
     llm: { ...DEFAULT_SETTINGS.llm, ...(stored?.llm ?? {}) },
-    rebuildStructure: stored?.rebuildStructure ?? DEFAULT_SETTINGS.rebuildStructure,
     removeEmptyFolders: stored?.removeEmptyFolders ?? DEFAULT_SETTINGS.removeEmptyFolders,
     domainGroups: stored?.domainGroups ?? DEFAULT_SETTINGS.domainGroups,
     rewriteGithubTitles: stored?.rewriteGithubTitles ?? DEFAULT_SETTINGS.rewriteGithubTitles,

@@ -10,10 +10,9 @@ function ports() {
 }
 
 describe('设置存取', () => {
-  it('无设置时返回默认值，且默认不推翻结构', async () => {
+  it('无设置时返回默认值', async () => {
     const settings = await loadSettings(ports())
     expect(settings).toEqual(DEFAULT_SETTINGS)
-    expect(settings.rebuildStructure).toBe(false)
     expect(settings.llm.apiKey).toBe('')
   })
 
@@ -29,13 +28,12 @@ describe('设置存取', () => {
 
   // 老用户存储里没有这两个键，缺字段必须回落默认值而不是 undefined，
   // 否则 MAX_SIBLINGS 会变成 undefined 一路传到 slice(0, undefined)
-  it('旧数据缺这两个字段时回落默认值，已有字段不受影响', async () => {
+  it('旧数据缺这两个字段时回落默认值', async () => {
     const p = ports()
-    await p.storage.set(SETTINGS_KEY, { rebuildStructure: true })
+    await p.storage.set(SETTINGS_KEY, {})
     const settings = await loadSettings(p)
     expect(settings.maxTopFolders).toBe(MAX_SIBLINGS)
     expect(settings.maxFolderDepth).toBe(2)
-    expect(settings.rebuildStructure).toBe(true)
   })
 
   // allowSubfolders 这个布尔开关被 maxFolderDepth 取代了。上周关掉过它的人，
@@ -71,7 +69,7 @@ describe('设置存取', () => {
   // 这是「默认开」的必然结果，不是遗漏
   it('旧数据缺目录下限字段时回落默认值', async () => {
     const p = ports()
-    await p.storage.set(SETTINGS_KEY, { rebuildStructure: true })
+    await p.storage.set(SETTINGS_KEY, {})
     const settings = await loadSettings(p)
     expect(settings.enforceMinFolderSize).toBe(true)
     expect(settings.minFolderSize).toBe(3)
@@ -90,12 +88,11 @@ describe('设置存取', () => {
     await saveSettings(p, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-x', model: 'deepseek-chat' },
-      rebuildStructure: true,
       removeEmptyFolders: false,
     })
     const settings = await loadSettings(p)
     expect(settings.llm.model).toBe('deepseek-chat')
-    expect(settings.rebuildStructure).toBe(true)
+    expect(settings.removeEmptyFolders).toBe(false)
   })
 
   it('部分字段缺失时用默认值补齐', async () => {
@@ -104,7 +101,6 @@ describe('设置存取', () => {
     const settings = await loadSettings(p)
     expect(settings.llm.apiKey).toBe('sk-y')
     expect(settings.llm.baseUrl).toBe(DEFAULT_SETTINGS.llm.baseUrl)
-    expect(settings.rebuildStructure).toBe(false)
   })
 })
 
@@ -181,7 +177,7 @@ describe('domainGroups 设置', () => {
 
   it('旧版本存档缺少该字段时补上默认值', async () => {
     const p = ports()
-    await p.storage.set('tidymark:settings', { rebuildStructure: true })
+    await p.storage.set('tidymark:settings', {})
     expect((await loadSettings(p)).domainGroups).toEqual([])
   })
 
@@ -199,7 +195,7 @@ describe('uiLocale', () => {
 
   it('旧数据里没有这个字段时兜底成 auto——不需要迁移代码', async () => {
     const p = ports()
-    await p.storage.set(SETTINGS_KEY, { rebuildStructure: true })
+    await p.storage.set(SETTINGS_KEY, {})
     expect((await loadSettings(p)).uiLocale).toBe('auto')
   })
 

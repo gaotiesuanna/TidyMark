@@ -293,17 +293,7 @@ describe('英文界面渲染守卫：设置页', () => {
   it('SettingsPanel', () => {
     useStore.setState({
       settingsOpen: true,
-      settings: { ...DEFAULT_SETTINGS, rebuildStructure: true },
-    })
-    const { container } = render(<SettingsPanel />)
-    assertNoChinese(container, 'SettingsPanel', INTENTIONAL_CHINESE)
-  })
-
-  // 禁用态的说明文字与启用态不是同一批节点，两种都要过一遍
-  it('SettingsPanel 推翻重建关闭时', () => {
-    useStore.setState({
-      settingsOpen: true,
-      settings: { ...DEFAULT_SETTINGS, rebuildStructure: false },
+      settings: { ...DEFAULT_SETTINGS },
     })
     const { container } = render(<SettingsPanel />)
     assertNoChinese(container, 'SettingsPanel', INTENTIONAL_CHINESE)

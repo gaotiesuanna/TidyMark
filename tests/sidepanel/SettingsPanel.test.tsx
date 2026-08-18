@@ -8,7 +8,7 @@ import { DEFAULT_SETTINGS } from '@/storage/settings'
 beforeEach(() => {
   useStore.setState({
     settingsOpen: true,
-    settings: { ...DEFAULT_SETTINGS, rebuildStructure: true },
+    settings: { ...DEFAULT_SETTINGS },
   })
 })
 
@@ -32,7 +32,7 @@ describe('SettingsPanel 分类参数', () => {
   // 手滑输成 99，把他打回 12 比留在 6 更意外。规格那句以此处为准。
   it('越界或非数字的输入不写进设置，保持原值', () => {
     useStore.setState({
-      settings: { ...DEFAULT_SETTINGS, rebuildStructure: true, maxTopFolders: 6 },
+      settings: { ...DEFAULT_SETTINGS, maxTopFolders: 6 },
     })
     render(<SettingsPanel />)
     const input = screen.getByLabelText('同层目录最多几个')
@@ -62,14 +62,18 @@ describe('SettingsPanel 分类参数', () => {
     expect(useStore.getState().settings.maxFolderDepth).toBe(2)
   })
 
-  // 沿用 PreferencesStep 里 domainGroups 的既有做法
-  it('推翻重建关闭时三项都禁用', () => {
-    useStore.setState({ settings: { ...DEFAULT_SETTINGS, rebuildStructure: false } })
+  it('分类偏好那几项一直可编辑——走哪条路是每次整理现判的，不该锁住设置', () => {
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS } })
     render(<SettingsPanel />)
-    expect(screen.getByLabelText('同层目录最多几个')).toHaveProperty('disabled', true)
-    expect(screen.getByLabelText('目录最深嵌套几层')).toHaveProperty('disabled', true)
-    expect(screen.getByLabelText('不足几个书签的目录就不单独建立')).toHaveProperty('disabled', true)
-    expect(screen.getByLabelText('至少几个书签')).toHaveProperty('disabled', true)
+    expect(screen.getByLabelText('同层目录最多几个')).toHaveProperty('disabled', false)
+    expect(screen.getByLabelText('目录最深嵌套几层')).toHaveProperty('disabled', false)
+    expect(screen.getByLabelText('不足几个书签的目录就不单独建立')).toHaveProperty('disabled', false)
+  })
+
+  it('说明文案交代它们只在重新设计目录结构时生效', () => {
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS } })
+    render(<SettingsPanel />)
+    expect(screen.getByText(/只在.*重新设计/)).toBeTruthy()
   })
 })
 
@@ -108,7 +112,7 @@ describe('SettingsPanel 目录下限', () => {
   // 数字框跟着勾选框走：没勾时那个数字不起作用，还能改就是在骗人
   it('没勾开关时阈值输入框禁用，勾选框自己不禁用', () => {
     useStore.setState({
-      settings: { ...DEFAULT_SETTINGS, rebuildStructure: true, enforceMinFolderSize: false },
+      settings: { ...DEFAULT_SETTINGS, enforceMinFolderSize: false },
     })
     render(<SettingsPanel />)
     expect(screen.getByLabelText('至少几个书签')).toHaveProperty('disabled', true)
@@ -130,9 +134,8 @@ describe('SettingsPanel 语言', () => {
     expect(useStore.getState().settings.uiLocale).toBe('en')
   })
 
-  // 分类参数在不推翻重建时会灰掉，语言不该跟着灰——它跟推翻重建没关系
-  it('语言不受推翻重建开关影响', () => {
-    useStore.setState({ settings: { ...DEFAULT_SETTINGS, rebuildStructure: false } })
+  it('语言输入框不禁用', () => {
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS } })
     render(<SettingsPanel />)
     expect(screen.getByLabelText('语言')).toHaveProperty('disabled', false)
   })

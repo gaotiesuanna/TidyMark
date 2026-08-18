@@ -10,7 +10,6 @@ const MAX_TOP_FOLDERS = 20
 
 export function SettingsPanel() {
   const { settings, setSettings } = useStore()
-  const enabled = settings.rebuildStructure
 
   return (
     <div className="space-y-4">
@@ -42,7 +41,7 @@ export function SettingsPanel() {
         <h3 className="text-sm font-medium">{t('settingsClassifyTitle')}</h3>
         <p className="text-[11px] leading-relaxed text-neutral-400">{t('settingsRebuildOnly')}</p>
 
-        <label className={`block text-sm ${enabled ? '' : 'text-neutral-300'}`}>
+        <label className="block text-sm">
           {t('settingsMaxFoldersTitle')}
           <input
             type="number"
@@ -50,7 +49,6 @@ export function SettingsPanel() {
             aria-label={t('settingsMaxFoldersTitle')}
             min={MIN_TOP_FOLDERS}
             max={MAX_TOP_FOLDERS}
-            disabled={!enabled}
             value={settings.maxTopFolders}
             onChange={(e) => {
               // 越界或空输入不写进存储：它会一路传到 slice(0, 越界值)，
@@ -66,7 +64,7 @@ export function SettingsPanel() {
           </span>
         </label>
 
-        <label className={`block text-sm ${enabled ? '' : 'text-neutral-300'}`}>
+        <label className="block text-sm">
           {t('settingsDepthTitle')}
           <input
             type="number"
@@ -74,7 +72,6 @@ export function SettingsPanel() {
             aria-label={t('settingsDepthTitle')}
             min={MIN_FOLDER_DEPTH}
             max={MAX_FOLDER_DEPTH}
-            disabled={!enabled}
             value={settings.maxFolderDepth}
             onChange={(e) => {
               // 与上面那个数字框同样的把关：越界值不写进存储，保持原值
@@ -90,12 +87,11 @@ export function SettingsPanel() {
         </label>
 
         {/* 勾选框沿用 PreferencesStep 里那几个的排版，数字框跟着它的勾选状态走 */}
-        <div className={enabled ? '' : 'text-neutral-300'}>
+        <div>
           <label className="flex items-start gap-2 text-sm">
             <input
               type="checkbox"
               className="mt-1 h-3.5 w-3.5"
-              disabled={!enabled}
               checked={settings.enforceMinFolderSize}
               onChange={(e) =>
                 void setSettings({ ...settings, enforceMinFolderSize: e.target.checked })
@@ -109,7 +105,7 @@ export function SettingsPanel() {
             aria-label={t('settingsMinSizeInput')}
             min={MIN_FOLDER_SIZE}
             max={MAX_FOLDER_SIZE}
-            disabled={!enabled || !settings.enforceMinFolderSize}
+            disabled={!settings.enforceMinFolderSize}
             value={settings.minFolderSize}
             onChange={(e) => {
               // 与上面两个数字框同样的把关：越界值不写进存储，保持原值。

@@ -33,7 +33,7 @@
     "message": "Classification"
   },
   "settingsRebuildOnly": {
-    "message": "The options below only take effect when \"Rebuild the folder structure\" is on."
+    "message": "The options below only take effect on runs that redesign the folder structure — TidyMark decides that from the scan itself and tells you on the preferences page before each run."
   },
   "settingsMaxFoldersTitle": {
     "message": "Folders per level"

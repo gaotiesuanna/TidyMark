@@ -304,7 +304,7 @@ describe('放弃这一轮之后，在途结果不再落地', () => {
     vi.mocked(send).mockReset()
     useStore.setState({
       step: 'preferences', scan, plan: null, checkedIds: new Set(['1']),
-      settings: { ...DEFAULT_SETTINGS, rebuildStructure: true, llm: { ...DEFAULT_SETTINGS.llm, apiKey: 'sk-x' } },
+      settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey: 'sk-x' } },
       busy: null, busyKind: null, error: null, logs: [],
     })
   })

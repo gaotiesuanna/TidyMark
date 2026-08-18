@@ -33,7 +33,7 @@
     "message": "分类偏好"
   },
   "settingsRebuildOnly": {
-    "message": "以下几项只在「推翻现有文件夹结构」开启时生效。"
+    "message": "以下几项只在这次整理重新设计目录结构时才生效——走哪条路由 TidyMark 按扫描结果自己判，每次整理开始前会在偏好页告诉你。"
   },
   "settingsMaxFoldersTitle": {
     "message": "同层目录最多几个"
