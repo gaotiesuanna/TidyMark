@@ -1148,4 +1148,40 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
     const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { plan: OrganizePlan }
     expect(res.plan.operations.filter((o) => o.type === 'rename_folder')).toEqual([])
   })
+
+  it('非推翻模式跑两遍：第二遍不新建、不改名、不移动', async () => {
+    const complete = vi.fn()
+      .mockResolvedValueOnce({
+        results: ['100', '101', '102'].map((id) => ({
+          bookmark_id: id, target_category_id: null, confidence: 0.2, reason: '无合适目录', topic: '语音合成',
+        })),
+      })
+      .mockResolvedValueOnce({ names: [{ key: '语音合成', name: '语音与音频' }] })
+    const { ports, deps } = setupHomeless(complete)
+    await saveNonRebuild(ports)
+
+    const first = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { ok: boolean; plan: OrganizePlan }
+    expect(first.ok).toBe(true)
+    await handle(ports, {
+      kind: 'apply', plan: first.plan as never, accepted: first.plan.rows.map((r) => r.bookmarkId),
+    }, deps)
+
+    // 第二遍：三本书签已经落在「语音与音频」里，从候选目录的提示词里读出它的真实
+    // id（第一遍 apply 后由 fake bookmarks 分配，无法静态写死），让模型把它们分回
+    // 原地——这才是一次表现良好的分类，也是幂等性要验的东西
+    complete.mockImplementationOnce(async (prompt: string) => {
+      const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)]
+      const target = ids.find((m) => m[2]!.includes('语音与音频'))![1]!
+      return {
+        results: ['100', '101', '102'].map((id) => ({
+          bookmark_id: id, target_category_id: target, confidence: 0.9, reason: '已在此',
+        })),
+      }
+    })
+    const second = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps) as { ok: boolean; plan: OrganizePlan }
+    expect(second.ok).toBe(true)
+    expect(second.plan.operations.filter((o) => o.type === 'create_folder')).toEqual([])
+    expect(second.plan.operations.filter((o) => o.type === 'rename_folder')).toEqual([])
+    expect(second.plan.rows).toHaveLength(0)
+  })
 })
