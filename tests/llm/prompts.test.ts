@@ -239,6 +239,16 @@ describe('classifyPrompt 的 topic 规则', () => {
   })
 })
 
+describe('classifyPrompt 的理由约束', () => {
+  it('中文那份禁止在理由里提别的书签 id', () => {
+    expect(classifyPrompt('zh_CN').join('\n')).toContain('不要提别的书签的 id')
+  })
+
+  it('英文那份同样', () => {
+    expect(classifyPrompt('en').join('\n')).toContain('Do not mention other bookmarks')
+  })
+})
+
 /**
  * 层级按绝对位置算：勾「其他书签」时模型建的是二级目录，不是一级。
  * 提示词里的称呼跟着走，否则模型会照着「一级目录要具体」的标准去命名一批二级目录。

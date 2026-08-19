@@ -3,6 +3,10 @@ import type { Locale } from '@/core/locale'
 /**
  * 禁止模型使用的宽泛词。中英各自独立成表——英文的宽泛词不是中文表的翻译，
  * 而是英文语境里真正没有区分度的那些词。
+ *
+ * 「其他」既在这张禁词表里、又是 core/tree.ts 的 FALLBACK_TITLE，看着打架，其实不是：
+ * 禁词表约束的是**模型的产出**，兜底目录是**确定性产物**——建树时由代码补上，
+ * 从不经过模型。两者作用对象不同，所以不改名（见 issues/04-folder-design-defects.md 末尾）。
  */
 export const BROAD_WORDS: Record<Locale, string> = {
   zh_CN: 'AI、人工智能、开发、编程、技术、工具、学习、资源、其他',
@@ -24,7 +28,7 @@ export function classifyPrompt(locale: Locale, includeTopicRule = true): string[
       '1. 只能从候选目录里选，绝不能创造新目录。',
       '2. 如果没有任何目录合适，target_category_id 返回 null。',
       '3. confidence 是 0 到 1 之间的数字，表示你的把握程度。',
-      '4. reason 用一句中文说明判断依据。',
+      '4. reason 用一句中文说明判断依据，不要提别的书签的 id 或编号——那串数字会原样显示给用户，而他看不懂。',
       ...(includeTopicRule
         ? ['5. 只有在 target_category_id 为 null 时，额外给出 topic：一个不超过 8 个字的主题词，说明这个书签属于什么类别。有合适目录时不要填 topic。']
         : []),
@@ -37,7 +41,7 @@ export function classifyPrompt(locale: Locale, includeTopicRule = true): string[
     '1. Only pick from the candidate folders. Never invent a new one.',
     '2. If no folder fits, return null for target_category_id.',
     '3. confidence is a number between 0 and 1 expressing how sure you are.',
-    '4. Write reason as one short sentence in English.',
+    '4. Write reason as one short sentence in English. Do not mention other bookmarks by id or number — that string is shown to the user verbatim and means nothing to them.',
     ...(includeTopicRule
       ? ['5. Only when target_category_id is null, also return topic: a short subject label (at most 3 words) describing what this bookmark is about. Leave topic out when a folder fits.']
       : []),
