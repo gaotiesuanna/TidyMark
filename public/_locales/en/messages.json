@@ -790,6 +790,10 @@
       }
     }
   },
+  "logDuplicateFolders": {
+    "message": "$count$ groups of folders share a name in this scope; only one of each is offered as a target — to the model they are the same line, and sending several just scatters related bookmarks",
+    "placeholders": { "count": { "content": "$1" } }
+  },
   "logModeAdditive": {
     "message": "These bookmarks are already organized — this run only files them into existing folders: $reason$",
     "placeholders": { "reason": { "content": "$1" } }

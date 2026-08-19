@@ -100,6 +100,10 @@ export async function handle(
         // 非推翻模式的候选表永远是空的（见 issues review C2）。roots 已经用
         // findScopeRoots 去重过父子，这里直接拿它的 id 集合。
         let candidates = buildCandidatesFromFolders(scan.folders, roots.map((r) => r.id))
+        // 数字取自扫描阶段算好的 stats，不在这里重算一遍——两处口径必须是同一个
+        if (scan.stats.duplicateFolderGroups > 0) {
+          log('scan', t('logDuplicateFolders', String(scan.stats.duplicateFolderGroups)))
+        }
         let newFolders: NewFolderSpec[] = []
         let renameFolders: RenameFolderSpec[] = []
         let pinned: Classification[] = []

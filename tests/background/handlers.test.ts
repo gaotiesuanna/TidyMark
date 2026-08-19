@@ -66,6 +66,45 @@ describe('handle', () => {
     expect(res.plan.rows).toHaveLength(1)
   })
 
+  it('范围内有重名目录时说一声——不然用户不知道有一批目录没进候选', async () => {
+    const complete = vi.fn(async (prompt: string) => {
+      const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+      if (prompt.includes('候选目录')) {
+        const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)].map((m) => m[1]!)
+        return { results: bookmarkIds.map((id) => (
+          { bookmark_id: id, target_category_id: ids[0] ?? null, confidence: 0.9, reason: 'r' }
+        ))}
+      }
+      return { results: bookmarkIds.map((id) => (
+        { bookmark_id: id, primary_topic: '前端', secondary_topic: null }
+      ))}
+    })
+    const fake = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: '01 GitHub', children: [
+            { id: 'a0', title: '书签 a0', url: 'https://a0.dev' },
+            { id: 'a1', title: '书签 a1', url: 'https://a1.dev' },
+            { id: 'a2', title: '书签 a2', url: 'https://a2.dev' },
+          ]},
+          { id: '11', title: '01 GitHub', children: [] },
+        ]},
+      ]},
+    ])
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+    })
+    const events: ProgressEvent[] = []
+    await handle(
+      ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' },
+      { createClient: () => ({ complete }), now: () => 1, onEvent: (e) => events.push(e) },
+    )
+
+    expect(events.some((e) => e.message.includes('重名'))).toBe(true)
+  })
+
   it('apply 执行 Plan 并返回结果', async () => {
     const { ports, deps, fake } = setup({
       complete: vi.fn().mockResolvedValue({

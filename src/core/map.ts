@@ -15,14 +15,40 @@ export function stripNumberPrefix(title: string): string {
   return stripped === '' ? title : stripped
 }
 
+/**
+ * 目录路径的归一化 key：每一段都剥掉编号前缀再归一化，拼起来。
+ *
+ * scan.ts 数重名目录、buildCandidatesFromFolders 去重候选，两处都要用同一把尺子——
+ * 否则日志报出的组数会跟实际折叠掉的候选数对不上。
+ */
+export function folderPathKey(path: string[], title: string): string {
+  return [...path, title].map((segment) => normalizeName(stripNumberPrefix(segment))).join('/')
+}
+
 export function buildCandidatesFromFolders(
   folders: FolderItem[],
   scopeRootIds: string[],
 ): CategoryCandidate[] {
   const rootSet = new Set(scopeRootIds)
-  return folders
-    .filter((f) => !rootSet.has(f.id))
-    .map((f) => ({ id: f.id, path: [...f.path, f.title] }))
+  const seen = new Set<string>()
+  const candidates: CategoryCandidate[] = []
+
+  for (const folder of folders) {
+    if (rootSet.has(folder.id)) continue
+    const path = [...folder.path, folder.title]
+    // 模型看到的候选是**路径**不是 id（llm/classify.ts 渲染成 `- id=… 目录=A / B`）。
+    // 同父同名的两个目录对它就是同一行，发两遍只会让它随机挑一个，于是同类书签
+    // 被分散进几个重名目录（见 issues/23-duplicate-sibling-folders.md）。
+    // 剥编号是有意的：「01 前端」和「02 前端」对用户就是重名，编号是我们自己加的。
+    // 留树序第一个，与 core/tree.ts 里 existingByParent 的「首个胜出」同源——
+    // 两处规则必须一致，否则「推翻模式复用哪个」与「归入现有留哪个候选」会指向不同目录。
+    const key = folderPathKey(folder.path, folder.title)
+    if (seen.has(key)) continue
+    seen.add(key)
+    candidates.push({ id: folder.id, path })
+  }
+
+  return candidates
 }
 
 /**

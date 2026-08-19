@@ -30,6 +30,35 @@ describe('buildCandidatesFromFolders', () => {
     const candidates = buildCandidatesFromFolders(folders, ['1'])
     expect(candidates.some((c) => c.id === '1')).toBe(false)
   })
+
+  it('同父同名的目录只留一个候选——模型眼里它们是同一行，发几遍只会让它随机挑', () => {
+    const folders = [
+      { id: '10', title: '01 GitHub', parentId: '1', index: 0, path: [], depth: 1, level: 1 },
+      { id: '11', title: '01 GitHub', parentId: '1', index: 1, path: [], depth: 1, level: 1 },
+      { id: '12', title: '05 GitHub', parentId: '1', index: 2, path: [], depth: 1, level: 1 },
+    ]
+    const candidates = buildCandidatesFromFolders(folders, ['1'])
+    expect(candidates).toHaveLength(1)
+    // 树序第一个胜出——与 core/tree.ts 复用已有目录的规则同源
+    expect(candidates[0]!.id).toBe('10')
+  })
+
+  it('不同父目录下的同名目录都留着——路径不同，模型分得清', () => {
+    const folders = [
+      { id: '100', title: '工具', parentId: '10', index: 0, path: ['前端'], depth: 2, level: 2 },
+      { id: '110', title: '工具', parentId: '11', index: 0, path: ['后端'], depth: 2, level: 2 },
+    ]
+    expect(buildCandidatesFromFolders(folders, ['1'])).toHaveLength(2)
+  })
+
+  it('范围根照旧排除', () => {
+    const folders = [
+      { id: '1', title: '书签栏', parentId: '0', index: 0, path: [], depth: 0, level: 1 },
+      { id: '10', title: 'GitHub', parentId: '1', index: 0, path: [], depth: 1, level: 1 },
+    ]
+    const candidates = buildCandidatesFromFolders(folders, ['1'])
+    expect(candidates.map((c) => c.id)).toEqual(['10'])
+  })
 })
 
 describe('resolveByRules', () => {

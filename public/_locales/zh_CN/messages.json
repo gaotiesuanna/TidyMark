@@ -790,6 +790,10 @@
       }
     }
   },
+  "logDuplicateFolders": {
+    "message": "范围内有 $count$ 组重名目录，每组只取一个当候选——重名目录对模型是同一行，发几遍只会让同类书签被分散",
+    "placeholders": { "count": { "content": "$1" } }
+  },
   "logModeAdditive": {
     "message": "这批书签已经整理过，这次只把书签归进现有目录：$reason$",
     "placeholders": { "reason": { "content": "$1" } }

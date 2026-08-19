@@ -1,5 +1,5 @@
 import { folderLevels } from './level'
-import { normalizeName, stripNumberPrefix } from './map'
+import { folderPathKey } from './map'
 import type { BookmarkNode } from './ports'
 import type { BookmarkItem, FolderItem, ScanResult, ScanStats } from './types'
 
@@ -66,9 +66,12 @@ export function scanTree(tree: BookmarkNode[], scopeRootIds: string[]): ScanResu
   // 同父 + 归一化后的名字 → 出现次数。用它数出有几组重名目录。
   // 用 path 判「同父」而不是 folder.parentId——后者是原样透传的 BookmarkNode.parentId，
   // 测试夹具（乃至某些浏览器场景）不一定填；path 是遍历时自己拼出来的，靠得住。
+  // key 由 folderPathKey 统一构造（每一段都剥编号前缀再归一化），与
+  // buildCandidatesFromFolders 去重候选用的是同一个函数——这个数字要直接进日志，
+  // 口径必须和实际折叠掉的候选数同源，不然日志会报一个跟结果对不上的数字。
   const folderKeyCounts = new Map<string, number>()
   for (const folder of folders) {
-    const key = JSON.stringify([folder.path, normalizeName(stripNumberPrefix(folder.title))])
+    const key = folderPathKey(folder.path, folder.title)
     folderKeyCounts.set(key, (folderKeyCounts.get(key) ?? 0) + 1)
   }
 
