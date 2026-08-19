@@ -23,7 +23,7 @@ export interface BuildTreeInput {
   /** 同一层目录数上限。省略时用 MAX_SIBLINGS。 */
   maxTopFolders?: number
   /** 允许再往下分一层。false 时忽略 secondaryTopic，只出一层。
-      由调用方按绝对层级算好（见 core/level.ts）：已经建到 maxFolderDepth 那层就是 false。
+      由调用方按形状推导的层数算好（见 core/level.ts）。
       只作用于主题目录树——聚合组的两层结构是那个功能本身的定义，不受影响。 */
   allowChildren?: boolean
   /** 新目录挂载的范围根文件夹 id。 */

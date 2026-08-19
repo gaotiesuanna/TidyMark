@@ -142,8 +142,9 @@ export async function handle(
           // 计划 2/2 会把 N_主题 = N − Σ 存活组命中数 与 depthGuard 预算一起补上。
           const shape = deriveShape(scan.bookmarks.length)
           // 上限只管「要不要再往下分」，不阻止在勾中处建第一层：用户勾了这里就是要在这里
-          // 整理，返回「一个目录都不建」看起来像坏了。层数不再看 settings.maxFolderDepth，
-          // 改看推导出的 shape.depth 是否到了两层
+          // 整理，返回「一个目录都不建」看起来像坏了。层数看的是推导出的 shape.depth
+          // 是否到了两层，不是 settings.maxFolderDepth——那个字段仍留在 Settings 里，
+          // 但已经无人读取，删除随清单第 12 项一起处理
           const allowChildren = shape.depth >= 2
           // shape.top 在三层（N > 1200）时是 0——票 10 有意把三层的分配留空，先兜底
           // 退回 SHAPE_MAX_SIBLINGS，不让「其他」以外的目录数塌成 0

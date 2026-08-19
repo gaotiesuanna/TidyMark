@@ -35,18 +35,6 @@
   "settingsRebuildOnly": {
     "message": "The options below only take effect on runs that redesign the folder structure — TidyMark decides that from the scan itself and tells you on the preferences page before each run."
   },
-  "settingsMaxFoldersTitle": {
-    "message": "Folders per level"
-  },
-  "settingsMaxFoldersBody": {
-    "message": "Topics beyond the limit go into \"Other\". Between 4 and 20."
-  },
-  "settingsDepthTitle": {
-    "message": "Maximum folder depth"
-  },
-  "settingsDepthBody": {
-    "message": "Counted from the bookmark library, not from what you selected: folders on the bookmarks bar are level 1, and \"Other Bookmarks\" is itself level 1, so its contents are level 2. With 2, selecting the bar allows a second level, while selecting \"Other Bookmarks\" produces a single level. Between 1 and 4."
-  },
   "settingsMinSizeTitle": {
     "message": "Minimum bookmarks per folder"
   },

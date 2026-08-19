@@ -1,12 +1,6 @@
 import { t } from '@/i18n'
 import { useStore } from '../store'
-import {
-  MAX_FOLDER_DEPTH, MAX_FOLDER_SIZE, MIN_FOLDER_DEPTH, MIN_FOLDER_SIZE, type Settings,
-} from '@/storage/settings'
-
-/** 上限的合法区间。低于 4 没有分类意义，高于 20 在书签栏里也找不着。 */
-const MIN_TOP_FOLDERS = 4
-const MAX_TOP_FOLDERS = 20
+import { MAX_FOLDER_SIZE, MIN_FOLDER_SIZE, type Settings } from '@/storage/settings'
 
 export function SettingsPanel() {
   const { settings, setSettings } = useStore()
@@ -41,51 +35,6 @@ export function SettingsPanel() {
         <h3 className="text-sm font-medium">{t('settingsClassifyTitle')}</h3>
         <p className="text-[11px] leading-relaxed text-neutral-400">{t('settingsRebuildOnly')}</p>
 
-        <label className="block text-sm">
-          {t('settingsMaxFoldersTitle')}
-          <input
-            type="number"
-            className="mt-1 w-20 rounded border px-2 py-1 text-xs"
-            aria-label={t('settingsMaxFoldersTitle')}
-            min={MIN_TOP_FOLDERS}
-            max={MAX_TOP_FOLDERS}
-            value={settings.maxTopFolders}
-            onChange={(e) => {
-              // 越界或空输入不写进存储：它会一路传到 slice(0, 越界值)，
-              // 在这里挡掉比在建树那头兜底更早、更好解释
-              const next = Number(e.target.value)
-              if (!Number.isInteger(next)) return
-              if (next < MIN_TOP_FOLDERS || next > MAX_TOP_FOLDERS) return
-              void setSettings({ ...settings, maxTopFolders: next })
-            }}
-          />
-          <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-400">
-            {t('settingsMaxFoldersBody')}
-          </span>
-        </label>
-
-        <label className="block text-sm">
-          {t('settingsDepthTitle')}
-          <input
-            type="number"
-            className="mt-1 w-20 rounded border px-2 py-1 text-xs"
-            aria-label={t('settingsDepthTitle')}
-            min={MIN_FOLDER_DEPTH}
-            max={MAX_FOLDER_DEPTH}
-            value={settings.maxFolderDepth}
-            onChange={(e) => {
-              // 与上面那个数字框同样的把关：越界值不写进存储，保持原值
-              const next = Number(e.target.value)
-              if (!Number.isInteger(next)) return
-              if (next < MIN_FOLDER_DEPTH || next > MAX_FOLDER_DEPTH) return
-              void setSettings({ ...settings, maxFolderDepth: next })
-            }}
-          />
-          <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-400">
-            {t('settingsDepthBody')}
-          </span>
-        </label>
-
         {/* 勾选框沿用 PreferencesStep 里那几个的排版，数字框跟着它的勾选状态走 */}
         <div>
           <label className="flex items-start gap-2 text-sm">
@@ -108,7 +57,7 @@ export function SettingsPanel() {
             disabled={!settings.enforceMinFolderSize}
             value={settings.minFolderSize}
             onChange={(e) => {
-              // 与上面两个数字框同样的把关：越界值不写进存储，保持原值。
+              // 越界值不写进存储，保持原值。
               // 下界是 2 而不是 1——填 1 等于没开，那种意图该去取消勾选
               const next = Number(e.target.value)
               if (!Number.isInteger(next)) return
