@@ -1476,6 +1476,43 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
     const collisionLog = events.find((e) => e.message.includes('和已有目录重名'))
     expect(collisionLog?.message).toMatch(/^1 /)
   })
+
+  it('非推翻模式绝不建「其他」——放不进就原地不动，那个模式的承诺是不动已有结构', async () => {
+    const complete = vi.fn(async (prompt: string) => {
+      const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+      if (prompt.includes('候选目录')) {
+        // 全都判「无合适目录」，且不带 topic：连新目录都攒不出来
+        return { results: bookmarkIds.map((id) => (
+          { bookmark_id: id, target_category_id: null, confidence: 0, reason: '无合适目录' }
+        ))}
+      }
+      return { results: bookmarkIds.map((id) => (
+        { bookmark_id: id, primary_topic: '前端', secondary_topic: null }
+      ))}
+    })
+    const fake = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: '收件箱', children: [
+            { id: 'x0', title: '书签 x0', url: 'https://x0.dev' },
+          ]},
+        ]},
+      ]},
+    ])
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+    })
+    const res = await handle(
+      ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' },
+      { createClient: () => ({ complete }), now: () => 1 },
+    ) as { plan: OrganizePlan }
+
+    const created = res.plan.operations.flatMap((o) => (o.type === 'create_folder' ? [o.title] : []))
+    expect(created.some((title) => title.includes('其他'))).toBe(false)
+    expect(res.plan.candidates.some((c) => c.path.at(-1)!.includes('其他'))).toBe(false)
+  })
 })
 
 describe('analyze 非推翻模式：级联勾选（review C2）', () => {
