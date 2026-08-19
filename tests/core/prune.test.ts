@@ -339,6 +339,34 @@ describe('pruneSmallFolders 的待定名单', () => {
     expect(result.pending).toHaveLength(1)
     expect(result.pending[0]!).toMatchObject({ bookmarkId: 'a', fromTitle: '前端' })
   })
+
+  // I2：正在撤的如果是「其他」自己，名单里已经记着的 fromTitle 不能被覆盖——
+  // 用户从没见过「其他」（它最终也不会被建出来），改判理由要点名的是他认识的
+  // 那个第一跳目录，不是「其他」
+  it('「其他」自己也被撤时，名单保留级联前那个真实目录名，不被改写成「其他」', () => {
+    const candidates = [
+      { id: 't1', path: ['01 语音识别'] },
+      { id: 't9', path: ['其他'] },
+    ]
+    const newFolders = [top('t1', '01 语音识别'), top('t9', '其他')]
+    const classifications = [
+      { bookmarkId: 'a', targetCategoryId: 't1', confidence: 0.9, reason: 'r', source: 'llm' as const },
+      { bookmarkId: 'b', targetCategoryId: 't1', confidence: 0.9, reason: 'r', source: 'llm' as const },
+    ]
+    const result = pruneSmallFolders({
+      candidates, newFolders, classifications, minFolderSize: 3, locale: 'zh_CN',
+    })
+
+    // 「其他」自己也只装得下这 2 条，级联被撤，书签退回原位
+    expect(result.fallbackId).toBe('t9')
+    expect(targetOf(result, 'a')).toBeNull()
+    expect(targetOf(result, 'b')).toBeNull()
+    // 名单里记的仍是级联前那个真实目录名，不是最后经过的「其他」
+    expect(result.pending.map((p) => p.bookmarkId).sort()).toEqual(['a', 'b'])
+    expect(result.pending.find((p) => p.bookmarkId === 'a')).toMatchObject({
+      fromTitle: '语音识别', count: 2,
+    })
+  })
 })
 
 describe('pruneReason 已导出', () => {

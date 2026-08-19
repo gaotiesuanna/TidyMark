@@ -74,8 +74,10 @@ export function pruneReason(
  * 还有一处看着矛盾、其实是对的：**建树时无条件放行「其他」，prune 这里却会撤它**。
  * 两处知道的信息不同——建树时它还没收到任何书签，拿标签数去判它毫无意义；
  * prune 时它的真实容量已知，装不满就不值得建。撤掉它之后没有下一站，
- * 里面的书签退回原位，而这正好与非推翻模式的「放不进就原地不动」是同一个行为
- * （见 issues/05-homeless-bookmarks.md「决定 4」）。
+ * 里面的书签在这一步退回原位，而这正好与非推翻模式的「放不进就原地不动」是同一个行为
+ * （见 issues/05-homeless-bookmarks.md「决定 4」）。推翻模式下调用方（handlers.ts 的
+ * 二次判定）还会再问一次模型，把这批书签送去存活目录里更合适的地方；那之后模型仍然
+ * 说没有合适去处的，才真的原地不动——本文件这段注释描述的只是 prune 自己这一步。
  *
  * 顺序也是语义的一部分：深的先判，父目录要等子目录并进来之后才知道自己够不够；
  * 同深度时「其他」最后判，它是所有撤销的去处，先判它就会在书签并进来之前被误撤。
@@ -154,11 +156,19 @@ export function pruneSmallFolders(input: PruneInput): PruneResult {
       // 掉进兜底目录或彻底没有下一站的，交给调用方再问一次模型。
       // 被父目录接住的不记——那是结构上说得通的去处，不必花一次调用。
       // 同一条书签可能被撤两次（子目录 → 父目录 → 「其他」），后写的覆盖先写的：
-      // 理由要讲的是它**最后**待过的那个目录
+      // 这条对**路由**是对的（判断是否最终落进兜底只能看最后一跳）。
+      // 但正在撤的如果是「其他」自己，覆盖就错了——它是这批书签的第二跳，
+      // 用户从没见过「其他」（它最终也不会被建出来），名单里已经记着的那个
+      // fromTitle 才是他认识、后面改判理由要点名的目录，不能被「其他」盖掉。
+      // 只有这一轮里第一次进名单的书签（模型当初就直接选了「其他」，没有
+      // 更早的第一跳）才用「其他」当来历。
       if (target === null || target.id === fallback?.id) {
-        pending.set(classification.bookmarkId, {
-          bookmarkId: classification.bookmarkId, fromTitle: title, count: mine.length,
-        })
+        const isFallbackItself = folder.id === fallback?.id
+        if (!(isFallbackItself && pending.has(classification.bookmarkId))) {
+          pending.set(classification.bookmarkId, {
+            bookmarkId: classification.bookmarkId, fromTitle: title, count: mine.length,
+          })
+        }
       }
     }
   }
