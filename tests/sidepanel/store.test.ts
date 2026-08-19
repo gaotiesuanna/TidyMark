@@ -4,7 +4,7 @@ import {
   MAX_LOGS, MAX_LOG_LENGTH, type LogLine,
 } from '@/sidepanel/store'
 import { send } from '@/sidepanel/lib/send'
-import { currentLocale, setLocale } from '@/i18n'
+import { currentLocale, setLocale, t } from '@/i18n'
 import { DEFAULT_SETTINGS } from '@/storage/settings'
 import { makePlan } from '../fakes/plan'
 import type { ProgressEvent } from '@/background/events'
@@ -494,6 +494,95 @@ describe('失败之后的重试', () => {
     vi.mocked(send).mockImplementation(() => Promise.resolve({ ok: false, error: '写失败' }) as never)
     await useStore.getState().apply()
     expect(useStore.getState().error).toBe('写失败')
+    expect(useStore.getState().retryable).toBeNull()
+  })
+
+  // I4：权限被拒不是配置类错误——ensureHostPermission 再调一次会重新弹权限请求，重试真的有用
+  it('权限被拒时显式给 retryable: analyze，不是 null', async () => {
+    chromeGlobal.chrome.permissions = {
+      contains: () => Promise.resolve(false),
+      request: () => Promise.resolve(false),
+    }
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey: 'sk-x' } } })
+
+    await useStore.getState().analyze()
+    expect(useStore.getState().error).toBe(t('errHostPermission'))
+    expect(useStore.getState().retryable).toBe('analyze')
+  })
+
+  // I3：导入面板与错误条同屏，扫描失败留下的 'scan' 不该在导入失败时借尸还魂——
+  // 走 fail() 之后 confirmImport 自己会显式覆写 retryable，不会继承上一次的值
+  it('扫描失败后改走导入，导入失败时不该带着上一次的重试入口', async () => {
+    const good = JSON.stringify({
+      format: 'tidymark/v1', kind: 'tree', exportedAt: '',
+      roots: [{ name: 'A', children: [{ name: 'a', url: 'https://a.dev' }] }],
+    })
+    vi.mocked(send).mockImplementation((req: { kind: string }) => {
+      if (req.kind === 'scan') return Promise.resolve({ ok: false, error: '扫描失败' }) as never
+      if (req.kind === 'import') return Promise.resolve({ ok: false, error: '导入失败' }) as never
+      return Promise.resolve({ ok: true }) as never
+    })
+    useStore.setState({ tree, checkedIds: new Set(['1']) })
+
+    await useStore.getState().goScan()
+    expect(useStore.getState().retryable).toBe('scan')
+
+    useStore.getState().readImportFile('x.json', good)
+    expect(useStore.getState().importFile).not.toBeNull()
+
+    await useStore.getState().confirmImport()
+    expect(useStore.getState().error).toBe('导入失败')
+    // 点「重试」不该跑扫描——这里必须是 null，不是遗留的 'scan'
+    expect(useStore.getState().retryable).toBeNull()
+  })
+})
+
+/**
+ * I2：errBackgroundRecycled 只有 onDisconnect 这一个来源，本票点名要求
+ * 「按当时的 busyKind 填」——漏了它，端口断而 SW 未死时用户连「请重试」都看不到。
+ */
+describe('长连接断开时按 busyKind 派生 retryable（I2）', () => {
+  const chromeGlobal = globalThis as unknown as { chrome: Record<string, unknown> }
+  const originalRuntime = chromeGlobal.chrome.runtime
+
+  afterEach(() => {
+    chromeGlobal.chrome.runtime = originalRuntime
+  })
+
+  function stubConnectingPort(): { disconnect: () => void } {
+    let handler: (() => void) | undefined
+    chromeGlobal.chrome.runtime = {
+      connect: () => ({
+        onMessage: { addListener: () => {} },
+        onDisconnect: { addListener: (fn: () => void) => { handler = fn } },
+        postMessage: () => {},
+        disconnect: () => {},
+      }),
+    }
+    return { disconnect: () => handler?.() }
+  }
+
+  it('busyKind 是 analyze 时，给 retryable: analyze', async () => {
+    const port = stubConnectingPort()
+    vi.mocked(send).mockImplementation(() => Promise.resolve({ ok: true }) as never)
+
+    await useStore.getState().init()
+    useStore.setState({ busy: '正在分析…', busyKind: 'analyze' })
+    port.disconnect()
+
+    expect(useStore.getState().error).toBe(t('errBackgroundRecycled'))
+    expect(useStore.getState().retryable).toBe('analyze')
+  })
+
+  it('busyKind 是 apply 这类不可重试的步骤时，不给重试入口', async () => {
+    const port = stubConnectingPort()
+    vi.mocked(send).mockImplementation(() => Promise.resolve({ ok: true }) as never)
+
+    await useStore.getState().init()
+    useStore.setState({ busy: '正在写入…', busyKind: 'apply' })
+    port.disconnect()
+
+    expect(useStore.getState().error).toBe(t('errBackgroundRecycled'))
     expect(useStore.getState().retryable).toBeNull()
   })
 })

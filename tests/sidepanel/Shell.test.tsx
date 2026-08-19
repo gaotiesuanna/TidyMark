@@ -76,14 +76,14 @@ describe('Shell 的错误条', () => {
   it('可重试时给出按钮，点了就重跑', async () => {
     const retry = vi.fn()
     useStore.setState({ error: '后台被中断', retryable: 'analyze', retry, busy: null })
-    render(<Shell />)
+    render(<Shell>{null}</Shell>)
     await userEvent.click(screen.getByRole('button', { name: '重试' }))
     expect(retry).toHaveBeenCalled()
   })
 
   it('不可重试的错误只显示文字，没有按钮', () => {
     useStore.setState({ error: '请先填 API Key', retryable: null, busy: null })
-    render(<Shell />)
+    render(<Shell>{null}</Shell>)
     expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
   })
 })

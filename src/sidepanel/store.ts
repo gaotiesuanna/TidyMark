@@ -45,6 +45,21 @@ export function nextStepAfterAnalyze(rebuildStructure: boolean): Step {
   return rebuildStructure ? 'structure' : 'review'
 }
 
+/**
+ * 失败的统一收场：错误与「可重试的是哪一步」必须一起写。
+ *
+ * 这两件事分开写正是票 24 的病根——写 error 的地方有七处，写 retryable 的曾经只有两处，
+ * 于是漏掉的那几处会留下**过期的**重试入口：按钮出不出现取决于「上一次有没有失败过」，
+ * 不取决于当前这个错误。最难看的一例是导入失败后红条带着「重试」回来、点下去跑的是扫描
+ * （见 .superpowers/sdd/2026-08-19-retry-affordance/final-review.md I3）。
+ *
+ * 这里把两件事焊在一个签名上：谁想写 error 就必须显式说出 retryable 是什么，
+ * 漏参数会被 tsc 挡住，而不是静默继承上一轮的值。
+ */
+function fail(set: (partial: Partial<State>) => void, error: string, retryable: State['retryable']): void {
+  set({ busy: null, busyKind: null, retryable, error })
+}
+
 export interface LogLine {
   id: number
   phase: ProgressPhase
@@ -310,7 +325,10 @@ export const useStore = create<State>((set, get) => ({
       onEvent: (event) => get().pushEvent(event),
       onDisconnect: () => {
         if (get().busy === null) return
-        set({ busy: null, busyKind: null, error: t('errBackgroundRecycled') })
+        // 按当时的 busyKind 填：这是这条文案唯一的来源，漏了它，端口断而 SW
+        // 未死时用户连「请重试」这四个字都看不到（见 issues/24-retry-affordance.md §2）
+        const kind = get().busyKind
+        fail(set, t('errBackgroundRecycled'), kind === 'scan' || kind === 'analyze' ? kind : null)
       },
     })
     set({ busy: t('busyReading'), busyKind: 'init', error: null })
@@ -338,7 +356,7 @@ export const useStore = create<State>((set, get) => ({
     set({ busy: t('busyScanning'), busyKind: 'scan', retryable: null, error: null, progress: null, logs: [] })
     const res = await send({ kind: 'scan', scopeRootIds: [...get().checkedIds] })
     if (isStale(get, set, run)) return
-    if (!res.ok) return set({ busy: null, busyKind: null, retryable: 'scan', error: res.error })
+    if (!res.ok) return fail(set, res.error, 'scan')
     if (res.kind !== 'scan') return set({ busy: null, busyKind: null })
     set({ scan: res.scan, step: 'preferences', modeOverride: null, busy: null, busyKind: null })
   },
@@ -357,7 +375,8 @@ export const useStore = create<State>((set, get) => ({
     const granted = await ensureHostPermission(get().settings.llm.baseUrl)
     if (isStale(get, set, run)) return
     if (!granted) {
-      return set({ error: t('errHostPermission') })
+      // 重试有意义：ensureHostPermission 会重新弹一次权限请求，不是配置类错误
+      return fail(set, t('errHostPermission'), 'analyze')
     }
     set({ busy: t('busyAnalyzing'), busyKind: 'analyze', retryable: null, error: null, progress: null, logs: [] })
     // 分析可能跑好几分钟，期间持续 ping，别让后台因空闲被回收
@@ -373,7 +392,7 @@ export const useStore = create<State>((set, get) => ({
     if (!res.ok && res.cancelled === true) {
       return set({ busy: null, busyKind: null, error: null })
     }
-    if (!res.ok) return set({ busy: null, busyKind: null, retryable: 'analyze', error: res.error })
+    if (!res.ok) return fail(set, res.error, 'analyze')
     if (res.kind !== 'analyze') return set({ busy: null, busyKind: null })
     set({
       plan: res.plan,
@@ -457,7 +476,9 @@ export const useStore = create<State>((set, get) => ({
       accepted: [...get().accepted],
     })
       .finally(stopKeepalive)
-    if (!res.ok) return set({ busy: null, busyKind: null, error: res.error })
+    // 不给重试入口：apply 失败时可能已经改了一部分书签，重跑有把同一批移动做两次的风险
+    // （收场靠断点续做，不是这个按钮，见 State.retryable 的注释）
+    if (!res.ok) return fail(set, res.error, null)
     if (res.kind !== 'apply') return set({ busy: null, busyKind: null })
     set({ applyResult: res.result, undoAvailable: true, step: 'result', busy: null, busyKind: null })
     await get().refreshTree()
@@ -466,7 +487,8 @@ export const useStore = create<State>((set, get) => ({
   async undo() {
     set({ busy: t('busyUndoing'), busyKind: 'undo', error: null, progress: null, logs: [] })
     const res = await send({ kind: 'undo' })
-    if (!res.ok) return set({ busy: null, busyKind: null, error: res.error })
+    // 不给重试入口：undo 失败时书签可能处于半撤销状态，重跑有二次改动的风险
+    if (!res.ok) return fail(set, res.error, null)
     if (res.kind !== 'undo') return set({ busy: null, busyKind: null })
     set({ undoResult: res.result, undoAvailable: false, busy: null, busyKind: null })
     await get().refreshTree()
@@ -503,7 +525,9 @@ export const useStore = create<State>((set, get) => ({
       nodes: file.preview.nodes,
       targetName: file.preview.targetName,
     })
-    if (!res.ok) return set({ busy: null, error: res.error })
+    // 不给重试入口：import 失败时可能已经写入了一部分书签，重跑有重复导入的风险；
+    // 这里显式写 null 还顺带堵上了 I3——上一次扫描失败留下的 'scan' 不会再借尸还魂
+    if (!res.ok) return fail(set, res.error, null)
     if (res.kind !== 'import') return set({ busy: null })
 
     set({

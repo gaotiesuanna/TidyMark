@@ -150,7 +150,7 @@
     "message": "Cannot reach the background. Make sure TidyMark is enabled at chrome://extensions, then reopen the side panel."
   },
   "sendErrNoResponse": {
-    "message": "The background returned nothing — it may have been suspended. Please retry."
+    "message": "The background returned nothing — it may have been suspended."
   },
   "exportGroupOne": {
     "message": "Export $count$ selected bookmark",

@@ -12,7 +12,7 @@ const STEPS = [
   { key: 'result', labelKey: 'shellStepResult' },
 ] as const
 
-export function Shell({ children }: { children?: ReactNode }) {
+export function Shell({ children }: { children: ReactNode }) {
   const {
     step,
     busy,

@@ -150,7 +150,7 @@
     "message": "连不上后台。请在 chrome://extensions 里确认 TidyMark 已启用，然后重开侧栏。"
   },
   "sendErrNoResponse": {
-    "message": "后台没有返回结果，可能已被浏览器回收，请重试。"
+    "message": "后台没有返回结果，可能已被浏览器回收。"
   },
   "exportGroupOne": {
     "message": "导出选中的 $count$ 条书签",
