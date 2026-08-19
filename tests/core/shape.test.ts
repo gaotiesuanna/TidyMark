@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deriveShape, MAX_LEAF, SHAPE_MAX_SIBLINGS } from '@/core/shape'
+import { deriveShape, depthGuard, MAX_LEAF, SHAPE_MAX_SIBLINGS } from '@/core/shape'
 
 describe('deriveShape', () => {
   it('书签少时一层就够，目录数按甜点 12 算', () => {
@@ -76,5 +76,33 @@ describe('deriveShape', () => {
   it('零和负数不炸，返回空形状', () => {
     expect(deriveShape(0)).toEqual({ leaves: 0, depth: 0, top: 0, perLeaf: 0 })
     expect(deriveShape(-5).depth).toBe(0)
+  })
+})
+
+describe('depthGuard', () => {
+  it('没有聚合组时就是满预算', () => {
+    expect(depthGuard(0, 123)).toBe(SHAPE_MAX_SIBLINGS)
+  })
+
+  it('挤得下就挤——组占掉的位子直接从主题预算里让出来', () => {
+    // 60 条：满预算下 deriveShape(60) 是一层；预算收到 10 − 3 = 7 仍是一层，那就用 7
+    expect(depthGuard(3, 60)).toBe(7)
+  })
+
+  it('挤到会多分一层时就退回去，一层一层放宽到第一个不加深的', () => {
+    // 123 条：满预算一层；10 − 6 = 4 时 123/4 = 30.75 > 20 会变两层，
+    // 于是往回放宽，取第一个仍是一层的预算
+    const cap = depthGuard(6, 123)
+    expect(deriveShape(123, cap).depth).toBe(deriveShape(123).depth)
+    expect(cap).toBeGreaterThan(4)
+  })
+
+  it('放宽到满预算仍然加深时，就用满预算——不为了不加深而无限放宽', () => {
+    // 书签多到满预算也得两层的量级，depthGuard 不该返回超过上限的值
+    expect(depthGuard(6, 3000)).toBeLessThanOrEqual(SHAPE_MAX_SIBLINGS)
+  })
+
+  it('组数多到把预算压到 0 时至少留 1', () => {
+    expect(depthGuard(20, 50)).toBeGreaterThanOrEqual(1)
   })
 })

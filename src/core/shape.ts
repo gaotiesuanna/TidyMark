@@ -69,3 +69,25 @@ export function deriveShape(n: number, topCap: number = SHAPE_MAX_SIBLINGS): Fol
   )
   return { leaves, depth: 2, top: branch, perLeaf: n / leaves }
 }
+
+/**
+ * 主题目录的一级预算：**挤到不能再挤，但绝不因为聚合组而让主题多分一层。**
+ *
+ * 聚合组要占一级目录的位子，最直觉的做法是「主题预算 = 上限 − 组数」硬挤。
+ * 原型对跑（tools/shape-with-groups.mjs）证明那一格是致命的：勾 6 个组、123 条书签时，
+ * 主题的 98 条会被压成「3 个一级 × 3 个二级」——正是票 10 枪毙方案 A 的那个失败模式
+ * （多分一层，而那层几乎不承载区分度），只是触发条件从「N 卡在阈值上」换成了「勾的组多」。
+ *
+ * 所以从最紧的预算起往回找第一个不会加深的值。规则里没有拍脑袋的常数：
+ * 下限由「这批书签本来该多深」自己算出来。代价是最坏情况一级目录到 14 个
+ * （勾满 6 个组 + 1200 条书签），破判准 A3——接受它，因为同层多两个是线性代价
+ * （多扫两行），多一层是指数代价（每个都要点开才知道里面是什么），
+ * 而「GitHub」「论文」「视频」这种来源名一眼掠过、几乎不耗认知。
+ */
+export function depthGuard(groups: number, topicN: number): number {
+  const want = deriveShape(topicN, SHAPE_MAX_SIBLINGS).depth
+  for (let cap = Math.max(SHAPE_MAX_SIBLINGS - groups, 1); cap < SHAPE_MAX_SIBLINGS; cap++) {
+    if (deriveShape(topicN, cap).depth <= want) return cap
+  }
+  return SHAPE_MAX_SIBLINGS
+}
