@@ -126,11 +126,11 @@ describe('scanTree 带上绝对层级', () => {
 describe('scanTree 数重名目录', () => {
   it('同父同名算一组，编号不影响判定', () => {
     const tree = [{ id: '0', title: '', children: [
-      { id: '1', title: '书签栏', children: [
-        { id: '10', title: '01 GitHub', children: [] },
-        { id: '11', title: '01 GitHub', children: [] },
-        { id: '12', title: '05 GitHub', children: [] },
-        { id: '13', title: '02 前端', children: [] },
+      { id: '1', parentId: '0', title: '书签栏', children: [
+        { id: '10', parentId: '1', title: '01 GitHub', children: [] },
+        { id: '11', parentId: '1', title: '01 GitHub', children: [] },
+        { id: '12', parentId: '1', title: '05 GitHub', children: [] },
+        { id: '13', parentId: '1', title: '02 前端', children: [] },
       ]},
     ]}]
     const scan = scanTree(tree, ['1'])
@@ -138,11 +138,17 @@ describe('scanTree 数重名目录', () => {
     expect(scan.stats.duplicateFolderGroups).toBe(1)
   })
 
-  it('不同父目录下的同名目录不算重名——路径不同，分得清', () => {
+  it('不同父目录下的同名目录不算重名——父目录不同，分得清', () => {
+    // 两个「工具」的 parentId 分别是 '10'（前端）与 '11'（后端）——必须如实填对，
+    // 判同名靠的是真父目录 id，不是相对范围根拼出来的路径。
     const tree = [{ id: '0', title: '', children: [
-      { id: '1', title: '书签栏', children: [
-        { id: '10', title: '前端', children: [{ id: '100', title: '工具', children: [] }] },
-        { id: '11', title: '后端', children: [{ id: '110', title: '工具', children: [] }] },
+      { id: '1', parentId: '0', title: '书签栏', children: [
+        { id: '10', parentId: '1', title: '前端', children: [
+          { id: '100', parentId: '10', title: '工具', children: [] },
+        ]},
+        { id: '11', parentId: '1', title: '后端', children: [
+          { id: '110', parentId: '11', title: '工具', children: [] },
+        ]},
       ]},
     ]}]
     expect(scanTree(tree, ['1']).stats.duplicateFolderGroups).toBe(0)
@@ -150,11 +156,11 @@ describe('scanTree 数重名目录', () => {
 
   it('两组重名就是 2', () => {
     const tree = [{ id: '0', title: '', children: [
-      { id: '1', title: '书签栏', children: [
-        { id: '10', title: 'GitHub', children: [] },
-        { id: '11', title: 'GitHub', children: [] },
-        { id: '12', title: '论文', children: [] },
-        { id: '13', title: '论文', children: [] },
+      { id: '1', parentId: '0', title: '书签栏', children: [
+        { id: '10', parentId: '1', title: 'GitHub', children: [] },
+        { id: '11', parentId: '1', title: 'GitHub', children: [] },
+        { id: '12', parentId: '1', title: '论文', children: [] },
+        { id: '13', parentId: '1', title: '论文', children: [] },
       ]},
     ]}]
     expect(scanTree(tree, ['1']).stats.duplicateFolderGroups).toBe(2)
@@ -162,9 +168,9 @@ describe('scanTree 数重名目录', () => {
 
   it('没有重名时是 0', () => {
     const tree = [{ id: '0', title: '', children: [
-      { id: '1', title: '书签栏', children: [
-        { id: '10', title: 'GitHub', children: [] },
-        { id: '11', title: '论文', children: [] },
+      { id: '1', parentId: '0', title: '书签栏', children: [
+        { id: '10', parentId: '1', title: 'GitHub', children: [] },
+        { id: '11', parentId: '1', title: '论文', children: [] },
       ]},
     ]}]
     expect(scanTree(tree, ['1']).stats.duplicateFolderGroups).toBe(0)

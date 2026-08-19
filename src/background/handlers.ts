@@ -100,9 +100,19 @@ export async function handle(
         // 非推翻模式的候选表永远是空的（见 issues review C2）。roots 已经用
         // findScopeRoots 去重过父子，这里直接拿它的 id 集合。
         let candidates = buildCandidatesFromFolders(scan.folders, roots.map((r) => r.id))
-        // 数字取自扫描阶段算好的 stats，不在这里重算一遍——两处口径必须是同一个
-        if (scan.stats.duplicateFolderGroups > 0) {
-          log('scan', t('logDuplicateFolders', String(scan.stats.duplicateFolderGroups)))
+        // 日志报「实际折叠掉几个」，不借用 scan.stats.duplicateFolderGroups——那是「组数」，
+        // 范围根也算在内；候选却排除范围根，两个数字对不上（勾两个同名范围根时
+        // stats 说 1 组、这里实际一个都没折叠）。用非根目录数减候选数，才是这次
+        // buildCandidatesFromFolders 真的合并掉的数量。
+        // 只在归入现有模式下打：推翻模式的候选来自下面的 buildCategoryTree，根本不经过
+        // buildCandidatesFromFolders（这里算出的 candidates 会在 rebuild 分支里被整个
+        // 覆盖），在那条路上打这句话说的是另一条代码路径发生的事，会误导用户。
+        if (!rebuild) {
+          const nonRootFolderCount = scan.folders.length - roots.length
+          const foldedCount = nonRootFolderCount - candidates.length
+          if (foldedCount > 0) {
+            log('scan', t('logDuplicateFolders', String(foldedCount)))
+          }
         }
         let newFolders: NewFolderSpec[] = []
         let renameFolders: RenameFolderSpec[] = []

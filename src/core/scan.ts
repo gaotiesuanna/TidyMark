@@ -1,5 +1,5 @@
 import { folderLevels } from './level'
-import { folderPathKey } from './map'
+import { folderKey } from './map'
 import type { BookmarkNode } from './ports'
 import type { BookmarkItem, FolderItem, ScanResult, ScanStats } from './types'
 
@@ -63,15 +63,18 @@ export function scanTree(tree: BookmarkNode[], scopeRootIds: string[]): ScanResu
   const urlCounts = new Map<string, number>()
   for (const item of bookmarks) urlCounts.set(item.url, (urlCounts.get(item.url) ?? 0) + 1)
 
-  // 同父 + 归一化后的名字 → 出现次数。用它数出有几组重名目录。
-  // 用 path 判「同父」而不是 folder.parentId——后者是原样透传的 BookmarkNode.parentId，
-  // 测试夹具（乃至某些浏览器场景）不一定填；path 是遍历时自己拼出来的，靠得住。
-  // key 由 folderPathKey 统一构造（每一段都剥编号前缀再归一化），与
+  // 同父（parentId）+ 归一化后的名字 → 出现次数。用它数出有几组重名目录。
+  // 用 folder.parentId 判「同父」，不用相对范围根拼出来的 path——勾了两个同名
+  // 范围根时，两个真父目录并不相同的子树会因为「相对各自范围根的路径」凑巧一样
+  // 而被错误合并成一组。parentId 就是上面 walk() 里如实透传的 BookmarkNode.parentId
+  // （`parentId: node.parentId ?? null`），调用方（含测试夹具）必须按真实层级填好，
+  // 不能省——这正是它靠得住的前提。
+  // key 由 folderKey 统一构造（父目录 id + 剥编号前缀再归一化的名字），与
   // buildCandidatesFromFolders 去重候选用的是同一个函数——这个数字要直接进日志，
   // 口径必须和实际折叠掉的候选数同源，不然日志会报一个跟结果对不上的数字。
   const folderKeyCounts = new Map<string, number>()
   for (const folder of folders) {
-    const key = folderPathKey(folder.path, folder.title)
+    const key = folderKey(folder)
     folderKeyCounts.set(key, (folderKeyCounts.get(key) ?? 0) + 1)
   }
 

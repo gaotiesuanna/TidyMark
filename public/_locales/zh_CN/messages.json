@@ -791,7 +791,7 @@
     }
   },
   "logDuplicateFolders": {
-    "message": "范围内有 $count$ 组重名目录，每组只取一个当候选——重名目录对模型是同一行，发几遍只会让同类书签被分散",
+    "message": "范围内有 $count$ 个重名目录被折叠掉了，只留同名中的第一个当候选——它们对模型是同一行，都发出去只会让同类书签被分散",
     "placeholders": { "count": { "content": "$1" } }
   },
   "logModeAdditive": {

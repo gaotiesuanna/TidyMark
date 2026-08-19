@@ -67,9 +67,11 @@ describe('handle', () => {
   })
 
   it('范围内有重名目录时说一声——不然用户不知道有一批目录没进候选', async () => {
+    const classifyPrompts: string[] = []
     const complete = vi.fn(async (prompt: string) => {
       const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
       if (prompt.includes('候选目录')) {
+        classifyPrompts.push(prompt)
         const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)].map((m) => m[1]!)
         return { results: bookmarkIds.map((id) => (
           { bookmark_id: id, target_category_id: ids[0] ?? null, confidence: 0.9, reason: 'r' }
@@ -103,6 +105,14 @@ describe('handle', () => {
     )
 
     expect(events.some((e) => e.message.includes('重名'))).toBe(true)
+    // 光有日志不够——真正要守住的是模型只会收到一行候选，不是两个 id=10/id=11
+    // 都发过去让它随机挑（这才是这次改动的全部目的，删掉去重闸门这条要变红）。
+    // 只数候选清单那几行（`- id=… 目录=…`），不数书签自带的 current_folder 字段——
+    // 后者本来就会给每个躺在 01 GitHub 里的书签各印一遍「书签栏 / 01 GitHub」，
+    // 跟候选去重与否无关，混进来数会把断言废掉。
+    expect(classifyPrompts).toHaveLength(1)
+    const catalogLines = [...classifyPrompts[0]!.matchAll(/^- id=(\S+) 目录=(.+)$/gm)]
+    expect(catalogLines.filter((m) => m[2] === '书签栏 / 01 GitHub')).toHaveLength(1)
   })
 
   it('apply 执行 Plan 并返回结果', async () => {
