@@ -156,10 +156,13 @@ describe('detectMode', () => {
       build([filled('f0', '01 前端', 3), filled('f1', '02 后端', 3)]),
       // 一个目录都没有
       scanOf([ROOT], [bookmark('b0', '1')]),
-      // 根下散着
-      build([filled('f0', '前端', 2)], Array.from({ length: 5 }, (_, i) => bookmark(`l${i}`, '1'))),
-      // 独苗过多
-      build([filled('f0', '独苗一', 1), filled('f1', '独苗二', 1), filled('f2', '前端', 3)]),
+      // 根下散着（书签总数凑到 MIN_JUDGED_BOOKMARKS，不然被样本量护栏挡住走不到这条规则）
+      build([filled('f0', '前端', 3)], Array.from({ length: 7 }, (_, i) => bookmark(`l${i}`, '1'))),
+      // 独苗过多（目录数凑到 MIN_JUDGED_FOLDERS，理由同上）
+      build([
+        filled('f0', '独苗一', 1), filled('f1', '独苗二', 1),
+        filled('f2', '独苗三', 1), filled('f3', '前端', 3),
+      ]),
       // 保守兜底
       build([filled('f0', '前端', 5), filled('f1', '后端', 5)]),
     ]
@@ -170,5 +173,76 @@ describe('detectMode', () => {
       expect(cjk.test(zh)).toBe(true)
       expect(cjk.test(en), `英文理由里混着中文：${en}`).toBe(false)
     }
+  })
+
+  it('样本量护栏：目录太少时，独苗比例再高也不足以判乱麻（I2）', () => {
+    // 用户手建的「工作」目录下是「报销」（1 条）和「周报」（10 条）：1/2 = 50% > 40%，
+    // 但只有 2 个目录，够不上 MIN_JUDGED_FOLDERS，落到保守兜底
+    const scan = build([filled('f0', '报销', 1), filled('f1', '周报', 10)])
+    expect(detectMode(scan, 'zh_CN').mode).toBe('additive')
+  })
+
+  it('样本量护栏：书签太少时，散落比例再高也不足以判乱麻（I2）', () => {
+    // 1 个目录 2 条、根下散 3 条：3/5 = 60% > 30%，但书签总数 5 够不上
+    // MIN_JUDGED_BOOKMARKS，落到保守兜底
+    const scan = build(
+      [filled('f0', '目录', 2)],
+      Array.from({ length: 3 }, (_, i) => bookmark(`loose${i}`, '1')),
+    )
+    expect(detectMode(scan, 'zh_CN').mode).toBe('additive')
+  })
+})
+
+describe('detectMode 对真实书签库形状的判断（回归 Recommendation 2）', () => {
+  const shapes: Array<{ name: string; scan: () => ScanResult; expected: 'additive' | 'rebuild' }> = [
+    {
+      name: 'TidyMark 一层产物：一级目录全带编号，书签栏上另外堆着新书签 → additive',
+      scan: () => build(
+        Array.from({ length: 4 }, (_, i) =>
+          filled(`f${i}`, `${String(i + 1).padStart(2, '0')} 主题${i}`, 4)),
+        Array.from({ length: 8 }, (_, i) => bookmark(`loose${i}`, '1')),
+      ),
+      expected: 'additive',
+    },
+    {
+      name: 'TidyMark 一层产物：一级全带编号，二级是用户自建的无编号目录，35% 散落 → additive（C1 回归）',
+      scan: () => {
+        // 分母若像修复前那样把二级也算进去：4 个一级 + 12 个无编号二级 = 16 个
+        // 判断目录，编号比例只有 4/16 = 25%，够不上 0.5，会落到散落比例（约 37%）
+        // 上翻成 rebuild——正是 C1 要堵的那个 bug。分母只取一级后是 4/4 = 100%，
+        // 直接定性成 additive，二级目录、散落比例都不再有机会把它翻过去。
+        const tops = Array.from({ length: 4 }, (_, i) =>
+          folder(`f${i}`, `${String(i + 1).padStart(2, '0')} 主题${i}`, '1', 1))
+        const subs = tops.flatMap((top) =>
+          Array.from({ length: 3 }, (_, j) => folder(`${top.id}-s${j}`, `子目录${j}`, top.id, 2)))
+        const subBookmarks = subs.map((s) => bookmark(`${s.id}-b`, s.id))
+        const loose = Array.from({ length: 7 }, (_, i) => bookmark(`loose${i}`, '1'))
+        return scanOf([ROOT, ...tops, ...subs], [...subBookmarks, ...loose])
+      },
+      expected: 'additive',
+    },
+    {
+      name: '手工整理：没有编号，书签在几个目录间分布均匀 → additive',
+      scan: () => build(Array.from({ length: 5 }, (_, i) => filled(`f${i}`, `目录${i}`, 4))),
+      expected: 'additive',
+    },
+    {
+      name: '全散：范围内一个目录都没有 → rebuild',
+      scan: () => scanOf([ROOT], Array.from({ length: 6 }, (_, i) => bookmark(`b${i}`, '1'))),
+      expected: 'rebuild',
+    },
+    {
+      name: '目录很多，但大半是独苗 → rebuild',
+      scan: () => build([
+        filled('f0', '独苗一', 1), filled('f1', '独苗二', 1),
+        filled('f2', '独苗三', 1), filled('f3', '独苗四', 1),
+        filled('f4', '正常一', 3), filled('f5', '正常二', 3),
+      ]),
+      expected: 'rebuild',
+    },
+  ]
+
+  it.each(shapes)('$name', ({ scan, expected }) => {
+    expect(detectMode(scan(), 'zh_CN').mode).toBe(expected)
   })
 })

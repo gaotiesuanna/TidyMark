@@ -28,6 +28,19 @@ export const LOOSE_BOOKMARK_RATIO = 0.3
 export const SINGLETON_FOLDER_RATIO = 0.4
 
 /**
+ * 样本量护栏，与上面三条比例同类——也是待更多真实书签库校准的初值。
+ *
+ * 判断目录/书签的数量低于这两个门槛时，对应的比例规则不生效，直接放行给下一条规则
+ * （最终兜底是 additive）。理由见 issues/14-mode-detection.md §2：不对称论证的全部
+ * 力量来自「乱信号是明确的」，样本量只有一两个时，一个目录/一条书签就能把比例推过线，
+ * 这算不上明确证据。
+ *
+ * 「一个目录都没有 → rebuild」那条不受这两个护栏影响：它是结构事实，不是比例。
+ */
+export const MIN_JUDGED_FOLDERS = 4
+export const MIN_JUDGED_BOOKMARKS = 10
+
+/**
  * 「这个目录名带编号前缀吗」。`stripNumberPrefix` 剥不动就是没带。
  *
  * 整串都是编号的标题（如 `01 `）被 stripNumberPrefix 原样返回，于是这里判成「没带」。
@@ -64,15 +77,24 @@ export function detectMode(scan: ScanResult, locale: Locale): ModeDecision {
   // 编号前缀是最强也最便宜的信号，几乎必然是上一轮 TidyMark 留下的：命中就直接定性，
   // 不再看别的。反过来「没有编号」什么都不说明——手工整理得很好的库同样没有编号，
   // 只看编号会把他判成一团乱麻，而那正是危险方向（§1）
-  const numbered = judged.filter((f) => hasNumberPrefix(f.title)).length
-  if (numbered / judged.length >= NUMBERED_PREFIX_RATIO) {
-    return { mode: 'additive', reason: reasonNumbered(locale, numbered, judged.length) }
+  //
+  // 分母只取一级目录：TidyMark 按设计只给一级目录编号，二级目录里用户自建、
+  // 本轮没收到书签的目录被刻意保持原样、不编号（见 core/plan.ts 的 participates）。
+  // 把二级目录也算进分母，等于按用户手建子目录的多寡把这条最强信号成比例稀释掉。
+  const numerable = judged.filter((f) => f.depth === 1)
+  const numbered = numerable.filter((f) => hasNumberPrefix(f.title)).length
+  if (numerable.length > 0 && numbered / numerable.length >= NUMBERED_PREFIX_RATIO) {
+    return { mode: 'additive', reason: reasonNumbered(locale, numbered, numerable.length) }
   }
 
-  // 「散在根下」= 直接挂在勾中的那个目录底下，一层都没进
+  // 「散在根下」= 直接挂在勾中的那个目录底下，一层都没进。样本太少时一两条散落
+  // 书签就能把比例推过线，够不上「明确的乱信号」，让它放行给下一条规则
   const rootIds = new Set(roots.map((r) => r.id))
   const loose = scan.bookmarks.filter((b) => rootIds.has(b.parentId)).length
-  if (scan.bookmarks.length > 0 && loose / scan.bookmarks.length > LOOSE_BOOKMARK_RATIO) {
+  if (
+    scan.bookmarks.length >= MIN_JUDGED_BOOKMARKS &&
+    loose / scan.bookmarks.length > LOOSE_BOOKMARK_RATIO
+  ) {
     return { mode: 'rebuild', reason: reasonLoose(locale, loose, scan.bookmarks.length) }
   }
 
@@ -83,7 +105,8 @@ export function detectMode(scan: ScanResult, locale: Locale): ModeDecision {
   const singletons = judged.filter(
     (f) => bookmarkCount.get(f.id) === 1 && !hasSubfolder.has(f.id),
   ).length
-  if (singletons / judged.length > SINGLETON_FOLDER_RATIO) {
+  // 目录太少时同理：一个装了一条书签的目录就能把比例推过线，够不上明确证据
+  if (judged.length >= MIN_JUDGED_FOLDERS && singletons / judged.length > SINGLETON_FOLDER_RATIO) {
     return { mode: 'rebuild', reason: reasonSingletons(locale, singletons, judged.length) }
   }
 
@@ -96,8 +119,8 @@ function percent(part: number, total: number): number {
 }
 
 function reasonNumbered(locale: Locale, numbered: number, total: number): string {
-  if (locale === 'zh_CN') return `${total} 个目录里有 ${numbered} 个带编号前缀，是上一轮整理留下的结构`
-  return `${numbered} of ${total} folders carry a number prefix — the structure an earlier run left behind`
+  if (locale === 'zh_CN') return `${total} 个一级目录里有 ${numbered} 个带编号前缀，看起来是排过序的结构`
+  return `${numbered} of ${total} top-level folders carry a number prefix — looks like a structure that was already ordered`
 }
 
 function reasonNoFolders(locale: Locale): string {

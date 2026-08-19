@@ -1688,11 +1688,15 @@ const tidyTree: TreeSpec[] = [
   ]},
 ]
 
-/** 一团乱麻的样子：书签全散在书签栏底下，只有一个装了一条的目录。 */
+/**
+ * 一团乱麻的样子：书签全散在书签栏底下，只有一个装了一条的目录。
+ * 散落书签给到 9 条、总数凑够 10（= MIN_JUDGED_BOOKMARKS），不然「根下散落比例」
+ * 这条规则会被样本量护栏挡住，判不出 rebuild（见 core/mode.ts 的 I2）。
+ */
 const messyTree: TreeSpec[] = [
   { id: '0', title: '', children: [
     { id: '1', title: '书签栏', children: [
-      ...Array.from({ length: 5 }, (_, i) => (
+      ...Array.from({ length: 9 }, (_, i) => (
         { id: `l${i}`, title: `书签 l${i}`, url: `https://l${i}.dev` }
       )),
       { id: '10', title: '待归档', children: [
