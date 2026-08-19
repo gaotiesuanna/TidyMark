@@ -8,6 +8,7 @@ import { NO_TOPIC } from './tags'
 import type { LlmClient } from './client'
 import {
   logCompoundNames, logCompoundNamesRemain, logDuplicateTopics, logFoldersDone, logFoldersFailed,
+  logFoldersRetryFailed, logNoTopicMapped,
 } from './logs'
 import { foldersPrompt, mergeNamePrompt, newFolderNamesPrompt } from './prompts'
 
@@ -146,7 +147,13 @@ function buildDesignPrompt(topics: TopicCount[], options: DesignOptions, locale:
  *
  * 中文连接词两侧各要求至少两个字：「饱和度」这种把「和」嵌在词里的名字不该被误判，
  * 而真正的复合名（「记忆与向量存储」「Python 配置与排错」）两侧都不止两个字。
- * 英文只认独立成词的 and / & / 斜杠——「Q&A」「AT&T」「Text-to-Speech」是一个概念，放过。
+ * 连接词字符类覆盖「与」「和」「及」「、」「/」「／」「＆」「&」「+」——「及」顺带盖住「以及」
+ * （「以」并进左侧词块），「/」「＆」是模型被禁用「与」「和」之后最省力的两种改法
+ * （见 issues review I2：不补的话最常见的重问结果会被静默判成成功）。
+ * 英文只认独立成词的 and / & / 斜杠，以及逗号列举——「Q&A」「AT&T」「Text-to-Speech」是
+ * 一个概念，放过；不带空格的斜杠只在两侧都是 ≤3 个字符的缩写时放过
+ * （护住「CI/CD」「I/O」「TCP/IP」「A/B」），更长的一律认成复合
+ * （「Speech synthesis/cloning」这种不带空格的斜杠恰恰是英文目录名里更常见的写法）。
  *
  * 判错的方向是不对称的：多认一个只是白问一次模型，漏认一个就留下一对会抢书签的目录，
  * 所以边界往「宁可多问一次」偏。
@@ -154,18 +161,30 @@ function buildDesignPrompt(topics: TopicCount[], options: DesignOptions, locale:
 export function isCompoundName(title: string, locale: Locale): boolean {
   const name = title.trim()
   if (locale === 'zh_CN') {
-    return /[一-鿿A-Za-z0-9]{2,}\s*[与和、]\s*[一-鿿A-Za-z0-9]{2,}/.test(name)
+    return /[一-鿿A-Za-z0-9]{2,}\s*[与和及、/／＆&+]\s*[一-鿿A-Za-z0-9]{2,}/.test(name)
   }
-  return /\s(and|&)\s|\s\/\s/i.test(name)
+  if (/\s(and|&)\s|\s\/\s|,\s*[A-Za-z]/i.test(name)) return true
+  const slash = /([A-Za-z0-9]+)\/([A-Za-z0-9]+)/.exec(name)
+  if (slash !== null && !(slash[1]!.length <= 3 && slash[2]!.length <= 3)) return true
+  return false
 }
 
-/** 发一次请求并把返回解析成 FolderDesign；失败返回 null（日志已在内部打）。 */
+/**
+ * 一次 requestDesign 的结果。不在这里打任何 onLog——一摊可能连着发两次请求
+ * （首轮 + 重问），日志该打在哪一次、打给谁看，只有调用方（designFolders）知道
+ * 「这次是不是最终会被采用的那一版」（见 issues review I1）。
+ */
+type DesignAttempt =
+  | { ok: true; design: FolderDesign; duplicateDetail: string | null }
+  | { ok: false; detail: string }
+
+/** 发一次请求并把返回解析成 FolderDesign；失败时把原因带回去，不在这里打日志。 */
 async function requestDesign(
   prompt: string,
   client: LlmClient,
   locale: Locale,
   options: DesignOptions,
-): Promise<FolderDesign | null> {
+): Promise<DesignAttempt> {
   try {
     const response = (await client.complete(prompt, DESIGN_SCHEMA)) as {
       folders?: RawFolder[]
@@ -224,29 +243,41 @@ async function requestDesign(
       folders.push({ title: folder.title, children: kept.map((c) => c.title) })
     }
 
-    if (folders.length === 0) return null
+    if (folders.length === 0) return { ok: false, detail: locale === 'zh_CN' ? '模型没有返回任何目录' : 'The model returned no folders' }
 
-    // 同一标签被多个目录同时声明：不抛错、取最后一个，但汇总成一条警告方便排查
+    // 同一标签被多个目录同时声明：不抛错、取最后一个，但汇总成一条警告方便排查——
+    // 只有这一版最终被采用时才该打给用户看，交给调用方决定
     const duplicated = [...declaredBy.values()].filter((entry) => entry.owners.size > 1)
-    if (duplicated.length > 0) {
-      const detail = duplicated
-        .map((entry) =>
-          locale === 'zh_CN'
-            ? `「${entry.display}」被 ${entry.owners.size} 个目录同时声明`
-            : `"${entry.display}" was declared by ${entry.owners.size} folders`,
-        )
-        .join(locale === 'zh_CN' ? '；' : '; ')
-      options.onLog?.(logDuplicateTopics(locale, detail), 'warn')
-    }
+    const duplicateDetail = duplicated.length === 0 ? null : duplicated
+      .map((entry) =>
+        locale === 'zh_CN'
+          ? `「${entry.display}」被 ${entry.owners.size} 个目录同时声明`
+          : `"${entry.display}" was declared by ${entry.owners.size} folders`,
+      )
+      .join(locale === 'zh_CN' ? '；' : '; ')
 
-    options.onLog?.(logFoldersDone(locale, folders.length, mapping.size), 'info')
-    return { folders, mapping }
+    return { ok: true, design: { folders, mapping }, duplicateDetail }
   } catch (error) {
     // 只进开发者控制台，不必双语。
     console.error('[TidyMark] 目录设计失败：', error)
-    options.onLog?.(logFoldersFailed(locale, String(error)), 'error')
-    return null
+    return { ok: false, detail: String(error) }
   }
+}
+
+/**
+ * 一版设计最终被采用时，统一在这里打「设计完成」与「重复声明」两条日志——
+ * 不管一摊里发了一次请求还是两次，这两条只会各打一次，且数字/详情都取自
+ * 真正被返回给调用方的那一版（见 issues review I1）。
+ */
+function logAdopted(
+  attempt: { design: FolderDesign; duplicateDetail: string | null },
+  locale: Locale,
+  options: DesignOptions,
+): void {
+  if (attempt.duplicateDetail !== null) {
+    options.onLog?.(logDuplicateTopics(locale, attempt.duplicateDetail), 'warn')
+  }
+  options.onLog?.(logFoldersDone(locale, attempt.design.folders.length, attempt.design.mapping.size), 'info')
 }
 
 /**
@@ -268,26 +299,56 @@ export async function designFolders(
 
   const prompt = buildDesignPrompt(topics, options, locale)
   const first = await requestDesign(prompt, client, locale, options)
-  if (first === null) return null
+  if (!first.ok) {
+    // 首轮真的失败：调用方会退回原始标签，这条文案说「保留原始标签」是对的
+    options.onLog?.(logFoldersFailed(locale, first.detail), 'error')
+    return null
+  }
 
-  const compound = compoundTitles(first, locale)
-  if (compound.length === 0) return first
+  const compound = compoundTitles(first.design, locale)
+  if (compound.length === 0) {
+    logAdopted(first, locale, options)
+    return first.design
+  }
 
   const detail = compound.join(locale === 'zh_CN' ? '、' : ', ')
   options.onLog?.(logCompoundNames(locale, detail), 'warn')
+
+  // 重问是取消之后才新发起的一次请求，不属于「已经在跑的这次请求不中途打断」
+  // 这条承诺覆盖的范围——用户点了取消，这次请求本就不该发出去（见 issues review I3）。
+  if (options.isCancelled?.() === true) {
+    logAdopted(first, locale, options)
+    return first.design
+  }
+
   // 只重问一次。重问失败（网络错、返回形状不对）就用第一版——名字不好看，
   // 也好过整摊书签退回碎片化的原始标签
   const second = await requestDesign(
     [prompt, '', ...compoundFeedback(locale, compound)].join('\n'),
     client, locale, options,
   )
-  if (second === null) return first
-
-  const remain = compoundTitles(second, locale)
-  if (remain.length > 0) {
-    options.onLog?.(logCompoundNamesRemain(locale, remain.join(locale === 'zh_CN' ? '、' : ', ')), 'warn')
+  if (!second.ok) {
+    // 重问失败≠首轮失败：第一版仍然被采用，不是退回原始标签，
+    // 不能打 logFoldersFailed 那条文案（见 issues review I1）
+    options.onLog?.(logFoldersRetryFailed(locale, second.detail), 'warn')
+    logAdopted(first, locale, options)
+    return first.design
   }
-  return second
+
+  const remain = compoundTitles(second.design, locale)
+  // 重问回来复合名不比第一版少，说明这一版没有变好——「收手」不等于「必须用它」，
+  // 退回更差的一版与「宁可名字不好看」的兜底哲学不符（见 issues review M8）
+  const useFirst = remain.length >= compound.length
+  const chosen = useFirst ? first : second
+  const remainingNames = useFirst ? compound : remain
+  if (remainingNames.length > 0) {
+    options.onLog?.(
+      logCompoundNamesRemain(locale, remainingNames.join(locale === 'zh_CN' ? '、' : ', ')),
+      'warn',
+    )
+  }
+  logAdopted(chosen, locale, options)
+  return chosen.design
 }
 
 /** 设计里所有复合名，一级与二级都算。 */
@@ -347,7 +408,20 @@ export async function designTagFolders(
 
   // 每个下标默认落回原始标签；每摊各自按位写回，等长同序与「每条各自映射」两条承诺都成立
   const result: TagResult[] = tags.slice()
-  /** 跑一摊，返回这一摊设计出来的目录（含子目录）标题；失败返回空数组。 */
+  /**
+   * 跑一摊，返回这一摊设计出来、且实际装得下 minFolderSize 的目录（含子目录）标题；
+   * 失败返回空数组。
+   *
+   * 「实际装得下」按 applyDesign 之后每条标签落在哪条路径下现数，不是模型设计产物里
+   * 自称的 topics 数——模型可能漏映射或多映射，数出来的才是真会建出的书签数
+   * （见 issues review I4）。
+   *
+   * 已知偏差：这里只按 minFolderSize 过滤，没有再模拟 core/tree.ts 的
+   * `maxSiblings` 截断——组内子目录数超过上限时，被截掉的那几个仍会报给主题那一轮，
+   * 当作「已经存在」。这个残留多报是接受的（见评审 I4 的取舍），
+   * 因为按数量截断需要先排序、再和 tree.ts 的排序规则对齐，成本明显更高，
+   * 而 minFolderSize 已经能过滤掉多报里最常见的那一类（装不满的小目录）。
+   */
   const run = async (
     entries: Array<{ index: number; tag: TagResult }>,
     batchOptions: DesignOptions,
@@ -359,14 +433,31 @@ export async function designTagFolders(
     next.forEach((tag, i) => {
       result[entries[i]!.index] = tag
     })
+    if (design === null) return []
+
+    // 数一数 applyDesign 之后每条路径实际分到几个书签
+    const counts = new Map<string, number>()
+    for (const tag of next) {
+      if (tag.primaryTopic === NO_TOPIC) continue
+      const path = tag.secondaryTopic === null ? tag.primaryTopic : `${tag.primaryTopic}/${tag.secondaryTopic}`
+      counts.set(path, (counts.get(path) ?? 0) + 1)
+    }
+    const minSize = batchOptions.minFolderSize
+    const fitsMin = (path: string): boolean => minSize === undefined || (counts.get(path) ?? 0) >= minSize
+
     // 聚合组那几摊一律 oneLevel（children 恒为空），所以这里返回的实际就是一层目录名；
     // children 那半边是为了将来万一放开二级时不必回头改，路径写成 `父/子`
-    return design === null ? [] : design.folders.flatMap((f) => [f.title, ...f.children.map((c) => `${f.title}/${c}`)])
+    return design.folders.flatMap((f) => [
+      ...(fitsMin(f.title) ? [f.title] : []),
+      ...f.children.filter((c) => fitsMin(`${f.title}/${c}`)).map((c) => `${f.title}/${c}`),
+    ])
   }
 
   // 聚合组那几摊先跑，主题那摊在后：主题设计要知道组里已经有什么，才不会造出一对
   // 抢同一批书签的双胞胎（见 issues/04-folder-design-defects.md「决定 1」）。
   // 顺序调换的另一面：中途取消时先落地的是聚合组那几摊，主题那摊整摊退回原始标签。
+  // 不过唯一的调用点（background/handlers.ts）在取消后直接 return，这份部分落地的
+  // 结果实际上不会被用来建树——这条语义只有测试看得见（见 issues review M4）。
   const existingFolders: string[] = []
   if (options.isCancelled?.() !== true) {
     for (const { title, entries } of byGroup.values()) {
@@ -377,7 +468,19 @@ export async function designTagFolders(
       existingFolders.push(...designed.map((name) => `${title}/${name}`))
     }
     if (options.isCancelled?.() !== true) {
+      // 「不许语义重叠」会让主题那一轮主动不建某些目录，那些标签映射不到目录、
+      // 被 applyDesign 置成 NO_TOPIC，最终去处交给分类阶段决定（见 issues review I5）。
+      // 这里只数、不拦：规则本身不改，只是把它的代价变得可观测。
+      const before = new Set(
+        topicEntries.filter((e) => e.tag.primaryTopic === NO_TOPIC).map((e) => e.index),
+      )
       await run(topicEntries, existingFolders.length === 0 ? options : { ...options, existingFolders })
+      const newlyUnmapped = topicEntries.filter(
+        (e) => !before.has(e.index) && result[e.index]!.primaryTopic === NO_TOPIC,
+      ).length
+      if (newlyUnmapped > 0) {
+        options.onLog?.(logNoTopicMapped(locale, newlyUnmapped), 'info')
+      }
     }
   }
 

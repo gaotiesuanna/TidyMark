@@ -40,6 +40,16 @@ export function logFoldersFailed(locale: Locale, detail: string): string {
     : `Folder design failed; falling back to raw labels: ${detail}`
 }
 
+/**
+ * 只在「重问」那次请求失败时打——第一版设计还在，不是退回原始标签，
+ * 因此不能沿用 logFoldersFailed 的文案（见 issues review I1：那条文案说反话）。
+ */
+export function logFoldersRetryFailed(locale: Locale, detail: string): string {
+  return locale === 'zh_CN'
+    ? `重出目录名失败，沿用上一版：${detail}`
+    : `Retry failed; keeping the previous design: ${detail}`
+}
+
 export function logDuplicateTopics(locale: Locale, detail: string): string {
   return locale === 'zh_CN'
     ? `模型返回的目录设计中标签重复声明，已保留最后一个：${detail}`
@@ -56,6 +66,17 @@ export function logCompoundNamesRemain(locale: Locale, detail: string): string {
   return locale === 'zh_CN'
     ? `重出后仍有目录名捆着两个概念，按现状继续：${detail}`
     : `Folder names still bundle two concepts after the retry; continuing as is: ${detail}`
+}
+
+/**
+ * 主题那摊设计完之后，有多少标签没能映射到任何目录（`applyDesign` 置成 NO_TOPIC）。
+ * 这些书签最终去处由分类阶段决定——多半是「其他」，也可能是某个已有目录的候选。
+ * 只在 N > 0 时打，不发明比例阈值（见 issues review I5）。
+ */
+export function logNoTopicMapped(locale: Locale, count: number): string {
+  return locale === 'zh_CN'
+    ? `主题设计完成后有 ${count} 个标签没有映射到任何目录，去处由分类阶段决定`
+    : `${count} labels were not mapped to any folder after topic design; where they end up is decided by the classification step`
 }
 
 export function fallbackReason(

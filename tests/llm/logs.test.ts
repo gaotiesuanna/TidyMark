@@ -3,6 +3,7 @@ import { LOCALES } from '@/core/locale'
 import {
   fallbackReason, logBatch, logBatchDone, logBatchFailed,
   logCompoundNames, logCompoundNamesRemain, logDuplicateTopics, logFoldersDone, logFoldersFailed,
+  logFoldersRetryFailed, logNoTopicMapped,
 } from '@/llm/logs'
 
 describe('llm 日志文案双语', () => {
@@ -38,5 +39,18 @@ describe('llm 日志文案双语', () => {
     expect(logCompoundNames('zh_CN', '记忆与向量存储')).toContain('记忆与向量存储')
     expect(/[一-鿿]/.test(logCompoundNames('en', 'x'))).toBe(false)
     expect(/[一-鿿]/.test(logCompoundNamesRemain('en', 'x'))).toBe(false)
+  })
+
+  it('重问失败的日志双语，且不是「保留原始标签」那条文案（I1）', () => {
+    expect(logFoldersRetryFailed('zh_CN', 'timeout')).toContain('timeout')
+    expect(logFoldersRetryFailed('zh_CN', 'timeout')).not.toContain('保留原始标签')
+    expect(/[一-鿿]/.test(logFoldersRetryFailed('en', 'x'))).toBe(false)
+    expect(logFoldersRetryFailed('zh_CN', 'x')).not.toBe(logFoldersRetryFailed('en', 'x'))
+  })
+
+  it('未映射到目录的标签数日志双语，带上数字（I5）', () => {
+    expect(logNoTopicMapped('zh_CN', 3)).toContain('3')
+    expect(/[一-鿿]/.test(logNoTopicMapped('en', 3))).toBe(false)
+    expect(logNoTopicMapped('zh_CN', 3)).not.toBe(logNoTopicMapped('en', 3))
   })
 })

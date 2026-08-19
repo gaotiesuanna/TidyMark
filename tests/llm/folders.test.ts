@@ -282,11 +282,41 @@ describe('isCompoundName', () => {
     expect(isCompoundName('Q&A', 'en')).toBe(false)
     expect(isCompoundName('Text-to-Speech', 'en')).toBe(false)
   })
+
+  it('中文「及」「以及」与斜杠系列连接词同样算复合名——换连接词不算取舍', () => {
+    // 模型被禁用「与」「和」之后最省力的逃逸口（见 issues review I2）
+    expect(isCompoundName('配置及排错', 'zh_CN')).toBe(true)
+    expect(isCompoundName('记忆以及检索', 'zh_CN')).toBe(true)
+    expect(isCompoundName('语音识别/合成', 'zh_CN')).toBe(true)
+    expect(isCompoundName('前端 / 后端', 'zh_CN')).toBe(true)
+    expect(isCompoundName('记忆＆检索', 'zh_CN')).toBe(true)
+    expect(isCompoundName('Agent+RAG', 'zh_CN')).toBe(true)
+  })
+
+  it('扩表之后真实的非复合名仍然放过', () => {
+    expect(isCompoundName('饱和度', 'zh_CN')).toBe(false)
+    expect(isCompoundName('共和国', 'zh_CN')).toBe(false)
+    expect(isCompoundName('中和反应', 'zh_CN')).toBe(false)
+    expect(isCompoundName('A/B 测试', 'zh_CN')).toBe(false)
+  })
+
+  it('英文不带空格的斜杠——短缩写放过，真正的复合名认得出', () => {
+    expect(isCompoundName('CI/CD', 'en')).toBe(false)
+    expect(isCompoundName('I/O', 'en')).toBe(false)
+    expect(isCompoundName('TCP/IP', 'en')).toBe(false)
+    expect(isCompoundName('A/B', 'en')).toBe(false)
+    expect(isCompoundName('Speech synthesis/cloning', 'en')).toBe(true)
+  })
+
+  it('英文逗号列举也算复合名', () => {
+    expect(isCompoundName('Memory, vector storage', 'en')).toBe(true)
+  })
 })
 
 describe('designFolders 的复合名重问', () => {
-  // 这里用原始导出而非本文件顶部的中文便捷包装：重问用例要显式控制第 4 个参数
-  // （onLog），包装函数的签名容不下它。
+  // 这里用原始导出而非本文件顶部的中文便捷包装：包装函数其实容得下 onLog
+  // （它就在第 3 个参数 options 里，同文件其他用例已经这么用），真实原因是
+  // 下面这些用例把 'zh_CN' 显式写成了第 3 个位置参数，与包装的 options 位冲突。
   const designFolders = designFoldersRaw
   const topics = [{ topic: 'KV Cache', count: 3 }]
 
@@ -332,7 +362,30 @@ describe('designFolders 的复合名重问', () => {
     expect(result!.folders).toEqual([{ title: '记忆与向量存储', children: [] }])
   })
 
-  it('重问回来还是复合名就收手，用重问那一版并留一条警告', async () => {
+  it('重问回来复合名比第一版少（变好了）就用重问那一版并留一条警告', async () => {
+    // 第一版两个目录都是复合名，重问版只剩一个——remain(1) < compound(2)，
+    // 说明重问确实起了作用，即便没能清零也该用它
+    const logs: Array<[string, string]> = []
+    const complete = vi.fn()
+      .mockResolvedValueOnce({
+        folders: [
+          { title: '记忆与向量存储', topics: ['KV Cache'], children: [] },
+          { title: '前端与后端', topics: [], children: [] },
+        ],
+      })
+      .mockResolvedValueOnce({ folders: [{ title: '记忆与检索', topics: ['KV Cache'], children: [] }] })
+    const result = await designFolders(topics, { complete }, 'zh_CN', {
+      onLog: (message, level) => logs.push([message, level]),
+    })
+
+    expect(complete).toHaveBeenCalledTimes(2)
+    expect(result!.folders).toEqual([{ title: '记忆与检索', children: [] }])
+    expect(logs.some(([m, l]) => l === 'warn' && m.includes('记忆与检索'))).toBe(true)
+  })
+
+  it('重问回来复合名不比第一版少（没变好）就退回第一版——不能收下更差的一版', async () => {
+    // 两版都只有一个复合名：remain(1) >= compound(1)，说明重问没有让情况变好，
+    // 「收手」不等于「必须用第二版」（见 issues review M8）
     const logs: Array<[string, string]> = []
     const complete = vi.fn()
       .mockResolvedValueOnce({ folders: [{ title: '记忆与向量存储', topics: ['KV Cache'], children: [] }] })
@@ -342,8 +395,69 @@ describe('designFolders 的复合名重问', () => {
     })
 
     expect(complete).toHaveBeenCalledTimes(2)
-    expect(result!.folders).toEqual([{ title: '记忆与检索', children: [] }])
-    expect(logs.some(([m, l]) => l === 'warn' && m.includes('记忆与检索'))).toBe(true)
+    expect(result!.folders).toEqual([{ title: '记忆与向量存储', children: [] }])
+    expect(logs.some(([m, l]) => l === 'warn' && m.includes('记忆与向量存储'))).toBe(true)
+  })
+
+  it('重问失败时打一条新的 warn，不是「保留原始标签」那条 error（I1）', async () => {
+    // 第一版被保留了，根本没有退回原始标签，不能沿用 logFoldersFailed 的文案
+    const logs: Array<[string, string]> = []
+    const complete = vi.fn()
+      .mockResolvedValueOnce({ folders: [{ title: '记忆与向量存储', topics: ['KV Cache'], children: [] }] })
+      .mockRejectedValueOnce(Object.assign(new Error('timeout'), { retryable: false }))
+    await designFolders(topics, { complete }, 'zh_CN', {
+      onLog: (message, level) => logs.push([message, level]),
+    })
+
+    expect(logs.some(([m, l]) => l === 'error' && m.includes('保留原始标签'))).toBe(false)
+    expect(logs.some(([m, l]) => l === 'warn' && m.includes('timeout'))).toBe(true)
+  })
+
+  it('不管重不重问，logFoldersDone 只打一次，数字取自最终采用的那一版（I1）', async () => {
+    const logs: Array<[string, string]> = []
+    const complete = vi.fn()
+      .mockResolvedValueOnce({ folders: [{ title: '记忆与向量存储', topics: ['KV Cache'], children: [] }] })
+      .mockResolvedValueOnce({ folders: [{ title: '向量存储', topics: ['KV Cache'], children: [] }] })
+    await designFolders(topics, { complete }, 'zh_CN', {
+      onLog: (message, level) => logs.push([message, level]),
+    })
+
+    const done = logs.filter(([, l]) => l === 'info')
+    expect(done).toHaveLength(1)
+    expect(done[0]![0]).toContain('1 个目录')
+  })
+
+  it('重问失败时也只打一次 logFoldersDone，数字来自第一版（I1）', async () => {
+    const logs: Array<[string, string]> = []
+    const complete = vi.fn()
+      .mockResolvedValueOnce({
+        folders: [
+          { title: '记忆与向量存储', topics: ['KV Cache'], children: [] },
+          { title: '注意力', topics: ['注意力机制'], children: [] },
+        ],
+      })
+      .mockRejectedValueOnce(Object.assign(new Error('x'), { retryable: false }))
+    await designFolders(
+      [{ topic: 'KV Cache', count: 3 }, { topic: '注意力机制', count: 2 }],
+      { complete }, 'zh_CN',
+      { onLog: (message, level) => logs.push([message, level]) },
+    )
+
+    const done = logs.filter(([, l]) => l === 'info')
+    expect(done).toHaveLength(1)
+    expect(done[0]![0]).toContain('2 个目录')
+  })
+
+  it('重问之前查一次取消，取消了就不再发这次请求，用第一版（I3）', async () => {
+    const complete = vi.fn().mockResolvedValueOnce({
+      folders: [{ title: '记忆与向量存储', topics: ['KV Cache'], children: [] }],
+    })
+    const result = await designFolders(topics, { complete }, 'zh_CN', {
+      isCancelled: () => true,
+    })
+
+    expect(complete).toHaveBeenCalledTimes(1)
+    expect(result!.folders).toEqual([{ title: '记忆与向量存储', children: [] }])
   })
 })
 
@@ -399,6 +513,61 @@ describe('designTagFolders', () => {
     )
     expect(result[0]!.primaryTopic).toBe('LLM 原理')
     expect(result[1]!.primaryTopic).toBe('智能体框架')
+  })
+
+  it('主题那摊失败时，聚合组那摊的结果仍然生效', async () => {
+    // 聚合组先跑、主题后跑，这里失败的换成主题那摊——顺序调换之后这个方向
+    // 之前没有用例覆盖（见 issues review M2）
+    const complete = vi.fn()
+      .mockResolvedValueOnce({ folders: [{ title: 'Agent 框架', topics: ['智能体框架'], children: [] }] })
+      .mockRejectedValueOnce(Object.assign(new Error('x'), { retryable: false }))
+    const result = await designTagFolders(
+      [tag('1', 'KV Cache'), tag('2', '智能体框架')],
+      [blog('1'), gh('2')], ['github'], { complete },
+    )
+    expect(result[1]!.primaryTopic).toBe('Agent 框架')
+    expect(result[0]!.primaryTopic).toBe('KV Cache')
+  })
+
+  it('组内子目录实际分到的书签数不足 minFolderSize 时，不报给主题那一轮', async () => {
+    // 「文档解析」装得下 2 条，「语音识别」只装 1 条；tree.ts 建树时会把后者剪掉，
+    // 报给主题那一轮的清单不该包含它，否则组外同主题的书签会被这条「已经存在」的
+    // 假象拦住，映射不到目录（见 issues review I4）
+    const complete = vi.fn()
+      .mockResolvedValueOnce({
+        folders: [
+          { title: '文档解析', topics: ['解析器'], children: [] },
+          { title: '语音识别', topics: ['识别模型'], children: [] },
+        ],
+      })
+      .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
+    await designTagFolders(
+      [
+        tag('1', 'KV Cache'),
+        tag('2', '解析器'), tag('3', '解析器'),
+        tag('4', '识别模型'),
+      ],
+      [blog('1'), gh('2'), gh('3'), gh('4')], ['github'], { complete },
+      { minFolderSize: 2 },
+    )
+    const topicPrompt = complete.mock.calls[1]![0] as string
+    expect(topicPrompt).toContain('GitHub/文档解析')
+    expect(topicPrompt).not.toContain('GitHub/语音识别')
+    expect(topicPrompt).toContain('GitHub')
+  })
+
+  it('不传 minFolderSize 时不过滤，组内子目录照样全数报给主题那一轮', async () => {
+    const complete = vi.fn()
+      .mockResolvedValueOnce({
+        folders: [{ title: '语音识别', topics: ['识别模型'], children: [] }],
+      })
+      .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
+    await designTagFolders(
+      [tag('1', 'KV Cache'), tag('4', '识别模型')],
+      [blog('1'), gh('4')], ['github'], { complete },
+    )
+    const topicPrompt = complete.mock.calls[1]![0] as string
+    expect(topicPrompt).toContain('GitHub/语音识别')
   })
 
   it('保持输入顺序与条数', async () => {
@@ -507,6 +676,35 @@ describe('designTagFolders', () => {
     })
     await designTagFolders([tag('1', 'KV Cache')], [blog('1')], [], { complete })
     expect(complete.mock.calls[0]![0]).not.toContain('语义重叠')
+  })
+
+  it('主题设计后有标签映射不到目录时打一条 info 日志，说明去处交给分类阶段（I5）', async () => {
+    // 设计只认领了 TopicA，TopicB 没有任何目录声明它，applyDesign 会把它置成 NO_TOPIC
+    const logs: Array<[string, string]> = []
+    const complete = vi.fn().mockResolvedValue({
+      folders: [{ title: 'FolderA', topics: ['TopicA'], children: [] }],
+    })
+    await designTagFolders(
+      [tag('1', 'TopicA'), tag('2', 'TopicB')],
+      [blog('1'), blog('2')], [], { complete },
+      { onLog: (message, level) => logs.push([message, level]) },
+    )
+    expect(logs.some(([m, l]) => l === 'info' && m.includes('1') && m.includes('分类'))).toBe(true)
+  })
+
+  it('主题设计后没有标签失去归属时不打这条 info 日志（I5）', async () => {
+    // logFoldersDone 本身也是 info 级别，这里只断言「未映射」那条不出现，
+    // 不是断言完全没有 info 日志
+    const logs: Array<[string, string]> = []
+    const complete = vi.fn().mockResolvedValue({
+      folders: [{ title: 'FolderA', topics: ['TopicA', 'TopicB'], children: [] }],
+    })
+    await designTagFolders(
+      [tag('1', 'TopicA'), tag('2', 'TopicB')],
+      [blog('1'), blog('2')], [], { complete },
+      { onLog: (message, level) => logs.push([message, level]) },
+    )
+    expect(logs.some(([m, l]) => l === 'info' && m.includes('分类'))).toBe(false)
   })
 })
 
