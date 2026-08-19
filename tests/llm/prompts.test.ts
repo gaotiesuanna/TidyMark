@@ -82,6 +82,13 @@ describe('提示词双语', () => {
     expect(zh).toContain('不要引号')
     expect(zh).toContain('JSON')
   })
+
+  it('合并起名提示词也要求一个名字一个概念（M7）', () => {
+    const zh = mergeNamePrompt('zh_CN', ['NiceG', 'b_llm']).join(' ')
+    const en = mergeNamePrompt('en', ['NiceG', 'b_llm']).join(' ')
+    expect(zh).toContain('一个名字只装一个概念')
+    expect(en).toMatch(/one concept per name/i)
+  })
 })
 
 describe('foldersPrompt 再分一层的开关', () => {
@@ -179,6 +186,17 @@ describe('foldersPrompt 的复合名禁令', () => {
     expect(lines).toContain('7. 一个目录只装一个概念')
     expect(lines).toContain('8. 不要建只装得下不到 3 个书签的目录')
   })
+
+  it('中文规则把「及」「/」也列进连接词，不只是「与」「和」（I2）', () => {
+    const lines = foldersPrompt('zh_CN', { total: 30, maxSiblings: 8 }).join('\n')
+    expect(lines).toContain('及')
+    expect(lines).toContain('/')
+  })
+
+  it('英文规则把逗号也列进连接词', () => {
+    const lines = foldersPrompt('en', { total: 30, maxSiblings: 8 }).join('\n')
+    expect(lines).toContain('comma')
+  })
 })
 
 describe('foldersPrompt 的已有目录清单', () => {
@@ -208,6 +226,18 @@ describe('foldersPrompt 的已有目录清单', () => {
     const lines = foldersPrompt('en', { total: 30, maxSiblings: 8, existingFolders: ['GitHub/Speech synthesis'] }).join('\n')
     expect(lines).toContain('GitHub/Speech synthesis')
     expect(/[一-鿿]/.test(lines)).toBe(false)
+  })
+
+  it('解释清单里 A/B 这种写法的含义（M5）', () => {
+    const zh = foldersPrompt('zh_CN', { total: 30, maxSiblings: 8, existingFolders: ['GitHub'] }).join('\n')
+    expect(zh).toContain('子目录')
+    const en = foldersPrompt('en', { total: 30, maxSiblings: 8, existingFolders: ['GitHub'] }).join('\n')
+    expect(en).toMatch(/subfolder/i)
+  })
+
+  it('范例不再自相矛盾——已有目录的范例不是复合名（M5）', () => {
+    const zh = foldersPrompt('zh_CN', { total: 30, maxSiblings: 8, existingFolders: ['GitHub'] }).join('\n')
+    expect(zh).not.toContain('语音合成与克隆')
   })
 })
 

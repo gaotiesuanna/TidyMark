@@ -171,8 +171,8 @@ export function foldersPrompt(
   // 不做确定性强改——硬拆只会得到更宽泛、更容易撞禁词表的名字，所以只能在这里要求模型自己取舍。
   const compoundRule = (index: number): string =>
     locale === 'zh_CN'
-      ? `${index}. 一个目录只装一个概念。禁止用「与」「和」把两个概念捆成一个名字——「记忆与向量存储」这种名字会和别的目录抢同一批书签。必须挑一个概念，另一个要么单独开目录，要么并进别处。`
-      : `${index}. One concept per folder. Never join two concepts with "and", "&", or a slash — a name like "Memory and vector storage" fights with other folders over the same bookmarks. Pick one concept; give the other its own folder, or fold it into an existing one.`
+      ? `${index}. 一个目录只装一个概念。禁止用「与」「和」「及」「/」这类连接词把两个概念捆成一个名字——「记忆与向量存储」「配置及排错」这种名字会和别的目录抢同一批书签，换个连接词不算取舍。必须挑一个概念，另一个要么单独开目录，要么并进别处。`
+      : `${index}. One concept per folder. Never join two concepts with "and", "&", a slash, or a comma — a name like "Memory and vector storage" fights with other folders over the same bookmarks. Pick one concept; give the other its own folder, or fold it into an existing one.`
 
   const sizeRule = (index: number): string =>
     locale === 'zh_CN'
@@ -180,13 +180,13 @@ export function foldersPrompt(
       : `${index}. Only create a folder if it will hold at least ${minFolderSize} bookmarks. Merge labels that cannot fill one into a neighbouring folder; if none fits, leave them without a folder of their own.`
 
   // 两轮设计从「互相看不见」变成「有先后」：聚合组先定，主题设计在它已知的前提下补剩下的。
-  // 只禁语义重叠，不禁同名——**这条界限在清单第 5 项落地后要再松一次**：
-  // 聚合组改成只装规则命中的书签之后，组外的同主题书签需要一个同名目录才有去处
-  // （见 issues/10-shape-from-count.md 的补账小节）。今天组会吸收非命中书签，所以同名仍属重叠。
+  // （清单第 5 项落地后）只禁语义重叠、不禁同名；今天组会吸收非命中书签，所以同名仍属重叠——
+  // 这条界限要在聚合组改成只装规则命中的书签之后才能再松一次：组外的同主题书签需要一个
+  // 同名目录才有去处（见 issues/10-shape-from-count.md 的补账小节）。
   const existingRule = (index: number): string =>
     locale === 'zh_CN'
-      ? `${index}. 这些目录已经存在，是按来源聚合出来的，它们里面的书签已经有归属了：${(existingFolders ?? []).join('、')}。不要再设计与它们语义重叠的目录——已经有「语音合成与克隆」就不要再造一个「语音合成」。`
-      : `${index}. These folders already exist — they were grouped by source and their bookmarks already have a home: ${(existingFolders ?? []).join(', ')}. Do not design folders that overlap them in meaning: if "Speech synthesis & cloning" is there, do not add another "Speech synthesis".`
+      ? `${index}. 这些目录已经存在，是按来源聚合出来的，它们里面的书签已经有归属了（其中「A/B」表示 A 目录下的子目录 B）：${(existingFolders ?? []).join('、')}。不要再设计与它们语义重叠的目录——已经有「语音合成」就不要再造一个「语音生成」。`
+      : `${index}. These folders already exist — they were grouped by source and their bookmarks already have a home ("A/B" means subfolder B under folder A): ${(existingFolders ?? []).join(', ')}. Do not design folders that overlap them in meaning: if "Speech synthesis" is there, do not add another "Voice generation".`
 
   if (locale === 'zh_CN') {
     const head = parentTitle !== undefined
@@ -278,6 +278,10 @@ export function foldersPrompt(
 /**
  * 给若干个被合并的文件夹起一个统一的名字。
  * 只出名字，不出结构——目录结构由 foldersPrompt 那一轮已经定好了。
+ *
+ * 「一个目录一个概念」这条要求在这里也补一句（M7）：起名同样可能把两个概念用
+ * 「与」/「and」捆成一个名字，只是这条路径只出一个名字、没有目录结构要建，
+ * 所以不值得为它专门加一轮复合名检测与重问——软性提醒足够。
  */
 export function mergeNamePrompt(locale: Locale, sourceTitles: string[]): string[] {
   if (locale === 'en') {
@@ -287,6 +291,7 @@ export function mergeNamePrompt(locale: Locale, sourceTitles: string[]): string[
       '',
       'Their bookmarks fall into the topics listed below.',
       'Give the new folder ONE short name (at most 12 characters) that covers them.',
+      'One concept per name — do not join two concepts with "and" or "&".',
       'No numbering prefix. No quotes. No explanation.',
       'Reply with JSON: {"name": "..."}',
     ]
@@ -297,6 +302,7 @@ export function mergeNamePrompt(locale: Locale, sourceTitles: string[]): string[
     '',
     '它们里面的书签分布在下列主题上。',
     '请给这个新文件夹起一个能概括它们的短名字，不超过 12 个字。',
+    '一个名字只装一个概念，不要用「与」「和」把两个概念捆在一起。',
     '不要编号前缀，不要引号，不要解释。',
     '按 JSON 回复：{"name": "..."}',
   ]
