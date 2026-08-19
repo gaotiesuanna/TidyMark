@@ -102,6 +102,16 @@ describe('设置存取', () => {
     expect(settings.llm.apiKey).toBe('sk-y')
     expect(settings.llm.baseUrl).toBe(DEFAULT_SETTINGS.llm.baseUrl)
   })
+
+  // rebuildStructure 这个旧开关被自动判断（core/mode.ts）取代了：走哪条路现判，
+  // 不再是设置项。这是刻意的决定——存量数据里躺着这个旧键必须一个字段都不影响，
+  // loadSettings 逐字段构造返回对象，漏不回来，但这条刻意的决定得有测试守着，
+  // 不然是下一个人可能"好心"想给它接回去的地方
+  it('存量的 rebuildStructure 旧键有意不认，loadSettings 原样返回默认设置', async () => {
+    const p = ports()
+    await p.storage.set(SETTINGS_KEY, { rebuildStructure: true })
+    expect(await loadSettings(p)).toEqual(DEFAULT_SETTINGS)
+  })
 })
 
 describe('分类缓存存取', () => {

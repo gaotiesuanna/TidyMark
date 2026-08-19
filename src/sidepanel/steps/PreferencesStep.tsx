@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { PRESETS } from '@/storage/settings'
 import { DOMAIN_GROUPS, groupFolderTitle } from '@/core/domainGroups'
 import { detectMode } from '@/core/mode'
@@ -6,11 +7,18 @@ import { useStore } from '../store'
 
 export function PreferencesStep() {
   const { scan, settings, setSettings, analyze, busy, reset, modeOverride, setModeOverride } = useStore()
-  if (scan === null) return null
-  const { stats } = scan
   const locale = currentLocale()
-  // 与后台是同一个纯函数、同一份扫描结果，两边的结论必然一致
-  const decision = detectMode(scan, locale)
+  // 与后台是同一个纯函数——但前提是同一份扫描结果：书签在 goScan 之后、这次
+  // analyze 之前被外部改动（书签管理器里删了个文件夹、同步来一批新的）时，
+  // 后台会用它自己重新 scanTree() 出来的结果再判一次，结论可能不同，那时以后台为准。
+  // 全部书签走一遍 filter + 建 Map，输入框每敲一个字符都会触发重渲染，
+  // 用 useMemo 避免上万条书签的库里每次击键都白算一遍。
+  const decision = useMemo(
+    () => (scan === null ? null : detectMode(scan, locale)),
+    [scan, locale],
+  )
+  if (scan === null || decision === null) return null
+  const { stats } = scan
   const rebuild = (modeOverride ?? decision.mode) === 'rebuild'
 
   return (
@@ -80,8 +88,11 @@ export function PreferencesStep() {
             {modeOverride === null ? decision.reason : t('prefsModeOverridden')}
           </p>
           {modeOverride === null ? (
-            // 逃生口只为「误判成已整理」那一个方向存在：反方向的误判用户在复核页
-            // 逐条看得见、拒得掉，不需要再给一个推翻整套判断的按钮
+            // 逃生口只为「误判成已整理」那一个方向存在，这是产品决定（issues/14 §5），
+            // 不是因为反方向的误判在复核页拒得掉——事实上拒不掉：推翻模式下给范围内
+            // 既有一级目录改名、加编号前缀，跟用户在复核页接受了几条书签建议无关
+            // （见 core/plan.ts 的 participates，对每个既有一级目录恒真）。
+            // 误判成 rebuild 时用户能做的是这一轮整个放弃（prefsBack）或者事后撤销。
             decision.mode === 'additive' && (
               <button
                 className="text-xs text-neutral-500 underline hover:text-neutral-800"

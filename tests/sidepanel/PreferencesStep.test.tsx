@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { PreferencesStep } from '@/sidepanel/steps/PreferencesStep'
 import { useStore } from '@/sidepanel/store'
 import { DEFAULT_SETTINGS } from '@/storage/settings'
+import type { OrganizeMode } from '@/core/mode'
 import type { BookmarkItem, FolderItem, ScanResult } from '@/core/types'
 
 function folder(id: string, title: string, parentId: string | null, depth: number): FolderItem {
@@ -39,11 +40,18 @@ const tidyScan = scanOf(
 /** 一个目录都没有，detectMode 判 rebuild。 */
 const messyScan = scanOf([ROOT], Array.from({ length: 5 }, (_, i) => bookmark(`l${i}`, '1')))
 
-function setup(scan: ScanResult, domainGroups: string[] = []): void {
+/**
+ * 内容对域名聚合这组用例不重要——模式全靠 modeOverride 钉死，不依赖 detectMode
+ * 的阈值。阈值调一下不该让这组无关用例跟着变红（计划 Task 2 Step 7 论证过同一件事，
+ * 后台测试已经这么做了，见 handlers.test.ts 的 analyzeWith）。
+ */
+const anyScan = scanOf([ROOT, folder('10', '目录', '1', 1)], [bookmark('a', '10')])
+
+function setup(scan: ScanResult, domainGroups: string[] = [], modeOverride: OrganizeMode | null = null): void {
   useStore.setState({
     scan,
     settings: { ...DEFAULT_SETTINGS, domainGroups },
-    modeOverride: null,
+    modeOverride,
     busy: null,
     // setSettings 会打 send()，必须替身；setModeOverride 只写 state，用真的那个
     setSettings: vi.fn(async (settings) => { useStore.setState({ settings }) }),
@@ -51,7 +59,7 @@ function setup(scan: ScanResult, domainGroups: string[] = []): void {
 }
 
 describe('PreferencesStep 域名聚合', () => {
-  beforeEach(() => { setup(messyScan) })
+  beforeEach(() => { setup(anyScan, [], 'rebuild') })
 
   it('列出所有可选的域名组', () => {
     expect(screen.queryByLabelText('GitHub')).toBeNull()
@@ -60,13 +68,13 @@ describe('PreferencesStep 域名聚合', () => {
     expect(screen.getByLabelText('论文')).toBeTruthy()
   })
 
-  it('推翻模式关闭时复选框禁用', () => {
-    setup(tidyScan)
+  it('判已整理（additive）时复选框禁用', () => {
+    setup(anyScan, [], 'additive')
     render(<PreferencesStep />)
     expect((screen.getByLabelText('GitHub') as HTMLInputElement).disabled).toBe(true)
   })
 
-  it('推翻模式开启时复选框可用', () => {
+  it('判一团乱麻（rebuild）时复选框可用', () => {
     render(<PreferencesStep />)
     expect((screen.getByLabelText('GitHub') as HTMLInputElement).disabled).toBe(false)
   })
@@ -78,7 +86,7 @@ describe('PreferencesStep 域名聚合', () => {
   })
 
   it('取消勾选后从 settings.domainGroups 移除', async () => {
-    setup(messyScan, ['github', 'paper'])
+    setup(anyScan, ['github', 'paper'], 'rebuild')
     render(<PreferencesStep />)
     await userEvent.click(screen.getByLabelText('GitHub'))
     expect(useStore.getState().settings.domainGroups).toEqual(['paper'])

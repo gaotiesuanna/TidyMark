@@ -68,6 +68,8 @@ describe('SettingsPanel 分类参数', () => {
     expect(screen.getByLabelText('同层目录最多几个')).toHaveProperty('disabled', false)
     expect(screen.getByLabelText('目录最深嵌套几层')).toHaveProperty('disabled', false)
     expect(screen.getByLabelText('不足几个书签的目录就不单独建立')).toHaveProperty('disabled', false)
+    // 默认设置下 enforceMinFolderSize 是开着的，这个数字框也该跟着可编辑
+    expect(screen.getByLabelText('至少几个书签')).toHaveProperty('disabled', false)
   })
 
   it('说明文案交代它们只在重新设计目录结构时生效', () => {
