@@ -73,6 +73,22 @@ describe('deriveShape', () => {
     expect(deriveShape(60, 3)).toMatchObject({ depth: 1, top: 3 })
   })
 
+  it('两层布局的一级目录数必须服从 topCap，不能悄悄超发', () => {
+    // 600 条：默认预算下 leaves=50，branch = max(floor(√50)=7, ceil(50/10)=5, 3) = 7。
+    // cap 收到 5 时，branch 必须被 topCap 夹住，不能还是不服从预算的 7——
+    // 否则聚合组 + 主题一级目录数会把同层撑爆，depthGuard 算出来的 cap 就白算了。
+    expect(deriveShape(600)).toMatchObject({ depth: 2, top: 7 })
+    expect(deriveShape(600, 5)).toMatchObject({ depth: 2, top: 5 })
+  })
+
+  it('topCap 收紧时，两层的容量跟着变小，三层阈值也要提前', () => {
+    // 600 条：leaves=50。默认预算下 50 ≤ 10×10=100，两层装得下。
+    // cap 收到 4 时，两层的容量只剩 4×10=40，50 > 40 装不下，必须提前分三层——
+    // 写死用 SHAPE_MAX_SIBLINGS 算容量的话，这里会错误地仍然吐出两层。
+    expect(deriveShape(600).depth).toBe(2)
+    expect(deriveShape(600, 4).depth).toBe(3)
+  })
+
   it('零和负数不炸，返回空形状', () => {
     expect(deriveShape(0)).toEqual({ leaves: 0, depth: 0, top: 0, perLeaf: 0 })
     expect(deriveShape(-5).depth).toBe(0)

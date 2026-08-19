@@ -56,15 +56,21 @@ export function deriveShape(n: number, topCap: number = SHAPE_MAX_SIBLINGS): Fol
 
   // 两层：叶子回到甜点，只是它们不再都挂在一级
   const leaves = wanted
-  if (leaves > SHAPE_MAX_SIBLINGS * SHAPE_MAX_SIBLINGS) {
-    // 三层的分配暂不细化：N > 1200 才走得到，超出当前证据范围（真实数据只有 123 条）。
-    // 硬编一套没验证过的规则不如留空——到时按同样的思路再递归一层。
+  // 两层布局的容量 = 一级数 × 每个一级下的二级数。一级被 topCap 收紧时容量跟着变小，
+  // 于是更早需要三层——写死上限的话，紧预算下两层塞不下也不会分层（N > 1200 才走得到
+  // 默认预算下的这条分支，超出当前证据范围（真实数据只有 123 条）；三层的分配暂不细化，
+  // 硬编一套没验证过的规则不如留空——到时按同样的思路再递归一层）。
+  if (leaves > topCap * SHAPE_MAX_SIBLINGS) {
     return { leaves, depth: 3, top: 0, perLeaf: n / leaves }
   }
+  // branch 就是一级目录数，必须服从 topCap：写死上限的话，预算收紧时两层布局仍会吐出
+  // 最多 SHAPE_MAX_SIBLINGS 个一级目录，聚合组 + 主题就把同层撑爆，depthGuard 白算。
   // 分叉取「均衡」与「够用」里更大的那个。只取 floor(√L) 会在 L=91 处算出 10.1 个
   // 二级、超上限退回三层，而 L=100 又回到两层——**深度非单调**。这个坑票 10 踩过一次。
+  // 注意 Math.ceil(leaves / SHAPE_MAX_SIBLINGS) 这一项分母不变：它问的是「每个一级下
+  // 最多 SHAPE_MAX_SIBLINGS 个二级，那至少要几个一级」，分母是二级的上限、不是一级的预算。
   const branch = Math.min(
-    SHAPE_MAX_SIBLINGS,
+    topCap,
     Math.max(Math.floor(Math.sqrt(leaves)), Math.ceil(leaves / SHAPE_MAX_SIBLINGS), 3),
   )
   return { leaves, depth: 2, top: branch, perLeaf: n / leaves }
