@@ -36,22 +36,23 @@ export interface FolderShape {
 /**
  * @param n      这次要整理的书签总数
  * @param topCap 一级目录数上限。计划 2/2 会用它把聚合组占掉的位子让出来。
+ *
+ *   topCap 收紧会参与「一层撑不撑得下」的判断，是有意的：cap 收得越紧，
+ *   一层能吸收的书签就越少，可能被顶去两层。计划 2/2 的 depthGuard
+ *   （见 tools/shape-with-groups.mjs）正是靠这件事工作——它从最紧的预算
+ *   往回找第一个不加深的 cap，前提就是 cap 确实能影响深度。别把这里
+ *   改成「topCap 只收窄 top、不参与深度判断」，那会让 depthGuard 的整个
+ *   搜索退化成第一次迭代就返回，等于废掉这个防「多分一层」的机制
+ *   （票 10 反复论证过：98 条书签被聚合组挤成 3×3 就是这么出的问题）。
  */
 export function deriveShape(n: number, topCap: number = SHAPE_MAX_SIBLINGS): FolderShape {
   if (n <= 0) return { leaves: 0, depth: 0, top: 0, perLeaf: 0 }
 
   const wanted = Math.ceil(n / SWEET_LEAF)
 
-  // 一层：先按「本来能站几个」（同层上限 SHAPE_MAX_SIBLINGS）判断撑不撑得下——
-  // 这是形状本身的决策，不该被 topCap 干扰。topCap 只是调用方（计划 2/2）
-  // 为聚合组预留位置而对「返回几个一级目录」的额外收紧，不能反过来把它塞进
-  // MAX_LEAF 判断里：那样会出现「topCap 越紧，越容易被误判成要分层」的怪现象，
-  // 恰恰违背「先撑大叶子、撑不下才分层」的初衷。
-  const top1 = Math.min(wanted, SHAPE_MAX_SIBLINGS)
-  if (n / top1 <= MAX_LEAF) {
-    const top = Math.min(top1, topCap)
-    return { leaves: top, depth: 1, top, perLeaf: n / top }
-  }
+  // 一层：目录数最多 topCap，装不下就让每个叶子多装点——判准给的是区间不是定值
+  const top1 = Math.min(wanted, topCap)
+  if (n / top1 <= MAX_LEAF) return { leaves: top1, depth: 1, top: top1, perLeaf: n / top1 }
 
   // 两层：叶子回到甜点，只是它们不再都挂在一级
   const leaves = wanted

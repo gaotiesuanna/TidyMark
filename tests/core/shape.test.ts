@@ -48,10 +48,18 @@ describe('deriveShape', () => {
     expect(deriveShape(1201).depth).toBe(3)
   })
 
-  it('topCap 收紧时一层能装的目录变少，其余照旧', () => {
-    // 计划 2/2 会用它把聚合组占掉的位子让出来
-    expect(deriveShape(123, 6).top).toBe(6)
-    expect(deriveShape(123, 6).depth).toBe(1)
+  it('topCap 收紧时，一层可能装不下——深度会被顶上去', () => {
+    // 123 条按甜点要 11 个叶子；cap 收到 6 时 123/6 = 20.5 > 20，一层撑不下，
+    // 于是分两层：leaves 仍是 11，branch = max(floor(√11)=3, ceil(11/10)=2, 3) = 3。
+    // **这正是计划 2/2 的 depthGuard 要防的事**——它会从最紧的预算往回找第一个不加深的，
+    // 而它能这么找的前提，就是 topCap 确实参与深度判断（见 tools/shape-with-groups.mjs）。
+    expect(deriveShape(123, 6)).toMatchObject({ depth: 2, top: 3, leaves: 11 })
+  })
+
+  it('topCap 宽到装得下时，它只封顶一级目录数，不改变深度', () => {
+    // 60 条：甜点要 5 个，cap 8 不咬合；cap 3 时 60/3 = 20，正好不超上限，仍是一层
+    expect(deriveShape(60, 8)).toMatchObject({ depth: 1, top: 5 })
+    expect(deriveShape(60, 3)).toMatchObject({ depth: 1, top: 3 })
   })
 
   it('零和负数不炸，返回空形状', () => {
