@@ -1,4 +1,5 @@
 import { folderLevels } from './level'
+import { normalizeName, stripNumberPrefix } from './map'
 import type { BookmarkNode } from './ports'
 import type { BookmarkItem, FolderItem, ScanResult, ScanStats } from './types'
 
@@ -62,6 +63,15 @@ export function scanTree(tree: BookmarkNode[], scopeRootIds: string[]): ScanResu
   const urlCounts = new Map<string, number>()
   for (const item of bookmarks) urlCounts.set(item.url, (urlCounts.get(item.url) ?? 0) + 1)
 
+  // 同父 + 归一化后的名字 → 出现次数。用它数出有几组重名目录。
+  // 用 path 判「同父」而不是 folder.parentId——后者是原样透传的 BookmarkNode.parentId，
+  // 测试夹具（乃至某些浏览器场景）不一定填；path 是遍历时自己拼出来的，靠得住。
+  const folderKeyCounts = new Map<string, number>()
+  for (const folder of folders) {
+    const key = JSON.stringify([folder.path, normalizeName(stripNumberPrefix(folder.title))])
+    folderKeyCounts.set(key, (folderKeyCounts.get(key) ?? 0) + 1)
+  }
+
   const stats: ScanStats = {
     totalBookmarks: bookmarks.length,
     totalFolders: folders.length,
@@ -71,6 +81,7 @@ export function scanTree(tree: BookmarkNode[], scopeRootIds: string[]): ScanResu
     untitledBookmarks: bookmarks.filter((b) => b.title.trim() === '').length,
     duplicateUrlGroups: [...urlCounts.values()].filter((n) => n > 1).length,
     maxDepth: folders.reduce((max, f) => Math.max(max, f.depth), 0),
+    duplicateFolderGroups: [...folderKeyCounts.values()].filter((n) => n > 1).length,
   }
 
   return { bookmarks, folders, stats }

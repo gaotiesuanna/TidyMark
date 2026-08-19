@@ -31,6 +31,7 @@ export function PreferencesStep() {
           <dt className="text-neutral-500">{t('prefsStatEmpty')}</dt><dd>{stats.emptyFolders}</dd>
           <dt className="text-neutral-500">{t('prefsStatUntitled')}</dt><dd>{stats.untitledBookmarks}</dd>
           <dt className="text-neutral-500">{t('prefsStatDuplicates')}</dt><dd>{stats.duplicateUrlGroups}</dd>
+          <dt className="text-neutral-500">{t('prefsStatDuplicateFolders')}</dt><dd>{stats.duplicateFolderGroups}</dd>
           <dt className="text-neutral-500">{t('prefsStatDepth')}</dt><dd>{stats.maxDepth}</dd>
         </dl>
       </section>

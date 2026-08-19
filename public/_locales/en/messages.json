@@ -329,6 +329,9 @@
   "prefsStatDuplicates": {
     "message": "Duplicate URL groups"
   },
+  "prefsStatDuplicateFolders": {
+    "message": "Duplicate folder names"
+  },
   "prefsStatDepth": {
     "message": "Max depth"
   },

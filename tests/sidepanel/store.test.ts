@@ -297,7 +297,7 @@ describe('放弃这一轮之后，在途结果不再落地', () => {
 
   const scan = {
     bookmarks: [], folders: [],
-    stats: { totalBookmarks: 2, totalFolders: 1, emptyFolders: 0, untitledBookmarks: 0, duplicateUrlGroups: 0, maxDepth: 1 },
+    stats: { totalBookmarks: 2, totalFolders: 1, emptyFolders: 0, untitledBookmarks: 0, duplicateUrlGroups: 0, duplicateFolderGroups: 0, maxDepth: 1 },
   }
 
   beforeEach(() => {

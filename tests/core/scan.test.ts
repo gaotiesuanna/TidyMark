@@ -55,6 +55,7 @@ describe('scanTree', () => {
       untitledBookmarks: 1,
       duplicateUrlGroups: 1,
       maxDepth: 1,
+      duplicateFolderGroups: 0,
     })
   })
 
@@ -119,5 +120,53 @@ describe('scanTree 带上绝对层级', () => {
   it('勾一个深层目录时，level 不会因为勾选点变化而变小', () => {
     expect(scanTree(tree, ['10']).folders.find((f) => f.id === '10')?.level).toBe(1)
     expect(scanTree(tree, ['1']).folders.find((f) => f.id === '10')?.level).toBe(1)
+  })
+})
+
+describe('scanTree 数重名目录', () => {
+  it('同父同名算一组，编号不影响判定', () => {
+    const tree = [{ id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '10', title: '01 GitHub', children: [] },
+        { id: '11', title: '01 GitHub', children: [] },
+        { id: '12', title: '05 GitHub', children: [] },
+        { id: '13', title: '02 前端', children: [] },
+      ]},
+    ]}]
+    const scan = scanTree(tree, ['1'])
+    // 三个 GitHub 是一组（编号剥掉后同名），「前端」不成组
+    expect(scan.stats.duplicateFolderGroups).toBe(1)
+  })
+
+  it('不同父目录下的同名目录不算重名——路径不同，分得清', () => {
+    const tree = [{ id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '10', title: '前端', children: [{ id: '100', title: '工具', children: [] }] },
+        { id: '11', title: '后端', children: [{ id: '110', title: '工具', children: [] }] },
+      ]},
+    ]}]
+    expect(scanTree(tree, ['1']).stats.duplicateFolderGroups).toBe(0)
+  })
+
+  it('两组重名就是 2', () => {
+    const tree = [{ id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '10', title: 'GitHub', children: [] },
+        { id: '11', title: 'GitHub', children: [] },
+        { id: '12', title: '论文', children: [] },
+        { id: '13', title: '论文', children: [] },
+      ]},
+    ]}]
+    expect(scanTree(tree, ['1']).stats.duplicateFolderGroups).toBe(2)
+  })
+
+  it('没有重名时是 0', () => {
+    const tree = [{ id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '10', title: 'GitHub', children: [] },
+        { id: '11', title: '论文', children: [] },
+      ]},
+    ]}]
+    expect(scanTree(tree, ['1']).stats.duplicateFolderGroups).toBe(0)
   })
 })

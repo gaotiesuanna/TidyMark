@@ -329,6 +329,9 @@
   "prefsStatDuplicates": {
     "message": "重复链接组"
   },
+  "prefsStatDuplicateFolders": {
+    "message": "重名目录"
+  },
   "prefsStatDepth": {
     "message": "最深层级"
   },

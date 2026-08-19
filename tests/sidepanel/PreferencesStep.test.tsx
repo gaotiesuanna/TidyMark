@@ -21,7 +21,7 @@ function scanOf(folders: FolderItem[], bookmarks: BookmarkItem[]): ScanResult {
     bookmarks,
     stats: {
       totalBookmarks: bookmarks.length, totalFolders: folders.length, emptyFolders: 0,
-      untitledBookmarks: 0, duplicateUrlGroups: 0, maxDepth: 0,
+      untitledBookmarks: 0, duplicateUrlGroups: 0, duplicateFolderGroups: 0, maxDepth: 0,
     },
   }
 }
@@ -160,5 +160,11 @@ describe('PreferencesStep 的模式判断', () => {
     setup(messyScan)
     render(<PreferencesStep />)
     expect(screen.queryByRole('button', { name: '不对，重新设计' })).toBeNull()
+  })
+
+  it('统计表里列出重名目录', () => {
+    setup(tidyScan)
+    render(<PreferencesStep />)
+    expect(screen.getByText('重名目录')).toBeTruthy()
   })
 })

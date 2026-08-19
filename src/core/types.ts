@@ -31,6 +31,14 @@ export interface ScanStats {
   untitledBookmarks: number
   duplicateUrlGroups: number
   maxDepth: number
+  /**
+   * 同父同名的目录有几组。口径与 duplicateUrlGroups 一致：数的是「组」不是「条」，
+   * 三个同名目录算一组。
+   *
+   * 比较前剥掉编号前缀：「01 前端」和「02 前端」对用户就是重名，编号是 TidyMark 自己加的。
+   * 不同父目录下的同名目录不算——它们路径不同，用户和模型都分得清。
+   */
+  duplicateFolderGroups: number
 }
 
 export interface ScanResult {

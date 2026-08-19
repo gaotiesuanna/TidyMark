@@ -18,7 +18,7 @@ function scanOf(folders: FolderItem[], bookmarks: BookmarkItem[]): ScanResult {
     bookmarks,
     stats: {
       totalBookmarks: bookmarks.length, totalFolders: folders.length, emptyFolders: 0,
-      untitledBookmarks: 0, duplicateUrlGroups: 0, maxDepth: 0,
+      untitledBookmarks: 0, duplicateUrlGroups: 0, duplicateFolderGroups: 0, maxDepth: 0,
     },
   }
 }

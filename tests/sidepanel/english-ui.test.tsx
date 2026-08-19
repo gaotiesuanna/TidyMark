@@ -74,7 +74,7 @@ describe('英文界面渲染守卫：步骤组件', () => {
   it('PreferencesStep', () => {
     const scan = {
       bookmarks: [], folders: [],
-      stats: { totalBookmarks: 12, totalFolders: 3, emptyFolders: 1, untitledBookmarks: 0, duplicateUrlGroups: 0, maxDepth: 2 },
+      stats: { totalBookmarks: 12, totalFolders: 3, emptyFolders: 1, untitledBookmarks: 0, duplicateUrlGroups: 0, duplicateFolderGroups: 0, maxDepth: 2 },
     }
     useStore.setState({
       scan, settings: { ...DEFAULT_SETTINGS }, modeOverride: null, busy: null,
@@ -98,7 +98,7 @@ describe('英文界面渲染守卫：步骤组件', () => {
       ],
       stats: {
         totalBookmarks: 6, totalFolders: 3, emptyFolders: 0,
-        untitledBookmarks: 0, duplicateUrlGroups: 0, maxDepth: 1,
+        untitledBookmarks: 0, duplicateUrlGroups: 0, duplicateFolderGroups: 0, maxDepth: 1,
       },
     }
     useStore.setState({
