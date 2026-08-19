@@ -103,6 +103,13 @@ export interface DesignOptions {
   parentTitle?: string
   /** 同一层目录数上限。省略时用 MAX_SIBLINGS。 */
   maxTopFolders?: number
+  /**
+   * 二级目录（一级目录下的 children）数量上限。省略时退回 maxTopFolders 的值——
+   * oneLevel 摊（聚合组内部）用不到它，因为 children 恒被强制成空数组；
+   * 非 oneLevel 摊两层形状下不该复用一级预算，理由见 core/tree.ts 的
+   * BuildTreeInput.maxChildFolders。
+   */
+  maxChildFolders?: number
   /** 允许再往下分一层。false 时提示词要求模型只输出一层。 */
   allowChildren?: boolean
   /** 这批目录的绝对层级（见 core/level.ts）。省略按 1 算。 */
@@ -200,6 +207,9 @@ async function requestDesign(
     // 在这里放行、却在建树阶段被静默截掉
     const max = options.maxTopFolders ?? MAX_SIBLINGS
     const limit = options.oneLevel === true ? max : max - 1
+    // 二级（children）截断不该复用一级的 max——两者预算不同（见 DesignOptions.
+    // maxChildFolders 的 JSDoc）。省略时退回 max，与改造前的行为一致。
+    const maxChild = options.maxChildFolders ?? max
     const folders: FolderDesign['folders'] = []
     const mapping = new Map<string, string[]>()
     // 标签归一化后 → 声明过它的目录标题集合，用于检测提示词第 5 条要求的
@@ -234,7 +244,7 @@ async function requestDesign(
           for (const topic of child.topics ?? []) setMapping(topic, folder.title, [folder.title])
         }
       }
-      const kept = children.slice(0, max)
+      const kept = children.slice(0, maxChild)
       for (const child of kept) {
         for (const topic of child.topics ?? []) {
           setMapping(topic, `${folder.title}/${child.title}`, [folder.title, child.title])

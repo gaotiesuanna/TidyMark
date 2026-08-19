@@ -22,6 +22,14 @@ export interface BuildTreeInput {
   tags: TagResult[]
   /** 同一层目录数上限。省略时用 MAX_SIBLINGS。 */
   maxTopFolders?: number
+  /**
+   * 二级目录（某个一级主题下的子目录）数量上限。省略时退回 maxTopFolders 的值——
+   * 这是改造前唯一存在过的行为，一层形状（allowChildren 为 false）下这个值本来
+   * 就用不到。两层形状下不该复用一级预算：一级预算回答的是「有几个主题」，
+   * 二级要的是「每个主题下摊几个」，两件事的分母不同（见 core/shape.ts 的
+   * FolderShape.leaves / top，方案 D）。
+   */
+  maxChildFolders?: number
   /** 允许再往下分一层。false 时忽略 secondaryTopic，只出一层。
       由调用方按形状推导的层数算好（见 core/level.ts）。
       只作用于主题目录树——聚合组的两层结构是那个功能本身的定义，不受影响。 */
@@ -93,6 +101,7 @@ function domainGroupOrder(key: string): number {
 
 export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
   const maxSiblings = input.maxTopFolders ?? MAX_SIBLINGS
+  const maxChildSiblings = input.maxChildFolders ?? maxSiblings
   const allowChildren = input.allowChildren ?? true
   const minFolderSize = input.minFolderSize ?? 1
   if (input.tags.length === 0) {
@@ -209,7 +218,7 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
     children: [...group.children.values()]
       .filter((c) => c.count >= minFolderSize)
       .sort((a, b) => b.count - a.count)
-      .slice(0, maxSiblings)
+      .slice(0, maxChildSiblings)
       .map((c) => ({ title: c.title, bookmarkIds: [] })),
     ownBookmarkIds: [],
   }))

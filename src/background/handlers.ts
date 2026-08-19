@@ -149,13 +149,31 @@ export async function handle(
           // shape.top 在三层（N > 1200）时是 0——票 10 有意把三层的分配留空，先兜底
           // 退回 SHAPE_MAX_SIBLINGS，不让「其他」以外的目录数塌成 0
           const topWithFallback = shape.top === 0 ? SHAPE_MAX_SIBLINGS : shape.top
-          // 推导值是「要几个主题目录」，而建树阶段还要给兜底的「其他」留一格
-          // （llm/folders.ts 的 buildDesignPrompt 会 max - 1，core/tree.ts 的
-          // slice(0, maxSiblings - 1) 也留了同一格）。所以这里传「推导值」本身，
-          // 让那一格从推导值里出——于是同层总数（主题 + 其他）不超过判准 A3 的 10。
-          // 下限 2：N ≤ 12 时推导只要 1 个目录，减掉「其他」那一格就是 0，
-          // 小库会被要求「一级目录不超过 0 个」、最后只剩一个「其他」。
-          const maxTopFolders = Math.max(topWithFallback, 2)
+          // 推导值是「要几个主题目录」，即 topWithFallback 个。「其他」是兜底桶，
+          // 不是模型被要求去填的主题——传「推导值本身」让它从里面扣，真正承载书签的
+          // 主题目录就只剩 topWithFallback − 1 个，占用变成 N/(topWithFallback − 1)，
+          // 会把判准 A1（叶子 ≤ 20）顶破（复核实测：N ∈ [21,24]∪[181,200]∪[241,288]∪
+          // [401,420] 时最坏一叶 24 条，见 final-review.md I1）。
+          // 改成「其他」加在推导值之上：传 topWithFallback + 1。tree.ts／folders.ts
+          // 已有的 `max − 1` 留位逻辑不变，+1 之后再 −1 正好还原出 topWithFallback 个
+          // 主题目录，「其他」是白加的第 topWithFallback + 1 格，账不再从推导值里扣。
+          // 代价：同层总数（主题 + 其他）因此最多到 topWithFallback + 1 = 11，破判准
+          // A3（同层 ≤ 10）一个位子——这是有意的取舍，依据是 depthGuard 那节裁过的
+          // 同一类判准优先级：同层多两个是线性代价（多扫两行），多一层是指数代价，
+          // A3 是更软的那条；A1 被顶破意味着一个目录能摸到 24 条，逐层浏览时摸不动，
+          // 是根尺子的直接失败。
+          // 下限 2（原来的 Math.max(topWithFallback, 2)）在 +1 之后已经天然满足：
+          // topWithFallback 最小是 1（N ≤ 12），+1 = 2，与原下限拍出的值相同，
+          // 可以去掉这道 max。
+          const maxTopFolders = topWithFallback + 1
+          // 两层时二级目录（某个主题下的子目录）不该复用一级预算：一级预算回答的是
+          // 「有几个主题」，二级要的是「每个主题下摊几个」——按方案 D 应为
+          // ceil(shape.leaves / topWithFallback)（票 10 补账第 8 条）。三层
+          // （N > 1200）时 topWithFallback 同样是那条路径唯一在用的「实际分支数」，
+          // 用它当分母与一级预算的兜底口径一致。一层时这个值不会被用到
+          // （allowChildren 为 false，tree.ts 不会往 children 里塞东西、
+          // folders.ts 的提示词也要求只输出一层），算出来也无害。
+          const maxChildFolders = Math.ceil(shape.leaves / topWithFallback)
           // 关掉开关时一路传 undefined，让下游各自保持改造前的行为，而不是传 1 让它们
           // 多跑一遍恒真的判断
           const minFolderSize = settings.enforceMinFolderSize ? settings.minFolderSize : undefined
@@ -181,6 +199,7 @@ export async function handle(
             onLog: (message, level) => log('tree', message, level),
             isCancelled,
             maxTopFolders,
+            maxChildFolders,
             allowChildren,
             startLevel,
             ...(containerTitle === undefined ? {} : { containerTitle }),
@@ -210,6 +229,7 @@ export async function handle(
             bookmarks: scan.bookmarks, domainGroups: settings.domainGroups, locale,
             mergeRoot,
             maxTopFolders,
+            maxChildFolders,
             allowChildren,
             ...(minFolderSize === undefined ? {} : { minFolderSize }),
           })
@@ -235,23 +255,37 @@ export async function handle(
           )
           // 形状推导只给目标、不强制：分不开的主题模型自然给不出更细的子目录，
           // 确定性规则不该硬拆（见 issues/10-shape-from-count.md「其余几问」）。
-          // 所以这里不做任何纠正，只把推导与实际并排记下来——将来拿真实库校准
+          // 所以这里不做任何纠正，只把预算与实际并排记下来——将来拿真实库校准
           // 这组数字（甜点 12、上限 20、同层 10），唯一的依据就是这条日志。
+          //
+          // 报的是「真正传下去、真正生效」的那组数，不是 deriveShape 的原始返回
+          // （shape.top / shape.depth）。原始值会在两端系统性说谎：N ≤ 12 时
+          // shape.top = 1，实际预算是 topWithFallback + 1 = 2，那个 +1 是我们自己的
+          // 下限造的、不是模型多给的，报原始值会被读成模型超产；N > 1200 时
+          // shape.top 是占位符 0、shape.depth 是 3，而实际预算是
+          // topWithFallback + 1 = 11、实际只会建 2 层（allowChildren 只开一层
+          // children，不会真的递归出第三层），报原始值等于每次都打印一条两个数字
+          // 都错的日志（见 final-review.md I2）。所以这里报 maxTopFolders
+          // （真正传给 designTagFolders/buildCategoryTree 的预算）与
+          // allowChildren 对应的实际层数。
           //
           // 一级目录 = 挂在范围根下的那些。两种模式挂法不同：合并模式挂在刚建的容器上
           // （parentTemporaryId 是容器的临时 id），非合并模式挂在范围根上
           // （parentTemporaryId 为 null、parentId 是 rootId）。
           //
-          // 数的是新建的一级目录。复用已有目录时它不进 newFolders（走的是 candidates
-          // 与 renameFolders），所以在「已有目录被复用」的库上这个数会偏小——这是已知
-          // 偏差，日志的用途是校准趋势而不是审计，够用。
+          // 已知偏差（两条，都不影响「校准趋势」这个用途，够用）：
+          // 1. 数的是新建的一级目录。复用已有目录时它不进 newFolders（走的是 candidates
+          //    与 renameFolders），所以在「已有目录被复用」的库上这个数会偏小。
+          // 2. 数的是挂在范围根/容器下的全部新目录，聚合组目录（domainSections）也在
+          //    其中，而 maxTopFolders 只是主题那一侧的预算——勾了聚合组时这个数会偏大。
           const containerId = tree_.mergeRootTemporaryId
           const actualTop = tree_.newFolders.filter((f) =>
             containerId === null
               ? f.parentTemporaryId === null && f.parentId === rootId
               : f.parentTemporaryId === containerId,
           ).length
-          log('tree', t('logShapeCompared', String(shape.top), String(actualTop), String(shape.depth)))
+          const effectiveDepth = allowChildren ? 2 : 1
+          log('tree', t('logShapeCompared', String(maxTopFolders), String(actualTop), String(effectiveDepth)))
           if (pinned.length > 0) {
             log('tree', t('logPinnedSkip', String(pinned.length)))
           }

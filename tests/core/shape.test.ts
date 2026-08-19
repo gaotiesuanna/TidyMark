@@ -48,6 +48,17 @@ describe('deriveShape', () => {
     expect(deriveShape(1201).depth).toBe(3)
   })
 
+  it('三层的分配留空——top === 0 是调用方必须兜底的占位符，不是「零个一级目录」', () => {
+    // N > 1200 才走得到这条分支（真实数据只有 123 条，超出了当前证据范围，
+    // 见函数 JSDoc）。1300 条：leaves = ceil(1300/12) = 109 > 100，落进三层。
+    // top 留 0 是有意的占位——调用方（background/handlers.ts）必须把它兜底成
+    // SHAPE_MAX_SIBLINGS，不能直接拿去当「一级目录数」用（那会让提示词写
+    // 「一级目录不超过 -1 个」）。这条测试钉住占位符本身，不代表三层的真实分配
+    // 已经实现——它没有，实现前这条断言应该一直保持 top === 0。
+    const shape = deriveShape(1300)
+    expect(shape).toEqual({ leaves: 109, depth: 3, top: 0, perLeaf: 1300 / 109 })
+  })
+
   it('topCap 收紧时，一层可能装不下——深度会被顶上去', () => {
     // 123 条按甜点要 11 个叶子；cap 收到 6 时 123/6 = 20.5 > 20，一层撑不下，
     // 于是分两层：leaves 仍是 11，branch = max(floor(√11)=3, ceil(11/10)=2, 3) = 3。

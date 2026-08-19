@@ -1085,8 +1085,11 @@ describe('推翻模式按绝对层级告知模型', () => {
     expect(prompts).toContain('其他书签')
   })
 
-  // 上限 2 + 勾其他书签 = 已经在第二层，不该再往下分
-  it('默认上限 2 下，勾其他书签就只建一层', async () => {
+  // 标题曾经是「默认上限 2 下，勾其他书签就只建一层」——那时候上限管着要不要分层。
+  // 旋钮删掉之后层数只看这次要整理的书签有多少：这里的夹具在「其他书签」下只有
+  // 1 个书签（Vue 官网），撑不起两层，下面这个断言能过纯属巧合，不是旧上限「2」
+  // 在起作用（那个字段已经无人读取，参见第 262 行同一个道理）
+  it('「其他书签」范围内书签数撑不起两层，提示词要求只输出一层（与旧上限无关，巧合通过）', async () => {
     expect(await promptsFor(['2'])).toContain('children 一律返回空数组')
   })
 
@@ -1097,9 +1100,14 @@ describe('推翻模式按绝对层级告知模型', () => {
     expect(await promptsFor(['1'])).toContain('children 一律返回空数组')
   })
 
-  // 用户勾了这里就是要在这里整理，返回「一个目录都不建」看起来像坏了
-  it('勾中处已经到上限那一层时，仍然建一层，只是不再往下', async () => {
-    const prompts = await promptsFor(['21'], { maxFolderDepth: 2 })
+  // 用户勾了这里就是要在这里整理，返回「一个目录都不建」看起来像坏了。
+  // 标题曾经是「勾中处已经到上限那一层时，仍然建一层，只是不再往下」，还传着
+  // { maxFolderDepth: 2 } 这个已经无人读取的字段——删掉它，纯噪声。
+  // 「三级目录不超过」这半仍然有效，验的是 startLevel 按绝对层级算对了；
+  // 「children 一律返回空数组」这半和上面两条一样，是这里只有 1 个书签、
+  // 撑不起两层的巧合，不是任何上限在起作用。
+  it('勾中处已在第三层，提示词按 startLevel 报「三级目录」；只建一层是书签数撑不起两层，与旧上限无关（巧合通过）', async () => {
+    const prompts = await promptsFor(['21'])
     expect(prompts).toContain('三级目录不超过')
     expect(prompts).toContain('children 一律返回空数组')
   })
@@ -2169,14 +2177,17 @@ describe('analyze 的目录形状由书签数推导', () => {
     return prompts[0]!
   }
 
-  it('书签少时提示词要求一层，且目录数按推导给（30 条 → 推导 3 个）', async () => {
+  it('书签少时提示词要求一层，且目录数按推导给（30 条 → 推导 3 个主题）', async () => {
     const prompt = await designPromptFor(30)
     expect(prompt).toContain('只输出一层')
-    // 推导 ceil(30/12) = 3 个一级目录。写进提示词的是 **3 − 1 = 2**：
+    // 推导 ceil(30/12) = 3 个主题目录（topWithFallback）。「其他」加在推导值之上，
+    // 传给 designTagFolders 的预算是 **topWithFallback + 1 = 4**（final-review.md I1
+    // 修复后：「其他」不再从推导值里扣）。写进提示词的是 **4 − 1 = 3**：
     // buildDesignPrompt 在非 oneLevel 时会 `max - 1`，给建树阶段补的「其他」留一个位子
     // （见 src/llm/folders.ts 的 buildDesignPrompt 与 core/tree.ts 的 `slice(0, maxSiblings - 1)`）。
-    // 也就是说推导出的 3 个 = 2 个主题目录 + 1 个「其他」，账是平的
-    expect(prompt).toMatch(/不超过 2 个/)
+    // 也就是说预算 4 个 = 3 个主题目录（与推导值 topWithFallback 相等）+ 1 个「其他」，
+    // 账现在是平的——推导要几个主题就真的留几个，不再被「其他」占掉一格。
+    expect(prompt).toMatch(/不超过 3 个/)
   })
 
   it('小库不会塌成只剩一个「其他」——推导只要 1 个目录时也得留出真目录的位子', async () => {
@@ -2190,9 +2201,9 @@ describe('analyze 的目录形状由书签数推导', () => {
   })
 
   it('不再读 settings.maxTopFolders——那个旋钮在这条路上已经没人听了', async () => {
-    // 把旋钮拧到 6，推导仍然按书签数说 3（提示词里是 3 − 1 = 2）
+    // 把旋钮拧到 6，推导仍然按书签数说 3 个主题（预算 3+1=4，提示词里是 4 − 1 = 3）
     const prompt = await designPromptFor(30, { maxTopFolders: 6 })
-    expect(prompt).toMatch(/不超过 2 个/)
+    expect(prompt).toMatch(/不超过 3 个/)
   })
 
   it('不再读 settings.maxFolderDepth——层数由书签数定', async () => {
@@ -2201,13 +2212,81 @@ describe('analyze 的目录形状由书签数推导', () => {
     expect(prompt).not.toContain('只输出一层')
   })
 
-  it('建完树后把推导与实际并排记进日志——校准这组数字将来只能靠它', async () => {
+  // 钉住 I1：「其他」加在推导值之上而不是从里面扣，判准 A1（叶子 ≤ 20）才不会被
+  // 顶破。190 条落在复核报告 final-review.md I1 点名的破 A1 区间 [181,200] 内：
+  // deriveShape(190) = { top: 10, depth: 1, leaves: 10 }，topWithFallback = 10。
+  // 旧账（「其他」从推导值里扣）只留 9 个主题槽位，190/9 ≈ 21.1 条会超过 20；
+  // 新账（maxTopFolders = topWithFallback + 1 = 11）留出 10 个主题槽位，
+  // 每个 190/10 = 19 条，不超上限。这里造 10 个大小均匀的主题（各 19 条），
+  // 让它们都不被 ranked.slice(0, maxSiblings - 1) 截掉，才是真的在验这件事——
+  // 少造几个主题，账目问题再大也测不出来。
+  it('N=190（落在 I1 点名的 [181,200] 破 A1 区间内）：修复后每个叶子目录不超过 20 条', async () => {
+    const TOPIC_COUNT = 10
+    const PER_TOPIC = 19
+    const total = TOPIC_COUNT * PER_TOPIC // 190
+    const topicOf = (id: string): number => Number(id.slice(1)) % TOPIC_COUNT
+
+    const complete = vi.fn(async (prompt: string) => {
+      const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+      if (prompt.includes('标签清单')) {
+        return { folders: Array.from({ length: TOPIC_COUNT }, (_, i) => ({
+          title: `主题${i}`, topics: [`主题${i}`], children: [],
+        }))}
+      }
+      if (prompt.includes('候选目录')) {
+        const idByTitle = new Map(
+          [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)].map((m) => [m[2]!, m[1]!]),
+        )
+        return { results: bookmarkIds.map((id) => {
+          const target = [...idByTitle.entries()]
+            .find(([title]) => title.includes(`主题${topicOf(id)}`))?.[1] ?? null
+          return { bookmark_id: id, target_category_id: target, confidence: 0.9, reason: 'r' }
+        })}
+      }
+      return { results: bookmarkIds.map((id) => (
+        { bookmark_id: id, primary_topic: `主题${topicOf(id)}`, secondary_topic: null }
+      ))}
+    })
+    const fake = createFakeBookmarks([{ id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '10', title: '收件箱', children: Array.from({ length: total }, (_, i) => (
+          { id: `b${i}`, title: `书签${i}`, url: `https://b${i}.dev` }
+        )) },
+      ]},
+    ]}])
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+    })
+    const res = await handle(
+      ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
+      { createClient: () => ({ complete }), now: () => 1 },
+    ) as { plan: OrganizePlan }
+
+    const createdIds = new Set(
+      res.plan.operations.filter((o) => o.type === 'create_folder').map((o) => o.temporaryId),
+    )
+    const countByFolder = new Map<string, number>()
+    for (const op of res.plan.operations) {
+      if (op.type !== 'move_bookmark' || op.toTemporaryId === null) continue
+      countByFolder.set(op.toTemporaryId, (countByFolder.get(op.toTemporaryId) ?? 0) + 1)
+    }
+    // 十个主题都真的建出了目录，没有一个被挤进「其他」——这正是修复要保住的那件事
+    const topicFolderCounts = [...createdIds].filter((id) => countByFolder.has(id)).map((id) => countByFolder.get(id)!)
+    expect(topicFolderCounts).toHaveLength(TOPIC_COUNT)
+    for (const count of topicFolderCounts) {
+      expect(count).toBeLessThanOrEqual(20)
+    }
+  })
+
+  it('建完树后把预算与实际并排记进日志——报的是生效值，不是 deriveShape 的原始返回', async () => {
     const complete = vi.fn(async (prompt: string) => {
       const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
       if (prompt.includes('标签清单')) {
         // 只给 1 个主题目录，让 buildCategoryTree 自己补的兜底「其他」目录
-        // 凑成实际 2 个（1 主题 + 其他）——推导 3、实际 2 才真正差得出来。
-        // 之前这里给两个主题目录，凑巧和推导值一样是 3 个（2 主题 + 其他），
+        // 凑成实际 2 个（1 主题 + 其他）——预算 4、实际 2 才真正差得出来。
+        // 之前这里给两个主题目录，凑巧和旧的推导值一样是 3 个（2 主题 + 其他），
         // 那条用例其实没演示出「差多少」，见 issues/10-shape-from-count.md。
         return { folders: [
           { title: '前端', topics: ['前端'], children: [] },
@@ -2246,7 +2325,60 @@ describe('analyze 的目录形状由书签数推导', () => {
 
     const line = events.find((e) => e.message.includes('推导'))
     expect(line).toBeDefined()
-    expect(line!.message).toContain('3')
-    expect(line!.message).toContain('2')
+    // deriveShape(30) 的原始返回是 { top: 3, depth: 1 }；日志报的不是这两个数，
+    // 而是真正传下去、真正生效的那组：maxTopFolders = topWithFallback(3) + 1 = 4，
+    // 与实际会建的层数 allowChildren ? 2 : 1 = 1（N=30 撑不起两层）（见 I2）。
+    expect(line!.message).toContain('4 个一级目录')
+    expect(line!.message).toContain('1 层')
+    expect(line!.message).toContain('实际建出 2 个')
+  })
+
+  // N > 1200 时 deriveShape 把三层的分配留空（shape.top === 0、shape.depth === 3，
+  // 都是占位符，见 core/shape.ts 第 59-63 行）。这条覆盖两件事：
+  // 1. 兜底确实生效——topWithFallback 退回 SHAPE_MAX_SIBLINGS，不会塌成 0；
+  // 2. I2 修复前，日志在这条路径上会打印「0 个一级目录、3 层」，两个数字都不是
+  //    实际发生的事（实际预算 11、实际只建 2 层，allowChildren 只开一层 children，
+  //    不会真的递归出第三层）。修复后应报「11 个一级目录、2 层」。
+  it('N > 1200 走三层兜底：日志报的是生效值（预算 11、2 层），不是推导原始值（0、3）', async () => {
+    const complete = vi.fn(async (prompt: string) => {
+      const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+      if (prompt.includes('标签清单')) {
+        return { folders: [{ title: '前端', topics: ['前端'], children: [] }] }
+      }
+      if (prompt.includes('候选目录')) {
+        const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)].map((m) => m[1]!)
+        return { results: bookmarkIds.map((id) => (
+          { bookmark_id: id, target_category_id: ids[0] ?? null, confidence: 0.9, reason: 'r' }
+        ))}
+      }
+      return { results: bookmarkIds.map((id) => (
+        { bookmark_id: id, primary_topic: '前端', secondary_topic: null }
+      ))}
+    })
+    const fake = createFakeBookmarks([{ id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '10', title: '收件箱', children: Array.from({ length: 1300 }, (_, i) => (
+          { id: `b${i}`, title: `书签 b${i}`, url: `https://b${i}.dev` }
+        )) },
+      ]},
+    ]}])
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      enforceMinFolderSize: false,
+    })
+    const events: ProgressEvent[] = []
+    await handle(
+      ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
+      { createClient: () => ({ complete }), now: () => 1, onEvent: (e) => events.push(e) },
+    )
+
+    const line = events.find((e) => e.message.includes('推导'))
+    expect(line).toBeDefined()
+    expect(line!.message).toContain('11 个一级目录')
+    expect(line!.message).toContain('2 层')
+    expect(line!.message).not.toContain('0 个一级目录')
+    expect(line!.message).not.toContain('3 层')
   })
 })
