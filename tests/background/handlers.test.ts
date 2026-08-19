@@ -1820,7 +1820,17 @@ describe('analyze 自己判断走哪条路', () => {
 })
 
 describe('analyze 的 prune 二次判定', () => {
-  /** 三个一级目录：两个装得满，一个只有 1 条会被撤。 */
+  /**
+   * 9 条书签，标签阶段「前端」「冷门」都攒够 minFolderSize=3 条标签，建树时都活下来；
+   * 但真实分类另有安排：a* 全进「前端」，c0 进「冷门」、c1/c2 被模型直接分去「前端」，
+   * 于是「冷门」只剩 1 条会被 prune 撤掉；d* 三条模型直接分进「其他」，
+   * 让「其他」在合并 c0 之前就已经够数、活了下来——prune 把 c0 并进这个存活的「其他」，
+   * 二次判定再把它从「其他」捞去更近的「前端」。
+   *
+   * 这个形状是刻意选的：如果「冷门」在建树阶段就因标签数不够被滤掉（旧夹具正是这样），
+   * pending 里的 fromTitle 会是「其他」而不是「冷门」——那是模型直接选了「其他」，不是
+   * 被小目录挤出来的，测不到票面真正要盖的那条路（见 final-review.md I1）。
+   */
   const rehomeTree = [
     { id: '0', title: '', children: [
       { id: '1', title: '书签栏', children: [
@@ -1828,11 +1838,21 @@ describe('analyze 的 prune 二次判定', () => {
           { id: 'a0', title: '书签 a0', url: 'https://a0.dev' },
           { id: 'a1', title: '书签 a1', url: 'https://a1.dev' },
           { id: 'a2', title: '书签 a2', url: 'https://a2.dev' },
-          { id: 'b0', title: '书签 b0', url: 'https://b0.dev' },
+          { id: 'a3', title: '书签 a3', url: 'https://a3.dev' },
+          { id: 'c0', title: '书签 c0', url: 'https://c0.dev' },
+          { id: 'c1', title: '书签 c1', url: 'https://c1.dev' },
+          { id: 'c2', title: '书签 c2', url: 'https://c2.dev' },
+          { id: 'd0', title: '书签 d0', url: 'https://d0.dev' },
+          { id: 'd1', title: '书签 d1', url: 'https://d1.dev' },
+          { id: 'd2', title: '书签 d2', url: 'https://d2.dev' },
         ]},
       ]},
     ]},
   ]
+
+  /** 标签阶段：a* 冷门、c* 冷门、d* 一个哪都不映射的话题，好让「其他」保持兜底。 */
+  const tagsOf = (id: string): string =>
+    id.startsWith('a') ? '前端' : id.startsWith('c') ? '冷门' : '孤单'
 
   it('落进「其他」的书签会带着存活目录再问一次，选中了就改判并重写理由', async () => {
     const prompts: string[] = []
@@ -1847,18 +1867,21 @@ describe('analyze 的 prune 二次判定', () => {
         prompts.push(prompt)
         const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)].map((m) => m[1]!)
         const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
-        // 第一次分类：a* 进「前端」，b0 进「冷门」（只有 1 条，会被 prune 撤掉）
-        // 第二次（二次判定）：只剩 b0，把它放进第一个候选
+        // 第一次分类：a* 全进「前端」，c0 进「冷门」，c1/c2 被模型直接分去「前端」——
+        // 「冷门」建树阶段靠 3 条标签活下来，真实分类却只留住 1 条；d* 直接进「其他」
+        // 第二次（二次判定）：只剩 c0，把它放进候选里第一个（「前端」）
         return { results: bookmarkIds.map((id) => ({
           bookmark_id: id,
-          target_category_id: prompts.length === 1 ? (id.startsWith('a') ? ids[0]! : ids[1]!) : ids[0]!,
-          confidence: 0.9,
+          target_category_id: prompts.length === 1
+            ? (id.startsWith('a') ? ids[0]! : id === 'c0' ? ids[1]! : id.startsWith('c') ? ids[0]! : ids[2]!)
+            : ids[0]!,
+          confidence: prompts.length === 1 ? 0.9 : 0.42,
           reason: 'r',
         }))}
       }
       const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
       return { results: bookmarkIds.map((id) => (
-        { bookmark_id: id, primary_topic: id.startsWith('a') ? '前端' : '冷门', secondary_topic: null }
+        { bookmark_id: id, primary_topic: tagsOf(id), secondary_topic: null }
       ))}
     })
 
@@ -1876,17 +1899,26 @@ describe('analyze 的 prune 二次判定', () => {
 
     // 二次判定确实发生了：分类提示词出现了两次
     expect(prompts).toHaveLength(2)
-    // 第二次只带那一条被撤的书签，且候选里没有「其他」
-    expect(prompts[1]).toContain('"b0"')
+    // 第二次只带那一条被撤的书签
+    expect(prompts[1]).toContain('"c0"')
     expect(prompts[1]).not.toContain('"a0"')
-    expect(prompts[1]).not.toContain('目录=其他')
-    // 改判后的理由仍然讲「原目录太小」，并点名新去处
-    const row = res.plan.rows.find((r) => r.bookmarkId === 'b0')!
+    // 「其他」这时候还活着（d0/d1/d2 撑着），但候选里必须被剔掉——这才是这条断言
+    // 真正要盯住的东西：不剔掉的话，模型会把它当默认答案，「其他」永远也不会真正退场。
+    // 候选行是「id=xxx 目录=02 其他」这种带编号的写法，不能拿 '目录=其他' 去匹配——
+    // 那个子串永远凑不出来，断言会白转（见 final-review.md I1 的实测教训）
+    expect(prompts[1]).not.toContain('其他')
+    // 改判后的理由点名的是它真正被挤出来的那个目录「冷门」，不是「其他」（见 I2）
+    const row = res.plan.rows.find((r) => r.bookmarkId === 'c0')!
+    expect(row.reason).toContain('冷门')
     expect(row.reason).toContain('不足 3 个')
-    expect(row.toPath.at(-1)).not.toContain('其他')
+    expect(row.reason).toContain('前端')
+    expect(row.toPath.at(-1)).toContain('前端')
+    // confidence 用的是二次判定这一次的把握度，不是首次分类那次对「冷门」的把握度（见 I3）
+    expect(row.confidence).toBeCloseTo(0.42)
   })
 
   it('模型说没有合适的，就保持 prune 定好的去处，不再改判', async () => {
+    let classifyCalls = 0
     const complete = vi.fn(async (prompt: string) => {
       if (prompt.includes('标签清单')) {
         return { folders: [
@@ -1895,18 +1927,26 @@ describe('analyze 的 prune 二次判定', () => {
         ]}
       }
       if (prompt.includes('候选目录')) {
+        classifyCalls += 1
         const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)].map((m) => m[1]!)
         const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
-        return { results: bookmarkIds.map((id) => ({
-          bookmark_id: id,
-          target_category_id: id === 'b0' ? null : (id.startsWith('a') ? ids[0]! : ids[1] ?? ids[0]!),
-          confidence: 0.5,
-          reason: 'r',
-        }))}
+        if (classifyCalls === 1) {
+          return { results: bookmarkIds.map((id) => ({
+            bookmark_id: id,
+            target_category_id:
+              id.startsWith('a') ? ids[0]! : id === 'c0' ? ids[1]! : id.startsWith('c') ? ids[0]! : ids[2]!,
+            confidence: 0.9,
+            reason: 'r',
+          }))}
+        }
+        // 二次判定：模型说没有更合适的目录
+        return { results: bookmarkIds.map((id) => (
+          { bookmark_id: id, target_category_id: null, confidence: 0.5, reason: 'r' }
+        ))}
       }
       const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
       return { results: bookmarkIds.map((id) => (
-        { bookmark_id: id, primary_topic: id.startsWith('a') ? '前端' : '冷门', secondary_topic: null }
+        { bookmark_id: id, primary_topic: tagsOf(id), secondary_topic: null }
       ))}
     })
 
@@ -1922,8 +1962,94 @@ describe('analyze 的 prune 二次判定', () => {
       { createClient: () => ({ complete }), now: () => 1 },
     ) as { plan: OrganizePlan }
 
-    // 没有改判成别的目录，行仍在（去处由 prune 定：「其他」或原位）
-    const row = res.plan.rows.find((r) => r.bookmarkId === 'b0')
-    expect(row === undefined || row.toPath.at(-1)!.includes('其他')).toBe(true)
+    // 二次判定确实被问过一次，不是压根没进这个分支
+    expect(classifyCalls).toBe(2)
+    // 没有改判成别的目录，去处仍是 prune 定好的：并进「其他」
+    const row = res.plan.rows.find((r) => r.bookmarkId === 'c0')
+    expect(row).toBeDefined()
+    expect(row!.toPath.at(-1)).toContain('其他')
+    expect(row!.reason).toContain('冷门')
+  })
+
+  it('二次判定改判之后，「其他」若被抽薄会被再撤一遍，不会建出一个不足下限的目录（钉住 C1）', async () => {
+    // 更贴近票面复现场景的最小夹具：min=3，6 条书签，a0/a1/a2 → 前端、
+    // b0 → 冷门、b1/b2 → 其他；prune 把 b0 并进「其他」使其达标（3 条），
+    // 二次判定又把 b0 改判去「前端」，「其他」只剩 b1/b2 两条——
+    // 如果没有人在这之后再数一遍，计划里就会凭空出现一个装 2 条、
+    // 低于 minFolderSize=3 的「其他」目录
+    const minTree = [
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: '收件箱', children: [
+            { id: 'a0', title: '书签 a0', url: 'https://a0.dev' },
+            { id: 'a1', title: '书签 a1', url: 'https://a1.dev' },
+            { id: 'a2', title: '书签 a2', url: 'https://a2.dev' },
+            { id: 'b0', title: '书签 b0', url: 'https://b0.dev' },
+            { id: 'b1', title: '书签 b1', url: 'https://b1.dev' },
+            { id: 'b2', title: '书签 b2', url: 'https://b2.dev' },
+          ]},
+        ]},
+      ]},
+    ]
+    let classifyCalls = 0
+    const complete = vi.fn(async (prompt: string) => {
+      if (prompt.includes('标签清单')) {
+        return { folders: [
+          { title: '前端', topics: ['前端'], children: [] },
+          { title: '冷门', topics: ['冷门'], children: [] },
+        ]}
+      }
+      if (prompt.includes('候选目录')) {
+        classifyCalls += 1
+        const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)].map((m) => m[1]!)
+        const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+        if (classifyCalls === 1) {
+          // a* 全进「前端」，b0 进「冷门」，b1/b2 模型直接分进「其他」
+          return { results: bookmarkIds.map((id) => ({
+            bookmark_id: id,
+            target_category_id: id.startsWith('a') ? ids[0]! : id === 'b0' ? ids[1]! : ids[2]!,
+            confidence: 0.9,
+            reason: 'r',
+          }))}
+        }
+        // 二次判定：把「冷门」被挤出来的 b0 改判进「前端」
+        return { results: bookmarkIds.map((id) => (
+          { bookmark_id: id, target_category_id: ids[0]!, confidence: 0.8, reason: 'r' }
+        ))}
+      }
+      const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+      return { results: bookmarkIds.map((id) => (
+        { bookmark_id: id, primary_topic: id.startsWith('a') ? '前端' : '冷门', secondary_topic: null }
+      ))}
+    })
+
+    const fake = createFakeBookmarks(minTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      minFolderSize: 3, enforceMinFolderSize: true,
+    })
+    const res = await handle(
+      ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
+      { createClient: () => ({ complete }), now: () => 1 },
+    ) as { plan: OrganizePlan }
+
+    // 不变量：每一个真的会被建出来的目录，落进去的书签数都不低于 minFolderSize——
+    // 哪怕它是二次判定改判之后才变薄的
+    const createdIds = new Set(
+      res.plan.operations.filter((o) => o.type === 'create_folder').map((o) => o.temporaryId),
+    )
+    const countByFolder = new Map<string, number>()
+    for (const op of res.plan.operations) {
+      if (op.type !== 'move_bookmark' || op.toTemporaryId === null) continue
+      countByFolder.set(op.toTemporaryId, (countByFolder.get(op.toTemporaryId) ?? 0) + 1)
+    }
+    for (const id of createdIds) {
+      expect(countByFolder.get(id) ?? 0).toBeGreaterThanOrEqual(3)
+    }
+    // 具体到这个场景：「其他」被二次撤销，b1/b2 退回原位，计划里看不到「其他」这个目的地
+    expect(res.plan.rows.some((r) => r.toPath.at(-1)?.includes('其他'))).toBe(false)
+    expect(res.plan.rows.find((r) => r.bookmarkId === 'b0')?.toPath.at(-1)).toContain('前端')
   })
 })

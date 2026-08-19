@@ -343,7 +343,10 @@ export async function handle(
           // 候选里剔掉「其他」自己：这一步的全部意义就是别让它当默认答案
           const rehomeCandidates = candidates.filter((c) => c.id !== pruned.fallbackId)
           const rehomeItems = scan.bookmarks.filter((b) => pendingById.has(b.id))
-          if (rehomeItems.length > 0 && rehomeCandidates.length > 0 && !isCancelled()) {
+          if (rehomeItems.length > 0 && rehomeCandidates.length > 0) {
+            // 这一步要发起新的付费请求，取消必须挡在它前面检查——与全文件另外
+            // 8 处「先查取消再往下走」保持一致，不能让用户点了取消还多花一次钱
+            if (isCancelled()) return CANCELLED
             log('classify', t('logRehomeStart', String(rehomeItems.length)))
             // 不传 onProgress：这一步是分类阶段的补充，再报一次进度会让进度条往回跳
             const placed = await classifyBookmarks({
@@ -371,19 +374,44 @@ export async function handle(
               const hit = placedById.get(c.bookmarkId)
               const info = pendingById.get(c.bookmarkId)
               if (hit === undefined || info === undefined) return c
+              // titleById 由同一份 rehomeCandidates 建、hit.targetCategoryId 来自
+              // 对这份候选表的分类结果，正常必然查得到。真查不到时宁可放弃这次
+              // 改判（保留 prune 定好的去处），也不该拼出「不再建这个目录」——
+              // 那句话只在「模型说没有合适的」时才成立，这里明明选中了一个目录
+              const targetTitle = titleById.get(hit.targetCategoryId!)
+              if (targetTitle === undefined) return c
               rehomed += 1
               // 理由仍旧由 pruneReason 拼：用户要知道的是「原来那个目录太小」，
               // 而不是模型这一次的措辞
               return {
                 ...c,
                 targetCategoryId: hit.targetCategoryId,
-                reason: pruneReason(
-                  locale, info.fromTitle, info.count, settings.minFolderSize,
-                  titleById.get(hit.targetCategoryId!) ?? null,
-                ),
+                // 用这一次改判的把握度，不沿用首次分类对着一个已经不存在的目录
+                // 打出的分数——复核页默认勾选、显示的百分比都靠它
+                confidence: hit.confidence,
+                reason: pruneReason(locale, info.fromTitle, info.count, settings.minFolderSize, targetTitle),
               }
             })
             log('classify', t('logRehomeDone', String(rehomed)))
+          }
+
+          // 二次判定只会让「其他」变小：它只把书签从「其他」搬进存活目录，不会
+          // 反过来把别的目录清空，所以不必重新跑一遍撤销判断——除了「其他」自己。
+          // 「其他」抽走几条之后完全可能跌破 minFolderSize，而上面那一轮
+          // pruneSmallFolders 已经跑完，没有人会再数一遍。这里再调用一次纯函数
+          // pruneSmallFolders（幂等、不花钱）就够了：数到「其他」还是不够，
+          // 就把它也撤掉，让里面剩下的书签退回原位——这批书签不再问第三次模型
+          // （票 05「决定 4」说的就是这个收场），日志与第一轮撤销复用同一条。
+          const rePruned = pruneSmallFolders({
+            candidates, newFolders, classifications, locale,
+            minFolderSize: settings.minFolderSize,
+            mergeRootTemporaryId: planMergeRoot?.temporaryId ?? null,
+          })
+          candidates = rePruned.candidates
+          newFolders = rePruned.newFolders
+          classifications = rePruned.classifications
+          if (rePruned.prunedTitles.length > 0) {
+            log('classify', t('logPrunedSmall', String(rePruned.prunedTitles.length), String(settings.minFolderSize)))
           }
         }
 
