@@ -86,8 +86,12 @@ export async function handle(
         // 判断只看这次扫描的结果，与设置无关；用户在偏好页推翻时才带 modeOverride 过来。
         const decision = detectMode(scan, locale)
         const rebuild = (request.modeOverride ?? decision.mode) === 'rebuild'
+        // 日志跟着实际走的模式说话，不跟着「是否推翻」说话——modeOverride 的类型两个
+        // 方向都收得下（后台自身的测试大量靠传 'additive' 把模式钉死），一旦只认
+        // 「带了 override 就说重新设计」，传 'additive' 的调用点就会让这行日志说假话。
+        // 推翻时把原判断的理由也缀上，方便用户事后翻日志看出自己否掉了什么、凭什么。
         log('scan', request.modeOverride !== undefined
-          ? t('logModeOverridden')
+          ? t(rebuild ? 'logModeOverriddenRebuild' : 'logModeOverriddenAdditive', decision.reason)
           : t(decision.mode === 'rebuild' ? 'logModeRebuild' : 'logModeAdditive', decision.reason))
 
         const client = createClient(settings.llm, locale)

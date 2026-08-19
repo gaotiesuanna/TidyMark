@@ -795,8 +795,13 @@
     "message": "These bookmarks have no usable structure yet — this run redesigns the whole folder tree: $reason$",
     "placeholders": { "reason": { "content": "$1" } }
   },
-  "logModeOverridden": {
-    "message": "Redesigning the whole folder tree as you asked — the automatic judgment is skipped this run."
+  "logModeOverriddenRebuild": {
+    "message": "Redesigning the whole folder tree as you asked — the automatic judgment is skipped this run (it would have said: $reason$)",
+    "placeholders": { "reason": { "content": "$1" } }
+  },
+  "logModeOverriddenAdditive": {
+    "message": "Filing bookmarks into existing folders as you asked — the automatic judgment is skipped this run (it would have said: $reason$)",
+    "placeholders": { "reason": { "content": "$1" } }
   },
   "logTagsStart": {
     "message": "Extracting topic tags for $count$ bookmarks",

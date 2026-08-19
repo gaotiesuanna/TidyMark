@@ -1736,5 +1736,48 @@ describe('analyze 自己判断走哪条路', () => {
 
     const line = events.find((e) => e.message.includes('编号前缀'))
     expect(line).toBeDefined()
+    // 只认理由、不认结论键的话，把 logModeAdditive 错写成 logModeRebuild 这条用例照样绿——
+    // 补上「归进现有目录」这半句，钉死走的确实是非推翻模式的那条日志模板
+    expect(line?.message).toContain('归进现有目录')
+  })
+
+  it('用户推翻自动判断（改判 rebuild）时，日志跟着实际模式走，并带上原判断的理由', async () => {
+    // tidyTree 自己判是 additive（编号前缀过半）；这里用 modeOverride 把它推翻成
+    // rebuild——日志不能再说「按你的选择改成归入现有」，得说「改成重新设计」，
+    // 且原判断（additive）的理由要缀在后面，方便用户翻日志看出自己否掉了什么
+    const fake = createFakeBookmarks(tidyTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+    })
+    const events: ProgressEvent[] = []
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, {
+      createClient: () => ({ complete: modeClient() }), now: () => 1, onEvent: (e) => events.push(e),
+    })
+
+    const line = events.find((e) => e.message.includes('重新设计整棵目录树') && e.message.includes('按你的选择'))
+    expect(line).toBeDefined()
+    expect(line?.message).toContain('编号前缀')
+  })
+
+  it('用户推翻自动判断（改判 additive）时，日志说的是归入现有，不是重新设计', async () => {
+    // messyTree 自己判是 rebuild（散落比例过高）；这里用 modeOverride 把它压成
+    // additive——I1 修之前，只要带了 modeOverride 就无条件说「重新设计整棵目录树」，
+    // 这条用例专门钉住那个方向不会回归
+    const fake = createFakeBookmarks(messyTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+    })
+    const events: ProgressEvent[] = []
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, {
+      createClient: () => ({ complete: modeClient() }), now: () => 1, onEvent: (e) => events.push(e),
+    })
+
+    const line = events.find((e) => e.message.includes('归进现有目录') && e.message.includes('按你的选择'))
+    expect(line).toBeDefined()
+    expect(line?.message).not.toContain('重新设计整棵目录树')
   })
 })
