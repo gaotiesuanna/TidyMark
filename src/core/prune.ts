@@ -21,10 +21,28 @@ export interface PruneResult {
   classifications: Classification[]
   /** 被撤掉的目录名（带编号），供日志与排查。 */
   prunedTitles: string[]
+  /**
+   * 最后落进「其他」或无处可去的书签。
+   *
+   * 被父目录接住的那批**不在**这里：那是结构上说得通的去处。只有掉进兜底目录的
+   * 才值得再问一次模型（见 issues/05-homeless-bookmarks.md「决定 1」）。
+   */
+  pending: PendingPlacement[]
+  /** 「其他」这个兜底目录的 id；不存在时为 null。调用方据此把它剔出二次判定的候选表。 */
+  fallbackId: string | null
+}
+
+/** 一条需要重新定去处的书签，连同它最后待过的那个目录的信息——够拼出改判理由。 */
+export interface PendingPlacement {
+  bookmarkId: string
+  /** 最后待过的那个目录名，已剥掉编号。 */
+  fromTitle: string
+  /** 那个目录当时装下的书签数。 */
+  count: number
 }
 
 /** 改判后的理由会原样显示在结果页，必须双语，且讲的是「为什么不在原来那个目录」。 */
-function pruneReason(
+export function pruneReason(
   locale: Locale,
   title: string,
   count: number,
@@ -64,6 +82,8 @@ export function pruneSmallFolders(input: PruneInput): PruneResult {
       newFolders: input.newFolders,
       classifications: input.classifications,
       prunedTitles: [],
+      pending: [],
+      fallbackId: null,
     }
   }
 
@@ -95,6 +115,7 @@ export function pruneSmallFolders(input: PruneInput): PruneResult {
   const classifications = input.classifications.map((c) => ({ ...c }))
   const removed = new Set<string>()
   const prunedTitles: string[] = []
+  const pending = new Map<string, PendingPlacement>()
 
   for (const folder of order) {
     const hasLiveChild = input.newFolders.some(
@@ -124,6 +145,15 @@ export function pruneSmallFolders(input: PruneInput): PruneResult {
     for (const classification of mine) {
       classification.targetCategoryId = target?.id ?? null
       classification.reason = pruneReason(locale, title, mine.length, minFolderSize, targetTitle)
+      // 掉进兜底目录或彻底没有下一站的，交给调用方再问一次模型。
+      // 被父目录接住的不记——那是结构上说得通的去处，不必花一次调用。
+      // 同一条书签可能被撤两次（子目录 → 父目录 → 「其他」），后写的覆盖先写的：
+      // 理由要讲的是它**最后**待过的那个目录
+      if (target === null || target.id === fallback?.id) {
+        pending.set(classification.bookmarkId, {
+          bookmarkId: classification.bookmarkId, fromTitle: title, count: mine.length,
+        })
+      }
     }
   }
 
@@ -132,5 +162,7 @@ export function pruneSmallFolders(input: PruneInput): PruneResult {
     newFolders: input.newFolders.filter((f) => !removed.has(f.temporaryId)),
     classifications,
     prunedTitles,
+    pending: [...pending.values()],
+    fallbackId: fallback?.id ?? null,
   }
 }
