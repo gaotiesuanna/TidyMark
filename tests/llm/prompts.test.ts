@@ -148,6 +148,39 @@ describe('foldersPrompt 目录下限', () => {
   })
 })
 
+describe('foldersPrompt 的复合名禁令', () => {
+  it('一级目录那次带上「一个目录一个概念」，并给出反例', () => {
+    const lines = foldersPrompt('zh_CN', { total: 30, maxSiblings: 8 }).join('\n')
+    expect(lines).toContain('一个目录只装一个概念')
+    expect(lines).toContain('与')
+    expect(lines).toContain('记忆与向量存储')
+  })
+
+  it('聚合组那次（parentTitle 在场）同样带上', () => {
+    const lines = foldersPrompt('zh_CN', { total: 30, maxSiblings: 8, parentTitle: 'GitHub' }).join('\n')
+    expect(lines).toContain('一个目录只装一个概念')
+  })
+
+  it('英文那份不是直译，用 and / & / 斜杠说事', () => {
+    const lines = foldersPrompt('en', { total: 30, maxSiblings: 8 }).join('\n')
+    expect(lines).toContain('One concept per folder')
+    expect(lines).toContain('"and"')
+    expect(lines).toContain('&')
+  })
+
+  it('可选规则按实际出现顺序连排编号——没有 minFolderSize 时复合名那条是第 7 条', () => {
+    const lines = foldersPrompt('zh_CN', { total: 30, maxSiblings: 8 }).join('\n')
+    expect(lines).toContain('7. 一个目录只装一个概念')
+    expect(lines).not.toContain('8. ')
+  })
+
+  it('有 minFolderSize 时它接在复合名那条后面，编号连排到 8', () => {
+    const lines = foldersPrompt('zh_CN', { total: 30, maxSiblings: 8, minFolderSize: 3 }).join('\n')
+    expect(lines).toContain('7. 一个目录只装一个概念')
+    expect(lines).toContain('8. 不要建只装得下不到 3 个书签的目录')
+  })
+})
+
 describe('classifyPrompt 的 topic 规则', () => {
   it('中文提示词说明 null 时要带回主题', () => {
     expect(classifyPrompt('zh_CN').join('\n')).toContain('topic')

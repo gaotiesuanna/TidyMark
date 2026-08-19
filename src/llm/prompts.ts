@@ -140,13 +140,32 @@ export function foldersPrompt(
   } = opts
   const here = levelName(locale, startLevel)
   const below = levelName(locale, startLevel + 1)
-  // 接在共有的第 5、6 条后面，编号才不会跟两个分支各自的 1-4 撞上
-  const sizeRule = (index: number): string[] => {
-    if (minFolderSize === undefined) return []
-    return locale === 'zh_CN'
-      ? [`${index}. 不要建只装得下不到 ${minFolderSize} 个书签的目录；凑不满的标签并进相近的目录，没有相近的就不必给它单独开目录。`]
-      : [`${index}. Only create a folder if it will hold at least ${minFolderSize} bookmarks. Merge labels that cannot fill one into a neighbouring folder; if none fits, leave them without a folder of their own.`]
+  // 尾部这几条规则里有可选项，编号必须按**实际出现**的顺序连排——写死编号的话，
+  // 关掉某一条会在提示词里留下一个跳号，模型会以为自己漏看了一条规则。
+  // 共有的第 5、6 条写死在下面两个分支里，所以这里从 7 起。
+  const tailRules = (builders: Array<((index: number) => string) | null>): string[] => {
+    const out: string[] = []
+    let index = 7
+    for (const build of builders) {
+      if (build === null) continue
+      out.push(build(index))
+      index += 1
+    }
+    return out
   }
+
+  // 复合名让互斥性必然破坏：两个名字各分一半语义给对方，就会抢同一批书签
+  // （「Agent记忆与向量检索」撞「记忆与向量存储」，见 issues/04-folder-design-defects.md）。
+  // 不做确定性强改——硬拆只会得到更宽泛、更容易撞禁词表的名字，所以只能在这里要求模型自己取舍。
+  const compoundRule = (index: number): string =>
+    locale === 'zh_CN'
+      ? `${index}. 一个目录只装一个概念。禁止用「与」「和」把两个概念捆成一个名字——「记忆与向量存储」这种名字会和别的目录抢同一批书签。必须挑一个概念，另一个要么单独开目录，要么并进别处。`
+      : `${index}. One concept per folder. Never join two concepts with "and", "&", or a slash — a name like "Memory and vector storage" fights with other folders over the same bookmarks. Pick one concept; give the other its own folder, or fold it into an existing one.`
+
+  const sizeRule = (index: number): string =>
+    locale === 'zh_CN'
+      ? `${index}. 不要建只装得下不到 ${minFolderSize} 个书签的目录；凑不满的标签并进相近的目录，没有相近的就不必给它单独开目录。`
+      : `${index}. Only create a folder if it will hold at least ${minFolderSize} bookmarks. Merge labels that cannot fill one into a neighbouring folder; if none fits, leave them without a folder of their own.`
 
   if (locale === 'zh_CN') {
     const head = parentTitle !== undefined
@@ -184,7 +203,7 @@ export function foldersPrompt(
       ...body,
       `5. 每个标签必须出现在恰好一个目录的 topics 里，不要遗漏、不要重复。直接归入某个${parentTitle === undefined ? `${here}级` : ''}目录的标签写在它自己的 topics 里，归入子目录的写在子目录的 topics 里。`,
       '6. 目录名用中文，专有技术名词（React、RAG、MCP）可直接用原文。',
-      ...sizeRule(7),
+      ...tailRules([compoundRule, minFolderSize === undefined ? null : sizeRule]),
     ]
   }
 
@@ -223,7 +242,7 @@ export function foldersPrompt(
     ...body,
     `5. Every label must appear in the topics of exactly one folder — none missing, none duplicated. Labels going directly into a${parentTitle === undefined ? ` ${here}` : ''} folder belong in its own topics; labels going into a subfolder belong in that subfolder.`,
     '6. Write folder names in English. Established technical names (React, RAG, MCP) stay as they are.',
-    ...sizeRule(7),
+    ...tailRules([compoundRule, minFolderSize === undefined ? null : sizeRule]),
   ]
 }
 
