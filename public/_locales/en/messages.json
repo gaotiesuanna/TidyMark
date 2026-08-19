@@ -837,6 +837,10 @@
       }
     }
   },
+  "logShapeCompared": {
+    "message": "Derived from the bookmark count: $wanted$ top-level folders, $depth$ level(s); actually built $actual$",
+    "placeholders": { "wanted": { "content": "$1" }, "actual": { "content": "$2" }, "depth": { "content": "$3" } }
+  },
   "logPrunedSmall": {
     "message": "Dropped $count$ folders holding fewer than $min$ bookmarks; their bookmarks moved up one level",
     "placeholders": {

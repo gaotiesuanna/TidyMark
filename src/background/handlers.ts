@@ -232,6 +232,25 @@ export async function handle(
               String(tree_.candidates.length - tree_.newFolders.length),
             ),
           )
+          // 形状推导只给目标、不强制：分不开的主题模型自然给不出更细的子目录，
+          // 确定性规则不该硬拆（见 issues/10-shape-from-count.md「其余几问」）。
+          // 所以这里不做任何纠正，只把推导与实际并排记下来——将来拿真实库校准
+          // 这组数字（甜点 12、上限 20、同层 10），唯一的依据就是这条日志。
+          //
+          // 一级目录 = 挂在范围根下的那些。两种模式挂法不同：合并模式挂在刚建的容器上
+          // （parentTemporaryId 是容器的临时 id），非合并模式挂在范围根上
+          // （parentTemporaryId 为 null、parentId 是 rootId）。
+          //
+          // 数的是新建的一级目录。复用已有目录时它不进 newFolders（走的是 candidates
+          // 与 renameFolders），所以在「已有目录被复用」的库上这个数会偏小——这是已知
+          // 偏差，日志的用途是校准趋势而不是审计，够用。
+          const containerId = tree_.mergeRootTemporaryId
+          const actualTop = tree_.newFolders.filter((f) =>
+            containerId === null
+              ? f.parentTemporaryId === null && f.parentId === rootId
+              : f.parentTemporaryId === containerId,
+          ).length
+          log('tree', t('logShapeCompared', String(shape.top), String(actualTop), String(shape.depth)))
           if (pinned.length > 0) {
             log('tree', t('logPinnedSkip', String(pinned.length)))
           }

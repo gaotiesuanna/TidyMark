@@ -2200,4 +2200,53 @@ describe('analyze 的目录形状由书签数推导', () => {
     const prompt = await designPromptFor(250, { maxFolderDepth: 1 })
     expect(prompt).not.toContain('只输出一层')
   })
+
+  it('建完树后把推导与实际并排记进日志——校准这组数字将来只能靠它', async () => {
+    const complete = vi.fn(async (prompt: string) => {
+      const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+      if (prompt.includes('标签清单')) {
+        // 只给 1 个主题目录，让 buildCategoryTree 自己补的兜底「其他」目录
+        // 凑成实际 2 个（1 主题 + 其他）——推导 3、实际 2 才真正差得出来。
+        // 之前这里给两个主题目录，凑巧和推导值一样是 3 个（2 主题 + 其他），
+        // 那条用例其实没演示出「差多少」，见 issues/10-shape-from-count.md。
+        return { folders: [
+          { title: '前端', topics: ['前端'], children: [] },
+        ]}
+      }
+      if (prompt.includes('候选目录')) {
+        const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)].map((m) => m[1]!)
+        return { results: bookmarkIds.map((id) => (
+          { bookmark_id: id, target_category_id: ids[0] ?? null, confidence: 0.9, reason: 'r' }
+        ))}
+      }
+      // 全部打成同一个主题，配合上面只给一个目录的设计结果，
+      // 让实际只建出「前端」+ 兜底「其他」两个一级目录
+      return { results: bookmarkIds.map((id) => (
+        { bookmark_id: id, primary_topic: '前端', secondary_topic: null }
+      ))}
+    })
+    const fake = createFakeBookmarks([{ id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '10', title: '收件箱', children: Array.from({ length: 30 }, (_, i) => (
+          { id: `b${i}`, title: `书签 b${i}`, url: `https://b${i}.dev` }
+        )) },
+      ]},
+    ]}])
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      enforceMinFolderSize: false,
+    })
+    const events: ProgressEvent[] = []
+    await handle(
+      ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
+      { createClient: () => ({ complete }), now: () => 1, onEvent: (e) => events.push(e) },
+    )
+
+    const line = events.find((e) => e.message.includes('推导'))
+    expect(line).toBeDefined()
+    expect(line!.message).toContain('3')
+    expect(line!.message).toContain('2')
+  })
 })
