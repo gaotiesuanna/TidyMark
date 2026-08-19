@@ -145,9 +145,16 @@ export async function handle(
           // 整理，返回「一个目录都不建」看起来像坏了。层数不再看 settings.maxFolderDepth，
           // 改看推导出的 shape.depth 是否到了两层
           const allowChildren = shape.depth >= 2
-          // shape.top 在三层（N > 1200）时是 0——票 10 有意把三层的分配留空，这里兜底
+          // shape.top 在三层（N > 1200）时是 0——票 10 有意把三层的分配留空，先兜底
           // 退回 SHAPE_MAX_SIBLINGS，不让「其他」以外的目录数塌成 0
-          const maxTopFolders = shape.top === 0 ? SHAPE_MAX_SIBLINGS : shape.top
+          const topWithFallback = shape.top === 0 ? SHAPE_MAX_SIBLINGS : shape.top
+          // 推导值是「要几个主题目录」，而建树阶段还要给兜底的「其他」留一格
+          // （llm/folders.ts 的 buildDesignPrompt 会 max - 1，core/tree.ts 的
+          // slice(0, maxSiblings - 1) 也留了同一格）。所以这里传「推导值」本身，
+          // 让那一格从推导值里出——于是同层总数（主题 + 其他）不超过判准 A3 的 10。
+          // 下限 2：N ≤ 12 时推导只要 1 个目录，减掉「其他」那一格就是 0，
+          // 小库会被要求「一级目录不超过 0 个」、最后只剩一个「其他」。
+          const maxTopFolders = Math.max(topWithFallback, 2)
           // 关掉开关时一路传 undefined，让下游各自保持改造前的行为，而不是传 1 让它们
           // 多跑一遍恒真的判断
           const minFolderSize = settings.enforceMinFolderSize ? settings.minFolderSize : undefined

@@ -254,7 +254,12 @@ describe('handle', () => {
   // settings.maxTopFolders 在推翻这条路上已经不再被读取，等价覆盖见下面
   // 「analyze 的目录形状由书签数推导」这个 describe 块。
 
-  it('嵌套上限设成 1 时，目录设计提示词要求只输出一层', async () => {
+  // 标题曾经是「嵌套上限设成 1 时，目录设计提示词要求只输出一层」——那时候
+  // maxFolderDepth 还管这件事。现在层数只看书签量：这里的夹具只有 1 个书签，
+  // 无论 maxFolderDepth 填几都只会推导出一层，下面这个断言能过纯属巧合，
+  // 不是 maxFolderDepth 在起作用（真要验证「设置被忽略」见下面
+  // 「analyze 的目录形状由书签数推导」describe 块里专门的用例）
+  it('单书签场景本就撑不起两层，提示词要求只输出一层（与 maxFolderDepth 无关，巧合通过）', async () => {
     const { ports } = setup()
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
@@ -273,9 +278,7 @@ describe('handle', () => {
   })
 
   it('推翻模式重复整理时复用已有目录，不再新建同名目录', async () => {
-    // 30 条书签：目录数与层数现在由数量推导（推导 3 个一级目录），6 条会被推导成
-    // 只有 1 个一级目录，减去给「其他」留的位子后一个真实目录都设计不出来
-    const bookmarks = Array.from({ length: 30 }, (_, i) => ({
+    const bookmarks = Array.from({ length: 6 }, (_, i) => ({
       id: `10${i}`, title: `站点${i}`, url: `https://site${i}.dev`,
     }))
     const fake = createFakeBookmarks([
@@ -329,38 +332,23 @@ describe('handle', () => {
   })
 
   it('analyze 在建树前先做一次全局目录设计', async () => {
-    // 30 条书签把一级目录数推导到 3 个，减去给「其他」留的位子后还剩 2 个真实设计位——
-    // 这条测的是「有没有跑全局目录设计」，用单书签夹具会撞上「1 个书签只推导出 1 个
-    // 一级目录、连给「其他」都不够分」的退化情形（见本文件顶部改造后的说明）
-    const bookmarks = Array.from({ length: 30 }, (_, i) => ({
-      id: `b${i}`, title: `站点${i}`, url: `https://b${i}.dev`,
-    }))
-    const fake = createFakeBookmarks([
-      { id: '0', title: '', children: [
-        { id: '1', title: '书签栏', children: [{ id: '11', title: '杂项', children: bookmarks }] },
-      ]},
-    ])
-    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     const complete = vi.fn(async (prompt: string) => {
-      const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
       if (prompt.includes('抽取一个具体主题')) {
-        return { results: bookmarkIds.map((id) => ({ bookmark_id: id, primary_topic: 'React 生态' })) }
+        return { results: [{ bookmark_id: '100', primary_topic: 'React 生态' }] }
       }
       if (prompt.includes('设计目录结构')) {
         return { folders: [{ title: '前端框架', topics: ['React 生态'], children: [] }] }
       }
-      const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)]
-      const target = ids.find((m) => m[2]!.includes('前端框架'))![1]!
-      return { results: bookmarkIds.map((id) => ({ bookmark_id: id, target_category_id: target, confidence: 0.9, reason: 'r' })) }
+      return { results: [{ bookmark_id: '100', target_category_id: 'tmp:1', confidence: 0.9, reason: 'r' }] }
     })
-    const deps = { createClient: () => ({ complete }), now: () => 1 }
+    const { ports, deps } = setup({ complete })
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
-      // 同上：这条验的是全局目录设计有没有跑，不是目录该不该建
+      // 同上：单书签夹具，这条验的是全局目录设计有没有跑，不是目录该不该建
       enforceMinFolderSize: false,
     })
     const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps) as { plan: OrganizePlan }
@@ -2189,6 +2177,11 @@ describe('analyze 的目录形状由书签数推导', () => {
     // （见 src/llm/folders.ts 的 buildDesignPrompt 与 core/tree.ts 的 `slice(0, maxSiblings - 1)`）。
     // 也就是说推导出的 3 个 = 2 个主题目录 + 1 个「其他」，账是平的
     expect(prompt).toMatch(/不超过 2 个/)
+  })
+
+  it('小库不会塌成只剩一个「其他」——推导只要 1 个目录时也得留出真目录的位子', async () => {
+    const prompt = await designPromptFor(10)
+    expect(prompt).toMatch(/不超过 1 个/)
   })
 
   it('书签多到撑不下一层时才允许二级（250 条）', async () => {
