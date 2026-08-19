@@ -12,9 +12,21 @@ const STEPS = [
   { key: 'result', labelKey: 'shellStepResult' },
 ] as const
 
-export function Shell({ children }: { children: ReactNode }) {
-  const { step, busy, busyKind, error, progress, logs, cancel, settingsOpen, openSettings, closeSettings } =
-    useStore()
+export function Shell({ children }: { children?: ReactNode }) {
+  const {
+    step,
+    busy,
+    busyKind,
+    error,
+    retryable,
+    retry,
+    progress,
+    logs,
+    cancel,
+    settingsOpen,
+    openSettings,
+    closeSettings,
+  } = useStore()
   return (
     <div className="flex h-screen flex-col bg-white text-neutral-800">
       <header className="border-b px-4 py-3">
@@ -69,7 +81,15 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
       </header>
       {error !== null && (
-        <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">{error}</div>
+        <div className="flex items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">
+          <span className="flex-1">{error}</span>
+          {/* 按钮放在红条里：出错时用户唯一在看的就是这条，不该让他自己去页底找「开始 AI 分析」 */}
+          {retryable !== null && (
+            <button className="shrink-0 underline hover:no-underline" onClick={() => void retry()}>
+              {t('errRetry')}
+            </button>
+          )}
+        </div>
       )}
       <main className="flex-1 overflow-y-auto p-4">
         {settingsOpen ? <SettingsPanel /> : (

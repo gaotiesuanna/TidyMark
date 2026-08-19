@@ -141,7 +141,7 @@
     }
   },
   "sendErrChannelClosed": {
-    "message": "后台在返回结果前被中断了（扩展刚重新加载，或后台被浏览器回收）。请重试——已经跑完的批次有缓存，重试会快很多。"
+    "message": "后台在返回结果前被中断了（扩展刚重新加载，或后台被浏览器回收）。已经跑完的批次有缓存，重试会快很多。"
   },
   "sendErrContextInvalidated": {
     "message": "扩展已重新加载，这个侧栏面板已失效。请关掉侧栏重新打开。"
@@ -694,8 +694,11 @@
   "busyImporting": {
     "message": "正在导入…"
   },
+  "errRetry": {
+    "message": "重试"
+  },
   "errBackgroundRecycled": {
-    "message": "后台已被浏览器回收，本次操作中断，请重试。"
+    "message": "后台已被浏览器回收，本次操作中断。"
   },
   "errHostPermission": {
     "message": "需要授权访问模型接口所在的域名才能继续分析。请重试并允许该权限。"

@@ -141,7 +141,7 @@
     }
   },
   "sendErrChannelClosed": {
-    "message": "The background stopped before returning a result (the extension was just reloaded, or the browser suspended it). Please retry — finished batches are cached, so a retry is much faster."
+    "message": "The background stopped before returning a result (the extension was just reloaded, or the browser suspended it). Finished batches are cached, so a retry is much faster."
   },
   "sendErrContextInvalidated": {
     "message": "The extension was reloaded, so this side panel is stale. Close it and open it again."
@@ -694,8 +694,11 @@
   "busyImporting": {
     "message": "Importing…"
   },
+  "errRetry": {
+    "message": "Retry"
+  },
   "errBackgroundRecycled": {
-    "message": "The browser suspended the background and interrupted this run. Please retry."
+    "message": "The browser suspended the background and interrupted this run."
   },
   "errHostPermission": {
     "message": "TidyMark needs permission to reach your model endpoint's domain. Retry and allow the permission."

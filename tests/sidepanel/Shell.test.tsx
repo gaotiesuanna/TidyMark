@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Shell } from '@/sidepanel/components/Shell'
@@ -65,5 +65,25 @@ describe('Shell 步骤条', () => {
     rerender(<Shell><div>步骤内容</div></Shell>)
     expect(screen.getByText('1. 选范围').getAttribute('aria-current')).toBeNull()
     expect(screen.getByText('4. 结果').getAttribute('aria-current')).toBe('step')
+  })
+})
+
+/**
+ * 出错时用户唯一在看的就是这条红条，不该让他自己去页底找「开始 AI 分析」——
+ * 所以可重试的错误得在红条里给出按钮；配置类错误（重试一百次也一样）不该给。
+ */
+describe('Shell 的错误条', () => {
+  it('可重试时给出按钮，点了就重跑', async () => {
+    const retry = vi.fn()
+    useStore.setState({ error: '后台被中断', retryable: 'analyze', retry, busy: null })
+    render(<Shell />)
+    await userEvent.click(screen.getByRole('button', { name: '重试' }))
+    expect(retry).toHaveBeenCalled()
+  })
+
+  it('不可重试的错误只显示文字，没有按钮', () => {
+    useStore.setState({ error: '请先填 API Key', retryable: null, busy: null })
+    render(<Shell />)
+    expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
   })
 })
