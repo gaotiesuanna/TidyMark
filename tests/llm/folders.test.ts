@@ -6,6 +6,7 @@ import {
   designTagFolders as designTagFoldersRaw,
   nameMergedFolder,
   nameNewTopics,
+  isCompoundName,
   type FolderDesign,
   type DesignOptions,
 } from '@/llm/folders'
@@ -255,6 +256,94 @@ describe('designFolders', () => {
     })
     await designFolders(topics, { complete }, { onLog })
     expect(onLog.mock.calls.some(([, level]) => level === 'warn')).toBe(false)
+  })
+})
+
+describe('isCompoundName', () => {
+  it('中文用「与」「和」「、」捆起来的算复合名', () => {
+    expect(isCompoundName('记忆与向量存储', 'zh_CN')).toBe(true)
+    expect(isCompoundName('模型微调和部署', 'zh_CN')).toBe(true)
+    expect(isCompoundName('前端、后端', 'zh_CN')).toBe(true)
+  })
+
+  it('连接词嵌在词里的不算——两侧各要求至少两个字', () => {
+    // 「饱和度」是设计类书签里真实存在的目录名，误判它会让重问白跑一次
+    expect(isCompoundName('饱和度', 'zh_CN')).toBe(false)
+    expect(isCompoundName('语音合成', 'zh_CN')).toBe(false)
+  })
+
+  it('英文只认独立成词的 and / & / 斜杠', () => {
+    expect(isCompoundName('Memory and vector storage', 'en')).toBe(true)
+    expect(isCompoundName('Speech synthesis & cloning', 'en')).toBe(true)
+    expect(isCompoundName('Design / research', 'en')).toBe(true)
+  })
+
+  it('不带空格的 & 放过——Q&A、AT&T 是一个概念', () => {
+    expect(isCompoundName('Q&A', 'en')).toBe(false)
+    expect(isCompoundName('Text-to-Speech', 'en')).toBe(false)
+  })
+})
+
+describe('designFolders 的复合名重问', () => {
+  // 这里用原始导出而非本文件顶部的中文便捷包装：重问用例要显式控制第 4 个参数
+  // （onLog），包装函数的签名容不下它。
+  const designFolders = designFoldersRaw
+  const topics = [{ topic: 'KV Cache', count: 3 }]
+
+  it('出现复合名时带着具体名字重问一次，用重问那一版', async () => {
+    const complete = vi.fn()
+      .mockResolvedValueOnce({ folders: [{ title: '记忆与向量存储', topics: ['KV Cache'], children: [] }] })
+      .mockResolvedValueOnce({ folders: [{ title: '向量存储', topics: ['KV Cache'], children: [] }] })
+    const result = await designFolders(topics, { complete }, 'zh_CN')
+
+    expect(complete).toHaveBeenCalledTimes(2)
+    // 反馈里要点名，不能只说「有复合名」——模型得知道是哪个
+    expect(complete.mock.calls[1]![0]).toContain('记忆与向量存储')
+    expect(result!.folders).toEqual([{ title: '向量存储', children: [] }])
+  })
+
+  it('没有复合名时不重问', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      folders: [{ title: '向量存储', topics: ['KV Cache'], children: [] }],
+    })
+    await designFolders(topics, { complete }, 'zh_CN')
+    expect(complete).toHaveBeenCalledTimes(1)
+  })
+
+  it('二级目录名同样算数', async () => {
+    const complete = vi.fn()
+      .mockResolvedValueOnce({
+        folders: [{ title: 'AI 工程', topics: [], children: [{ title: '记忆与检索', topics: ['KV Cache'] }] }],
+      })
+      .mockResolvedValueOnce({
+        folders: [{ title: 'AI 工程', topics: [], children: [{ title: '向量检索', topics: ['KV Cache'] }] }],
+      })
+    await designFolders(topics, { complete }, 'zh_CN')
+    expect(complete).toHaveBeenCalledTimes(2)
+    expect(complete.mock.calls[1]![0]).toContain('记忆与检索')
+  })
+
+  it('重问失败时保留第一版——名字不好看也好过整摊书签失去归属', async () => {
+    const complete = vi.fn()
+      .mockResolvedValueOnce({ folders: [{ title: '记忆与向量存储', topics: ['KV Cache'], children: [] }] })
+      .mockRejectedValueOnce(Object.assign(new Error('x'), { retryable: false }))
+    const result = await designFolders(topics, { complete }, 'zh_CN')
+
+    expect(result!.folders).toEqual([{ title: '记忆与向量存储', children: [] }])
+  })
+
+  it('重问回来还是复合名就收手，用重问那一版并留一条警告', async () => {
+    const logs: Array<[string, string]> = []
+    const complete = vi.fn()
+      .mockResolvedValueOnce({ folders: [{ title: '记忆与向量存储', topics: ['KV Cache'], children: [] }] })
+      .mockResolvedValueOnce({ folders: [{ title: '记忆与检索', topics: ['KV Cache'], children: [] }] })
+    const result = await designFolders(topics, { complete }, 'zh_CN', {
+      onLog: (message, level) => logs.push([message, level]),
+    })
+
+    expect(complete).toHaveBeenCalledTimes(2)
+    expect(result!.folders).toEqual([{ title: '记忆与检索', children: [] }])
+    expect(logs.some(([m, l]) => l === 'warn' && m.includes('记忆与检索'))).toBe(true)
   })
 })
 

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { LOCALES } from '@/core/locale'
 import {
   fallbackReason, logBatch, logBatchDone, logBatchFailed,
-  logDuplicateTopics, logFoldersDone, logFoldersFailed,
+  logCompoundNames, logCompoundNamesRemain, logDuplicateTopics, logFoldersDone, logFoldersFailed,
 } from '@/llm/logs'
 
 describe('llm 日志文案双语', () => {
@@ -32,5 +32,11 @@ describe('llm 日志文案双语', () => {
         expect(fallbackReason(locale, kind, 'boom').trim()).not.toBe('')
       }
     }
+  })
+
+  it('复合名的两条日志都双语', () => {
+    expect(logCompoundNames('zh_CN', '记忆与向量存储')).toContain('记忆与向量存储')
+    expect(/[一-鿿]/.test(logCompoundNames('en', 'x'))).toBe(false)
+    expect(/[一-鿿]/.test(logCompoundNamesRemain('en', 'x'))).toBe(false)
   })
 })

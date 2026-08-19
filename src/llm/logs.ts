@@ -46,6 +46,18 @@ export function logDuplicateTopics(locale: Locale, detail: string): string {
     : `The model declared the same label in several folders; kept the last one: ${detail}`
 }
 
+export function logCompoundNames(locale: Locale, detail: string): string {
+  return locale === 'zh_CN'
+    ? `目录名把两个概念捆在了一起，已要求模型重出一版：${detail}`
+    : `Some folder names bundle two concepts; asked the model for another pass: ${detail}`
+}
+
+export function logCompoundNamesRemain(locale: Locale, detail: string): string {
+  return locale === 'zh_CN'
+    ? `重出后仍有目录名捆着两个概念，按现状继续：${detail}`
+    : `Folder names still bundle two concepts after the retry; continuing as is: ${detail}`
+}
+
 export function fallbackReason(
   locale: Locale, kind: 'noResult' | 'failed' | 'unprocessed', detail = '',
 ): string {

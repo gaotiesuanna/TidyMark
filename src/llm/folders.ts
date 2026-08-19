@@ -6,7 +6,9 @@ import type { TopicCluster } from '@/core/newTopics'
 import { MAX_SIBLINGS } from '@/core/tree'
 import { NO_TOPIC } from './tags'
 import type { LlmClient } from './client'
-import { logDuplicateTopics, logFoldersDone, logFoldersFailed } from './logs'
+import {
+  logCompoundNames, logCompoundNamesRemain, logDuplicateTopics, logFoldersDone, logFoldersFailed,
+} from './logs'
 import { foldersPrompt, mergeNamePrompt, newFolderNamesPrompt } from './prompts'
 
 export interface TopicCount {
@@ -137,24 +139,32 @@ function buildDesignPrompt(topics: TopicCount[], options: DesignOptions, locale:
 }
 
 /**
- * 看到全部标签的那一次调用，由它归并同义标签并定下目录树。
+ * 目录名有没有把两个概念捆在一起。
  *
- * 标签抽取是分批并发的，模型看不到全局，必然抽出「Claude Code」「CC 工作流」
- * 这类碎片。碎片各自都不够大，按数量筛只会把它们统统扔进「其他」。
- * 归并只能在这里做——这是唯一看得到全部标签的地方。
+ * 中文连接词两侧各要求至少两个字：「饱和度」这种把「和」嵌在词里的名字不该被误判，
+ * 而真正的复合名（「记忆与向量存储」「Python 配置与排错」）两侧都不止两个字。
+ * 英文只认独立成词的 and / & / 斜杠——「Q&A」「AT&T」「Text-to-Speech」是一个概念，放过。
  *
- * 失败返回 null，调用方退回未归并的原始标签，不让整次分析白跑。
+ * 判错的方向是不对称的：多认一个只是白问一次模型，漏认一个就留下一对会抢书签的目录，
+ * 所以边界往「宁可多问一次」偏。
  */
-export async function designFolders(
-  topics: TopicCount[],
+export function isCompoundName(title: string, locale: Locale): boolean {
+  const name = title.trim()
+  if (locale === 'zh_CN') {
+    return /[一-鿿A-Za-z0-9]{2,}\s*[与和、]\s*[一-鿿A-Za-z0-9]{2,}/.test(name)
+  }
+  return /\s(and|&)\s|\s\/\s/i.test(name)
+}
+
+/** 发一次请求并把返回解析成 FolderDesign；失败返回 null（日志已在内部打）。 */
+async function requestDesign(
+  prompt: string,
   client: LlmClient,
   locale: Locale,
-  options: DesignOptions = {},
+  options: DesignOptions,
 ): Promise<FolderDesign | null> {
-  if (topics.length === 0) return null
-
   try {
-    const response = (await client.complete(buildDesignPrompt(topics, options, locale), DESIGN_SCHEMA)) as {
+    const response = (await client.complete(prompt, DESIGN_SCHEMA)) as {
       folders?: RawFolder[]
     }
     const raw = response.folders ?? []
@@ -234,6 +244,67 @@ export async function designFolders(
     options.onLog?.(logFoldersFailed(locale, String(error)), 'error')
     return null
   }
+}
+
+/**
+ * 看到全部标签的那一次调用，由它归并同义标签并定下目录树。
+ *
+ * 标签抽取是分批并发的，模型看不到全局，必然抽出「Claude Code」「CC 工作流」
+ * 这类碎片。碎片各自都不够大，按数量筛只会把它们统统扔进「其他」。
+ * 归并只能在这里做——这是唯一看得到全部标签的地方。
+ *
+ * 失败返回 null，调用方退回未归并的原始标签，不让整次分析白跑。
+ */
+export async function designFolders(
+  topics: TopicCount[],
+  client: LlmClient,
+  locale: Locale,
+  options: DesignOptions = {},
+): Promise<FolderDesign | null> {
+  if (topics.length === 0) return null
+
+  const prompt = buildDesignPrompt(topics, options, locale)
+  const first = await requestDesign(prompt, client, locale, options)
+  if (first === null) return null
+
+  const compound = compoundTitles(first, locale)
+  if (compound.length === 0) return first
+
+  const detail = compound.join(locale === 'zh_CN' ? '、' : ', ')
+  options.onLog?.(logCompoundNames(locale, detail), 'warn')
+  // 只重问一次。重问失败（网络错、返回形状不对）就用第一版——名字不好看，
+  // 也好过整摊书签退回碎片化的原始标签
+  const second = await requestDesign(
+    [prompt, '', ...compoundFeedback(locale, compound)].join('\n'),
+    client, locale, options,
+  )
+  if (second === null) return first
+
+  const remain = compoundTitles(second, locale)
+  if (remain.length > 0) {
+    options.onLog?.(logCompoundNamesRemain(locale, remain.join(locale === 'zh_CN' ? '、' : ', ')), 'warn')
+  }
+  return second
+}
+
+/** 设计里所有复合名，一级与二级都算。 */
+function compoundTitles(design: FolderDesign, locale: Locale): string[] {
+  const all = design.folders.flatMap((f) => [f.title, ...f.children])
+  return all.filter((title) => isCompoundName(title, locale))
+}
+
+/** 重问时追加的反馈。必须点名，模型才知道要改哪几个。 */
+function compoundFeedback(locale: Locale, names: string[]): string[] {
+  if (locale === 'zh_CN') {
+    return [
+      `刚才那一版里这些目录名把两个概念捆在了一起：${names.join('、')}。`,
+      '请重新设计一版：每个目录只装一个概念，被拆掉的那个概念要么单独开目录，要么并进别处。其余规则不变。',
+    ]
+  }
+  return [
+    `These folder names from the previous pass bundle two concepts: ${names.join(', ')}.`,
+    'Design another version: one concept per folder. Give the concept you drop its own folder, or fold it into an existing one. Every other rule stays the same.',
+  ]
 }
 
 /**
