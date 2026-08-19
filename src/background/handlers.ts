@@ -7,6 +7,7 @@ import { findScopeRoots, scanTree } from '@/core/scan'
 import { detectMode } from '@/core/mode'
 import { planTitleRewrites } from '@/core/titles'
 import { buildCategoryTree } from '@/core/tree'
+import { deriveShape, SHAPE_MAX_SIBLINGS } from '@/core/shape'
 import { clusterHomeless, dropAlreadyGrouped, planNewFolders, MIN_NEW_FOLDER_SIZE } from '@/core/newTopics'
 import type { Ports } from '@/core/ports'
 import type { Classification, OrganizePlan, TagResult } from '@/core/types'
@@ -135,9 +136,18 @@ export async function handle(
           // 万一没有，?? 0 让它退回改造前的行为，而不是把整次分析弄崩
           const rootLevel = scan.folders.find((f) => f.id === rootId)?.level ?? 0
           const startLevel = rootLevel + 1
+          // 目录的数量与层数由这次要整理的书签总数推导，不再由用户拨旋钮
+          // （见 issues/10-shape-from-count.md「决定：方案 D」）。
+          // N 暂时按范围内的书签总数算：勾了聚合组时它偏大、推导出的目录数偏多。
+          // 计划 2/2 会把 N_主题 = N − Σ 存活组命中数 与 depthGuard 预算一起补上。
+          const shape = deriveShape(scan.bookmarks.length)
           // 上限只管「要不要再往下分」，不阻止在勾中处建第一层：用户勾了这里就是要在这里
-          // 整理，返回「一个目录都不建」看起来像坏了
-          const allowChildren = startLevel < settings.maxFolderDepth
+          // 整理，返回「一个目录都不建」看起来像坏了。层数不再看 settings.maxFolderDepth，
+          // 改看推导出的 shape.depth 是否到了两层
+          const allowChildren = shape.depth >= 2
+          // shape.top 在三层（N > 1200）时是 0——票 10 有意把三层的分配留空，这里兜底
+          // 退回 SHAPE_MAX_SIBLINGS，不让「其他」以外的目录数塌成 0
+          const maxTopFolders = shape.top === 0 ? SHAPE_MAX_SIBLINGS : shape.top
           // 关掉开关时一路传 undefined，让下游各自保持改造前的行为，而不是传 1 让它们
           // 多跑一遍恒真的判断
           const minFolderSize = settings.enforceMinFolderSize ? settings.minFolderSize : undefined
@@ -162,7 +172,7 @@ export async function handle(
           tags = await designTagFolders(tags, scan.bookmarks, settings.domainGroups, client, locale, {
             onLog: (message, level) => log('tree', message, level),
             isCancelled,
-            maxTopFolders: settings.maxTopFolders,
+            maxTopFolders,
             allowChildren,
             startLevel,
             ...(containerTitle === undefined ? {} : { containerTitle }),
@@ -191,7 +201,7 @@ export async function handle(
             tags, rootId, existingFolders: scan.folders,
             bookmarks: scan.bookmarks, domainGroups: settings.domainGroups, locale,
             mergeRoot,
-            maxTopFolders: settings.maxTopFolders,
+            maxTopFolders,
             allowChildren,
             ...(minFolderSize === undefined ? {} : { minFolderSize }),
           })

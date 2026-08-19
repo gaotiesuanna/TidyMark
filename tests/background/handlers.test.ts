@@ -250,24 +250,9 @@ describe('handle', () => {
     expect(classifyPrompts[0]).not.toContain('topic')
   })
 
-  it('一级目录上限从设置里读，并写进发给模型的目录设计提示词', async () => {
-    const { ports } = setup()
-    await saveSettings(ports, {
-      ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      maxTopFolders: 5,
-    })
-    const complete = vi.fn()
-      .mockResolvedValueOnce({ results: [{ bookmark_id: '100', primary_topic: '前端' }] })
-      .mockResolvedValueOnce({ folders: [{ title: '前端', topics: ['前端'], children: [] }] })
-      .mockResolvedValueOnce({ results: [{ bookmark_id: '100', target_category_id: 'tmp:1', confidence: 0.9, reason: 'r' }] })
-    const deps = { createClient: () => ({ complete }), now: () => 1 }
-
-    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps)
-    const prompts = complete.mock.calls.map((c) => c[0] as string)
-    // 上限 5 减去给「其他」留的那一位 = 4
-    expect(prompts.some((prompt) => prompt.includes('一级目录不超过 4 个'))).toBe(true)
-  })
+  // 「一级目录上限从设置里读」这条旧用例随本任务删掉：一级目录数改由书签总数推导，
+  // settings.maxTopFolders 在推翻这条路上已经不再被读取，等价覆盖见下面
+  // 「analyze 的目录形状由书签数推导」这个 describe 块。
 
   it('嵌套上限设成 1 时，目录设计提示词要求只输出一层', async () => {
     const { ports } = setup()
@@ -288,7 +273,9 @@ describe('handle', () => {
   })
 
   it('推翻模式重复整理时复用已有目录，不再新建同名目录', async () => {
-    const bookmarks = Array.from({ length: 6 }, (_, i) => ({
+    // 30 条书签：目录数与层数现在由数量推导（推导 3 个一级目录），6 条会被推导成
+    // 只有 1 个一级目录，减去给「其他」留的位子后一个真实目录都设计不出来
+    const bookmarks = Array.from({ length: 30 }, (_, i) => ({
       id: `10${i}`, title: `站点${i}`, url: `https://site${i}.dev`,
     }))
     const fake = createFakeBookmarks([
@@ -342,23 +329,38 @@ describe('handle', () => {
   })
 
   it('analyze 在建树前先做一次全局目录设计', async () => {
+    // 30 条书签把一级目录数推导到 3 个，减去给「其他」留的位子后还剩 2 个真实设计位——
+    // 这条测的是「有没有跑全局目录设计」，用单书签夹具会撞上「1 个书签只推导出 1 个
+    // 一级目录、连给「其他」都不够分」的退化情形（见本文件顶部改造后的说明）
+    const bookmarks = Array.from({ length: 30 }, (_, i) => ({
+      id: `b${i}`, title: `站点${i}`, url: `https://b${i}.dev`,
+    }))
+    const fake = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [{ id: '11', title: '杂项', children: bookmarks }] },
+      ]},
+    ])
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     const complete = vi.fn(async (prompt: string) => {
+      const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
       if (prompt.includes('抽取一个具体主题')) {
-        return { results: [{ bookmark_id: '100', primary_topic: 'React 生态' }] }
+        return { results: bookmarkIds.map((id) => ({ bookmark_id: id, primary_topic: 'React 生态' })) }
       }
       if (prompt.includes('设计目录结构')) {
         return { folders: [{ title: '前端框架', topics: ['React 生态'], children: [] }] }
       }
-      return { results: [{ bookmark_id: '100', target_category_id: 'tmp:1', confidence: 0.9, reason: 'r' }] }
+      const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)]
+      const target = ids.find((m) => m[2]!.includes('前端框架'))![1]!
+      return { results: bookmarkIds.map((id) => ({ bookmark_id: id, target_category_id: target, confidence: 0.9, reason: 'r' })) }
     })
-    const { ports, deps } = setup({ complete })
+    const deps = { createClient: () => ({ complete }), now: () => 1 }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
-      // 同上：单书签夹具，这条验的是全局目录设计有没有跑，不是目录该不该建
+      // 同上：这条验的是全局目录设计有没有跑，不是目录该不该建
       enforceMinFolderSize: false,
     })
     const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps) as { plan: OrganizePlan }
@@ -1100,9 +1102,11 @@ describe('推翻模式按绝对层级告知模型', () => {
     expect(await promptsFor(['2'])).toContain('children 一律返回空数组')
   })
 
-  // 同样是上限 2，勾书签栏时二级还开着——上限管的是绝对层级，不是「再分一层」
-  it('同样上限 2，勾书签栏时仍允许分出二级', async () => {
-    expect(await promptsFor(['1'])).not.toContain('children 一律返回空数组')
+  // 旋钮删掉之后层数不再看「勾选点在第几层」，只看这次要整理的书签有多少：
+  // 这里勾书签栏只带出 1 个书签，撑不起两层，跟勾其他书签时结果一致，都只建一层——
+  // 不再是「上限管绝对层级，不管从勾选点起算的深度」那一套
+  it('层数不再看绝对层级，书签量撑不起两层时勾书签栏也只建一层', async () => {
+    expect(await promptsFor(['1'])).toContain('children 一律返回空数组')
   })
 
   // 用户勾了这里就是要在这里整理，返回「一个目录都不建」看起来像坏了
@@ -1166,26 +1170,65 @@ describe('handle analyze 目录下限', () => {
     expect(prompts.some((prompt) => prompt.includes('个书签的目录'))).toBe(false)
   })
 
-  // 标签数够、真实归属不够：模型把 6 个书签的两个子主题分成了 5 : 1，
-  // 只有数过分类结果才拦得住那个 1
+  /**
+   * 二级目录（React/Vue）要建得出来，allowChildren 得是 true——而这现在由书签总数
+   * 推导（N > 200 才进两层），不再由「勾选点在第几层」决定，所以这两条子目录下限
+   * 的用例不能再用 6 条书签的夹具：203 条里 React 占 200、Vue 占 3，够上两层，
+   * Vue 在标签阶段又刚好卡在 minFolderSize=3 的线上，让建树那道拦不住它。
+   *
+   * 标签数够、真实归属不够：模型把这批书签的两个子主题分成了「几乎全 React、只留
+   * 1 条给 Vue」，只有数过分类结果才拦得住那 1 条。
+   */
+  const REACT_TAG_COUNT = 200
+  const VUE_TAG_COUNT = 3
+  const skewedBookmarks = Array.from({ length: REACT_TAG_COUNT + VUE_TAG_COUNT }, (_, i) => ({
+    id: `s${i}`, title: `站点${i}`, url: `https://site${i}.dev`,
+  }))
+  // 标签阶段真按 3:200 分（Vue 卡在下限线上），真实分类另有安排：只留最后一条给 Vue
+  const loneVueId = skewedBookmarks.at(-1)!.id
+
+  function setupSkewed(complete: LlmClient['complete']) {
+    const fake = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [{ id: '11', title: '杂项', children: skewedBookmarks }] },
+      ]},
+    ])
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    return { fake, ports, deps: { createClient: () => ({ complete }), now: () => 1 } }
+  }
+
+  function skewedComplete(): LlmClient['complete'] {
+    return vi.fn(async (prompt: string) => {
+      const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+      if (prompt.includes('标签清单')) {
+        return { folders: [{ title: '前端', topics: [], children: [
+          { title: 'React', topics: ['React'] },
+          { title: 'Vue', topics: ['Vue'] },
+        ] }] }
+      }
+      if (prompt.includes('候选目录')) {
+        const withLabel = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)]
+        const reactId = withLabel.find((m) => m[2]!.includes('React'))![1]!
+        const vueId = withLabel.find((m) => m[2]!.includes('Vue'))![1]!
+        return { results: bookmarkIds.map((id) => ({
+          bookmark_id: id,
+          target_category_id: id === loneVueId ? vueId : reactId,
+          confidence: 0.9,
+          reason: 'r',
+        }))}
+      }
+      // 标签阶段：最后 VUE_TAG_COUNT 条先标成 Vue（够格通过建树那道的下限筛选），
+      // 真实分类会把其中大部分改判回 React，只留 loneVueId 那一条
+      return { results: bookmarkIds.map((id) => {
+        const index = skewedBookmarks.findIndex((b) => b.id === id)
+        return { bookmark_id: id, primary_topic: index >= REACT_TAG_COUNT ? 'Vue' : 'React', secondary_topic: null }
+      })}
+    })
+  }
+
   it('分类后仍不足下限的目录不出现在计划里，书签并进父目录', async () => {
-    const tags = Array.from({ length: 6 }, (_, i) => ({
-      bookmark_id: `20${i}`, primary_topic: i < 3 ? 'React' : 'Vue',
-    }))
-    // 两个子主题各 3 个标签，都撑得起子目录——建树那道拦不住，得靠分类后再数一遍
-    const complete = vi.fn()
-      .mockResolvedValueOnce({ results: tags })
-      .mockResolvedValueOnce({ folders: [{ title: '前端', topics: [], children: [
-        { title: 'React', topics: ['React'] },
-        { title: 'Vue', topics: ['Vue'] },
-      ] }] })
-      .mockResolvedValueOnce({ results: Array.from({ length: 6 }, (_, i) => ({
-        bookmark_id: `20${i}`,
-        target_category_id: i === 5 ? 'tmp:3' : 'tmp:2',
-        confidence: 0.9,
-        reason: 'r',
-      })) })
-    const { ports, deps } = setupSix(complete)
+    const complete = skewedComplete()
+    const { ports, deps } = setupSkewed(complete)
     await saveSettings(ports, rebuild({ minFolderSize: 3 }))
 
     const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps) as { plan: OrganizePlan }
@@ -1193,29 +1236,14 @@ describe('handle analyze 目录下限', () => {
     expect(created.some((title) => title.includes('React'))).toBe(true)
     expect(created.some((title) => title.includes('Vue'))).toBe(false)
     // 那个书签落在父目录，而不是掉进「其他」或原地不动
-    const row = res.plan.rows.find((r) => r.bookmarkId === '205')!
+    const row = res.plan.rows.find((r) => r.bookmarkId === loneVueId)!
     expect(row.toPath.map((p) => p.replace(/^\d+ /, ''))).toEqual(['前端'])
     expect(row.reason).toContain('不足 3 个')
   })
 
   it('开关关掉时那个只有一个书签的子目录照建', async () => {
-    const tags = Array.from({ length: 6 }, (_, i) => ({
-      bookmark_id: `20${i}`, primary_topic: i < 3 ? 'React' : 'Vue',
-    }))
-    // 两个子主题各 3 个标签，都撑得起子目录——建树那道拦不住，得靠分类后再数一遍
-    const complete = vi.fn()
-      .mockResolvedValueOnce({ results: tags })
-      .mockResolvedValueOnce({ folders: [{ title: '前端', topics: [], children: [
-        { title: 'React', topics: ['React'] },
-        { title: 'Vue', topics: ['Vue'] },
-      ] }] })
-      .mockResolvedValueOnce({ results: Array.from({ length: 6 }, (_, i) => ({
-        bookmark_id: `20${i}`,
-        target_category_id: i === 5 ? 'tmp:3' : 'tmp:2',
-        confidence: 0.9,
-        reason: 'r',
-      })) })
-    const { ports, deps } = setupSix(complete)
+    const complete = skewedComplete()
+    const { ports, deps } = setupSkewed(complete)
     await saveSettings(ports, rebuild({ enforceMinFolderSize: false }))
 
     const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps) as { plan: OrganizePlan }
@@ -1870,24 +1898,27 @@ describe('analyze 自己判断走哪条路', () => {
 
 describe('analyze 的 prune 二次判定', () => {
   /**
-   * 9 条书签，标签阶段「前端」「冷门」都攒够 minFolderSize=3 条标签，建树时都活下来；
-   * 但真实分类另有安排：a* 全进「前端」，c0 进「冷门」、c1/c2 被模型直接分去「前端」，
-   * 于是「冷门」只剩 1 条会被 prune 撤掉；d* 三条模型直接分进「其他」，
-   * 让「其他」在合并 c0 之前就已经够数、活了下来——prune 把 c0 并进这个存活的「其他」，
-   * 二次判定再把它从「其他」捞去更近的「前端」。
+   * 25 条书签（a* 19 条、c0-c2、d0-d2 各 3 条），标签阶段「前端」「冷门」都攒够
+   * minFolderSize=3 条标签，建树时都活下来；但真实分类另有安排：a* 全进「前端」，
+   * c0 进「冷门」、c1/c2 被模型直接分去「前端」，于是「冷门」只剩 1 条会被 prune 撤掉；
+   * d* 三条模型直接分进「其他」，让「其他」在合并 c0 之前就已经够数、活了下来——
+   * prune 把 c0 并进这个存活的「其他」，二次判定再把它从「其他」捞去更近的「前端」。
    *
    * 这个形状是刻意选的：如果「冷门」在建树阶段就因标签数不够被滤掉（旧夹具正是这样），
    * pending 里的 fromTitle 会是「其他」而不是「冷门」——那是模型直接选了「其他」，不是
    * 被小目录挤出来的，测不到票面真正要盖的那条路（见 final-review.md I1）。
+   *
+   * a* 从 4 条撑到 19 条（原来只有 9 条书签、总数 10）：一级目录数现在由总数推导，
+   * 9~10 条只推导得出 1 个一级目录，减去给「其他」留的位子后连「前端」「冷门」都设计
+   * 不出来。凑够 25 条让推导给出 3 个一级目录，「前端」「冷门」「其他」三个都有位子；
+   * 25 也是分类批次大小（classifyBookmarks 默认 batchSize=25）的上限——再多一条
+   * 第一轮分类就会被拆成两批，`prompts`/`classifyCalls` 数的就不再是「问了几轮」了。
    */
   const rehomeTree = [
     { id: '0', title: '', children: [
       { id: '1', title: '书签栏', children: [
         { id: '10', title: '收件箱', children: [
-          { id: 'a0', title: '书签 a0', url: 'https://a0.dev' },
-          { id: 'a1', title: '书签 a1', url: 'https://a1.dev' },
-          { id: 'a2', title: '书签 a2', url: 'https://a2.dev' },
-          { id: 'a3', title: '书签 a3', url: 'https://a3.dev' },
+          ...Array.from({ length: 19 }, (_, i) => ({ id: `a${i}`, title: `书签 a${i}`, url: `https://a${i}.dev` })),
           { id: 'c0', title: '书签 c0', url: 'https://c0.dev' },
           { id: 'c1', title: '书签 c1', url: 'https://c1.dev' },
           { id: 'c2', title: '书签 c2', url: 'https://c2.dev' },
@@ -2021,18 +2052,19 @@ describe('analyze 的 prune 二次判定', () => {
   })
 
   it('二次判定改判之后，「其他」若被抽薄会被再撤一遍，不会建出一个不足下限的目录（钉住 C1）', async () => {
-    // 更贴近票面复现场景的最小夹具：min=3，6 条书签，a0/a1/a2 → 前端、
+    // 更贴近票面复现场景的最小夹具：min=3，a0..a21（22 条）→ 前端、
     // b0 → 冷门、b1/b2 → 其他；prune 把 b0 并进「其他」使其达标（3 条），
     // 二次判定又把 b0 改判去「前端」，「其他」只剩 b1/b2 两条——
     // 如果没有人在这之后再数一遍，计划里就会凭空出现一个装 2 条、
-    // 低于 minFolderSize=3 的「其他」目录
+    // 低于 minFolderSize=3 的「其他」目录。
+    // a 组从 3 条撑到 22 条（凑够 25 条总数）：一级目录数现在由总数推导，
+    // 6 条只推导得出 1 个一级目录，减去给「其他」留的位子后连「前端」都设计不出来；
+    // 25 也是分类批次大小上限——再多就会被拆成两批，打乱 classifyCalls 计数
     const minTree = [
       { id: '0', title: '', children: [
         { id: '1', title: '书签栏', children: [
           { id: '10', title: '收件箱', children: [
-            { id: 'a0', title: '书签 a0', url: 'https://a0.dev' },
-            { id: 'a1', title: '书签 a1', url: 'https://a1.dev' },
-            { id: 'a2', title: '书签 a2', url: 'https://a2.dev' },
+            ...Array.from({ length: 22 }, (_, i) => ({ id: `a${i}`, title: `书签 a${i}`, url: `https://a${i}.dev` })),
             { id: 'b0', title: '书签 b0', url: 'https://b0.dev' },
             { id: 'b1', title: '书签 b1', url: 'https://b1.dev' },
             { id: 'b2', title: '书签 b2', url: 'https://b2.dev' },
@@ -2100,5 +2132,79 @@ describe('analyze 的 prune 二次判定', () => {
     // 具体到这个场景：「其他」被二次撤销，b1/b2 退回原位，计划里看不到「其他」这个目的地
     expect(res.plan.rows.some((r) => r.toPath.at(-1)?.includes('其他'))).toBe(false)
     expect(res.plan.rows.find((r) => r.bookmarkId === 'b0')?.toPath.at(-1)).toContain('前端')
+  })
+})
+
+describe('analyze 的目录形状由书签数推导', () => {
+  /** 造一棵「书签栏 / 收件箱」的树，收件箱里放 count 条书签。 */
+  function treeWith(count: number) {
+    return [{ id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '10', title: '收件箱', children: Array.from({ length: count }, (_, i) => (
+          { id: `b${i}`, title: `书签 b${i}`, url: `https://b${i}.dev` }
+        )) },
+      ]},
+    ]}]
+  }
+
+  /** 抓住目录设计那一次的提示词。 */
+  async function designPromptFor(count: number, settings: Partial<Settings> = {}): Promise<string> {
+    const prompts: string[] = []
+    const complete = vi.fn(async (prompt: string) => {
+      const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+      if (prompt.includes('标签清单')) {
+        prompts.push(prompt)
+        return { folders: [{ title: '前端', topics: ['前端'], children: [] }] }
+      }
+      if (prompt.includes('候选目录')) {
+        const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)].map((m) => m[1]!)
+        return { results: bookmarkIds.map((id) => (
+          { bookmark_id: id, target_category_id: ids[0] ?? null, confidence: 0.9, reason: 'r' }
+        ))}
+      }
+      return { results: bookmarkIds.map((id) => (
+        { bookmark_id: id, primary_topic: '前端', secondary_topic: null }
+      ))}
+    })
+    const fake = createFakeBookmarks(treeWith(count))
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      enforceMinFolderSize: false,
+      ...settings,
+    })
+    await handle(
+      ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
+      { createClient: () => ({ complete }), now: () => 1 },
+    )
+    return prompts[0]!
+  }
+
+  it('书签少时提示词要求一层，且目录数按推导给（30 条 → 推导 3 个）', async () => {
+    const prompt = await designPromptFor(30)
+    expect(prompt).toContain('只输出一层')
+    // 推导 ceil(30/12) = 3 个一级目录。写进提示词的是 **3 − 1 = 2**：
+    // buildDesignPrompt 在非 oneLevel 时会 `max - 1`，给建树阶段补的「其他」留一个位子
+    // （见 src/llm/folders.ts 的 buildDesignPrompt 与 core/tree.ts 的 `slice(0, maxSiblings - 1)`）。
+    // 也就是说推导出的 3 个 = 2 个主题目录 + 1 个「其他」，账是平的
+    expect(prompt).toMatch(/不超过 2 个/)
+  })
+
+  it('书签多到撑不下一层时才允许二级（250 条）', async () => {
+    const prompt = await designPromptFor(250)
+    expect(prompt).not.toContain('只输出一层')
+  })
+
+  it('不再读 settings.maxTopFolders——那个旋钮在这条路上已经没人听了', async () => {
+    // 把旋钮拧到 6，推导仍然按书签数说 3（提示词里是 3 − 1 = 2）
+    const prompt = await designPromptFor(30, { maxTopFolders: 6 })
+    expect(prompt).toMatch(/不超过 2 个/)
+  })
+
+  it('不再读 settings.maxFolderDepth——层数由书签数定', async () => {
+    // 旋钮说只许一层，但 250 条按推导该有两层
+    const prompt = await designPromptFor(250, { maxFolderDepth: 1 })
+    expect(prompt).not.toContain('只输出一层')
   })
 })
