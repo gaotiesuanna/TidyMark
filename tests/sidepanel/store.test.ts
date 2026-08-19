@@ -425,3 +425,75 @@ describe('放弃这一轮之后，在途结果不再落地', () => {
     expect(useStore.getState().modeOverride).toBeNull()
   })
 })
+
+describe('失败之后的重试', () => {
+  // analyze 开头要问一次 host 权限，jsdom 里没有 chrome.permissions（同上面「放弃这一轮」的桩）
+  const chromeGlobal = globalThis as unknown as { chrome: Record<string, unknown> }
+  const originalPermissions = chromeGlobal.chrome.permissions
+  beforeEach(() => {
+    chromeGlobal.chrome.permissions = { contains: () => Promise.resolve(true) }
+  })
+  afterEach(() => {
+    chromeGlobal.chrome.permissions = originalPermissions
+  })
+
+  it('analyze 失败时记下可重试的是哪一步', async () => {
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey: 'sk-x' } } })
+    vi.mocked(send).mockImplementation((req: { kind: string }) =>
+      req.kind === 'analyze'
+        ? (Promise.resolve({ ok: false, error: '后台被中断' }) as never)
+        : (Promise.resolve({ ok: true }) as never))
+
+    await useStore.getState().analyze()
+    expect(useStore.getState().error).toBe('后台被中断')
+    expect(useStore.getState().retryable).toBe('analyze')
+  })
+
+  it('scan 失败同理', async () => {
+    vi.mocked(send).mockImplementation(() => Promise.resolve({ ok: false, error: 'x' }) as never)
+    await useStore.getState().goScan()
+    expect(useStore.getState().retryable).toBe('scan')
+  })
+
+  it('用户主动取消不算失败，不给重试', async () => {
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey: 'sk-x' } } })
+    vi.mocked(send).mockImplementation((req: { kind: string }) =>
+      req.kind === 'analyze'
+        ? (Promise.resolve({ ok: false, error: '已取消', cancelled: true }) as never)
+        : (Promise.resolve({ ok: true }) as never))
+
+    await useStore.getState().analyze()
+    expect(useStore.getState().retryable).toBeNull()
+  })
+
+  it('retry() 重跑失败的那一步', async () => {
+    useStore.setState({
+      retryable: 'analyze', error: '后台被中断',
+      settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey: 'sk-x' } },
+    })
+    vi.mocked(send).mockImplementation((req: { kind: string }) =>
+      req.kind === 'analyze'
+        ? (Promise.resolve({ ok: true, kind: 'analyze', plan: makePlan() }) as never)
+        : (Promise.resolve({ ok: true }) as never))
+
+    await useStore.getState().retry()
+    expect(useStore.getState().plan).not.toBeNull()
+    // 成功之后重试入口收起来
+    expect(useStore.getState().retryable).toBeNull()
+    expect(useStore.getState().error).toBeNull()
+  })
+
+  it('reset 之后不再留着重试入口', () => {
+    useStore.setState({ retryable: 'analyze', error: 'x' })
+    useStore.getState().reset()
+    expect(useStore.getState().retryable).toBeNull()
+  })
+
+  it('apply 失败不给重试——那一步可能已经动过书签了', async () => {
+    useStore.setState({ plan: makePlan(), accepted: new Set(['100']) })
+    vi.mocked(send).mockImplementation(() => Promise.resolve({ ok: false, error: '写失败' }) as never)
+    await useStore.getState().apply()
+    expect(useStore.getState().error).toBe('写失败')
+    expect(useStore.getState().retryable).toBeNull()
+  })
+})

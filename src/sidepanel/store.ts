@@ -157,6 +157,19 @@ interface State {
   busy: string | null
   /** 当前在跑哪一步，决定能不能取消。 */
   busyKind: 'init' | 'scan' | 'analyze' | 'apply' | 'undo' | null
+  /**
+   * 上一次失败的是哪一步，`null` 表示没有可重试的东西。
+   *
+   * 不复用 `busyKind`——那个字段的语义是「**正在**跑哪一步」，用来决定能不能取消；
+   * 让它在失败后继续留着值，会把「在跑」和「跑挂了」两种状态混进同一个字段。
+   *
+   * **只认 scan 与 analyze**：这两步一个只读书签树、一个只产出方案，重跑零风险，
+   * 而且分类缓存让重试很便宜。apply / undo / import 失败时可能已经改了一部分书签
+   * （applyPlan 还写着断点），给它们一个通用的重试按钮，等于诱使用户在结构未定的
+   * 状态上再跑一遍，可能把同一批移动做两次。它们的收场由各自的机制负责
+   * （撤销、断点续做），不是由这个按钮糊过去（见 issues/24-retry-affordance.md）。
+   */
+  retryable: 'scan' | 'analyze' | null
   error: string | null
   progress: Progress | null
   logs: LogLine[]
@@ -197,6 +210,7 @@ interface State {
   setSettings(settings: Settings): Promise<void>
   setModeOverride(mode: OrganizeMode | null): void
   analyze(): Promise<void>
+  retry(): Promise<void>
   renameNode(id: string, title: string): void
   removeNode(id: string): void
   confirmStructure(): void
@@ -242,6 +256,7 @@ export const useStore = create<State>((set, get) => ({
   undoAvailable: false,
   busy: null,
   busyKind: null,
+  retryable: null,
   error: null,
   progress: null,
   logs: [],
@@ -320,10 +335,10 @@ export const useStore = create<State>((set, get) => ({
 
   async goScan() {
     const run = get().runSeq
-    set({ busy: t('busyScanning'), busyKind: 'scan', error: null, progress: null, logs: [] })
+    set({ busy: t('busyScanning'), busyKind: 'scan', retryable: null, error: null, progress: null, logs: [] })
     const res = await send({ kind: 'scan', scopeRootIds: [...get().checkedIds] })
     if (isStale(get, set, run)) return
-    if (!res.ok) return set({ busy: null, busyKind: null, error: res.error })
+    if (!res.ok) return set({ busy: null, busyKind: null, retryable: 'scan', error: res.error })
     if (res.kind !== 'scan') return set({ busy: null, busyKind: null })
     set({ scan: res.scan, step: 'preferences', modeOverride: null, busy: null, busyKind: null })
   },
@@ -344,7 +359,7 @@ export const useStore = create<State>((set, get) => ({
     if (!granted) {
       return set({ error: t('errHostPermission') })
     }
-    set({ busy: t('busyAnalyzing'), busyKind: 'analyze', error: null, progress: null, logs: [] })
+    set({ busy: t('busyAnalyzing'), busyKind: 'analyze', retryable: null, error: null, progress: null, logs: [] })
     // 分析可能跑好几分钟，期间持续 ping，别让后台因空闲被回收
     const stopKeepalive = startKeepalive(connection)
     const res = await send({
@@ -354,11 +369,11 @@ export const useStore = create<State>((set, get) => ({
       modeOverride: get().modeOverride ?? undefined,
     }).finally(stopKeepalive)
     if (isStale(get, set, run)) return
-    // 主动取消不是错误，日志里已经有记录，不弹红条
+    // 主动取消不是错误，日志里已经有记录，不弹红条，也不算失败，不记可重试
     if (!res.ok && res.cancelled === true) {
       return set({ busy: null, busyKind: null, error: null })
     }
-    if (!res.ok) return set({ busy: null, busyKind: null, error: res.error })
+    if (!res.ok) return set({ busy: null, busyKind: null, retryable: 'analyze', error: res.error })
     if (res.kind !== 'analyze') return set({ busy: null, busyKind: null })
     set({
       plan: res.plan,
@@ -370,6 +385,15 @@ export const useStore = create<State>((set, get) => ({
       busy: null,
       busyKind: null,
     })
+  },
+
+  async retry() {
+    const kind = get().retryable
+    if (kind === null) return
+    // 清掉红条再重跑：让用户看得出这一次是新的一轮，而不是旧错误还挂着
+    set({ error: null, retryable: null })
+    if (kind === 'scan') return get().goScan()
+    return get().analyze()
   },
 
   renameNode(id, title) {
@@ -514,7 +538,7 @@ export const useStore = create<State>((set, get) => ({
       runSeq: get().runSeq + 1,
       step: 'scope', scan: null, plan: null, accepted: new Set(),
       structureEdits: EMPTY_EDITS, modeOverride: null,
-      applyResult: null, undoResult: null, error: null,
+      applyResult: null, undoResult: null, error: null, retryable: null,
     })
   },
 }))
