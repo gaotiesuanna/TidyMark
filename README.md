@@ -14,6 +14,10 @@ exactly as before.
 
 - **You choose the scope.** Check the folders you want reorganized. Unchecked folders are
   never read and never modified — no bookmark moves out of them, and none moves in.
+- **TidyMark judges the shape for you, and explains why.** Bookmarks that already look
+  organized are only filed into the folders you have; a genuine mess gets a full redesign
+  of the folder tree. The call comes with its reasoning, and you can override it before
+  anything runs.
 - **Review every move.** Before anything is applied, every move is listed: where each
   bookmark came from, where it's going, and why. Cancel any of them individually, or filter
   in bulk by confidence.
