@@ -368,14 +368,15 @@ describe('designTagFolders', () => {
 
   it('命中聚合组的书签单独设计，且不进一级目录那次请求', async () => {
     const complete = vi.fn()
-      .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
       .mockResolvedValueOnce({ folders: [{ title: 'Agent 框架', topics: ['智能体框架'], children: [] }] })
+      .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
     const result = await designTagFolders(
       [tag('1', 'KV Cache'), tag('2', '智能体框架')],
       [blog('1'), gh('2')], ['github'], { complete },
     )
     expect(complete).toHaveBeenCalledTimes(2)
-    expect(complete.mock.calls[0]![0]).not.toContain('智能体框架')
+    // 聚合组先跑，主题那次是第二次请求——它不该带上组内标签
+    expect(complete.mock.calls[1]![0]).not.toContain('智能体框架')
     expect(result[0]!.primaryTopic).toBe('LLM 原理')
     expect(result[1]!.primaryTopic).toBe('Agent 框架')
   })
@@ -388,9 +389,10 @@ describe('designTagFolders', () => {
   })
 
   it('某一次设计失败时，该批标签原样保留，其余照常归并', async () => {
+    // 聚合组先跑，这里失败的是聚合组那摊
     const complete = vi.fn()
-      .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
       .mockRejectedValueOnce(Object.assign(new Error('x'), { retryable: false }))
+      .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
     const result = await designTagFolders(
       [tag('1', 'KV Cache'), tag('2', '智能体框架')],
       [blog('1'), gh('2')], ['github'], { complete },
@@ -415,24 +417,26 @@ describe('designTagFolders', () => {
   })
 
   it('取消后跳过剩余摊子，已发出的那摊结果仍然生效，未处理的摊子原样保留', async () => {
+    // 聚合组先跑，因此这里让「已发出的那摊」变成聚合组那摊：
+    // isCancelled 前两次探活（摊前总检查、组内逐摊检查）放行，组那摊跑完后
+    // 第三次探活（主题那摊开始前）才报取消，主题那摊因此原样保留。
     const complete = vi.fn().mockResolvedValue({
-      folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }],
+      folders: [{ title: 'Agent 框架', topics: ['智能体框架'], children: [] }],
     })
-    let cancelled = false
+    let calls = 0
     const result = await designTagFolders(
       [tag('1', 'KV Cache'), tag('2', '智能体框架')],
       [blog('1'), gh('2')], ['github'], { complete },
       {
         isCancelled: () => {
-          const value = cancelled
-          cancelled = true
-          return value
+          calls += 1
+          return calls > 2
         },
       },
     )
     expect(complete).toHaveBeenCalledTimes(1)
-    expect(result[0]!.primaryTopic).toBe('LLM 原理')
-    expect(result[1]!.primaryTopic).toBe('智能体框架')
+    expect(result[1]!.primaryTopic).toBe('Agent 框架')
+    expect(result[0]!.primaryTopic).toBe('KV Cache')
   })
 
   it('同一个 bookmarkId 出现两次时，两条各自独立映射，不互相覆盖', async () => {
@@ -447,6 +451,62 @@ describe('designTagFolders', () => {
     )
     expect(result[0]!.primaryTopic).toBe('A')
     expect(result[1]!.primaryTopic).toBe('B')
+  })
+
+  it('聚合组那几摊先跑，主题那摊在后——先后关系是这条链路的全部意义', async () => {
+    const complete = vi.fn()
+      .mockResolvedValueOnce({ folders: [{ title: 'Agent 框架', topics: ['智能体框架'], children: [] }] })
+      .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
+    await designTagFolders(
+      [tag('1', 'KV Cache'), tag('2', '智能体框架')],
+      [blog('1'), gh('2')], ['github'], { complete },
+    )
+    // 第一次是聚合组那摊：它认得组内的标签，也带着「只输出一层」
+    expect(complete.mock.calls[0]![0]).toContain('智能体框架')
+    expect(complete.mock.calls[0]![0]).toContain('只输出一层')
+  })
+
+  it('主题那次带上聚合组名与组内设计出来的子目录名', async () => {
+    // 「语音合成与克隆」本身是复合名（Task 1/2 的重问逻辑会认出「与」两侧都够长），
+    // 所以聚合组那摊会先重问一次；重问原样给回同一个标题，验的仍然是重问结束之后
+    // 落地的最终产物——第三次调用才是主题那次
+    const complete = vi.fn()
+      .mockResolvedValueOnce({
+        folders: [{ title: '语音合成与克隆', topics: ['智能体框架'], children: [] }],
+      })
+      .mockResolvedValueOnce({
+        folders: [{ title: '语音合成与克隆', topics: ['智能体框架'], children: [] }],
+      })
+      .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
+    await designTagFolders(
+      [tag('1', 'KV Cache'), tag('2', '智能体框架')],
+      [blog('1'), gh('2')], ['github'], { complete },
+    )
+    const topicPrompt = complete.mock.calls[2]![0] as string
+    expect(topicPrompt).toContain('GitHub')
+    expect(topicPrompt).toContain('语音合成与克隆')
+    expect(topicPrompt).toContain('语义重叠')
+  })
+
+  it('聚合组那摊设计失败时，主题那摊仍然知道组名，只是没有子目录名可报', async () => {
+    const complete = vi.fn()
+      .mockRejectedValueOnce(Object.assign(new Error('x'), { retryable: false }))
+      .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
+    const result = await designTagFolders(
+      [tag('1', 'KV Cache'), tag('2', '智能体框架')],
+      [blog('1'), gh('2')], ['github'], { complete },
+    )
+    expect(complete.mock.calls[1]![0]).toContain('GitHub')
+    // 失败那摊的标签原样保留
+    expect(result[1]!.primaryTopic).toBe('智能体框架')
+  })
+
+  it('没勾选聚合组时，主题那次不带已有目录清单', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }],
+    })
+    await designTagFolders([tag('1', 'KV Cache')], [blog('1')], [], { complete })
+    expect(complete.mock.calls[0]![0]).not.toContain('语义重叠')
   })
 })
 

@@ -127,6 +127,13 @@ export function foldersPrompt(
     /** 这批目录会被放进哪个目录，用于让模型知道自己在谁下面命名。 */
     containerTitle?: string
     /**
+     * 已经存在、这一轮不需要再设计的目录（聚合组名与组内子目录名，路径写成 `组名/子目录名`）。
+     *
+     * 只有主题那一摊会传：它跑在聚合组那几摊之后，靠这份清单避开双胞胎目录
+     * （见 issues/04-folder-design-defects.md「决定 1」）。空数组等同于不传。
+     */
+    existingFolders?: string[]
+    /**
      * 目录至少要装下几个书签。省略表示不做这项要求（用户关掉了开关）。
      *
      * 标签清单里带着每个标签的书签数，模型有依据算出某个目录会不会太小。
@@ -136,7 +143,8 @@ export function foldersPrompt(
   },
 ): string[] {
   const {
-    total, parentTitle, maxSiblings, allowChildren = true, startLevel = 1, containerTitle, minFolderSize,
+    total, parentTitle, maxSiblings, allowChildren = true, startLevel = 1, containerTitle,
+    existingFolders, minFolderSize,
   } = opts
   const here = levelName(locale, startLevel)
   const below = levelName(locale, startLevel + 1)
@@ -166,6 +174,15 @@ export function foldersPrompt(
     locale === 'zh_CN'
       ? `${index}. 不要建只装得下不到 ${minFolderSize} 个书签的目录；凑不满的标签并进相近的目录，没有相近的就不必给它单独开目录。`
       : `${index}. Only create a folder if it will hold at least ${minFolderSize} bookmarks. Merge labels that cannot fill one into a neighbouring folder; if none fits, leave them without a folder of their own.`
+
+  // 两轮设计从「互相看不见」变成「有先后」：聚合组先定，主题设计在它已知的前提下补剩下的。
+  // 只禁语义重叠，不禁同名——**这条界限在清单第 5 项落地后要再松一次**：
+  // 聚合组改成只装规则命中的书签之后，组外的同主题书签需要一个同名目录才有去处
+  // （见 issues/10-shape-from-count.md 的补账小节）。今天组会吸收非命中书签，所以同名仍属重叠。
+  const existingRule = (index: number): string =>
+    locale === 'zh_CN'
+      ? `${index}. 这些目录已经存在，是按来源聚合出来的，它们里面的书签已经有归属了：${(existingFolders ?? []).join('、')}。不要再设计与它们语义重叠的目录——已经有「语音合成与克隆」就不要再造一个「语音合成」。`
+      : `${index}. These folders already exist — they were grouped by source and their bookmarks already have a home: ${(existingFolders ?? []).join(', ')}. Do not design folders that overlap them in meaning: if "Speech synthesis & cloning" is there, do not add another "Speech synthesis".`
 
   if (locale === 'zh_CN') {
     const head = parentTitle !== undefined
@@ -203,7 +220,11 @@ export function foldersPrompt(
       ...body,
       `5. 每个标签必须出现在恰好一个目录的 topics 里，不要遗漏、不要重复。直接归入某个${parentTitle === undefined ? `${here}级` : ''}目录的标签写在它自己的 topics 里，归入子目录的写在子目录的 topics 里。`,
       '6. 目录名用中文，专有技术名词（React、RAG、MCP）可直接用原文。',
-      ...tailRules([compoundRule, minFolderSize === undefined ? null : sizeRule]),
+      ...tailRules([
+        compoundRule,
+        existingFolders === undefined || existingFolders.length === 0 ? null : existingRule,
+        minFolderSize === undefined ? null : sizeRule,
+      ]),
     ]
   }
 
@@ -242,7 +263,11 @@ export function foldersPrompt(
     ...body,
     `5. Every label must appear in the topics of exactly one folder — none missing, none duplicated. Labels going directly into a${parentTitle === undefined ? ` ${here}` : ''} folder belong in its own topics; labels going into a subfolder belong in that subfolder.`,
     '6. Write folder names in English. Established technical names (React, RAG, MCP) stay as they are.',
-    ...tailRules([compoundRule, minFolderSize === undefined ? null : sizeRule]),
+    ...tailRules([
+      compoundRule,
+      existingFolders === undefined || existingFolders.length === 0 ? null : existingRule,
+      minFolderSize === undefined ? null : sizeRule,
+    ]),
   ]
 }
 

@@ -110,6 +110,8 @@ export interface DesignOptions {
   containerTitle?: string
   /** 目录至少要装下几个书签。省略表示用户关掉了这项约束。 */
   minFolderSize?: number
+  /** 已经存在的目录（聚合组名与组内子目录名）。只有主题那一摊会传。 */
+  existingFolders?: string[]
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => void
   /** 每摊设计开始前检查一次，返回 true 就跳过剩余摊子。 */
   isCancelled?: () => boolean
@@ -131,6 +133,7 @@ function buildDesignPrompt(topics: TopicCount[], options: DesignOptions, locale:
       ...(options.startLevel === undefined ? {} : { startLevel: options.startLevel }),
       ...(options.containerTitle === undefined ? {} : { containerTitle: options.containerTitle }),
       ...(options.minFolderSize === undefined ? {} : { minFolderSize: options.minFolderSize }),
+      ...(options.existingFolders === undefined ? {} : { existingFolders: options.existingFolders }),
     }),
     '',
     locale === 'zh_CN' ? '标签清单：' : 'Label list:',
@@ -344,10 +347,11 @@ export async function designTagFolders(
 
   // 每个下标默认落回原始标签；每摊各自按位写回，等长同序与「每条各自映射」两条承诺都成立
   const result: TagResult[] = tags.slice()
+  /** 跑一摊，返回这一摊设计出来的目录（含子目录）标题；失败返回空数组。 */
   const run = async (
     entries: Array<{ index: number; tag: TagResult }>,
     batchOptions: DesignOptions,
-  ): Promise<void> => {
+  ): Promise<string[]> => {
     const batch = entries.map((entry) => entry.tag)
     const design = await designFolders(collectTopics(batch), client, locale, batchOptions)
     // 设计失败就保留原始标签：碎片化的目录也好过整摊书签失去归属
@@ -355,14 +359,25 @@ export async function designTagFolders(
     next.forEach((tag, i) => {
       result[entries[i]!.index] = tag
     })
+    // 聚合组那几摊一律 oneLevel（children 恒为空），所以这里返回的实际就是一层目录名；
+    // children 那半边是为了将来万一放开二级时不必回头改，路径写成 `父/子`
+    return design === null ? [] : design.folders.flatMap((f) => [f.title, ...f.children.map((c) => `${f.title}/${c}`)])
   }
 
-  // 每摊开始前查一次取消：命中就跳过剩余摊子，已经在跑的这次请求不中途打断
+  // 聚合组那几摊先跑，主题那摊在后：主题设计要知道组里已经有什么，才不会造出一对
+  // 抢同一批书签的双胞胎（见 issues/04-folder-design-defects.md「决定 1」）。
+  // 顺序调换的另一面：中途取消时先落地的是聚合组那几摊，主题那摊整摊退回原始标签。
+  const existingFolders: string[] = []
   if (options.isCancelled?.() !== true) {
-    await run(topicEntries, options)
     for (const { title, entries } of byGroup.values()) {
       if (options.isCancelled?.() === true) break
-      await run(entries, { ...options, oneLevel: true, parentTitle: title })
+      // 组名本身也要报给主题那一轮：造一个跟「GitHub」重叠的顶层目录同样是双胞胎
+      existingFolders.push(title)
+      const designed = await run(entries, { ...options, oneLevel: true, parentTitle: title })
+      existingFolders.push(...designed.map((name) => `${title}/${name}`))
+    }
+    if (options.isCancelled?.() !== true) {
+      await run(topicEntries, existingFolders.length === 0 ? options : { ...options, existingFolders })
     }
   }
 

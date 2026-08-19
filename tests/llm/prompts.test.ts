@@ -181,6 +181,36 @@ describe('foldersPrompt 的复合名禁令', () => {
   })
 })
 
+describe('foldersPrompt 的已有目录清单', () => {
+  it('带上清单时点名这些目录已经存在，并禁止造语义重叠的', () => {
+    const lines = foldersPrompt('zh_CN', {
+      total: 30, maxSiblings: 8, existingFolders: ['GitHub', 'GitHub/语音合成与克隆'],
+    }).join('\n')
+    expect(lines).toContain('GitHub/语音合成与克隆')
+    expect(lines).toContain('语义重叠')
+  })
+
+  it('清单为空时这条规则整条不出现，编号也不跳号', () => {
+    const lines = foldersPrompt('zh_CN', { total: 30, maxSiblings: 8, existingFolders: [], minFolderSize: 3 }).join('\n')
+    expect(lines).not.toContain('语义重叠')
+    expect(lines).toContain('8. 不要建只装得下不到 3 个书签的目录')
+  })
+
+  it('清单在场时它是第 8 条，minFolderSize 顺延到第 9 条', () => {
+    const lines = foldersPrompt('zh_CN', {
+      total: 30, maxSiblings: 8, existingFolders: ['GitHub'], minFolderSize: 3,
+    }).join('\n')
+    expect(lines).toContain('8. ')
+    expect(lines).toContain('9. 不要建只装得下不到 3 个书签的目录')
+  })
+
+  it('英文那份同样带清单', () => {
+    const lines = foldersPrompt('en', { total: 30, maxSiblings: 8, existingFolders: ['GitHub/Speech synthesis'] }).join('\n')
+    expect(lines).toContain('GitHub/Speech synthesis')
+    expect(/[一-鿿]/.test(lines)).toBe(false)
+  })
+})
+
 describe('classifyPrompt 的 topic 规则', () => {
   it('中文提示词说明 null 时要带回主题', () => {
     expect(classifyPrompt('zh_CN').join('\n')).toContain('topic')
