@@ -1781,3 +1781,112 @@ describe('analyze 自己判断走哪条路', () => {
     expect(line?.message).not.toContain('重新设计整棵目录树')
   })
 })
+
+describe('analyze 的 prune 二次判定', () => {
+  /** 三个一级目录：两个装得满，一个只有 1 条会被撤。 */
+  const rehomeTree = [
+    { id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '10', title: '收件箱', children: [
+          { id: 'a0', title: '书签 a0', url: 'https://a0.dev' },
+          { id: 'a1', title: '书签 a1', url: 'https://a1.dev' },
+          { id: 'a2', title: '书签 a2', url: 'https://a2.dev' },
+          { id: 'b0', title: '书签 b0', url: 'https://b0.dev' },
+        ]},
+      ]},
+    ]},
+  ]
+
+  it('落进「其他」的书签会带着存活目录再问一次，选中了就改判并重写理由', async () => {
+    const prompts: string[] = []
+    const complete = vi.fn(async (prompt: string) => {
+      if (prompt.includes('标签清单')) {
+        return { folders: [
+          { title: '前端', topics: ['前端'], children: [] },
+          { title: '冷门', topics: ['冷门'], children: [] },
+        ]}
+      }
+      if (prompt.includes('候选目录')) {
+        prompts.push(prompt)
+        const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)].map((m) => m[1]!)
+        const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+        // 第一次分类：a* 进「前端」，b0 进「冷门」（只有 1 条，会被 prune 撤掉）
+        // 第二次（二次判定）：只剩 b0，把它放进第一个候选
+        return { results: bookmarkIds.map((id) => ({
+          bookmark_id: id,
+          target_category_id: prompts.length === 1 ? (id.startsWith('a') ? ids[0]! : ids[1]!) : ids[0]!,
+          confidence: 0.9,
+          reason: 'r',
+        }))}
+      }
+      const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+      return { results: bookmarkIds.map((id) => (
+        { bookmark_id: id, primary_topic: id.startsWith('a') ? '前端' : '冷门', secondary_topic: null }
+      ))}
+    })
+
+    const fake = createFakeBookmarks(rehomeTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      minFolderSize: 3, enforceMinFolderSize: true,
+    })
+    const res = await handle(
+      ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
+      { createClient: () => ({ complete }), now: () => 1 },
+    ) as { plan: OrganizePlan }
+
+    // 二次判定确实发生了：分类提示词出现了两次
+    expect(prompts).toHaveLength(2)
+    // 第二次只带那一条被撤的书签，且候选里没有「其他」
+    expect(prompts[1]).toContain('"b0"')
+    expect(prompts[1]).not.toContain('"a0"')
+    expect(prompts[1]).not.toContain('目录=其他')
+    // 改判后的理由仍然讲「原目录太小」，并点名新去处
+    const row = res.plan.rows.find((r) => r.bookmarkId === 'b0')!
+    expect(row.reason).toContain('不足 3 个')
+    expect(row.toPath.at(-1)).not.toContain('其他')
+  })
+
+  it('模型说没有合适的，就保持 prune 定好的去处，不再改判', async () => {
+    const complete = vi.fn(async (prompt: string) => {
+      if (prompt.includes('标签清单')) {
+        return { folders: [
+          { title: '前端', topics: ['前端'], children: [] },
+          { title: '冷门', topics: ['冷门'], children: [] },
+        ]}
+      }
+      if (prompt.includes('候选目录')) {
+        const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)].map((m) => m[1]!)
+        const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+        return { results: bookmarkIds.map((id) => ({
+          bookmark_id: id,
+          target_category_id: id === 'b0' ? null : (id.startsWith('a') ? ids[0]! : ids[1] ?? ids[0]!),
+          confidence: 0.5,
+          reason: 'r',
+        }))}
+      }
+      const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+      return { results: bookmarkIds.map((id) => (
+        { bookmark_id: id, primary_topic: id.startsWith('a') ? '前端' : '冷门', secondary_topic: null }
+      ))}
+    })
+
+    const fake = createFakeBookmarks(rehomeTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      minFolderSize: 3, enforceMinFolderSize: true,
+    })
+    const res = await handle(
+      ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
+      { createClient: () => ({ complete }), now: () => 1 },
+    ) as { plan: OrganizePlan }
+
+    // 没有改判成别的目录，行仍在（去处由 prune 定：「其他」或原位）
+    const row = res.plan.rows.find((r) => r.bookmarkId === 'b0')
+    expect(row === undefined || row.toPath.at(-1)!.includes('其他')).toBe(true)
+  })
+})

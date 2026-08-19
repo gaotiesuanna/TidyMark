@@ -841,6 +841,22 @@
       }
     }
   },
+  "logRehomeStart": {
+    "message": "$count$ bookmarks lost their folder; looking for the best home among the folders that survived",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "logRehomeDone": {
+    "message": "$count$ of them found a better folder; the rest stay where pruning put them",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
   "logMergeNamed": {
     "message": "Merged folder named \"$name$\"",
     "placeholders": {

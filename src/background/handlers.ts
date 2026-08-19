@@ -2,7 +2,7 @@ import { currentLocale, resolveLocale, setLocale, t } from '@/i18n'
 import { buildCandidatesFromFolders, stripNumberPrefix } from '@/core/map'
 import type { Locale } from '@/core/locale'
 import { buildPlan, type NewFolderSpec, type RenameFolderSpec } from '@/core/plan'
-import { pruneSmallFolders } from '@/core/prune'
+import { pruneReason, pruneSmallFolders } from '@/core/prune'
 import { findScopeRoots, scanTree } from '@/core/scan'
 import { detectMode } from '@/core/mode'
 import { planTitleRewrites } from '@/core/titles'
@@ -335,6 +335,55 @@ export async function handle(
           classifications = pruned.classifications
           if (pruned.prunedTitles.length > 0) {
             log('classify', t('logPrunedSmall', String(pruned.prunedTitles.length), String(settings.minFolderSize)))
+          }
+          // 「其他」退成真正的最后一档：掉进去的书签先问一次模型，存活目录里有没有更合适的。
+          // 复用 classifyBookmarks 而不是另写一个模块——分批、并发、缓存、429 重试、
+          // 「没有合适的就返回 null」这些语义它全都有，而这一步要的正是这些。
+          const pendingById = new Map(pruned.pending.map((p) => [p.bookmarkId, p]))
+          // 候选里剔掉「其他」自己：这一步的全部意义就是别让它当默认答案
+          const rehomeCandidates = candidates.filter((c) => c.id !== pruned.fallbackId)
+          const rehomeItems = scan.bookmarks.filter((b) => pendingById.has(b.id))
+          if (rehomeItems.length > 0 && rehomeCandidates.length > 0 && !isCancelled()) {
+            log('classify', t('logRehomeStart', String(rehomeItems.length)))
+            // 不传 onProgress：这一步是分类阶段的补充，再报一次进度会让进度条往回跳
+            const placed = await classifyBookmarks({
+              items: rehomeItems,
+              candidates: rehomeCandidates,
+              client, cache,
+              batchSize: deps.batchSize,
+              onLog: (message, level) => log('classify', message, level),
+              isCancelled,
+              locale,
+              model: settings.llm.model,
+              includeTopicRule: false,
+            })
+            await saveCache(ports, cache)
+            if (isCancelled()) return CANCELLED
+            const placedById = new Map(
+              placed.filter((p) => p.targetCategoryId !== null && p.source !== 'none')
+                .map((p) => [p.bookmarkId, p]),
+            )
+            const titleById = new Map(
+              rehomeCandidates.map((c) => [c.id, stripNumberPrefix(c.path.at(-1) ?? '')]),
+            )
+            let rehomed = 0
+            classifications = classifications.map((c) => {
+              const hit = placedById.get(c.bookmarkId)
+              const info = pendingById.get(c.bookmarkId)
+              if (hit === undefined || info === undefined) return c
+              rehomed += 1
+              // 理由仍旧由 pruneReason 拼：用户要知道的是「原来那个目录太小」，
+              // 而不是模型这一次的措辞
+              return {
+                ...c,
+                targetCategoryId: hit.targetCategoryId,
+                reason: pruneReason(
+                  locale, info.fromTitle, info.count, settings.minFolderSize,
+                  titleById.get(hit.targetCategoryId!) ?? null,
+                ),
+              }
+            })
+            log('classify', t('logRehomeDone', String(rehomed)))
           }
         }
 
