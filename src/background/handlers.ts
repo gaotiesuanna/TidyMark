@@ -206,6 +206,11 @@ export async function handle(
           }
         }
 
+        // 「归入现有」却一个候选目录都没有。自动判断下够不着：detectMode 在没有任何
+        // 非根目录时判 rebuild，而候选恰恰就是那批非根目录（buildCandidatesFromFolders
+        // 排除的同样是范围根）。今天只有显式传 modeOverride: 'additive' 才走得到这里，
+        // 留着当兜底。
+        // 文案原先写着「请开启「重建结构」」——那个开关已随模式自动判断一起删掉，不能再往回指。
         if (candidates.length === 0) {
           return { ok: false, error: t('errNoTargetFolders') }
         }

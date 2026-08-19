@@ -722,7 +722,7 @@
     "message": "未选择任何范围。"
   },
   "errNoTargetFolders": {
-    "message": "所选范围内没有可用的目标文件夹。请开启「重建结构」或先选择包含子文件夹的范围。"
+    "message": "所选范围内没有可用的目标文件夹。请勾选一个包含子文件夹的范围再试。"
   },
   "errNoBookmarksBar": {
     "message": "找不到书签栏，无法导入。"

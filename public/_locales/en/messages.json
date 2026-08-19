@@ -722,7 +722,7 @@
     "message": "No scope selected."
   },
   "errNoTargetFolders": {
-    "message": "No usable target folders in the selected scope. Turn on \"Rebuild the folder structure\", or pick a scope that contains subfolders."
+    "message": "No usable target folders in the selected scope. Pick a scope that contains subfolders and try again."
   },
   "errNoBookmarksBar": {
     "message": "Cannot find the bookmarks bar, so importing is not possible."
