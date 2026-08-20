@@ -529,6 +529,17 @@
   "reviewLowConfidence": {
     "message": "低置信度"
   },
+  "reviewGroupAllRule": {
+    "message": "全部来自域名规则"
+  },
+  "reviewGroupCount": {
+    "message": "$count$ 条",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
   "reviewDiscard": {
     "message": "放弃"
   },

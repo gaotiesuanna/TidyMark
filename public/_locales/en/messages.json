@@ -529,6 +529,17 @@
   "reviewLowConfidence": {
     "message": "Low confidence"
   },
+  "reviewGroupAllRule": {
+    "message": "All matched by domain rules"
+  },
+  "reviewGroupCount": {
+    "message": "$count$ items",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
   "reviewDiscard": {
     "message": "Discard"
   },

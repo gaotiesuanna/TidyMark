@@ -5,7 +5,7 @@ import { ReviewStep } from '@/sidepanel/steps/ReviewStep'
 import { useStore } from '@/sidepanel/store'
 import { downloadJson } from '@/sidepanel/lib/download'
 import { DEFAULT_SETTINGS } from '@/storage/settings'
-import type { OrganizePlan } from '@/core/types'
+import type { OrganizePlan, PlanRow } from '@/core/types'
 
 vi.mock('@/sidepanel/lib/download', () => ({ downloadJson: vi.fn(), downloadText: vi.fn() }))
 
@@ -92,5 +92,70 @@ describe('ReviewStep', () => {
     // 这个文件是要发出去给人看的，密钥一个字符都不能跟着走
     expect(JSON.stringify(payload)).not.toContain('sk-secret')
     expect('apiKey' in body.settings.llm).toBe(false)
+  })
+})
+
+describe('ReviewStep 的分组', () => {
+  /** 造一条最简 PlanRow，只暴露分组测试关心的三个维度：id、目标目录、来源。 */
+  function row(id: string, toPath: string[], source: PlanRow['source']): PlanRow {
+    return {
+      bookmarkId: id,
+      title: `书签 ${id}`,
+      url: `https://example.com/${id}`,
+      fromPath: ['书签栏', '杂项'],
+      toPath,
+      confidence: source === 'rule' ? 1 : 0.9,
+      reason: source === 'rule' ? '域名规则命中' : '模型判断',
+      source,
+    }
+  }
+
+  /** 拿一批行拼出一份最简 plan 塞进 store，rebuildStructure 关着，renumberPlan 就原样直通。 */
+  function setupPlan(rows: PlanRow[]): void {
+    const groupPlan: OrganizePlan = {
+      id: 'g1', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: false,
+      candidates: [], operations: [],
+      rows,
+      unchanged: [],
+      summary: {
+        totalBookmarks: rows.length, movedBookmarks: rows.length, unchangedBookmarks: 0,
+        createdFolders: 0, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 0,
+      },
+      warnings: [],
+      tags: [],
+      mergeRoot: null,
+    }
+    useStore.setState({ plan: groupPlan, accepted: new Set(rows.map((r) => r.bookmarkId)), busy: null, error: null })
+  }
+
+  it('按目标目录分组，组标题是目标路径', () => {
+    setupPlan([
+      row('a', ['01 前端'], 'llm'), row('b', ['01 前端'], 'llm'), row('c', ['02 后端'], 'llm'),
+    ])
+    render(<ReviewStep />)
+    expect(screen.getByText('01 前端')).toBeTruthy()
+    expect(screen.getByText('02 后端')).toBeTruthy()
+  })
+
+  it('整组都是规则命中时给组级标记，并默认折叠', () => {
+    setupPlan([row('a', ['01 GitHub'], 'rule'), row('b', ['01 GitHub'], 'rule')])
+    render(<ReviewStep />)
+    expect(screen.getByText(/全部来自域名规则/)).toBeTruthy()
+    // 折叠：成员的标题不在文档里
+    expect(screen.queryByText('书签 a')).toBeNull()
+  })
+
+  it('展开之后成员就看得见', async () => {
+    setupPlan([row('a', ['01 GitHub'], 'rule'), row('b', ['01 GitHub'], 'rule')])
+    render(<ReviewStep />)
+    await userEvent.click(screen.getByText(/全部来自域名规则/))
+    expect(screen.getByText('书签 a')).toBeTruthy()
+  })
+
+  it('混着模型判断的组不折叠——那组里正是要审的东西', () => {
+    setupPlan([row('a', ['01 GitHub'], 'rule'), row('b', ['01 GitHub'], 'llm')])
+    render(<ReviewStep />)
+    expect(screen.getByText('书签 a')).toBeTruthy()
+    expect(screen.queryByText(/全部来自域名规则/)).toBeNull()
   })
 })
