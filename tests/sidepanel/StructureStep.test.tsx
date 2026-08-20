@@ -4,7 +4,34 @@ import userEvent from '@testing-library/user-event'
 import { StructureStep } from '@/sidepanel/steps/StructureStep'
 import { useStore } from '@/sidepanel/store'
 import { EMPTY_EDITS } from '@/core/structure'
+import type { CategoryCandidate, OrganizePlan } from '@/core/types'
 import { makePlan } from '../fakes/plan'
+
+/** 只列一级/二级两层的最小 plan：给「合并到」下拉的用例专用，不牵扯书签计数与移动操作。 */
+interface NodeSpec {
+  id: string
+  title: string
+  children?: NodeSpec[]
+}
+
+function setupPlan(specs: NodeSpec[]): void {
+  const candidates: CategoryCandidate[] = []
+  for (const spec of specs) {
+    candidates.push({ id: spec.id, path: [spec.title] })
+    for (const child of spec.children ?? []) {
+      candidates.push({ id: child.id, path: [spec.title, child.title] })
+    }
+  }
+  const plan: OrganizePlan = {
+    id: 'p', createdAt: 0, scopeRootIds: ['1'], rebuildStructure: true,
+    candidates, operations: [], rows: [], unchanged: [], warnings: [], tags: [], mergeRoot: null,
+    summary: {
+      totalBookmarks: 0, movedBookmarks: 0, unchangedBookmarks: 0,
+      createdFolders: candidates.length, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 0,
+    },
+  }
+  useStore.setState({ plan, structureEdits: EMPTY_EDITS, step: 'structure' })
+}
 
 describe('StructureStep', () => {
   beforeEach(() => {
@@ -138,5 +165,36 @@ describe('StructureStep 合并会删掉哪些文件夹', () => {
     useStore.setState({ plan: makePlan(), structureEdits: EMPTY_EDITS, step: 'structure' })
     render(<StructureStep />)
     expect(screen.queryByText(/会被清空并删除/)).toBeNull()
+  })
+})
+
+describe('StructureStep 合并到', () => {
+  it('每个可删节点旁给一个「合并到」的下拉，选了就合并', async () => {
+    setupPlan([{ id: 'tmp:1', title: '前端' }, { id: 'tmp:2', title: '后端' }])
+    render(<StructureStep />)
+    await userEvent.selectOptions(screen.getByLabelText('合并到：前端'), 'tmp:2')
+
+    const edits = useStore.getState().structureEdits
+    expect(edits.removed).toContain('tmp:1')
+    expect(edits.mergedInto['tmp:1']).toBe('tmp:2')
+  })
+
+  it('下拉里不出现自己', () => {
+    setupPlan([{ id: 'tmp:1', title: '前端' }, { id: 'tmp:2', title: '后端' }])
+    render(<StructureStep />)
+    const select = screen.getByLabelText('合并到：前端') as HTMLSelectElement
+    const values = [...select.options].map((o) => o.value)
+    expect(values).not.toContain('tmp:1')
+    expect(values).toContain('tmp:2')
+  })
+
+  it('只列同层的——跨层等于移动，本轮不做', () => {
+    setupPlan([
+      { id: 'tmp:1', title: '前端', children: [{ id: 'tmp:9', title: '构建工具' }] },
+      { id: 'tmp:2', title: '后端' },
+    ])
+    render(<StructureStep />)
+    const select = screen.getByLabelText('合并到：前端') as HTMLSelectElement
+    expect([...select.options].map((o) => o.value)).not.toContain('tmp:9')
   })
 })

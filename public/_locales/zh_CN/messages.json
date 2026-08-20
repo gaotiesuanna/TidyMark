@@ -429,6 +429,17 @@
       }
     }
   },
+  "structureMergeInto": {
+    "message": "合并到：$title$",
+    "placeholders": {
+      "title": {
+        "content": "$1"
+      }
+    }
+  },
+  "structureMergePlaceholder": {
+    "message": "合并到…"
+  },
   "structureFallback": {
     "message": "删掉一级目录，里面的书签会落到「其他」；删掉子目录，书签留在它的上级目录。"
   },

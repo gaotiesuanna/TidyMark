@@ -111,7 +111,10 @@ describe('英文界面渲染守卫：步骤组件', () => {
   it('StructureStep', () => {
     useStore.setState({ plan: makePlan(), structureEdits: EMPTY_EDITS, step: 'structure' })
     const { container } = render(<StructureStep />)
-    assertNoChinese(container, 'StructureStep')
+    // makePlan() 的候选目录标题本身是中文夹具数据（AI 工具、前端、其他），不是这份守卫要挡的应用文案——
+    // 此前它们只以 <input value> 出现，不进 textContent；「合并到」下拉把同层标题列成了
+    // <option> 的真文本节点，才第一次把这份夹具数据暴露给这条守卫，允许名单只放行这几个已知词
+    assertNoChinese(container, 'StructureStep', /AI 工具|前端|其他/g)
   })
 
   it('StructureStep（合并模式：合并到输入框与「源目录会被删除」说明）', () => {
@@ -129,7 +132,8 @@ describe('英文界面渲染守卫：步骤组件', () => {
       structureEdits: EMPTY_EDITS, step: 'structure',
     })
     const { container } = render(<StructureStep />)
-    assertNoChinese(container, 'StructureStep（合并模式）')
+    // 同上：夹具候选目录标题会出现在「合并到」下拉的 <option> 里，允许名单原样保留
+    assertNoChinese(container, 'StructureStep（合并模式）', /AI 工具|前端|其他/g)
   })
 
   it('ReviewStep（含新建目录、重命名目录、重命名书签三条摘要，覆盖第 26 行的分支）', async () => {

@@ -5,7 +5,7 @@ import { joinTitles } from '../lib/listText'
 import { useStore } from '../store'
 
 export function StructureStep() {
-  const { plan, structureEdits, renameNode, removeNode, confirmStructure, backToPreferences } = useStore()
+  const { plan, structureEdits, renameNode, removeNode, mergeNode, confirmStructure, backToPreferences } = useStore()
   const nodes = useMemo(
     () => (plan === null ? [] : buildStructureView(plan, structureEdits, currentLocale())),
     [plan, structureEdits],
@@ -60,6 +60,27 @@ export function StructureStep() {
                   <span className="min-w-0 flex-1 px-2 py-1 text-neutral-500">{node.title}</span>
                 )}
                 <span className="shrink-0 text-neutral-400">{t('structureIncoming', String(node.count))}</span>
+                {/* 下拉不放进上面 removable 分支里的 <input>：这里的行本身没有 <label> 包裹，
+                    但选项集合仍按「只列同层」严格算，跨层等于移动，本轮不做（票 07）。
+                    「其他」不进选项：它是删除已经会落到的地方（见 structureFallback），
+                    merge 只用来接住真正的目标目录，不重复删除已经有的效果 */}
+                {node.removable && (
+                  <select
+                    aria-label={t('structureMergeInto', node.title)}
+                    className="shrink-0 rounded border px-1 py-0.5 text-neutral-700"
+                    defaultValue=""
+                    onChange={(e) => {
+                      if (e.target.value !== '') mergeNode(node.id, e.target.value)
+                    }}
+                  >
+                    <option value="">{t('structureMergePlaceholder')}</option>
+                    {nodes
+                      .filter((sibling) => sibling.id !== node.id && sibling.removable)
+                      .map((sibling) => (
+                        <option key={sibling.id} value={sibling.id}>{sibling.title}</option>
+                      ))}
+                  </select>
+                )}
                 {node.removable && (
                   <button
                     aria-label={t('structureDelete', node.title)}
@@ -84,6 +105,22 @@ export function StructureStep() {
                         onChange={(e) => renameNode(child.id, e.target.value)}
                       />
                       <span className="shrink-0 text-neutral-400">{t('structureIncoming', String(child.count))}</span>
+                      {/* 二级目录只能合到同一个父目录下的另一个二级目录——跨父目录等于移动，本轮不做 */}
+                      <select
+                        aria-label={t('structureMergeInto', child.title)}
+                        className="shrink-0 rounded border px-1 py-0.5 text-neutral-700"
+                        defaultValue=""
+                        onChange={(e) => {
+                          if (e.target.value !== '') mergeNode(child.id, e.target.value)
+                        }}
+                      >
+                        <option value="">{t('structureMergePlaceholder')}</option>
+                        {node.children
+                          .filter((sibling) => sibling.id !== child.id)
+                          .map((sibling) => (
+                            <option key={sibling.id} value={sibling.id}>{sibling.title}</option>
+                          ))}
+                      </select>
                       <button
                         aria-label={t('structureDelete', child.title)}
                         className="shrink-0 rounded border px-1.5 py-0.5 text-neutral-400 hover:bg-neutral-50"
