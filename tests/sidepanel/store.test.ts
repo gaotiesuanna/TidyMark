@@ -6,6 +6,7 @@ import {
 import { send } from '@/sidepanel/lib/send'
 import { currentLocale, setLocale, t } from '@/i18n'
 import { DEFAULT_SETTINGS } from '@/storage/settings'
+import { EMPTY_EDITS } from '@/core/structure'
 import { makePlan } from '../fakes/plan'
 import type { ProgressEvent } from '@/background/events'
 import type { BookmarkNode } from '@/core/ports'
@@ -154,6 +155,33 @@ describe('结构确认步骤', () => {
     useStore.getState().backToPreferences()
     expect(useStore.getState().step).toBe('preferences')
     expect(useStore.getState().structureEdits).toEqual({ renames: {}, removed: [], mergedInto: {} })
+  })
+
+  it('合并同时写 removed 与 mergedInto——两件事必须一起发生', () => {
+    useStore.setState({ structureEdits: EMPTY_EDITS })
+    useStore.getState().mergeNode('tmp:1', 'tmp:2')
+
+    const edits = useStore.getState().structureEdits
+    expect(edits.removed).toContain('tmp:1')
+    expect(edits.mergedInto['tmp:1']).toBe('tmp:2')
+  })
+
+  it('合并到自己是无操作——不会把一个目录合进它自己', () => {
+    useStore.setState({ structureEdits: EMPTY_EDITS })
+    useStore.getState().mergeNode('tmp:1', 'tmp:1')
+
+    expect(useStore.getState().structureEdits.removed).toEqual([])
+  })
+
+  it('重复合并同一个目录时以最后一次为准', () => {
+    useStore.setState({ structureEdits: EMPTY_EDITS })
+    useStore.getState().mergeNode('tmp:1', 'tmp:2')
+    useStore.getState().mergeNode('tmp:1', 'tmp:3')
+
+    const edits = useStore.getState().structureEdits
+    expect(edits.mergedInto['tmp:1']).toBe('tmp:3')
+    // removed 不该出现重复项
+    expect(edits.removed.filter((id) => id === 'tmp:1')).toHaveLength(1)
   })
 })
 

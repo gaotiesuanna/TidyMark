@@ -228,6 +228,14 @@ interface State {
   retry(): Promise<void>
   renameNode(id: string, title: string): void
   removeNode(id: string): void
+  /**
+   * 把一个目录合并进另一个目录——合并 = 删除 + 指定去处，两件事必须一起写。
+   *
+   * 只写 removed 会让书签按 resolve() 的默认回落链走，不会去用户选的目的地；
+   * 只写 mergedInto 会让目录本身还留在树上。合并到自己没有意义，挡在这里
+   * 而不是让 resolve() 去兜——那会绕一圈回到同一个 id。
+   */
+  mergeNode(id: string, into: string): void
   confirmStructure(): void
   backToPreferences(): void
   toggleAccepted(bookmarkId: string): void
@@ -434,6 +442,20 @@ export const useStore = create<State>((set, get) => ({
     const edits = get().structureEdits
     if (edits.removed.includes(id)) return
     set({ structureEdits: { ...edits, removed: [...edits.removed, id] } })
+  },
+
+  mergeNode(id, into) {
+    // 合进自己没有意义，挡在这里而不是让 resolve 去兜——那会绕一圈回到同一个 id
+    if (id === into) return
+    const edits = get().structureEdits
+    set({
+      structureEdits: {
+        ...edits,
+        // 合并 = 删除 + 指定去处，两件事一起写。只写一处会得到半截状态
+        removed: edits.removed.includes(id) ? edits.removed : [...edits.removed, id],
+        mergedInto: { ...edits.mergedInto, [id]: into },
+      },
+    })
   },
 
   confirmStructure() {
