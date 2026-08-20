@@ -29,21 +29,6 @@
   "settingsLangBody": {
     "message": "同时决定界面文案和新建目录名的语言。"
   },
-  "settingsClassifyTitle": {
-    "message": "分类偏好"
-  },
-  "settingsRebuildOnly": {
-    "message": "以下几项只在这次整理重新设计目录结构时才生效——走哪条路由 TidyMark 按扫描结果自己判，每次整理开始前会在偏好页告诉你。"
-  },
-  "settingsMinSizeTitle": {
-    "message": "不足几个书签的目录就不单独建立"
-  },
-  "settingsMinSizeInput": {
-    "message": "至少几个书签"
-  },
-  "settingsMinSizeBody": {
-    "message": "防止整理出只装着一个链接的目录。装不满的目录会被撤掉，里面的书签并进上一层，一级目录则并进「其他」。2 到 10 之间。"
-  },
   "shellStepReview": {
     "message": "预览"
   },

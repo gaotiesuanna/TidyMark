@@ -2,7 +2,7 @@ import { currentLocale, resolveLocale, setLocale, t } from '@/i18n'
 import { buildCandidatesFromFolders, stripNumberPrefix } from '@/core/map'
 import type { Locale } from '@/core/locale'
 import { buildPlan, type NewFolderSpec, type RenameFolderSpec } from '@/core/plan'
-import { pruneReason, pruneSmallFolders } from '@/core/prune'
+import { MIN_FOLDER_BOOKMARKS, pruneReason, pruneSmallFolders } from '@/core/prune'
 import { findScopeRoots, scanTree } from '@/core/scan'
 import { detectMode } from '@/core/mode'
 import { planTitleRewrites } from '@/core/titles'
@@ -148,14 +148,14 @@ export async function handle(
           }
           // 一级位子现在是稀缺资源，装 1 条的「GitHub」不配占（第 4 条）。
           // 不够的组不建，那几条书签退回主题那一轮当普通书签处理。
-          // minFolderSize 关掉时不设门槛——用户明确不要这项约束
-          const groupFloor = settings.enforceMinFolderSize ? settings.minFolderSize : 1
+          // 门槛与目录下限是同一个数：一个装不满的聚合组和一个装不满的主题目录，
+          // 浏览成本上没有区别，没有理由给它们两套阈值
           const survivingGroups = settings.domainGroups.filter(
-            (key) => (hitsByGroup.get(key) ?? 0) >= groupFloor,
+            (key) => (hitsByGroup.get(key) ?? 0) >= MIN_FOLDER_BOOKMARKS,
           )
           const droppedGroups = settings.domainGroups.length - survivingGroups.length
           if (droppedGroups > 0) {
-            log('tree', t('logGroupsDropped', String(droppedGroups), String(groupFloor)))
+            log('tree', t('logGroupsDropped', String(droppedGroups), String(MIN_FOLDER_BOOKMARKS)))
           }
           // 命中数 ≤ MAX_LEAF 的组，core/tree.ts 建树时会整组平铺、子目录一个都不建
           // （`bucket.length <= MAX_LEAF ? [] : …`）：跑 refineGroupTags 抽的细分标签
@@ -205,9 +205,6 @@ export async function handle(
           // （allowChildren 为 false，tree.ts 不会往 children 里塞东西、
           // folders.ts 的提示词也要求只输出一层），算出来也无害。
           const maxChildFolders = Math.ceil(shape.leaves / topWithFallback)
-          // 关掉开关时一路传 undefined，让下游各自保持改造前的行为，而不是传 1 让它们
-          // 多跑一遍恒真的判断
-          const minFolderSize = settings.enforceMinFolderSize ? settings.minFolderSize : undefined
           const containerTitle = merging ? undefined : roots.find((r) => r.id === rootId)?.title
           log('tags', t('logTagsStart', String(scan.bookmarks.length)))
           tags = await extractTags(scan.bookmarks, client, locale, {
@@ -235,7 +232,7 @@ export async function handle(
             allowChildren,
             startLevel,
             ...(containerTitle === undefined ? {} : { containerTitle }),
-            ...(minFolderSize === undefined ? {} : { minFolderSize }),
+            minFolderSize: MIN_FOLDER_BOOKMARKS,
           })
           if (isCancelled()) return CANCELLED
           let mergeRoot: { parentId: string; title: string } | undefined
@@ -263,7 +260,7 @@ export async function handle(
             maxTopFolders,
             maxChildFolders,
             allowChildren,
-            ...(minFolderSize === undefined ? {} : { minFolderSize }),
+            minFolderSize: MIN_FOLDER_BOOKMARKS,
           })
           if (mergeRoot !== undefined && tree_.mergeRootTemporaryId !== null) {
             planMergeRoot = {
@@ -448,17 +445,17 @@ export async function handle(
             : []
         // 目录下限的最后一道：前两道只能按标签数预估，书签最终落在哪个目录是刚才那步定的。
         // 只在推翻重建模式下做——非推翻模式的候选目录全是用户自己的，一个都不该撤。
-        if (rebuild && settings.enforceMinFolderSize) {
+        if (rebuild) {
           const pruned = pruneSmallFolders({
             candidates, newFolders, classifications, locale,
-            minFolderSize: settings.minFolderSize,
+            minFolderSize: MIN_FOLDER_BOOKMARKS,
             mergeRootTemporaryId: planMergeRoot?.temporaryId ?? null,
           })
           candidates = pruned.candidates
           newFolders = pruned.newFolders
           classifications = pruned.classifications
           if (pruned.prunedTitles.length > 0) {
-            log('classify', t('logPrunedSmall', String(pruned.prunedTitles.length), String(settings.minFolderSize)))
+            log('classify', t('logPrunedSmall', String(pruned.prunedTitles.length), String(MIN_FOLDER_BOOKMARKS)))
           }
           // 「其他」退成真正的最后一档：掉进去的书签先问一次模型，存活目录里有没有更合适的。
           // 复用 classifyBookmarks 而不是另写一个模块——分批、并发、缓存、429 重试、
@@ -517,7 +514,7 @@ export async function handle(
                 // 用这一次改判的把握度，不沿用首次分类对着一个已经不存在的目录
                 // 打出的分数——复核页默认勾选、显示的百分比都靠它
                 confidence: hit.confidence,
-                reason: pruneReason(locale, info.fromTitle, info.count, settings.minFolderSize, targetTitle),
+                reason: pruneReason(locale, info.fromTitle, info.count, MIN_FOLDER_BOOKMARKS, targetTitle),
               }
             })
             log('classify', t('logRehomeDone', String(rehomed)))
@@ -525,21 +522,21 @@ export async function handle(
 
           // 二次判定只会让「其他」变小：它只把书签从「其他」搬进存活目录，不会
           // 反过来把别的目录清空，所以不必重新跑一遍撤销判断——除了「其他」自己。
-          // 「其他」抽走几条之后完全可能跌破 minFolderSize，而上面那一轮
+          // 「其他」抽走几条之后完全可能跌破下限，而上面那一轮
           // pruneSmallFolders 已经跑完，没有人会再数一遍。这里再调用一次纯函数
           // pruneSmallFolders（幂等、不花钱）就够了：数到「其他」还是不够，
           // 就把它也撤掉，让里面剩下的书签退回原位——这批书签不再问第三次模型
           // （票 05「决定 4」说的就是这个收场），日志与第一轮撤销复用同一条。
           const rePruned = pruneSmallFolders({
             candidates, newFolders, classifications, locale,
-            minFolderSize: settings.minFolderSize,
+            minFolderSize: MIN_FOLDER_BOOKMARKS,
             mergeRootTemporaryId: planMergeRoot?.temporaryId ?? null,
           })
           candidates = rePruned.candidates
           newFolders = rePruned.newFolders
           classifications = rePruned.classifications
           if (rePruned.prunedTitles.length > 0) {
-            log('classify', t('logPrunedSmall', String(rePruned.prunedTitles.length), String(settings.minFolderSize)))
+            log('classify', t('logPrunedSmall', String(rePruned.prunedTitles.length), String(MIN_FOLDER_BOOKMARKS)))
           }
         }
 

@@ -29,21 +29,6 @@
   "settingsLangBody": {
     "message": "Sets both the interface language and the language of newly created folder names."
   },
-  "settingsClassifyTitle": {
-    "message": "Classification"
-  },
-  "settingsRebuildOnly": {
-    "message": "The options below only take effect on runs that redesign the folder structure — TidyMark decides that from the scan itself and tells you on the preferences page before each run."
-  },
-  "settingsMinSizeTitle": {
-    "message": "Minimum bookmarks per folder"
-  },
-  "settingsMinSizeInput": {
-    "message": "Minimum bookmarks"
-  },
-  "settingsMinSizeBody": {
-    "message": "Keeps the result free of folders holding a single link. A folder that stays under the threshold is dropped and its bookmarks move up one level; top-level ones move into \"Other\". Between 2 and 10."
-  },
   "shellStepReview": {
     "message": "Preview"
   },

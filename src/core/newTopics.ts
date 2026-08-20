@@ -8,8 +8,11 @@ import type { BookmarkItem, CategoryCandidate, Classification, FolderItem } from
 /**
  * 同一主题攒够几条才值得开一个新目录。
  *
- * 内部常量而不是设置项：用户无从判断 3 还是 5 更好（见 issues/08-settings-tradeoffs.md），
- * 而 `minFolderSize` 那个设置项本身即将随清单第 12 项一起删掉，不去依赖它。
+ * 内部常量而不是设置项：用户无从判断 3 还是 5 更好（见 issues/08-settings-tradeoffs.md）。
+ * `minFolderSize` 那个设置项已经随清单第 12 项删掉，同一个理由也把它变成了 core 里的
+ * 常量 `MIN_FOLDER_BOOKMARKS`（见 core/prune.ts）。两个常量今天取值相同但**有意不合并**：
+ * 这一个管「非推翻模式下攒够几条才值得新开一个目录」，那一个管「推翻模式下设计出来的
+ * 目录装不满几条就撤掉」，是两个模式下的两条规则，将来分头调也说得通。
  */
 export const MIN_NEW_FOLDER_SIZE = 3
 

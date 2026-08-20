@@ -25,67 +25,32 @@ describe('SettingsPanel 分类参数', () => {
     expect(screen.queryByLabelText('目录最深嵌套几层')).toBeNull()
   })
 
-  it('目录下限那两项还在——prune 仍然在读它们', () => {
+  // 原来验的是「目录下限那两项还在——prune 仍然在读它们」。它们已经退成 core 里的
+  // 内部常量 MIN_FOLDER_BOOKMARKS，设置页不该再摆出来：摆着就等于告诉用户他能拨
+  it('不再摆出目录下限那两项——阈值已经退成 core 里的内部常量', () => {
     useStore.setState({ settings: { ...DEFAULT_SETTINGS } })
     render(<SettingsPanel />)
-    expect(screen.getByLabelText('不足几个书签的目录就不单独建立')).toBeTruthy()
-    expect(screen.getByLabelText('至少几个书签')).toBeTruthy()
+    expect(screen.queryByLabelText('不足几个书签的目录就不单独建立')).toBeNull()
+    expect(screen.queryByLabelText('至少几个书签')).toBeNull()
   })
 
-  it('分类偏好那几项一直可编辑——走哪条路是每次整理现判的，不该锁住设置', () => {
+  // 原来验的是「分类偏好那几项一直可编辑」。那几项没了，但它守的规矩没变——设置页里
+  // 摆出来的东西就得能改。写成整页扫一遍，比逐个点名更难失效
+  it('设置页里没有任何被禁用的控件——摆出来的旋钮就得能拨', () => {
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS } })
+    const { container } = render(<SettingsPanel />)
+    expect(container.querySelectorAll('[disabled]')).toHaveLength(0)
+    // 空断言防身：页面里确实有控件可查，不是扫了个空壳
+    expect(container.querySelectorAll('input, select, button').length).toBeGreaterThan(0)
+  })
+
+  // 原来验的是那段「以下几项只在重新设计目录结构时生效」的说明。段里最后一个旋钮
+  // 撤走之后，说明本身也没有指代对象了——连同整个 section 一起删掉，不留空壳
+  it('分类偏好那一整段连同说明文案一起没了——里面已经一个旋钮都不剩', () => {
     useStore.setState({ settings: { ...DEFAULT_SETTINGS } })
     render(<SettingsPanel />)
-    expect(screen.getByLabelText('不足几个书签的目录就不单独建立')).toHaveProperty('disabled', false)
-    // 默认设置下 enforceMinFolderSize 是开着的，这个数字框也该跟着可编辑
-    expect(screen.getByLabelText('至少几个书签')).toHaveProperty('disabled', false)
-  })
-
-  it('说明文案交代它们只在重新设计目录结构时生效', () => {
-    useStore.setState({ settings: { ...DEFAULT_SETTINGS } })
-    render(<SettingsPanel />)
-    expect(screen.getByText(/只在.*重新设计/)).toBeTruthy()
-  })
-})
-
-describe('SettingsPanel 目录下限', () => {
-  it('默认勾着，阈值 3', () => {
-    render(<SettingsPanel />)
-    expect(screen.getByLabelText('不足几个书签的目录就不单独建立')).toHaveProperty('checked', true)
-    expect(screen.getByLabelText('至少几个书签')).toHaveProperty('value', '3')
-  })
-
-  it('取消勾选后写进设置', () => {
-    render(<SettingsPanel />)
-    fireEvent.click(screen.getByLabelText('不足几个书签的目录就不单独建立'))
-    expect(useStore.getState().settings.enforceMinFolderSize).toBe(false)
-  })
-
-  it('改阈值后写进设置', () => {
-    render(<SettingsPanel />)
-    fireEvent.change(screen.getByLabelText('至少几个书签'), { target: { value: '5' } })
-    expect(useStore.getState().settings.minFolderSize).toBe(5)
-  })
-
-  it('阈值越界或非数字的输入不写进设置，保持原值', () => {
-    render(<SettingsPanel />)
-    const input = screen.getByLabelText('至少几个书签')
-    fireEvent.change(input, { target: { value: '11' } })
-    expect(useStore.getState().settings.minFolderSize).toBe(3)
-    // 填 1 等于没开，那种意图应该去取消勾选，不是把阈值调到 1
-    fireEvent.change(input, { target: { value: '1' } })
-    expect(useStore.getState().settings.minFolderSize).toBe(3)
-    fireEvent.change(input, { target: { value: '' } })
-    expect(useStore.getState().settings.minFolderSize).toBe(3)
-  })
-
-  // 数字框跟着勾选框走：没勾时那个数字不起作用，还能改就是在骗人
-  it('没勾开关时阈值输入框禁用，勾选框自己不禁用', () => {
-    useStore.setState({
-      settings: { ...DEFAULT_SETTINGS, enforceMinFolderSize: false },
-    })
-    render(<SettingsPanel />)
-    expect(screen.getByLabelText('至少几个书签')).toHaveProperty('disabled', true)
-    expect(screen.getByLabelText('不足几个书签的目录就不单独建立')).toHaveProperty('disabled', false)
+    expect(screen.queryByText(/只在.*重新设计/)).toBeNull()
+    expect(screen.queryByText('分类偏好')).toBeNull()
   })
 })
 

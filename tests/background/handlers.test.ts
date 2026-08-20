@@ -22,6 +22,27 @@ const tree = [
   ]},
 ]
 
+/**
+ * 推翻模式专用夹具。共享的 `tree` 只有 1 个书签，而目录下限已经是恒为 3 的内部常量
+ * （core/prune.ts 的 MIN_FOLDER_BOOKMARKS），1 条书签一个目录都建不出来——那样下面几条
+ * 用例验的「标签→建树→分类」「目录设计跑没跑」全都无从谈起。所以把书签喂到 3 条，
+ * 让目录真的立得住，用例验的仍是原来那件事。
+ */
+const rebuildTree = [
+  { id: '0', title: '', children: [
+    { id: '1', title: '书签栏', children: [
+      { id: '10', title: 'react', children: [] },
+      { id: '11', title: '杂项', children: [
+        { id: '100', title: 'React 官网', url: 'https://react.dev' },
+        { id: '101', title: 'Vite 官网', url: 'https://vite.dev' },
+        { id: '102', title: 'Vitest 官网', url: 'https://vitest.dev' },
+      ]},
+    ]},
+  ]},
+]
+
+const REBUILD_IDS = ['100', '101', '102']
+
 function setup(client?: LlmClient) {
   const fake = createFakeBookmarks(tree)
   const ports = { bookmarks: fake.api, storage: createFakeStorage() }
@@ -198,7 +219,9 @@ describe('handle', () => {
   })
 
   it('推翻模式下先抽标签建树，再把书签分到新目录', async () => {
-    const fake = createFakeBookmarks(tree)
+    // 这条验的是「标签 -> 建树 -> 分类」这条链路本身，用 rebuildTree（3 条书签）
+    // 让「前端」这个目录真的撑得过下限
+    const fake = createFakeBookmarks(rebuildTree)
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
@@ -206,14 +229,15 @@ describe('handle', () => {
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
-      // 这条验的是「标签 -> 建树 -> 分类」这条链路本身。夹具只有一个书签，
-      // 开着目录下限就一个目录都建不出来，验不到想验的东西
-      enforceMinFolderSize: false,
     })
     const complete = vi.fn()
-      .mockResolvedValueOnce({ results: [{ bookmark_id: '100', primary_topic: '前端', secondary_topic: 'React' }] })
+      .mockResolvedValueOnce({ results: REBUILD_IDS.map((id) => (
+        { bookmark_id: id, primary_topic: '前端', secondary_topic: 'React' }
+      ))})
       .mockResolvedValueOnce({ folders: [{ title: '前端', topics: ['前端'], children: [] }] })
-      .mockResolvedValueOnce({ results: [{ bookmark_id: '100', target_category_id: 'tmp:1', confidence: 0.9, reason: 'r' }] })
+      .mockResolvedValueOnce({ results: REBUILD_IDS.map((id) => (
+        { bookmark_id: id, target_category_id: 'tmp:1', confidence: 0.9, reason: 'r' }
+      ))})
     const deps = { createClient: () => ({ complete }), now: () => 1 }
 
     const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps) as { plan: { operations: Array<{ type: string }> } }
@@ -225,7 +249,8 @@ describe('handle', () => {
   // 提示词——推翻模式的候选是刚设计出来的，用不上这条规则，而推翻模式的分类稳定性
   // 正是这整个工作流存在的理由，提示词不该因为一个它用不上的功能而发生任何变化。
   it('推翻模式下发给模型的分类提示词不带 topic 规则——那条只有非推翻模式用得上', async () => {
-    const fake = createFakeBookmarks(tree)
+    // 同上：换 rebuildTree（3 条书签），目录立得住才走得到分类那一轮
+    const fake = createFakeBookmarks(rebuildTree)
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
@@ -233,16 +258,19 @@ describe('handle', () => {
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
-      enforceMinFolderSize: false,
     })
     const classifyPrompts: string[] = []
     const complete = vi.fn(async (prompt: string) => {
       if (prompt.includes('候选目录：')) {
         classifyPrompts.push(prompt)
-        return { results: [{ bookmark_id: '100', target_category_id: 'tmp:1', confidence: 0.9, reason: 'r' }] }
+        return { results: REBUILD_IDS.map((id) => (
+          { bookmark_id: id, target_category_id: 'tmp:1', confidence: 0.9, reason: 'r' }
+        ))}
       }
       if (prompt.includes('标签清单：')) return { folders: [{ title: '前端', topics: ['前端'], children: [] }] }
-      return { results: [{ bookmark_id: '100', primary_topic: '前端', secondary_topic: 'React' }] }
+      return { results: REBUILD_IDS.map((id) => (
+        { bookmark_id: id, primary_topic: '前端', secondary_topic: 'React' }
+      ))}
     })
     const deps = { createClient: () => ({ complete }), now: () => 1 }
 
@@ -337,22 +365,26 @@ describe('handle', () => {
   it('analyze 在建树前先做一次全局目录设计', async () => {
     const complete = vi.fn(async (prompt: string) => {
       if (prompt.includes('抽取一个具体主题')) {
-        return { results: [{ bookmark_id: '100', primary_topic: 'React 生态' }] }
+        return { results: REBUILD_IDS.map((id) => ({ bookmark_id: id, primary_topic: 'React 生态' })) }
       }
       if (prompt.includes('设计目录结构')) {
         return { folders: [{ title: '前端框架', topics: ['React 生态'], children: [] }] }
       }
-      return { results: [{ bookmark_id: '100', target_category_id: 'tmp:1', confidence: 0.9, reason: 'r' }] }
+      return { results: REBUILD_IDS.map((id) => (
+        { bookmark_id: id, target_category_id: 'tmp:1', confidence: 0.9, reason: 'r' }
+      ))}
     })
-    const { ports, deps } = setup({ complete })
+    // 这条验的是全局目录设计有没有跑，不是目录该不该建——换 rebuildTree（3 条书签），
+    // 让设计出来的「前端框架」撑得过目录下限，断言才落得到实处
+    const fake = createFakeBookmarks(rebuildTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    const deps = { createClient: () => ({ complete }), now: () => 1 }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
-      // 同上：单书签夹具，这条验的是全局目录设计有没有跑，不是目录该不该建
-      enforceMinFolderSize: false,
     })
     const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps) as { plan: OrganizePlan }
     const tops = res.plan.candidates.filter((c) => c.path.length === 1).map((c) => c.path[0]!)
@@ -876,7 +908,12 @@ describe('analyze 的聚合组预算', () => {
    * 造 ports、按提示词分流的假件跑一次 rebuild 模式的 analyze，
    * 把每次 complete 收到的提示词原样收集起来返回。
    */
-  async function runAnalyze(tree: TreeSpec[], domainGroups: string[]): Promise<{ prompts: string[] }> {
+  async function runAnalyze(
+    tree: TreeSpec[],
+    domainGroups: string[],
+    /** 直接写进**存量记录**的旧键。它们已经不在 Settings 类型里，只能从存储那一侧模拟。 */
+    legacyKeys: Record<string, unknown> = {},
+  ): Promise<{ prompts: string[]; plan: OrganizePlan }> {
     const fake = createFakeBookmarks(tree)
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     const prompts: string[] = []
@@ -899,14 +936,25 @@ describe('analyze 的聚合组预算', () => {
         { bookmark_id: id, primary_topic: '工具', secondary_topic: null }
       ))}
     })
-    await saveSettings(ports, {
+    const settings = {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       domainGroups,
-    })
+    }
+    await saveSettings(ports, settings)
+    if (Object.keys(legacyKeys).length > 0) {
+      await ports.storage.set(SETTINGS_KEY, { ...settings, ...legacyKeys })
+    }
     const deps = { createClient: () => ({ complete } as unknown as LlmClient), now: () => 1 }
-    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps)
-    return { prompts }
+    const res = await handle(
+      ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps,
+    ) as { plan: OrganizePlan }
+    return { prompts, plan: res.plan }
+  }
+
+  /** 计划里真的会被建出来的目录名。组建没建，看这个最直接。 */
+  function createdTitles(plan: OrganizePlan): string[] {
+    return plan.operations.flatMap((o) => (o.type === 'create_folder' ? [o.title] : []))
   }
 
   it('命中数不足下限的组不建，那几条书签退回主题那一轮', async () => {
@@ -916,6 +964,27 @@ describe('analyze 的聚合组预算', () => {
     // 组不建，于是那 2 条 github 书签的标签也出现在主题那一轮里
     expect(design).toBeDefined()
     expect(prompts.some((p) => p.includes('来自「GitHub」'))).toBe(false)
+  })
+
+  // 聚合组的门槛与目录下限是同一个常量。曾经的开关关掉时门槛会塌成 1，命中 1 条的
+  // 「GitHub」就能占掉一个一级位子——存量记录里躺着那个关掉过的开关时不许再发生
+  it('存量记录里躺着 enforceMinFolderSize=false，命中 2 条的组照样不建', async () => {
+    const { plan } = await runAnalyze(groupTree(2, 20), ['github'], { enforceMinFolderSize: false })
+    // 对照组：同一棵树命中够 3 条时组是真的建得出来的，这条断言不是空转
+    expect(createdTitles(plan).some((title) => title.includes('GitHub'))).toBe(false)
+  })
+
+  // 另一个方向：旧阈值往下拧过（2）同样没有落点，门槛仍是 3
+  it('存量记录里躺着 minFolderSize=2，命中 2 条的组照样不建', async () => {
+    const { plan } = await runAnalyze(groupTree(2, 20), ['github'], { minFolderSize: 2 })
+    expect(createdTitles(plan).some((title) => title.includes('GitHub'))).toBe(false)
+  })
+
+  // 上面两条的对照组：门槛就在 3 上，命中 3 条的组建得出来。没有这一条，
+  // 「不建」那两条断言可能只是因为整条聚合组路径压根没跑起来
+  it('命中 3 条的组建得出来——门槛就卡在 MIN_FOLDER_BOOKMARKS 上', async () => {
+    const { plan } = await runAnalyze(groupTree(3, 20), ['github'])
+    expect(createdTitles(plan).some((title) => title.includes('GitHub'))).toBe(true)
   })
 
   it('命中够的组照建，且主题那一轮的预算按 N_主题 与组数算', async () => {
@@ -991,6 +1060,12 @@ const mergeTree = [
     { id: '1', title: '书签栏', children: [
       { id: '10', title: 'NiceG', children: [
         { id: '100', title: 'React 官网', url: 'https://react.dev' },
+        // 104/105 是为目录下限补的：勾 '10'+'11' 合并时范围内共 4 条书签，
+        // 合并根下那个「前端」才撑得过 MIN_FOLDER_BOOKMARKS，「一级目录挂在合并根下」
+        // 这条断言（others.length > 0）才有东西可数。合并根自己不受下限约束
+        // （pruneSmallFolders 认 mergeRootTemporaryId），但它下面的主题目录受
+        { id: '104', title: 'Vite 官网', url: 'https://vite.dev' },
+        { id: '105', title: 'Vitest 官网', url: 'https://vitest.dev' },
         // 非推翻模式下候选目录只能来自范围内的非根目录：'10'、'11' 自己是范围根、
         // 会被 buildCandidatesFromFolders 排除，没有它整个分析会以「没有目标目录」提前返回
         { id: '12', title: '待归档', children: [] },
@@ -1047,8 +1122,6 @@ async function analyzeMerge(
     ...DEFAULT_SETTINGS,
     llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
     removeEmptyFolders: false, domainGroups: [], rewriteGithubTitles: false,
-    // 合并模式那组用例验的是容器目录的挂载关系，夹具书签数撑不起目录下限
-    enforceMinFolderSize: false,
   })
   const deps = { createClient: () => ({ complete: mergeClient(nameResponse) }), now: () => 1 }
   const res = await handle(ports, { kind: 'analyze', scopeRootIds, modeOverride }, deps) as { plan: OrganizePlan }
@@ -1256,24 +1329,47 @@ describe('handle analyze 目录下限', () => {
       .mockResolvedValueOnce({ folders: [{ title: '前端', topics: ['前端'], children: [] }] })
       .mockResolvedValueOnce({ results: [] })
     const { ports, deps } = setupSix(complete)
-    await saveSettings(ports, rebuild({ minFolderSize: 4 }))
+    await saveSettings(ports, rebuild())
 
     await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps)
     const prompts = complete.mock.calls.map((c) => c[0] as string)
-    expect(prompts.some((prompt) => prompt.includes('不到 4 个书签'))).toBe(true)
+    // 原来这里把阈值拧成 4 再验提示词里出现 4。阈值不再可拨，恒为 MIN_FOLDER_BOOKMARKS，
+    // 验的仍是同一件事：**下限有没有一路传到目录设计那一轮的提示词里**
+    expect(prompts.some((prompt) => prompt.includes('不到 3 个书签'))).toBe(true)
   })
 
-  it('开关关掉时提示词里没有这条', async () => {
+  // 原来验的是「开关关掉时提示词里没有这条」。开关删掉后那条路不存在了，但它问的事
+  // 还在：**存量存储里躺着关掉过的开关，这次整理会不会被它带偏。** 答案反过来了，
+  // 断言跟着反过来。存量键已经不在 Settings 类型里，只能从存储那一侧写
+  it('存量记录里躺着 enforceMinFolderSize=false，下限照样写进目录设计提示词', async () => {
     const complete = vi.fn()
       .mockResolvedValueOnce({ results: [{ bookmark_id: '200', primary_topic: '前端' }] })
       .mockResolvedValueOnce({ folders: [{ title: '前端', topics: ['前端'], children: [] }] })
       .mockResolvedValueOnce({ results: [] })
     const { ports, deps } = setupSix(complete)
-    await saveSettings(ports, rebuild({ enforceMinFolderSize: false }))
+    await saveSettings(ports, rebuild())
+    await ports.storage.set(SETTINGS_KEY, { ...rebuild(), enforceMinFolderSize: false })
 
     await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps)
     const prompts = complete.mock.calls.map((c) => c[0] as string)
-    expect(prompts.some((prompt) => prompt.includes('个书签的目录'))).toBe(false)
+    expect(prompts.some((prompt) => prompt.includes('不到 3 个书签'))).toBe(true)
+  })
+
+  // 反向的另一半：旧阈值往上拧过（5）同样没有落点。上一条盯的是「关掉」，
+  // 这一条盯的是「拧到别的数」——两个方向都不许把存量值偷偷放回来
+  it('存量记录里躺着 minFolderSize=5，提示词里报的仍是 3', async () => {
+    const complete = vi.fn()
+      .mockResolvedValueOnce({ results: [{ bookmark_id: '200', primary_topic: '前端' }] })
+      .mockResolvedValueOnce({ folders: [{ title: '前端', topics: ['前端'], children: [] }] })
+      .mockResolvedValueOnce({ results: [] })
+    const { ports, deps } = setupSix(complete)
+    await saveSettings(ports, rebuild())
+    await ports.storage.set(SETTINGS_KEY, { ...rebuild(), minFolderSize: 5 })
+
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps)
+    const prompts = complete.mock.calls.map((c) => c[0] as string)
+    expect(prompts.some((prompt) => prompt.includes('不到 3 个书签'))).toBe(true)
+    expect(prompts.some((prompt) => prompt.includes('不到 5 个书签'))).toBe(false)
   })
 
   /**
@@ -1335,7 +1431,8 @@ describe('handle analyze 目录下限', () => {
   it('分类后仍不足下限的目录不出现在计划里，书签并进父目录', async () => {
     const complete = skewedComplete()
     const { ports, deps } = setupSkewed(complete)
-    await saveSettings(ports, rebuild({ minFolderSize: 3 }))
+    // 阈值恒为 3，不必再拧（原来这里写的就是 3）
+    await saveSettings(ports, rebuild())
 
     const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps) as { plan: OrganizePlan }
     const created = res.plan.operations.flatMap((o) => (o.type === 'create_folder' ? [o.title] : []))
@@ -1347,14 +1444,37 @@ describe('handle analyze 目录下限', () => {
     expect(row.reason).toContain('不足 3 个')
   })
 
-  it('开关关掉时那个只有一个书签的子目录照建', async () => {
+  // 日志里那个数字过去直接印 settings.minFolderSize。存量记录里拧过的值不许再从
+  // 这里漏出来——用户看到的解释必须是真正生效的那个下限
+  it('撤掉目录时日志报的下限就是 3，不是存量记录里拧过的那个数', async () => {
+    const complete = skewedComplete()
+    const { ports } = setupSkewed(complete)
+    await saveSettings(ports, rebuild())
+    await ports.storage.set(SETTINGS_KEY, { ...rebuild(), minFolderSize: 9 })
+    const events: ProgressEvent[] = []
+    await handle(
+      ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
+      { createClient: () => ({ complete }), now: () => 1, onEvent: (e) => events.push(e) },
+    )
+    const line = events.find((e) => e.message.includes('装不满'))
+    expect(line).toBeDefined()
+    expect(line!.message).toContain('装不满 3 个书签')
+  })
+
+  // 原来验的是「开关关掉时那个只有一个书签的子目录照建」。开关已经删掉——目录下限
+  // 退成 core 里的内部常量，一律生效。那条用例问的事情本身还在：**存量存储里躺着
+  // 关掉过的开关时，这次整理会不会被它带偏。** 答案反过来了，所以断言跟着反过来，
+  // 而不是把这条用例删掉。存量键只能从存储那一侧写，它已经不在 Settings 类型里
+  it('存量记录里躺着 enforceMinFolderSize=false，那个只有一个书签的子目录照样被剪', async () => {
     const complete = skewedComplete()
     const { ports, deps } = setupSkewed(complete)
-    await saveSettings(ports, rebuild({ enforceMinFolderSize: false }))
+    await saveSettings(ports, rebuild())
+    await ports.storage.set(SETTINGS_KEY, { ...rebuild(), enforceMinFolderSize: false })
 
     const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps) as { plan: OrganizePlan }
     const created = res.plan.operations.flatMap((o) => (o.type === 'create_folder' ? [o.title] : []))
-    expect(created.some((title) => title.includes('Vue'))).toBe(true)
+    expect(created.some((title) => title.includes('React'))).toBe(true)
+    expect(created.some((title) => title.includes('Vue'))).toBe(false)
   })
 })
 
@@ -1883,7 +2003,6 @@ async function analyzeWith(tree: TreeSpec[], modeOverride?: OrganizeMode): Promi
     ...DEFAULT_SETTINGS,
     llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
     removeEmptyFolders: false,
-    enforceMinFolderSize: false,
   })
   const deps = { createClient: () => ({ complete: modeClient() }), now: () => 1 }
   // modeOverride 是可选字段，缺省与显式传 undefined 在这里等价（tsconfig 没开
@@ -2040,9 +2159,12 @@ describe('analyze 的 prune 二次判定', () => {
   const tagsOf = (id: string): string =>
     id.startsWith('a') ? '前端' : id.startsWith('c') ? '冷门' : '孤单'
 
-  it('落进「其他」的书签会带着存活目录再问一次，选中了就改判并重写理由', async () => {
-    const prompts: string[] = []
-    const complete = vi.fn(async (prompt: string) => {
+  /**
+   * 二次判定那组用例共用的假件。收到的分类提示词原样记进 `prompts`，
+   * 数它的长度就知道二次判定那一轮跑没跑。
+   */
+  function rehomeComplete(prompts: string[]): LlmClient['complete'] {
+    return vi.fn(async (prompt: string) => {
       if (prompt.includes('标签清单')) {
         return { folders: [
           { title: '前端', topics: ['前端'], children: [] },
@@ -2070,13 +2192,17 @@ describe('analyze 的 prune 二次判定', () => {
         { bookmark_id: id, primary_topic: tagsOf(id), secondary_topic: null }
       ))}
     })
+  }
+
+  it('落进「其他」的书签会带着存活目录再问一次，选中了就改判并重写理由', async () => {
+    const prompts: string[] = []
+    const complete = rehomeComplete(prompts)
 
     const fake = createFakeBookmarks(rehomeTree)
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      minFolderSize: 3, enforceMinFolderSize: true,
     })
     const res = await handle(
       ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
@@ -2101,6 +2227,31 @@ describe('analyze 的 prune 二次判定', () => {
     expect(row.toPath.at(-1)).toContain('前端')
     // confidence 用的是二次判定这一次的把握度，不是首次分类那次对「冷门」的把握度（见 I3）
     expect(row.confidence).toBeCloseTo(0.42)
+  })
+
+  // 开关删掉之前，`rebuild && settings.enforceMinFolderSize` 这道闸把**整个二次判定**
+  // 一起关掉了：关过开关的人不但小目录不撤，掉进「其他」的书签也不会再问一次模型。
+  // 这是删旋钮真正的行为变化里最容易被忽略的一半，单独钉一条
+  it('存量记录里躺着 enforceMinFolderSize=false，二次判定那一轮照样会跑', async () => {
+    const prompts: string[] = []
+    const complete = rehomeComplete(prompts)
+    const fake = createFakeBookmarks(rehomeTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+    }
+    await saveSettings(ports, settings)
+    await ports.storage.set(SETTINGS_KEY, { ...settings, enforceMinFolderSize: false })
+    const res = await handle(
+      ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
+      { createClient: () => ({ complete }), now: () => 1 },
+    ) as { plan: OrganizePlan }
+
+    expect(prompts).toHaveLength(2)
+    expect(prompts[1]).toContain('"c0"')
+    // c0 真的被改判去了「前端」，不是问过一轮就丢掉结果
+    expect(res.plan.rows.find((r) => r.bookmarkId === 'c0')!.toPath.at(-1)).toContain('前端')
   })
 
   it('模型说没有合适的，就保持 prune 定好的去处，不再改判', async () => {
@@ -2141,7 +2292,6 @@ describe('analyze 的 prune 二次判定', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      minFolderSize: 3, enforceMinFolderSize: true,
     })
     const res = await handle(
       ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
@@ -2215,7 +2365,6 @@ describe('analyze 的 prune 二次判定', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      minFolderSize: 3, enforceMinFolderSize: true,
     })
     const res = await handle(
       ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
@@ -2296,7 +2445,7 @@ describe('analyze 的 prune 二次判定', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      minFolderSize: 3, enforceMinFolderSize: true, domainGroups: ['github'],
+      domainGroups: ['github'],
     })
     await handle(
       ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
@@ -2351,7 +2500,6 @@ describe('analyze 的目录形状由书签数推导', () => {
     const settings: Settings = {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      enforceMinFolderSize: false,
     }
     await saveSettings(ports, settings)
     if (Object.keys(legacyKeys).length > 0) {
@@ -2506,7 +2654,6 @@ describe('analyze 的目录形状由书签数推导', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      enforceMinFolderSize: false,
     })
     const events: ProgressEvent[] = []
     await handle(
@@ -2557,7 +2704,6 @@ describe('analyze 的目录形状由书签数推导', () => {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      enforceMinFolderSize: false,
     })
     const events: ProgressEvent[] = []
     await handle(

@@ -14,34 +14,15 @@ export interface Settings {
   domainGroups: string[]
   /** 把 GitHub 书签的标题统一成 `repo (owner)`。 */
   rewriteGithubTitles: boolean
-  /**
-   * 是否要求目录至少装下 minFolderSize 个书签才值得单独建立。
-   * 关掉时完全不做这项约束。只在推翻重建模式下生效。
-   */
-  enforceMinFolderSize: boolean
-  /** 目录至少要装下几个书签。enforceMinFolderSize 关闭时这个值不被读取。 */
-  minFolderSize: number
   /** 界面与产出的语言。'auto' 时跟随浏览器 UI 语言。 */
   uiLocale: UiLocale
 }
-
-/**
- * minFolderSize 这个数字自己的合法区间——不是「目录里的书签数」的区间。
- *
- * 下界 2 是这个功能的最弱形态（只赶走独苗目录）；填 1 等于没开，那种意图应该
- * 去关开关而不是把阈值调到 1。上界 10 再往上，能活下来的目录太少，
- * 整理结果会退化成一个巨大的「其他」。
- */
-export const MIN_FOLDER_SIZE = 2
-export const MAX_FOLDER_SIZE = 10
 
 export const DEFAULT_SETTINGS: Settings = {
   llm: { baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-4o-mini' },
   removeEmptyFolders: true,
   domainGroups: [],
   rewriteGithubTitles: false,
-  enforceMinFolderSize: true,
-  minFolderSize: 3,
   uiLocale: 'auto',
 }
 
@@ -75,6 +56,11 @@ export const PRESETS: Array<{ label: Record<Locale, string>; baseUrl: string; mo
  * - `allowSubfolders`：比 `maxFolderDepth` 更早的一代，当年是个「允不允许二级目录」的
  *   布尔。它曾被翻译成 `maxFolderDepth: 1`；那个目标字段现在也没了，翻译没有落点，
  *   于是连同被它取代的那一代一起不认。
+ * - `enforceMinFolderSize` / `minFolderSize`：当年管「目录至少装几个书签才值得建」，
+ *   还带一个「整个关掉」的开关。这个数字用户无从判断（3 还是 5 更好，取决于这批书签的
+ *   主题有多分散，跑完一次才看得出来），现在退成 core 里的内部常量
+ *   `MIN_FOLDER_BOOKMARKS`（见 core/prune.ts）。**约束一律生效**——以前关掉过开关的人
+ *   下次整理会吃到它，这是删旋钮的代价，不是回归。
  *
  * 判例：**删掉一个旋钮时，存量值一律读取时忽略，而不是继续在后台生效。**
  * 代价是「上周关掉过二级目录」的人下次整理会看到行为变化——这是有意接受的：
@@ -87,8 +73,6 @@ export async function loadSettings(ports: Ports): Promise<Settings> {
     removeEmptyFolders: stored?.removeEmptyFolders ?? DEFAULT_SETTINGS.removeEmptyFolders,
     domainGroups: stored?.domainGroups ?? DEFAULT_SETTINGS.domainGroups,
     rewriteGithubTitles: stored?.rewriteGithubTitles ?? DEFAULT_SETTINGS.rewriteGithubTitles,
-    enforceMinFolderSize: stored?.enforceMinFolderSize ?? DEFAULT_SETTINGS.enforceMinFolderSize,
-    minFolderSize: stored?.minFolderSize ?? DEFAULT_SETTINGS.minFolderSize,
     uiLocale: stored?.uiLocale ?? DEFAULT_SETTINGS.uiLocale,
   }
 }

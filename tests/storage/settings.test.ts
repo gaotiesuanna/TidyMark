@@ -15,23 +15,28 @@ describe('设置存取', () => {
     expect(settings.llm.apiKey).toBe('')
   })
 
-  // 存量存储里可能躺着四代旧旋钮：maxTopFolders / maxFolderDepth 是被「按书签数推导形状」
+  // 存量存储里可能躺着几代旧旋钮：maxTopFolders / maxFolderDepth 是被「按书签数推导形状」
   // 取代的（第 12 项删掉），allowSubfolders 是更早被 maxFolderDepth 取代的，
-  // rebuildStructure 是被「每次现判走哪条路」取代的。四个键一律读都不读——
+  // rebuildStructure 是被「每次现判走哪条路」取代的，enforceMinFolderSize / minFolderSize
+  // 是被 core 里的内部常量 MIN_FOLDER_BOOKMARKS 取代的。一律读都不读——
   // 认任何一个都等于把删掉的旋钮偷偷留着。
-  it('存量存储里的四个旧键一个都不读进来', async () => {
+  it('存量存储里的六个旧键一个都不读进来', async () => {
     const p = ports()
     await p.storage.set(SETTINGS_KEY, {
       maxTopFolders: 6,
       maxFolderDepth: 1,
       allowSubfolders: false,
       rebuildStructure: true,
+      enforceMinFolderSize: false,
+      minFolderSize: 5,
     })
     const settings = await loadSettings(p)
     expect(settings).not.toHaveProperty('maxTopFolders')
     expect(settings).not.toHaveProperty('maxFolderDepth')
     expect(settings).not.toHaveProperty('allowSubfolders')
     expect(settings).not.toHaveProperty('rebuildStructure')
+    expect(settings).not.toHaveProperty('enforceMinFolderSize')
+    expect(settings).not.toHaveProperty('minFolderSize')
     expect(Object.keys(settings).sort()).toEqual(Object.keys(DEFAULT_SETTINGS).sort())
   })
 
@@ -89,29 +94,38 @@ describe('设置存取', () => {
     expect(await loadSettings(p)).toEqual(DEFAULT_SETTINGS)
   })
 
-  // 目录太小是这个功能要防的东西（一个目录里只躺一个链接），所以默认就开着
-  it('默认开启目录下限，阈值 3', async () => {
+  // 原来验的是这两个旋钮的默认值（开着、3）。旋钮删掉后默认值无从谈起——下限退成
+  // core 里的内部常量 MIN_FOLDER_BOOKMARKS，一律生效。但「默认设置里不该再冒出这两个键」
+  // 这件事必须钉住：只要有人手滑把它们写回 DEFAULT_SETTINGS，旋钮就会连同默认值一起复活
+  it('默认设置里不再有目录下限那两个键', async () => {
     const settings = await loadSettings(ports())
-    expect(settings.enforceMinFolderSize).toBe(true)
-    expect(settings.minFolderSize).toBe(3)
+    expect(settings).not.toHaveProperty('enforceMinFolderSize')
+    expect(settings).not.toHaveProperty('minFolderSize')
+    expect(DEFAULT_SETTINGS).not.toHaveProperty('enforceMinFolderSize')
+    expect(DEFAULT_SETTINGS).not.toHaveProperty('minFolderSize')
   })
 
-  // 旧存储里没有这两个键，回落默认值——也就是老用户下次整理会吃到这个新行为。
-  // 这是「默认开」的必然结果，不是遗漏
-  it('旧数据缺目录下限字段时回落默认值', async () => {
+  // 反向的那一半：上一条盯的是「关掉过的开关」，这一条盯的是「拧到别的数的阈值」。
+  // 哪天有人给 minFolderSize 补一条映射，这里会红
+  it('存量里单独躺着 minFolderSize=5 同样没有落点，读出来仍是默认设置', async () => {
     const p = ports()
-    await p.storage.set(SETTINGS_KEY, {})
-    const settings = await loadSettings(p)
-    expect(settings.enforceMinFolderSize).toBe(true)
-    expect(settings.minFolderSize).toBe(3)
+    await p.storage.set(SETTINGS_KEY, { minFolderSize: 5 })
+    expect(await loadSettings(p)).toEqual(DEFAULT_SETTINGS)
   })
 
-  it('显式关掉的目录下限读得回来，不被默认值翻回去', async () => {
-    const p = ports()
-    await p.storage.set(SETTINGS_KEY, { enforceMinFolderSize: false, minFolderSize: 5 })
-    const settings = await loadSettings(p)
-    expect(settings.enforceMinFolderSize).toBe(false)
-    expect(settings.minFolderSize).toBe(5)
+  // 原来验的是「显式关掉的目录下限读得回来，不被默认值翻回去」。那个开关已经删掉——
+  // 目录下限退成 core 里的内部常量，一律生效。问的仍是同一件事：**存量存储里躺着
+  // 旧值时，产品的行为是什么。** 答案变了（从「读回来照办」变成「读都不读」），
+  // 所以断言跟着改口径而不是消失。对照组用同一份空存量兜住两头
+  it('存量里显式关掉的目录下限读都不读——跟没这两个键时一模一样', async () => {
+    const legacy = ports()
+    await legacy.storage.set(SETTINGS_KEY, { enforceMinFolderSize: false, minFolderSize: 5 })
+    const clean = ports()
+    await clean.storage.set(SETTINGS_KEY, {})
+    const settings = await loadSettings(legacy)
+    expect(settings).not.toHaveProperty('enforceMinFolderSize')
+    expect(settings).not.toHaveProperty('minFolderSize')
+    expect(settings).toEqual(await loadSettings(clean))
   })
 
   it('保存后能读回', async () => {
