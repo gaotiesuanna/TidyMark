@@ -2223,6 +2223,76 @@ describe('analyze 的 prune 二次判定', () => {
     expect(res.plan.rows.some((r) => r.toPath.at(-1)?.includes('其他'))).toBe(false)
     expect(res.plan.rows.find((r) => r.bookmarkId === 'b0')?.toPath.at(-1)).toContain('前端')
   })
+
+  it('二次判定那次分类同样不带聚合组目录——不然改判会把书签重新塞回「GitHub」', async () => {
+    // 在「落进其他的书签会带着存活目录再问一次」那副夹具上加一个聚合组：
+    // g0-g2 三条命中 github.com，够上 minFolderSize=3，组会建起来、混进候选表
+    const treeWithGroup = [
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: '收件箱', children: [
+            ...Array.from({ length: 19 }, (_, i) => ({ id: `a${i}`, title: `书签 a${i}`, url: `https://a${i}.dev` })),
+            { id: 'c0', title: '书签 c0', url: 'https://c0.dev' },
+            { id: 'c1', title: '书签 c1', url: 'https://c1.dev' },
+            { id: 'c2', title: '书签 c2', url: 'https://c2.dev' },
+            { id: 'd0', title: '书签 d0', url: 'https://d0.dev' },
+            { id: 'd1', title: '书签 d1', url: 'https://d1.dev' },
+            { id: 'd2', title: '书签 d2', url: 'https://d2.dev' },
+            { id: 'g0', title: '仓库 0', url: 'https://github.com/o/r0' },
+            { id: 'g1', title: '仓库 1', url: 'https://github.com/o/r1' },
+            { id: 'g2', title: '仓库 2', url: 'https://github.com/o/r2' },
+          ]},
+        ]},
+      ]},
+    ]
+
+    const prompts: string[] = []
+    const complete = vi.fn(async (prompt: string) => {
+      if (prompt.includes('标签清单')) {
+        return { folders: [
+          { title: '前端', topics: ['前端'], children: [] },
+          { title: '冷门', topics: ['冷门'], children: [] },
+        ]}
+      }
+      if (prompt.includes('候选目录')) {
+        prompts.push(prompt)
+        const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)].map((m) => m[1]!)
+        const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+        // g0-g2 命中规则，由 pinned 定好去处，压根不会出现在这里的 bookmarkIds 里——
+        // 与第一处那条用例（analyze 的聚合组预算）验的是同一个前提
+        return { results: bookmarkIds.map((id) => ({
+          bookmark_id: id,
+          target_category_id: prompts.length === 1
+            ? (id.startsWith('a') ? ids[0]! : id === 'c0' ? ids[1]! : id.startsWith('c') ? ids[0]! : ids[2]!)
+            : ids[0]!,
+          confidence: prompts.length === 1 ? 0.9 : 0.42,
+          reason: 'r',
+        }))}
+      }
+      const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+      return { results: bookmarkIds.map((id) => (
+        { bookmark_id: id, primary_topic: tagsOf(id), secondary_topic: null }
+      ))}
+    })
+
+    const fake = createFakeBookmarks(treeWithGroup)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      minFolderSize: 3, enforceMinFolderSize: true, domainGroups: ['github'],
+    })
+    await handle(
+      ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
+      { createClient: () => ({ complete }), now: () => 1 },
+    )
+
+    // 二次判定确实发生了（不是压根没走到这一步、断言空转）：分类提示词出现了两次
+    expect(prompts).toHaveLength(2)
+    // 最后一次才是二次判定——它跟首次分类一样是在给书签找去处，同样不该看到组目录
+    const rehomePrompt = prompts.at(-1)!
+    expect(rehomePrompt).not.toMatch(/目录=\d* ?GitHub/)
+  })
 })
 
 describe('analyze 的目录形状由书签数推导', () => {
