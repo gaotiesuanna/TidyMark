@@ -357,3 +357,31 @@ describe('ReviewStep 的改投与标记', () => {
     expect(useStore.getState().accepted.has('a')).toBe(true)
   })
 })
+
+/**
+ * 票 15 接受残留（不去挪用户明确拒绝移动的书签），但用户有权知道后果：
+ * 取消勾选的这条若是原目录里最后一个留守者，那个目录就会因为它活下来。
+ */
+describe('ReviewStep 的留下目录提示', () => {
+  // 用 row() 造的行 fromPath 都是 ['书签栏', '杂项']，两条同源
+  it('取消勾选后，若这条是原目录里最后一个还没搬走的，那一行说明会保留哪个目录', async () => {
+    setupPlan([row('a', ['01 前端'], 'llm'), row('b', ['01 前端'], 'llm')])
+    render(<ReviewStep />)
+    // 勾着的时候不提示：勾上就等于会搬走，没有目录因它留下
+    expect(screen.queryByText(/会保留目录/)).toBeNull()
+
+    await userEvent.click(screen.getByRole('checkbox', { name: '书签 a' }))
+
+    expect(screen.getByText(/会保留目录「杂项」/)).toBeTruthy()
+  })
+
+  // 反向：只有正向断言的话，一个「对所有未勾选的行都提示」的实现也会绿
+  it('原目录里还有别的书签不走时，取消勾选不提示——那个目录本来就会活下来', async () => {
+    setupPlan([row('a', ['01 前端'], 'llm'), row('b', ['01 前端'], 'llm')])
+    render(<ReviewStep />)
+    await userEvent.click(screen.getByRole('checkbox', { name: '书签 a' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: '书签 b' }))
+
+    expect(screen.queryByText(/会保留目录/)).toBeNull()
+  })
+})

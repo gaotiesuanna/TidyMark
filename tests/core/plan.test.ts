@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildPlan, filterAccepted, renumberPlan, retargetRow, summarize, MARK_CONFIDENCE } from '@/core/plan'
+import { buildPlan, filterAccepted, renumberPlan, retargetRow, summarize, wouldStrandFolder, MARK_CONFIDENCE } from '@/core/plan'
 import type { BookmarkItem, BookmarkOperation, CategoryCandidate, Classification, OrganizePlan } from '@/core/types'
 import { makePlan } from '../fakes/plan'
 
@@ -678,5 +678,65 @@ describe('retargetRow', () => {
     const plan = base()
     const next = retargetRow(plan, '不存在的书签', 'tmp:2')
     expect(next).toBe(plan)
+  })
+})
+
+/**
+ * 取消勾选一条建议，有时会让它原来那个目录活下来。
+ * 只有「这条书签是原目录里唯一还没搬走的」时才成立——原目录里还有别的东西留守时，
+ * 那个目录本来就会活下来，取消勾选不是它活下来的原因。
+ */
+describe('wouldStrandFolder', () => {
+  const 杂项 = ['书签栏', '杂项']
+  const 收件箱 = ['书签栏', '收件箱']
+
+  const item = (id: string, currentPath: string[]): BookmarkItem => ({
+    id, title: `书签 ${id}`, url: `https://${id}.dev`, parentId: '9', index: 0, currentPath,
+  })
+  /** 搬去「前端」的建议 */
+  const move = (id: string): Classification => ({
+    bookmarkId: id, targetCategoryId: '10', confidence: 1, reason: '', source: 'llm',
+  })
+  /** 本轮不会动的书签，落进未变动区 */
+  const stay = (id: string): Classification => ({
+    bookmarkId: id, targetCategoryId: null, confidence: 0, reason: '无合适目录', source: 'llm',
+  })
+  const planWith = (items: BookmarkItem[], classifications: Classification[]): OrganizePlan =>
+    buildPlan({
+      id: 'p-strand', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: false,
+      items, candidates: [{ id: '10', path: ['书签栏', '前端'] }], classifications, newFolders: [],
+    })
+
+  it('同目录里别的书签都要搬走时，取消这一条就是留下那个目录', () => {
+    const plan = planWith([item('a', 杂项), item('b', 杂项)], [move('a'), move('b')])
+    expect(wouldStrandFolder(plan, new Set(['a', 'b']), 'a')).toBe(true)
+  })
+
+  it('原目录里还有一条本轮不会动的书签时不算——那个目录本来就会活下来', () => {
+    const plan = planWith(
+      [item('a', 杂项), item('b', 杂项), item('c', 杂项)],
+      [move('a'), move('b'), stay('c')],
+    )
+    expect(wouldStrandFolder(plan, new Set(['a', 'b']), 'a')).toBe(false)
+  })
+
+  it('同目录里另一条建议也没被勾选时不算——留下目录的不止这一条', () => {
+    const plan = planWith([item('a', 杂项), item('b', 杂项)], [move('a'), move('b')])
+    expect(wouldStrandFolder(plan, new Set(['a']), 'a')).toBe(false)
+  })
+
+  // 留守者得在同一个原目录里才算数：不比路径的实现（「只要还有谁不走就返回 false」）
+  // 会把别的目录里的留守者也算进来，那样这里就该错判成 false
+  it('别的目录里的留守者不算数', () => {
+    const plan = planWith(
+      [item('a', 杂项), item('b', 杂项), item('d', 收件箱), item('e', 收件箱)],
+      [move('a'), move('b'), move('d'), stay('e')],
+    )
+    expect(wouldStrandFolder(plan, new Set(['a', 'b']), 'a')).toBe(true)
+  })
+
+  it('方案里根本没有这条书签时返回 false', () => {
+    const plan = planWith([item('a', 杂项), item('b', 杂项)], [move('a'), move('b')])
+    expect(wouldStrandFolder(plan, new Set(['a', 'b']), '不存在')).toBe(false)
   })
 })

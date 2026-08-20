@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { localDate } from '@/core/export'
-import { MARK_CONFIDENCE, renumberPlan, summarize } from '@/core/plan'
+import { MARK_CONFIDENCE, renumberPlan, summarize, wouldStrandFolder } from '@/core/plan'
 import type { PlanRow, UnchangedRow } from '@/core/types'
 import { plural, t } from '@/i18n'
 import { downloadJson } from '../lib/download'
@@ -281,6 +281,14 @@ export function ReviewStep() {
                               <span className="line-through">{row.fromPath.join(' / ')}</span>
                             </div>
                             <div className="mt-0.5 text-neutral-400">{row.reason}</div>
+                            {/* 取消勾选的后果只在「这条是原目录里最后一个留守者」时说——
+                                原目录里还有别的书签不走时它本来就会活下来，那时提示纯属噪音。
+                                跟着上面两行的次要说明文字走，不另起一层视觉。 */}
+                            {!accepted.has(row.bookmarkId) && wouldStrandFolder(plan, accepted, row.bookmarkId) && (
+                              <div className="mt-0.5 text-neutral-500">
+                                {t('reviewStrandNote', row.fromPath.at(-1) ?? '')}
+                              </div>
+                            )}
                           </div>
                         </label>
                       </div>

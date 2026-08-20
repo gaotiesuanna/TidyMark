@@ -554,6 +554,14 @@
       }
     }
   },
+  "reviewStrandNote": {
+    "message": "Leaving this bookmark here keeps the folder \"$folder$\" around.",
+    "placeholders": {
+      "folder": {
+        "content": "$1"
+      }
+    }
+  },
   "reviewMarked": {
     "message": "Worth a look"
   },

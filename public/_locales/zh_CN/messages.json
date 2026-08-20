@@ -554,6 +554,14 @@
       }
     }
   },
+  "reviewStrandNote": {
+    "message": "\u4e0d\u79fb\u52a8\u5b83\u5c31\u4f1a\u4fdd\u7559\u76ee\u5f55\u300c$folder$\u300d\u3002",
+    "placeholders": {
+      "folder": {
+        "content": "$1"
+      }
+    }
+  },
   "reviewMarked": {
     "message": "值得看一眼"
   },

@@ -406,6 +406,45 @@ export function retargetRow(plan: OrganizePlan, bookmarkId: string, targetId: st
 }
 
 /**
+ * 路径拼 key 的分隔符用 U+0000：目录名里 '/' 与空格都可能出现，
+ * 拿它们当分隔符时 ['A/B'] 与 ['A', 'B'] 会拼出同一个 key，两个不同的目录就撞成一个。
+ * 与 llm/classify.ts 的 pathKey 同一套理由（那边早就为这个坑改过一次）。
+ */
+function pathKey(path: string[]): string {
+  return path.join('\u0000')
+}
+
+/**
+ * 取消勾选这条建议，会不会成为「那个原目录活下来」的唯一原因。
+ *
+ * 票 15 接受残留（不去挪用户明确拒绝移动的书签），但用户有权知道后果。
+ * 只在「最后一个留守者」时为真：原目录里还有别的书签不走时，那个目录本来就会活下来，
+ * 这时提示纯属噪音——取消勾选并不是它活下来的原因。
+ *
+ * 判定不看 bookmarkId 自己在不在 accepted 里：调用方问的是「（再）取消它会怎样」，
+ * 勾着问和取消之后问得到同一个答案。
+ *
+ * **已知边界**：只看书签，不看子目录。原目录若还有子目录，它同样会活下来，
+ * 而这里不提示——宁可少说，不可乱说。
+ */
+export function wouldStrandFolder(
+  plan: OrganizePlan,
+  accepted: Set<string>,
+  bookmarkId: string,
+): boolean {
+  const row = plan.rows.find((r) => r.bookmarkId === bookmarkId)
+  if (row === undefined) return false
+  const from = pathKey(row.fromPath)
+
+  // 本轮压根不会动的书签就在这个目录里
+  if (plan.unchanged.some((u) => pathKey(u.currentPath) === from)) return false
+  // 同一个原目录里另有一条建议也没被勾选——留下这个目录的不止这一条
+  return !plan.rows.some(
+    (r) => r.bookmarkId !== bookmarkId && pathKey(r.fromPath) === from && !accepted.has(r.bookmarkId),
+  )
+}
+
+/**
  * 保留被接受的 move，以及这些 move 真正需要的 create_folder（含其祖先链）。
  * 顺序保证 create_folder 先于 move，且父文件夹先于子文件夹。
  */
