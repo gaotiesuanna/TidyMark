@@ -216,20 +216,22 @@ describe('ReviewStep 的分组', () => {
     expect(screen.getByText('书签 b')).toBeTruthy()
   })
 
-  it('编号平移不该动折叠状态——组的身份是 id，不是渲染出来的那串字', async () => {
-    // 两个目标目录，各一行；用户手动折叠了其中一组
+  it('两个同名组各折各的——身份是 id，不是渲染出来的那串字', async () => {
+    // 两个不同的目标目录**恰好同名**（真实场景：库里有重名目录）。
+    // 如果分组键是渲染出来的路径字符串，这两组会共用一个键、一折全折。
     setupPlan([
-      row('a', ['01 前端'], 'llm', 0.9, 'tmp:1'),
-      row('b', ['02 后端'], 'llm', 0.9, 'tmp:2'),
+      row('a', ['01 GitHub'], 'llm', 0.9, 'tmp:1'),
+      row('b', ['01 GitHub'], 'llm', 0.9, 'tmp:2'),
     ])
     render(<ReviewStep />)
-    await userEvent.click(screen.getByText('01 前端'))
-    expect(screen.queryByText('书签 a')).toBeNull()
+    expect(screen.getByText('书签 a')).toBeTruthy()
+    expect(screen.getByText('书签 b')).toBeTruthy()
 
-    // 取消勾选 b 会让编号重排，「01 前端」可能变成别的编号——
-    // 但那一组的身份（tmp:1）没变，它必须**仍然折叠着**
-    await userEvent.click(screen.getByLabelText('书签 b'))
+    // 折叠第一组
+    await userEvent.click(screen.getAllByText('01 GitHub')[0]!)
     expect(screen.queryByText('书签 a')).toBeNull()
+    // 第二组不受影响——两组的键不同
+    expect(screen.getByText('书签 b')).toBeTruthy()
   })
 
   it('同名不同 id 分成两组——它们本来就是两个目录', () => {
