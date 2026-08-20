@@ -51,6 +51,12 @@
       }
     }
   },
+  "scopeNeedModel": {
+    "message": "书签怎么分类，由你自己配的模型说了算——现在还没配。挑一个预设，粘上 API Key，就这两步。"
+  },
+  "scopeNeedModelAction": {
+    "message": "去配置模型"
+  },
   "scopeIntro": {
     "message": "勾选你想让 TidyMark 重构的文件夹。"
   },
@@ -348,7 +354,7 @@
     "message": "统一 GitHub 书签标题"
   },
   "settingsGithubBody": {
-    "message": "把标题按 URL 改写成「仓库名 (作者)」，收藏具体文件时保留文件名。这会改动书签本身的名字，不只是位置；可一键撤销。与上面的勾选无关，开启后范围内所有 GitHub 书签都会改。"
+    "message": "把标题按 URL 改写成「仓库名 (作者)」，收藏具体文件时保留文件名。这会改动书签本身的名字，不只是位置；可一键撤销。这一轮怎么整理不影响它：只要开着，范围内所有 GitHub 书签都会改。"
   },
   "prefsGroupTitle": {
     "message": "单独聚合这些站点"
@@ -361,6 +367,12 @@
   },
   "prefsStart": {
     "message": "开始 AI 分析"
+  },
+  "prefsGoConfigure": {
+    "message": "先去配置模型"
+  },
+  "prefsPermissionNotice": {
+    "message": "开始分析的那一刻，才会向浏览器申请访问你填的那个模型域名——只这一个。安装时 TidyMark 一个网络权限都没要。"
   },
   "structureIntroOne": {
     "message": "AI 设计了 $folders$ 个一级目录，将容纳 $bookmarks$ 个书签。",

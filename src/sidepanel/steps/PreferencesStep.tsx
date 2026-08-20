@@ -5,7 +5,9 @@ import { currentLocale, t } from '@/i18n'
 import { useStore } from '../store'
 
 export function PreferencesStep() {
-  const { scan, settings, setSettings, analyze, busy, reset, modeOverride, setModeOverride } = useStore()
+  const {
+    scan, settings, setSettings, analyze, busy, reset, modeOverride, setModeOverride, openSettings,
+  } = useStore()
   const locale = currentLocale()
   // 与后台是同一个纯函数——但前提是同一份扫描结果：书签在 goScan 之后、这次
   // analyze 之前被外部改动（书签管理器里删了个文件夹、同步来一批新的）时，
@@ -19,6 +21,9 @@ export function PreferencesStep() {
   if (scan === null || decision === null) return null
   const { stats } = scan
   const rebuild = (modeOverride ?? decision.mode) === 'rebuild'
+  // 模型配置在设置页，这里只判断配没配。没配时不禁用按钮：一个禁用的按钮既不解释
+  // 为什么，也不给出路；换成一个能点、点了直接落到设置页的按钮永远更好。
+  const needModel = settings.llm.apiKey.trim() === ''
 
   return (
     <div className="space-y-4">
@@ -117,15 +122,30 @@ export function PreferencesStep() {
         </div>
       </section>
 
-      <div className="flex gap-2">
-        <button className="rounded border px-3 py-2 text-sm" onClick={reset}>{t('prefsBack')}</button>
-        <button
-          className="flex-1 rounded bg-neutral-800 py-2 text-sm text-white disabled:opacity-40"
-          disabled={busy !== null || settings.llm.apiKey.trim() === ''}
-          onClick={() => void analyze()}
-        >
-          {t('prefsStart')}
-        </button>
+      <div className="space-y-2">
+        {/* 权限预告放在按钮上方：申请只发生在点下去的那一刻（chrome.permissions.request()
+            要用户手势，设置页是 onChange 即存，放不了），提前说清楚它只要一个域名。
+            两种按钮状态下都摆着——它讲的是这条动线接下来会发生什么，不依赖当前是哪个按钮。 */}
+        <p className="text-[11px] leading-relaxed text-neutral-400">{t('prefsPermissionNotice')}</p>
+        <div className="flex gap-2">
+          <button className="rounded border px-3 py-2 text-sm" onClick={reset}>{t('prefsBack')}</button>
+          {needModel ? (
+            <button
+              className="flex-1 rounded border border-neutral-800 py-2 text-sm text-neutral-800"
+              onClick={openSettings}
+            >
+              {t('prefsGoConfigure')}
+            </button>
+          ) : (
+            <button
+              className="flex-1 rounded bg-neutral-800 py-2 text-sm text-white disabled:opacity-40"
+              disabled={busy !== null}
+              onClick={() => void analyze()}
+            >
+              {t('prefsStart')}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

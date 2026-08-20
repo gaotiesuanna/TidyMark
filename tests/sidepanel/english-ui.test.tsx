@@ -62,10 +62,13 @@ const tree: BookmarkNode[] = [
 ]
 
 describe('英文界面渲染守卫：步骤组件', () => {
-  it('ScopeStep', () => {
+  it('ScopeStep（含「还没配模型」那条提示）', () => {
     useStore.setState({
       tree, checkedIds: new Set(['10']), busy: null, error: null,
       importFile: null, importError: null, importDone: null,
+      // 显式钉住空 apiKey：提示只在没配模型时渲染，靠 store 初值碰运气的话，
+      // 前面某条用例填过 Key 就会把这段文案整个绕过去，守卫等于没挂上
+      settings: { ...DEFAULT_SETTINGS },
     })
     const { container } = render(<ScopeStep />)
     assertNoChinese(container, 'ScopeStep')
@@ -81,6 +84,20 @@ describe('英文界面渲染守卫：步骤组件', () => {
     })
     const { container } = render(<PreferencesStep />)
     assertNoChinese(container, 'PreferencesStep')
+  })
+
+  it('PreferencesStep（配好模型之后：开始按钮换成另一条文案，得单独走一遍）', () => {
+    const scan = {
+      bookmarks: [], folders: [],
+      stats: { totalBookmarks: 12, totalFolders: 3, emptyFolders: 1, untitledBookmarks: 0, duplicateUrlGroups: 0, duplicateFolderGroups: 0, maxDepth: 2 },
+    }
+    useStore.setState({
+      scan,
+      settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey: 'sk-configured' } },
+      modeOverride: null, busy: null,
+    })
+    const { container } = render(<PreferencesStep />)
+    assertNoChinese(container, 'PreferencesStep（已配好模型）')
   })
 
   it('PreferencesStep（判已整理：结论、理由与逃生口都要是英文）', () => {

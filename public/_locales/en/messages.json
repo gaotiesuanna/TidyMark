@@ -51,6 +51,12 @@
       }
     }
   },
+  "scopeNeedModel": {
+    "message": "TidyMark files your bookmarks with an AI model of your own, and there is not one yet. Pick a preset, paste an API key, and that is the whole setup."
+  },
+  "scopeNeedModelAction": {
+    "message": "Set up the model"
+  },
   "scopeIntro": {
     "message": "Check the folders you want TidyMark to reorganize."
   },
@@ -348,7 +354,7 @@
     "message": "Normalize GitHub bookmark titles"
   },
   "settingsGithubBody": {
-    "message": "Rewrites titles from the URL into \"repo (owner)\", keeping the file name when a specific file is bookmarked. This changes the bookmark's own name, not just its location, and can be undone. It is independent of the checkboxes above — once on, every GitHub bookmark in scope is rewritten."
+    "message": "Rewrites titles from the URL into \"repo (owner)\", keeping the file name when a specific file is bookmarked. This changes the bookmark's own name, not just its location, and can be undone. However this round is organized, the switch stands on its own: while it is on, every GitHub bookmark in scope is rewritten."
   },
   "prefsGroupTitle": {
     "message": "Give these sites their own folders"
@@ -361,6 +367,12 @@
   },
   "prefsStart": {
     "message": "Start AI analysis"
+  },
+  "prefsGoConfigure": {
+    "message": "Set up the model first"
+  },
+  "prefsPermissionNotice": {
+    "message": "Chrome asks for network access only when the analysis starts, and only for the model domain you entered \u2014 nothing else. TidyMark ships with no network access at all."
   },
   "structureIntroOne": {
     "message": "The AI designed $folders$ top-level folder to hold $bookmarks$ bookmarks.",

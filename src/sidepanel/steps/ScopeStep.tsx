@@ -6,7 +6,10 @@ import { ImportPanel } from '../components/ImportPanel'
 import { collectAllFolderIds, useStore } from '../store'
 
 export function ScopeStep() {
-  const { tree, checkedIds, toggle, goScan, busy } = useStore()
+  const { tree, checkedIds, toggle, goScan, busy, settings, openSettings } = useStore()
+  // 模型配置在设置页，而扫描一步根本用不上它——不在这里先说一声，新用户会一路顺畅
+  // 走完勾选和扫描，直到第三步才发现没地方填 Key，那时他已经投入了。
+  const needModel = settings.llm.apiKey.trim() === ''
   // null 表示还没手动展开过，此时默认只展开根节点，也就是先只看一级目录
   const [expanded, setExpanded] = useState<Set<string> | null>(null)
   const defaultExpanded = useMemo(
@@ -26,6 +29,19 @@ export function ScopeStep() {
     // 操作区不能放进这个 space-y-3 里：它的 `margin-bottom: 0` 优先级高于 -mb-4，会把下面那条负外边距吃掉。
     <div>
       <div className="space-y-3">
+        {/* 次要层级、不用红色告警：没配模型不是错误，导入导出和勾选范围照常能走，这条只挡在视线里、不挡在路上。
+            也不做「不再提示」——真需要配置的人会因此永久失去入口，而配好之后它自己就消失了，没有需要关闭的场景。 */}
+        {needModel && (
+          <section className="space-y-2 rounded-md border border-neutral-200 bg-neutral-50 p-3">
+            <p className="text-xs leading-relaxed text-neutral-600">{t('scopeNeedModel')}</p>
+            <button
+              className="cursor-pointer rounded-md border border-neutral-300 bg-white px-2.5 py-1 text-xs font-medium text-neutral-700 transition-colors duration-150 hover:border-neutral-400 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 motion-reduce:transition-none"
+              onClick={openSettings}
+            >
+              {t('scopeNeedModelAction')}
+            </button>
+          </section>
+        )}
         <p className="text-xs leading-relaxed text-neutral-500">{t('scopeIntro')}</p>
         <p className="text-xs font-medium leading-relaxed text-neutral-600">{t('scopeSafety')}</p>
 

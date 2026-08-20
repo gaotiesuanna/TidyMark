@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ScopeStep } from '@/sidepanel/steps/ScopeStep'
 import { useStore } from '@/sidepanel/store'
+import { DEFAULT_SETTINGS } from '@/storage/settings'
 import type { BookmarkNode } from '@/core/ports'
 
 const tree: BookmarkNode[] = [
@@ -80,5 +81,55 @@ describe('ScopeStep 导入入口', () => {
   it('选范围页上挂着导入面板', () => {
     render(<ScopeStep />)
     expect(screen.getByText('选择文件…')).toBeDefined()
+  })
+})
+
+/**
+ * 没配模型时的提前告知。模型配置搬进设置页之后，新用户在这一页没有任何线索，
+ * 而扫描根本不需要 Key——他会一路顺畅走到偏好页才撞墙，那时已经投入了。
+ */
+describe('ScopeStep 还没配模型时的提示', () => {
+  /** 提示只看 apiKey 一个条件，baseUrl 与 model 有默认值、不参与判断。 */
+  function setKey(apiKey: string, openSettings = vi.fn()): ReturnType<typeof vi.fn> {
+    useStore.setState({
+      settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey } },
+      openSettings,
+    })
+    return openSettings
+  }
+
+  it('apiKey 为空时顶部给出提示，点那个按钮就去设置页', async () => {
+    const openSettings = setKey('')
+    render(<ScopeStep />)
+
+    expect(screen.getByText(/挑一个预设/)).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: '去配置模型' }))
+    expect(openSettings).toHaveBeenCalledTimes(1)
+  })
+
+  it('apiKey 非空时没有这条提示', () => {
+    setKey('sk-already-configured')
+    render(<ScopeStep />)
+
+    // 空断言防身：先证明这一页真渲染出来了，而且下面两种查询在这一页上确实命中得了东西，
+    // 否则「查不到」可能只是查错了地方
+    expect(screen.getByText(/勾选你想让 TidyMark 重构的文件夹/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: '全部展开' })).toBeTruthy()
+
+    expect(screen.queryByText(/挑一个预设/)).toBeNull()
+    expect(screen.queryByRole('button', { name: '去配置模型' })).toBeNull()
+  })
+
+  it('提示在场也不挡路：目录树照常勾得动，扫描照常开得了', async () => {
+    setKey('')
+    render(<ScopeStep />)
+    // 前提：这条用例要验的是「提示在场时」，提示不在场就什么也没证明
+    expect(screen.getByRole('button', { name: '去配置模型' })).toBeTruthy()
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'react' }))
+    expect([...useStore.getState().checkedIds].sort()).toEqual(['10', '100', '1000'])
+
+    const scan = screen.getByRole('button', { name: /扫描选中的/ }) as HTMLButtonElement
+    expect(scan.disabled).toBe(false)
   })
 })

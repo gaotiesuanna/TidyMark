@@ -202,3 +202,80 @@ describe('PreferencesStep 不再摆配一次就不动的设置', () => {
     expect(screen.queryByText(/仓库名 \(作者\)/)).toBeNull()
   })
 })
+
+/**
+ * 模型配置搬进设置页之后，这一页的「开始」按钮是新用户唯一会撞上的墙。
+ * 禁用的按钮既不解释为什么、也不给出路，所以没配 Key 时它换成一个能点、点了有去处的按钮。
+ */
+describe('PreferencesStep 没配模型时的出路', () => {
+  function arrange(apiKey: string): { analyze: ReturnType<typeof vi.fn>; openSettings: ReturnType<typeof vi.fn> } {
+    setup(messyScan)
+    const analyze = vi.fn(async () => {})
+    const openSettings = vi.fn()
+    useStore.setState({
+      settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey } },
+      analyze, openSettings,
+    })
+    return { analyze, openSettings }
+  }
+
+  it('apiKey 为空时按钮能点，点了去设置页而不是开始分析', async () => {
+    const { analyze, openSettings } = arrange('')
+    render(<PreferencesStep />)
+
+    const button = screen.getByRole('button', { name: '先去配置模型' }) as HTMLButtonElement
+    expect(button.disabled).toBe(false)
+
+    await userEvent.click(button)
+    expect(openSettings).toHaveBeenCalledTimes(1)
+    expect(analyze).not.toHaveBeenCalled()
+  })
+
+  it('apiKey 为空时不摆「开始 AI 分析」——那一步这会儿走不通', () => {
+    arrange('')
+    render(<PreferencesStep />)
+    // 空断言防身：先证明这一页渲染出来了、这类查询在这一页上确实命中得了按钮
+    expect(screen.getByRole('button', { name: '先去配置模型' })).toBeTruthy()
+
+    expect(screen.queryByRole('button', { name: '开始 AI 分析' })).toBeNull()
+  })
+
+  it('apiKey 非空时才是「开始 AI 分析」，点了真的开始分析', async () => {
+    const { analyze, openSettings } = arrange('sk-already-configured')
+    render(<PreferencesStep />)
+
+    const button = screen.getByRole('button', { name: '开始 AI 分析' }) as HTMLButtonElement
+    expect(button.disabled).toBe(false)
+
+    await userEvent.click(button)
+    expect(analyze).toHaveBeenCalledTimes(1)
+    expect(openSettings).not.toHaveBeenCalled()
+  })
+
+  it('apiKey 非空时不再摆「先去配置模型」', () => {
+    arrange('sk-already-configured')
+    render(<PreferencesStep />)
+    // 空断言防身：同上，这一页上按钮名查询确实能命中
+    expect(screen.getByRole('button', { name: '开始 AI 分析' })).toBeTruthy()
+
+    expect(screen.queryByRole('button', { name: '先去配置模型' })).toBeNull()
+  })
+
+  it('分析在跑时「开始 AI 分析」照旧禁用', () => {
+    arrange('sk-already-configured')
+    useStore.setState({ busy: '分析中…' })
+    render(<PreferencesStep />)
+    expect((screen.getByRole('button', { name: '开始 AI 分析' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+describe('PreferencesStep 的权限预告', () => {
+  it('提前说明那一刻会申请哪一个域名的访问权限', () => {
+    setup(messyScan)
+    render(<PreferencesStep />)
+    const notice = screen.getByText(/只这一个/)
+    expect(notice.textContent).toMatch(/模型/)
+    // 关键在「只申请你填的那一个」和「安装时一个都没要」——这是卖点，不是免责声明
+    expect(notice.textContent).toMatch(/安装时/)
+  })
+})
