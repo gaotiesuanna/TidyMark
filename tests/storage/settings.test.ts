@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SETTINGS_KEY, loadSettings, saveSettings, loadCache, saveCache, DEFAULT_SETTINGS } from '@/storage/settings'
+import { SETTINGS_KEY, loadSettings, saveSettings, loadCache, saveCache, DEFAULT_SETTINGS, MAX_CACHE_ENTRIES } from '@/storage/settings'
 import { createFakeStorage } from '../fakes/fake-storage'
 import { createFakeBookmarks } from '../fakes/fake-bookmarks'
 import type { CachedClassification } from '@/core/types'
@@ -222,6 +222,62 @@ describe('分类缓存存取', () => {
       ['bad', { targetPath: null, url: 'https://x.dev', confidence: 0, reason: 'r', topic: 42 }],
     ])
     expect((await loadCache(p)).size).toBe(0)
+  })
+})
+
+describe('分类缓存条数上限', () => {
+  const entryAt = (i: number): CachedClassification => ({
+    targetPath: ['书签栏', 'react'], url: `https://example.com/${i}`, confidence: 0.9, reason: 'r',
+  })
+
+  /** 按 k0、k1…的顺序写入 count 条——Map 保插入顺序，这个顺序就是淘汰依据。 */
+  function cacheOf(count: number): Map<string, CachedClassification> {
+    const cache = new Map<string, CachedClassification>()
+    for (let i = 0; i < count; i++) cache.set(`k${i}`, entryAt(i))
+    return cache
+  }
+
+  it('超过上限时落盘条数恰好是 MAX_CACHE_ENTRIES', async () => {
+    const p = ports()
+    await saveCache(p, cacheOf(MAX_CACHE_ENTRIES + 5))
+    expect((await loadCache(p)).size).toBe(MAX_CACHE_ENTRIES)
+  })
+
+  // 只断言条数的话，一个「留下最早那批」的实现照样绿——这条钉的是淘汰的方向。
+  it('留下的是后写入的那批：最早的 5 条读不回来，最后写入的那条读得回来', async () => {
+    const p = ports()
+    await saveCache(p, cacheOf(MAX_CACHE_ENTRIES + 5))
+    const cache = await loadCache(p)
+    // 先证明这个查询本身有效：紧挨着被淘汰那 5 条的第 6 条必须还在，
+    // 不然下面那串 has === false 在一个「什么都没存下」的实现里也全绿。
+    expect(cache.get('k5')).toEqual(entryAt(5))
+    for (let i = 0; i < 5; i++) expect(cache.has(`k${i}`)).toBe(false)
+    expect(cache.get(`k${MAX_CACHE_ENTRIES + 4}`)).toEqual(entryAt(MAX_CACHE_ENTRIES + 4))
+  })
+
+  it('恰好等于上限时一条都不淘汰', async () => {
+    const p = ports()
+    await saveCache(p, cacheOf(MAX_CACHE_ENTRIES))
+    const cache = await loadCache(p)
+    expect(cache.size).toBe(MAX_CACHE_ENTRIES)
+    expect(cache.has('k0')).toBe(true)
+  })
+
+  it('不足上限时一条不少，且写入顺序原样保留（顺序就是淘汰依据，乱了淘汰就错了）', async () => {
+    const p = ports()
+    await saveCache(p, cacheOf(3))
+    const cache = await loadCache(p)
+    expect([...cache.keys()]).toEqual(['k0', 'k1', 'k2'])
+  })
+
+  // 同一轮里 classifyBookmarks 还拿着这个 Map 在用，落盘时就地删条目
+  // 等于在别人手里抽东西——截断只能截落盘的那一份。
+  it('截断不动调用方传进来的那个 Map', async () => {
+    const p = ports()
+    const cache = cacheOf(MAX_CACHE_ENTRIES + 5)
+    await saveCache(p, cache)
+    expect(cache.size).toBe(MAX_CACHE_ENTRIES + 5)
+    expect(cache.has('k0')).toBe(true)
   })
 })
 

@@ -6,6 +6,25 @@ import type { LlmConfig } from '@/llm/client'
 export const SETTINGS_KEY = 'tidymark:settings'
 export const CACHE_KEY = 'tidymark:classify-cache'
 
+/**
+ * 分类缓存的条数上限。
+ *
+ * manifest 里有 unlimitedStorage（见 manifest.config.ts 的 permissions），所以
+ * 「撑爆配额」不是理由——真正的理由是每一轮整理都要把整份缓存完整读一遍再完整
+ * 写一遍：loadCache 逐条跑 isCachedClassification 校验，saveCache 把整个数组
+ * 序列化后整块落盘。这份开销跟本轮整理多少书签无关，只跟缓存有多长有关。而
+ * key 里含 locale × model × 候选路径集合（见 llm/classify.ts 的 cacheKey），
+ * 换语言、换模型、目录结构一变就是一整套新 key，旧的那套再也命中不了——留着
+ * 它们只是让每一轮都白读白写一遍死数据。
+ *
+ * 取 10000：一条约 300 字节（key 约 18 + 字段名约 66 + url 约 60 + 一句中文
+ * reason 约 75 + targetPath 约 30 + topic 约 12），10000 × 300 B ≈ 3 MB，一次
+ * 读写在几十毫秒量级。这个数远高于任何一份真实书签库的规模，所以正常一轮整理
+ * 写下的条目不会互相挤掉，被挤掉的只会是换配置之前那套旧 key。上限低于书签库
+ * 规模才是要命的：那样每轮都把最早写的那批挤掉，下一轮它们必然落空，缓存等于白留。
+ */
+export const MAX_CACHE_ENTRIES = 10_000
+
 export interface Settings {
   llm: LlmConfig
   /** 整理完成后清理范围内不含任何书签的目录。 */
@@ -116,6 +135,22 @@ export async function loadCache(ports: Ports): Promise<Map<string, CachedClassif
   )
 }
 
+/**
+ * 落盘前按写入顺序截到 MAX_CACHE_ENTRIES：Map 保插入顺序，`[...cache]` 就是写入
+ * 顺序，取后 MAX_CACHE_ENTRIES 项＝淘汰最早写入的那批（FIFO）。
+ *
+ * 只截落盘的这一份，不动传进来的那个 Map——同一轮里 classifyBookmarks 还拿着它
+ * 在用，就地删条目等于在别人手里抽东西。
+ *
+ * FIFO 的已知代价，写在这儿别装作没有：命中缓存不刷新条目位置（全程只有
+ * llm/classify.ts 里那一处 cache.set 会写），所以一条写过一次、之后被命中一百次
+ * 的条目，仍按它最初的写入时间被淘汰，可能先于一条刚写进来、再也用不上的条目。
+ * 而且 Map.set 对已存在的 key 只改值不挪位置，这个顺序严格说是「首次写入顺序」，
+ * 重写一条也不会让它变年轻。要修得改成命中时重新插入（LRU），代价是让读也变成
+ * 写。这个量级下不值当——先记下来。
+ */
 export async function saveCache(ports: Ports, cache: Map<string, CachedClassification>): Promise<void> {
-  await ports.storage.set(CACHE_KEY, [...cache])
+  const entries = [...cache]
+  // slice 的负索引在不足上限时原样返回全部条目，不必再判一次长度。
+  await ports.storage.set(CACHE_KEY, entries.slice(-MAX_CACHE_ENTRIES))
 }
