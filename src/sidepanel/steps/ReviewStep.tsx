@@ -6,9 +6,14 @@ import { plural, t } from '@/i18n'
 import { downloadJson } from '../lib/download'
 import { useStore } from '../store'
 
-/** 一组：目标目录相同的建议。allRule 决定要不要给组级「全部来自域名规则」标记与默认折叠。 */
+/**
+ * 一组：目标目录相同的建议。allRule 决定要不要给组级「全部来自域名规则」标记与默认折叠。
+ *
+ * key 是 toCategoryId，组的身份；label 是组内第一行的 toPath 拼出来的字符串，只用于显示。
+ */
 interface ReviewGroup {
   key: string
+  label: string
   rows: PlanRow[]
   allRule: boolean
 }
@@ -39,19 +44,25 @@ export function ReviewStep() {
    * 按目标目录分组，保持首次出现顺序——不按字母或条数重排，
    * 不然同一份方案每次看起来都不一样。
    *
+   * 分组键是 row.toCategoryId，不是 toPath 拼出来的字符串——渲染出来的字符串
+   * 是给人看的，不是身份：编号平移（推翻重建模式下 `01 前端` 可能变成 `02 前端`）、
+   * 合并根前缀、同名不同目录，任何一个都能让字符串变而身份没变（见 issues/26）。
+   * 组标题仍取组内第一行的 toPath，只用于显示。
+   *
    * 用 Map 是因为它天然按插入顺序迭代，比额外记一份顺序数组省事。
    */
   const groups = useMemo<ReviewGroup[]>(() => {
     if (plan === null) return []
     const byTarget = new Map<string, PlanRow[]>()
     for (const row of plan.rows) {
-      const key = row.toPath.join(' / ')
+      const key = row.toCategoryId
       const rows = byTarget.get(key)
       if (rows) rows.push(row)
       else byTarget.set(key, [row])
     }
     return [...byTarget.entries()].map(([key, rows]) => ({
       key,
+      label: rows[0]!.toPath.join(' / '),
       rows,
       allRule: rows.every((row) => row.source === 'rule'),
     }))
@@ -215,7 +226,7 @@ export function ReviewStep() {
                 className="flex w-full items-center gap-2 rounded bg-neutral-100 px-2 py-1 text-left text-xs font-medium hover:bg-neutral-200"
                 onClick={() => toggleGroup(group)}
               >
-                <span className="truncate">{group.key}</span>
+                <span className="truncate">{group.label}</span>
                 <span className="shrink-0 text-neutral-400">{t('reviewGroupCount', String(group.rows.length))}</span>
                 {group.allRule && (
                   <span className="shrink-0 rounded bg-emerald-100 px-1 text-[10px] text-emerald-700">{t('reviewGroupAllRule')}</span>

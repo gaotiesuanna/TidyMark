@@ -215,6 +215,32 @@ describe('ReviewStep 的分组', () => {
     expect(await screen.findByText('书签 a')).toBeTruthy()
     expect(screen.getByText('书签 b')).toBeTruthy()
   })
+
+  it('编号平移不该动折叠状态——组的身份是 id，不是渲染出来的那串字', async () => {
+    // 两个目标目录，各一行；用户手动折叠了其中一组
+    setupPlan([
+      row('a', ['01 前端'], 'llm', 0.9, 'tmp:1'),
+      row('b', ['02 后端'], 'llm', 0.9, 'tmp:2'),
+    ])
+    render(<ReviewStep />)
+    await userEvent.click(screen.getByText('01 前端'))
+    expect(screen.queryByText('书签 a')).toBeNull()
+
+    // 取消勾选 b 会让编号重排，「01 前端」可能变成别的编号——
+    // 但那一组的身份（tmp:1）没变，它必须**仍然折叠着**
+    await userEvent.click(screen.getByLabelText('书签 b'))
+    expect(screen.queryByText('书签 a')).toBeNull()
+  })
+
+  it('同名不同 id 分成两组——它们本来就是两个目录', () => {
+    setupPlan([
+      row('a', ['01 GitHub'], 'llm', 0.9, 'tmp:1'),
+      row('b', ['01 GitHub'], 'llm', 0.9, 'tmp:2'),
+    ])
+    render(<ReviewStep />)
+    // 两个同名组，各装一条
+    expect(screen.getAllByText('01 GitHub')).toHaveLength(2)
+  })
 })
 
 describe('ReviewStep 的筛选开关', () => {
