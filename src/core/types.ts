@@ -111,6 +111,14 @@ export interface PlanRow {
   url: string
   fromPath: string[]
   toPath: string[]
+  /**
+   * 目标目录的 candidate id——与对应 move 操作的 toCategoryId 保持一致。
+   *
+   * toPath 是给人看的路径字符串，会随 renumberPlan、合并根前缀等展示层加工而变化，
+   * 拿它反查候选在多种状态下会落空（部分取消勾选、合并模式……），下拉选中值、分组键
+   * 这类需要精确匹配候选的地方，必须直接用这个字段，不能反查 toPath。
+   */
+  toCategoryId: string
   confidence: number
   reason: string
   /** 这条建议是域名规则命中的还是模型判的。复核页靠它把整组规则命中的默认折叠。 */

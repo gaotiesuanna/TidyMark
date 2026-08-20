@@ -2,7 +2,7 @@ import type { Locale } from './locale'
 import { normalizeName, stripNumberPrefix } from './map'
 import { summarize } from './plan'
 import { FALLBACK_TITLE } from './tree'
-import type { BookmarkOperation, CategoryCandidate, OrganizePlan, PlanRow } from './types'
+import type { BookmarkOperation, CategoryCandidate, OrganizePlan, PlanRow, UnchangedRow } from './types'
 
 export interface StructureEdits {
   /** candidate id → 用户输入的新名字，不含编号前缀。 */
@@ -26,6 +26,16 @@ export interface StructureNode {
 const isFallback = (candidate: CategoryCandidate, locale: Locale): boolean =>
   candidate.path.length === 1 &&
   normalizeName(stripNumberPrefix(candidate.path[0]!)) === normalizeName(FALLBACK_TITLE[locale])
+
+/**
+ * 结构页删掉一个目录后，`resolve()` 找不到回落点时用的理由——
+ * 「没有合适目录」是模型说的，这里不是，是用户自己删掉了收留它的地方，说法要分清。
+ */
+function noFallbackReason(locale: Locale): string {
+  return locale === 'zh_CN'
+    ? '你删掉了本来要收它的目录，现在没有别的地方可去'
+    : 'The folder that was going to hold it got deleted, and there is nowhere else for it to go'
+}
 
 /** 编辑后的裸名字：用户改过就用他的，否则用去掉编号的原名。 */
 const titleOf = (candidate: CategoryCandidate, edits: StructureEdits): string =>
@@ -190,15 +200,31 @@ export function applyStructureEdits(
   })
 
   const prefix = mergeRootTitle === null ? [] : [mergeRootTitle]
+  // resolve() 找不到回落点时（删掉的目录没有兜底目录可去）这条书签不再进 rows，
+  // 但「rows 与 unchanged 互斥且完备」这条不变式出了 buildPlan 也必须成立——
+  // 不能像早先那样直接丢弃，得给它在 unchanged 里补一个位置，否则复核页上这条书签
+  // 会一个字都不出现（见 issues/05「决定 3」，正是这一轮要消灭的状态）。
+  const orphaned: UnchangedRow[] = []
   const rows: PlanRow[] = plan.rows.flatMap((row) => {
     const target = retarget.get(row.bookmarkId) ?? null
-    if (target === null) return []
+    if (target === null) {
+      orphaned.push({
+        bookmarkId: row.bookmarkId, title: row.title, url: row.url, currentPath: row.fromPath,
+        kind: 'noTarget', reason: noFallbackReason(locale),
+      })
+      return []
+    }
     const path = pathById.get(target)
-    return [{ ...row, toPath: path === undefined ? row.toPath : [...prefix, ...path] }]
+    return [{
+      ...row,
+      toPath: path === undefined ? row.toPath : [...prefix, ...path],
+      toCategoryId: target,
+    }]
   })
+  const unchanged = orphaned.length === 0 ? plan.unchanged : [...plan.unchanged, ...orphaned]
 
   const next: OrganizePlan = {
-    ...plan, candidates, operations, rows,
+    ...plan, candidates, operations, rows, unchanged,
     mergeRoot: plan.mergeRoot === null ? null : { ...plan.mergeRoot, title: mergeRootTitle! },
   }
   return {

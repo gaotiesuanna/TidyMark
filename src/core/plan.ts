@@ -132,6 +132,7 @@ export function buildPlan(input: BuildPlanInput): OrganizePlan {
       url: item.url,
       fromPath: item.currentPath,
       toPath: [...prefix, ...target.path],
+      toCategoryId: classification.targetCategoryId,
       confidence: classification.confidence,
       reason: classification.reason,
       source: classification.source,
@@ -365,10 +366,15 @@ export function retargetRow(plan: OrganizePlan, bookmarkId: string, targetId: st
   const isTemporary = plan.operations.some(
     (o) => o.type === 'create_folder' && o.temporaryId === targetId,
   )
+  // 与 buildPlan、applyStructureEdits 两处写 toPath 保持一致：合并模式下要带合并根前缀，
+  // 否则界面显示的路径会跟同一份列表里别的行（都带着前缀）对不上，还会因此自成一组
+  const prefix = plan.mergeRoot === null ? [] : [plan.mergeRoot.title]
 
   return {
     ...plan,
-    rows: plan.rows.map((r) => (r.bookmarkId === bookmarkId ? { ...r, toPath: target.path } : r)),
+    rows: plan.rows.map((r) =>
+      r.bookmarkId === bookmarkId ? { ...r, toPath: [...prefix, ...target.path], toCategoryId: targetId } : r,
+    ),
     operations: plan.operations.map((o) =>
       o.type === 'move_bookmark' && o.bookmarkId === bookmarkId
         ? { ...o, toCategoryId: targetId, toTemporaryId: isTemporary ? targetId : null }

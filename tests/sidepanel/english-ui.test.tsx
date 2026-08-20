@@ -149,8 +149,8 @@ describe('英文界面渲染守卫：步骤组件', () => {
         { type: 'move_bookmark', bookmarkId: '101', fromParentId: '9', originalIndex: 1, toCategoryId: 'tmp:1', toTemporaryId: 'tmp:1', confidence: 0.4, reason: 'maybe related' },
       ],
       rows: [
-        { bookmarkId: '100', title: 'React docs', url: 'https://react.dev', fromPath: ['Bookmarks bar', 'Misc'], toPath: ['Bookmarks bar', 'react'], confidence: 0.95, reason: 'official docs', source: 'llm' },
-        { bookmarkId: '101', title: 'Uncertain one', url: 'https://x.dev', fromPath: ['Bookmarks bar', 'Misc'], toPath: ['Bookmarks bar', 'react'], confidence: 0.4, reason: 'maybe related', source: 'llm' },
+        { bookmarkId: '100', title: 'React docs', url: 'https://react.dev', fromPath: ['Bookmarks bar', 'Misc'], toPath: ['Bookmarks bar', 'react'], toCategoryId: 'tmp:1', confidence: 0.95, reason: 'official docs', source: 'llm' },
+        { bookmarkId: '101', title: 'Uncertain one', url: 'https://x.dev', fromPath: ['Bookmarks bar', 'Misc'], toPath: ['Bookmarks bar', 'react'], toCategoryId: 'tmp:1', confidence: 0.4, reason: 'maybe related', source: 'llm' },
       ],
       unchanged: [],
       summary: { totalBookmarks: 2, movedBookmarks: 2, unchangedBookmarks: 0, createdFolders: 1, renamedFolders: 1, renamedBookmarks: 1, lowConfidenceItems: 1 },
@@ -175,7 +175,7 @@ describe('英文界面渲染守卫：步骤组件', () => {
         { type: 'move_bookmark', bookmarkId: '100', fromParentId: '1', originalIndex: 0, toCategoryId: 'tmp:1', toTemporaryId: 'tmp:1', confidence: 1, reason: '' },
       ],
       rows: [
-        { bookmarkId: '100', title: 'a', url: 'https://a', fromPath: ['Bookmarks bar'], toPath: ['AI'], confidence: 1, reason: '', source: 'llm' },
+        { bookmarkId: '100', title: 'a', url: 'https://a', fromPath: ['Bookmarks bar'], toPath: ['AI'], toCategoryId: 'tmp:1', confidence: 1, reason: '', source: 'llm' },
       ],
       unchanged: [],
       summary: { totalBookmarks: 1, movedBookmarks: 1, unchangedBookmarks: 0, createdFolders: 1, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 0 },
@@ -224,7 +224,7 @@ describe('英文界面渲染守卫：步骤组件', () => {
       { type: 'move_bookmark', bookmarkId: '100', fromParentId: '10', originalIndex: 0, toCategoryId: 'tmp:1', toTemporaryId: 'tmp:1', confidence: 1, reason: '' },
     ],
     rows: [
-      { bookmarkId: '100', title: 'a', url: 'https://a', fromPath: ['NiceG'], toPath: ['AI learning', 'AI'], confidence: 1, reason: '', source: 'llm' },
+      { bookmarkId: '100', title: 'a', url: 'https://a', fromPath: ['NiceG'], toPath: ['AI learning', 'AI'], toCategoryId: 'tmp:1', confidence: 1, reason: '', source: 'llm' },
     ],
     unchanged: [],
     summary: { totalBookmarks: 1, movedBookmarks: 1, unchangedBookmarks: 0, createdFolders: 2, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 0 },

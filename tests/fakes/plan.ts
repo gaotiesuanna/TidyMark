@@ -36,7 +36,7 @@ export function makePlan(): OrganizePlan {
   ]
   const rows: PlanRow[] = moves.map(([bookmarkId, toCategoryId]) => ({
     bookmarkId, title: bookmarkId, url: `https://x/${bookmarkId}`,
-    fromPath: ['旧'], toPath: candidates.find((c) => c.id === toCategoryId)!.path,
+    fromPath: ['旧'], toPath: candidates.find((c) => c.id === toCategoryId)!.path, toCategoryId,
     confidence: 1, reason: 'r', source: 'llm',
   }))
   const tags: TagResult[] = [

@@ -536,8 +536,27 @@ describe('retargetRow', () => {
     const next = retargetRow(base(), 'a', 'tmp:2')
 
     expect(next.rows[0]!.toPath).toEqual(['后端'])
+    // row 自己也要记住新目标 id——下拉的当前值直接读它，不再拿 toPath 反查候选（见 I2）
+    expect(next.rows[0]!.toCategoryId).toBe('tmp:2')
     const move = next.operations.find((o) => o.type === 'move_bookmark')!
     expect(move).toMatchObject({ toCategoryId: 'tmp:2', toTemporaryId: 'tmp:2' })
+  })
+
+  // I3：buildPlan（plan.ts:134）与 applyStructureEdits（structure.ts:197）写 toPath 时都带着
+  // 合并根前缀，retargetRow 早先漏了这一处，合并模式下改投会丢掉前缀、跟同一份列表里
+  // 别的行（都带着前缀）对不上，还会因此自成一组。
+  it('合并模式下改投，toPath 仍带着合并根前缀——与 buildPlan、applyStructureEdits 两处写法一致', () => {
+    const plan = {
+      ...base(),
+      mergeRoot: {
+        temporaryId: 'tmp:0', title: '合并根',
+        sourceRootIds: ['8', '9'], sourceTitles: ['旧a', '旧b'],
+      },
+    }
+    const next = retargetRow(plan, 'a', 'tmp:2')
+
+    expect(next.rows[0]!.toPath).toEqual(['合并根', '后端'])
+    expect(next.rows[0]!.toCategoryId).toBe('tmp:2')
   })
 
   it('改成已有目录时 toTemporaryId 为 null——它不是本轮新建的', () => {

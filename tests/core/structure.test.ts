@@ -159,6 +159,67 @@ describe('applyStructureEdits 删除', () => {
   })
 })
 
+/**
+ * I1：删掉一个目录之后，resolve() 找不到任何回落点（没有兜底目录，或兜底目录自己也被删）时，
+ * 早先的实现直接把这条书签从 rows 里丢弃、也不放进 unchanged——「rows 与 unchanged 互斥且完备」
+ * 这条不变式出了 buildPlan 就被破坏，复核页上这条书签会一个字都不出现（评审 I1）。
+ */
+describe('applyStructureEdits 删除后无处可去', () => {
+  /** 只有一个一级目录、没有任何「其他」兜底目录的最简 plan。 */
+  function orphanPlan(): OrganizePlan {
+    return {
+      id: 'p', createdAt: 0, scopeRootIds: ['1'], rebuildStructure: true,
+      candidates: [{ id: 'tmp:1', path: ['前端'] }],
+      operations: [
+        { type: 'create_folder', temporaryId: 'tmp:1', parentId: '1', parentTemporaryId: null, title: '前端' },
+        {
+          type: 'move_bookmark', bookmarkId: 'a', fromParentId: '9', originalIndex: 0,
+          toCategoryId: 'tmp:1', toTemporaryId: 'tmp:1', confidence: 1, reason: 'r',
+        },
+      ],
+      rows: [{
+        bookmarkId: 'a', title: '书签 a', url: 'https://a.dev', fromPath: ['收件箱'],
+        toPath: ['前端'], toCategoryId: 'tmp:1', confidence: 1, reason: 'r', source: 'llm',
+      }],
+      unchanged: [], warnings: [], tags: [], mergeRoot: null,
+      summary: {
+        totalBookmarks: 1, movedBookmarks: 1, unchangedBookmarks: 0,
+        createdFolders: 1, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 0,
+      },
+    }
+  }
+
+  it('不再从 rows 里凭空消失，而是补进 unchanged，记为 noTarget', () => {
+    const next = applyStructureEdits(orphanPlan(), { renames: {}, removed: ['tmp:1'] }, 'zh_CN')
+
+    expect(next.rows).toEqual([])
+    expect(next.unchanged).toHaveLength(1)
+    expect(next.unchanged[0]).toMatchObject({
+      bookmarkId: 'a', title: '书签 a', url: 'https://a.dev', currentPath: ['收件箱'], kind: 'noTarget',
+    })
+    // 理由要说清楚这不是模型判的「没有合适目录」，是用户自己删的
+    expect(next.unchanged[0]!.reason).not.toBe('')
+  })
+
+  it('summary.unchangedBookmarks 与实际列出的条数一致，不再自相矛盾', () => {
+    const next = applyStructureEdits(orphanPlan(), { renames: {}, removed: ['tmp:1'] }, 'zh_CN')
+    expect(next.summary.unchangedBookmarks).toBe(next.unchanged.length)
+    expect(next.summary.unchangedBookmarks).toBe(1)
+  })
+
+  it('原有的 unchanged 条目不受影响，新条目追加在后面', () => {
+    const plan = orphanPlan()
+    const original = {
+      bookmarkId: 'b', title: '书签 b', url: 'https://b.dev', currentPath: ['收件箱'],
+      kind: 'inPlace' as const, reason: '',
+    }
+    const next = applyStructureEdits(
+      { ...plan, unchanged: [original] }, { renames: {}, removed: ['tmp:1'] }, 'zh_CN',
+    )
+    expect(next.unchanged).toEqual([original, expect.objectContaining({ bookmarkId: 'a', kind: 'noTarget' })])
+  })
+})
+
 /** 把 makePlan() 改造成合并模式：所有一级目录挂在新建的容器 tmp:0 下。 */
 function makeMergePlan(): OrganizePlan {
   const plan = makePlan()

@@ -13,8 +13,8 @@ const plan: OrganizePlan = {
   id: 'p1', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: false,
   candidates: [], operations: [],
   rows: [
-    { bookmarkId: '100', title: 'React 官网', url: 'https://react.dev', fromPath: ['书签栏', '杂项'], toPath: ['书签栏', 'react'], confidence: 0.95, reason: '官方文档', source: 'llm' },
-    { bookmarkId: '101', title: '不确定的', url: 'https://x.dev', fromPath: ['书签栏', '杂项'], toPath: ['书签栏', 'react'], confidence: 0.4, reason: '可能相关', source: 'llm' },
+    { bookmarkId: '100', title: 'React 官网', url: 'https://react.dev', fromPath: ['书签栏', '杂项'], toPath: ['书签栏', 'react'], toCategoryId: 'react', confidence: 0.95, reason: '官方文档', source: 'llm' },
+    { bookmarkId: '101', title: '不确定的', url: 'https://x.dev', fromPath: ['书签栏', '杂项'], toPath: ['书签栏', 'react'], toCategoryId: 'react', confidence: 0.4, reason: '可能相关', source: 'llm' },
   ],
   unchanged: [],
   summary: { totalBookmarks: 2, movedBookmarks: 2, unchangedBookmarks: 0, createdFolders: 0, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 1 },
@@ -91,14 +91,20 @@ describe('ReviewStep', () => {
 /**
  * 造一条最简 PlanRow，只暴露测试关心的几个维度：id、目标目录、来源，
  * confidence 缺省时按来源给个合理默认值（rule 必然高、llm 给个中等值）。
+ *
+ * toCategoryId 缺省时按 toPath 拼一个稳定的假 id——大多数用例（分组、折叠、勾选）
+ * 根本不读它。只有真的要跟 candidates 对上号的用例（改投下拉）才需要显式传真实 id。
  */
-function row(id: string, toPath: string[], source: PlanRow['source'], confidence?: number): PlanRow {
+function row(
+  id: string, toPath: string[], source: PlanRow['source'], confidence?: number, toCategoryId?: string,
+): PlanRow {
   return {
     bookmarkId: id,
     title: `书签 ${id}`,
     url: `https://example.com/${id}`,
     fromPath: ['书签栏', '杂项'],
     toPath,
+    toCategoryId: toCategoryId ?? `cand:${toPath.join('/')}`,
     confidence: confidence ?? (source === 'rule' ? 1 : 0.9),
     reason: source === 'rule' ? '域名规则命中' : '模型判断',
     source,
@@ -193,11 +199,15 @@ describe('ReviewStep 的分组', () => {
 
 describe('ReviewStep 的改投与标记', () => {
   it('每行给一个改投目录的下拉，选了就改方案并自动勾上', async () => {
-    setupPlan([row('a', ['01 前端'], 'llm')], [{ id: 'tmp:1', path: ['01 前端'] }, { id: 'tmp:2', path: ['02 后端'] }])
+    setupPlan(
+      [row('a', ['01 前端'], 'llm', undefined, 'tmp:1')],
+      [{ id: 'tmp:1', path: ['01 前端'] }, { id: 'tmp:2', path: ['02 后端'] }],
+    )
     render(<ReviewStep />)
     await userEvent.selectOptions(screen.getByLabelText('改投目录：书签 a'), 'tmp:2')
 
     expect(useStore.getState().plan!.rows[0]!.toPath).toEqual(['02 后端'])
+    expect(useStore.getState().plan!.rows[0]!.toCategoryId).toBe('tmp:2')
     expect(useStore.getState().accepted.has('a')).toBe(true)
   })
 
