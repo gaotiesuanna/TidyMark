@@ -8,6 +8,7 @@ import type { LlmClient } from '@/llm/client'
 import type { OrganizePlan } from '@/core/types'
 import type { ProgressEvent } from '@/background/events'
 import { MAX_SIBLINGS } from '@/core/tree'
+import { MAX_LEAF } from '@/core/shape'
 import type { OrganizeMode } from '@/core/mode'
 
 const tree = [
@@ -822,12 +823,12 @@ describe('analyze 的域名聚合', () => {
 
 describe('analyze 对聚合组做细分抽取', () => {
   it('勾选聚合组时会为组内书签单独跑一次功能域抽取', async () => {
-    // 3 条命中，够着默认 minFolderSize=3 的门槛，组才建得起来
-    const { ports, deps } = setupAnalyze({
-      g0: 'https://github.com/o/r0',
-      g1: 'https://github.com/o/r1',
-      g2: 'https://github.com/o/r2',
-    })
+    // 命中数要过 I2 的门槛（> MAX_LEAF=20）这次抽取才会真的发出去——命中数 ≤ 20 的组
+    // 建树时整组平铺、不建子目录，refineGroupTags 的产出会被整份丢弃，因此改造后
+    // 这次调用本身就会被跳过（见 final-review.md I2）
+    const urls: Record<string, string> = {}
+    for (let i = 0; i < MAX_LEAF + 1; i++) urls[`g${i}`] = `https://github.com/o/r${i}`
+    const { ports, deps } = setupAnalyze(urls)
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
@@ -923,6 +924,19 @@ describe('analyze 的聚合组预算', () => {
     // 挑 120 而不是 60：60 条只要 5 个目录，上限 9 不咬合，那条用例验不出 depthGuard 有没有生效。
     const design = prompts.find((p) => p.includes('标签清单') && !p.includes('来自「GitHub」'))!
     expect(design).toMatch(/不超过 9 个/)
+  })
+
+  it('命中数 ≤ MAX_LEAF 的组不为它发目录设计请求（I2）', async () => {
+    // 命中 10 条，没过 MAX_LEAF=20 的门槛——组建树时整组平铺，子目录一个都不建，
+    // 跑设计只会产出必然被丢弃的目录名，还会把它们错报成「已存在」喂给主题那一轮
+    const { prompts } = await runAnalyze(groupTree(10, 120), ['github'])
+    const designPrompts = prompts.filter((p) => p.includes('标签清单'))
+    // 只有主题那一轮发了设计请求——组那摊被跳过
+    expect(designPrompts).toHaveLength(1)
+    // 主题那一轮的已有目录清单里只有组根名（组确实会建出来），没有任何幻影子目录名
+    const topicDesign = designPrompts[0]!
+    expect(topicDesign).toContain('GitHub')
+    expect(topicDesign).not.toMatch(/GitHub\/\S/)
   })
 
   it('不勾聚合组时主题拿满预算——对照上一条，差的那一格正是组吃掉的', async () => {

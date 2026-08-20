@@ -258,6 +258,20 @@ describe('foldersPrompt 的已有目录清单', () => {
     expect(lines).toContain('same name')
     expect(/[一-鿿]/.test(lines)).toBe(false)
   })
+
+  // 放开同名只该覆盖组内子目录（「A/B」里的 B）——组根名本身（不带「/」，如「GitHub」）
+  // 与聚合组是同一个来源，造一个跟它重名的顶层目录仍然是双胞胎。上面「规则松成……」
+  // 那条只验了「同名」这个词出现，没验清楚放开的范围，这里补上（final-review.md I4）。
+  it('放开同名不含组根名——不带「/」的名字本身仍然不能重用', () => {
+    const zh = foldersPrompt('zh_CN', {
+      total: 30, maxSiblings: 8, existingFolders: ['GitHub', 'GitHub/语音合成'],
+    }).join('\n')
+    expect(zh).toContain('不带「/」的名字本身不要重用')
+    const en = foldersPrompt('en', {
+      total: 30, maxSiblings: 8, existingFolders: ['GitHub', 'GitHub/Speech synthesis'],
+    }).join('\n')
+    expect(en).toMatch(/do not reuse a bare name/i)
+  })
 })
 
 describe('classifyPrompt 的 topic 规则', () => {

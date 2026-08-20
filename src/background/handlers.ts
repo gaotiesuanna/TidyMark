@@ -7,7 +7,7 @@ import { findScopeRoots, scanTree } from '@/core/scan'
 import { detectMode } from '@/core/mode'
 import { planTitleRewrites } from '@/core/titles'
 import { buildCategoryTree } from '@/core/tree'
-import { deriveShape, depthGuard, SHAPE_MAX_SIBLINGS } from '@/core/shape'
+import { deriveShape, depthGuard, MAX_LEAF, SHAPE_MAX_SIBLINGS } from '@/core/shape'
 import { matchDomainGroup } from '@/core/domainGroups'
 import { clusterHomeless, dropAlreadyGrouped, planNewFolders, MIN_NEW_FOLDER_SIZE } from '@/core/newTopics'
 import type { Ports } from '@/core/ports'
@@ -157,6 +157,14 @@ export async function handle(
           if (droppedGroups > 0) {
             log('tree', t('logGroupsDropped', String(droppedGroups), String(groupFloor)))
           }
+          // 命中数 ≤ MAX_LEAF 的组，core/tree.ts 建树时会整组平铺、子目录一个都不建
+          // （`bucket.length <= MAX_LEAF ? [] : …`）：跑 refineGroupTags 抽的细分标签
+          // 派不上用场，全被丢弃。命中数在跑模型之前已经算好，跳过零成本
+          // （见 final-review.md I2；llm/folders.ts 的组内目录设计同一个门槛，自行按
+          // entries.length 判断，不需要这里再传一次）
+          const groupsNeedingDesign = survivingGroups.filter(
+            (key) => (hitsByGroup.get(key) ?? 0) > MAX_LEAF,
+          )
           // N_主题 = N − Σ 存活组的命中数（第 5 条）
           const inGroups = survivingGroups.reduce((sum, key) => sum + (hitsByGroup.get(key) ?? 0), 0)
           const topicN = scan.bookmarks.length - inGroups
@@ -208,9 +216,10 @@ export async function handle(
             isCancelled,
           })
           if (isCancelled()) return CANCELLED
-          // 组内的共同点已经写在目录名上，通用标签在这里没有区分度，换一套细的重抽
-          if (survivingGroups.length > 0) {
-            tags = await refineGroupTags(tags, scan.bookmarks, survivingGroups, client, locale, {
+          // 组内的共同点已经写在目录名上，通用标签在这里没有区分度，换一套细的重抽——
+          // 只抽命中数过了 MAX_LEAF 门槛、真的会分子目录的那几个组
+          if (groupsNeedingDesign.length > 0) {
+            tags = await refineGroupTags(tags, scan.bookmarks, groupsNeedingDesign, client, locale, {
               onLog: (message, level) => log('tags', message, level),
               isCancelled,
             })

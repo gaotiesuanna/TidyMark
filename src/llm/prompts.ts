@@ -180,14 +180,17 @@ export function foldersPrompt(
       : `${index}. Only create a folder if it will hold at least ${minFolderSize} bookmarks. Merge labels that cannot fill one into a neighbouring folder; if none fits, leave them without a folder of their own.`
 
   // 两轮设计从「互相看不见」变成「有先后」：聚合组先定，主题设计在它已知的前提下补剩下的。
-  // 已松（2026-08-19，计划 2/2）：只禁语义重叠，不禁同名。松绑的前提是「组只装规则命中的
-  // 书签」这条已经成立（票 10 补账第 2 条）——组关起来之后，组外的同主题书签需要一个
-  // 同名目录才有去处，硬禁同名只会把它们赶进「其他」（见 issues/10-shape-from-count.md
-  // 的补账小节）。
+  // 已松（2026-08-19，计划 2/2）：只禁语义重叠，不禁同名——但只对「A/B」这类子目录松，
+  // 不带「/」的名字本身（聚合组根名，如「GitHub」）仍然不能重用。松绑的前提是「组只装
+  // 规则命中的书签」这条已经成立（票 10 补账第 2 条）——组关起来之后，组外的同主题书签
+  // 需要一个同名子目录才有去处，硬禁同名只会把它们赶进「其他」（见
+  // issues/10-shape-from-count.md 的补账小节）；但组根名与聚合组是同一个来源，
+  // 造一个跟它重名的顶层目录仍然是双胞胎（见 llm/folders.ts 里 push 组根名那行的注释，
+  // 两处文字曾经打架，见 final-review.md I4）。
   const existingRule = (index: number): string =>
     locale === 'zh_CN'
-      ? `${index}. 这些目录已经存在（其中「A/B」表示 A 目录下的子目录 B），但它们只装来自特定来源的书签：${(existingFolders ?? []).join('、')}。你设计的目录装的是别处来的书签，可以与它们同名；要避开的是语义重叠但名字不同的目录——已经有「语音合成」就不要再造一个「文本转语音」。`
-      : `${index}. These folders already exist ("A/B" means subfolder B under folder A), but they only hold bookmarks from one specific source: ${(existingFolders ?? []).join(', ')}. The folders you design hold bookmarks from elsewhere, so it's fine to give them the same name. What to avoid is a folder that overlaps one of these in meaning but uses a different name — if "Speech synthesis" is there, do not add another "Text-to-speech".`
+      ? `${index}. 这些目录已经存在（其中「A/B」表示 A 目录下的子目录 B），但它们只装来自特定来源的书签：${(existingFolders ?? []).join('、')}。「A/B」这样的子目录可以与你设计的目录同名——那装的是别处来的书签；但不带「/」的名字本身不要重用（例如「GitHub」，那和这些目录是同一个来源，会造出一对并排的双胞胎）。要避开的是语义重叠但名字不同的目录——已经有「语音合成」就不要再造一个「文本转语音」。`
+      : `${index}. These folders already exist ("A/B" means subfolder B under folder A), but they only hold bookmarks from one specific source: ${(existingFolders ?? []).join(', ')}. A subfolder like "A/B" may use the same name as your folder — it holds bookmarks from elsewhere. But do not reuse a bare name with no "/" (e.g. "GitHub") — that is the same source, and would create a twin folder sitting right next to it. What to avoid is a folder that overlaps one of these in meaning but uses a different name — if "Speech synthesis" is there, do not add another "Text-to-speech".`
 
   if (locale === 'zh_CN') {
     const head = parentTitle !== undefined

@@ -4,6 +4,7 @@ import type { Locale } from '@/core/locale'
 import type { BookmarkItem, TagResult } from '@/core/types'
 import type { TopicCluster } from '@/core/newTopics'
 import { MAX_SIBLINGS } from '@/core/tree'
+import { MAX_LEAF, SHAPE_MAX_SIBLINGS } from '@/core/shape'
 import { NO_TOPIC } from './tags'
 import type { LlmClient } from './client'
 import {
@@ -101,7 +102,12 @@ export interface DesignOptions {
   oneLevel?: boolean
   /** 只出一层时，把父目录名告诉模型，避免它把组名再当分类依据。 */
   parentTitle?: string
-  /** 同一层目录数上限。省略时用 MAX_SIBLINGS。 */
+  /**
+   * 同一层目录数上限。省略时用 MAX_SIBLINGS。
+   *
+   * oneLevel 摊（聚合组内部）不读这个值，固定用 SHAPE_MAX_SIBLINGS——与 core/tree.ts
+   * 组内子目录截断对齐（见 final-review.md I3）。
+   */
   maxTopFolders?: number
   /**
    * 二级目录（一级目录下的 children）数量上限。省略时退回 maxTopFolders 的值——
@@ -127,7 +133,11 @@ export interface DesignOptions {
 
 function buildDesignPrompt(topics: TopicCount[], options: DesignOptions, locale: Locale): string {
   const total = topics.reduce((sum, t) => sum + t.count, 0)
-  const max = options.maxTopFolders ?? MAX_SIBLINGS
+  // 组分摊（oneLevel）的上限固定用 SHAPE_MAX_SIBLINGS，不借用 options.maxTopFolders——
+  // 那个数传的是主题那一摊的预算（topWithFallback + 1），与组内截断是两件事。
+  // core/tree.ts 组内子目录截断本来就用 SHAPE_MAX_SIBLINGS，这里不跟上，提示词给模型
+  // 的目标数和建树阶段真正生效的上限就会是两个不同的数（见 final-review.md I3）。
+  const max = options.oneLevel === true ? SHAPE_MAX_SIBLINGS : (options.maxTopFolders ?? MAX_SIBLINGS)
   // tree.ts 建树时会再留一个位置给「其他」，非 oneLevel 时的上限要和它对齐，否则模型给满
   // 上限时最小的那个会被建树阶段静默丢弃
   const maxSiblings = options.oneLevel === true ? max : max - 1
@@ -204,8 +214,9 @@ async function requestDesign(
     }
 
     // 非 oneLevel 时留一个位置给 tree.ts 建树时补的「其他」，避免第 max 个目录
-    // 在这里放行、却在建树阶段被静默截掉
-    const max = options.maxTopFolders ?? MAX_SIBLINGS
+    // 在这里放行、却在建树阶段被静默截掉。oneLevel 固定用 SHAPE_MAX_SIBLINGS，
+    // 理由同 buildDesignPrompt（I3）
+    const max = options.oneLevel === true ? SHAPE_MAX_SIBLINGS : (options.maxTopFolders ?? MAX_SIBLINGS)
     const limit = options.oneLevel === true ? max : max - 1
     // 二级（children）截断不该复用一级的 max——两者预算不同（见 DesignOptions.
     // maxChildFolders 的 JSDoc）。省略时退回 max，与改造前的行为一致。
@@ -473,7 +484,16 @@ export async function designTagFolders(
     for (const { title, entries } of byGroup.values()) {
       if (options.isCancelled?.() === true) break
       // 组名本身也要报给主题那一轮：造一个跟「GitHub」重叠的顶层目录同样是双胞胎
+      // （规则文案区分了这一条和下面子目录名的松紧，见 llm/prompts.ts 的 existingRule，I4）
       existingFolders.push(title)
+      // entries 就是这个组命中的全部书签，entries.length 与 background/handlers.ts
+      // 算好的 hitsByGroup 同一个数（两边用同一个 domainGroups 集合各自对 matchDomainGroup
+      // 归并，一一对应）。命中数 ≤ MAX_LEAF 时 core/tree.ts 会整组平铺、子目录一个都不建
+      // （`bucket.length <= MAX_LEAF ? [] : …`），这里跑设计只会产出必然被丢弃的目录名，
+      // 还会把它们错报成「已存在」喂给主题那一轮，变成一条谁都造不出来的幻影约束。
+      // 提前跳过这次设计调用，零成本；同一命中数门槛也让 handlers.ts 跳过 refineGroupTags
+      // 那次功能域细分抽取，两次一起省（见 final-review.md I2）
+      if (entries.length <= MAX_LEAF) continue
       const designed = await run(entries, { ...options, oneLevel: true, parentTitle: title })
       existingFolders.push(...designed.map((name) => `${title}/${name}`))
     }

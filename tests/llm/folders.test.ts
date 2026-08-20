@@ -14,6 +14,7 @@ import { NO_TOPIC } from '@/llm/tags'
 import type { BookmarkItem, TagResult } from '@/core/types'
 import type { LlmClient } from '@/llm/client'
 import { MAX_SIBLINGS } from '@/core/tree'
+import { MAX_LEAF, SHAPE_MAX_SIBLINGS } from '@/core/shape'
 
 function tag(bookmarkId: string, primaryTopic: string): TagResult {
   return { bookmarkId, primaryTopic, secondaryTopic: null }
@@ -135,14 +136,28 @@ describe('designFolders', () => {
     expect(result!.mapping.has(`标签${MAX_SIBLINGS - 1}`)).toBe(false)
   })
 
-  it('oneLevel 时子目录超过上限仍按 MAX_SIBLINGS 截断，不留「其他」位', async () => {
-    const many = Array.from({ length: MAX_SIBLINGS + 3 }, (_, i) => ({
+  // oneLevel 只用于聚合组内部，上限固定用 SHAPE_MAX_SIBLINGS——与 core/tree.ts 组内
+  // 子目录截断对齐，不再借用（这里没传的）maxTopFolders（final-review.md I3）
+  it('oneLevel 时子目录超过上限按 SHAPE_MAX_SIBLINGS 截断，不留「其他」位', async () => {
+    const many = Array.from({ length: SHAPE_MAX_SIBLINGS + 3 }, (_, i) => ({
       title: `目录${i}`, topics: [`标签${i}`], children: [],
     }))
     const complete = vi.fn().mockResolvedValue({ folders: many })
     const result = await designFolders(topics, { complete }, { oneLevel: true })
-    expect(result!.folders).toHaveLength(MAX_SIBLINGS)
-    expect(result!.mapping.has(`标签${MAX_SIBLINGS + 1}`)).toBe(false)
+    expect(result!.folders).toHaveLength(SHAPE_MAX_SIBLINGS)
+    expect(result!.mapping.has(`标签${SHAPE_MAX_SIBLINGS + 1}`)).toBe(false)
+  })
+
+  it('oneLevel 时忽略 maxTopFolders，仍然固定用 SHAPE_MAX_SIBLINGS（I3）', async () => {
+    const many = Array.from({ length: SHAPE_MAX_SIBLINGS + 3 }, (_, i) => ({
+      title: `目录${i}`, topics: [`标签${i}`], children: [],
+    }))
+    const complete = vi.fn().mockResolvedValue({ folders: many })
+    // 传一个远大于 SHAPE_MAX_SIBLINGS 的值（模拟主题预算 topWithFallback + 1 传下来），
+    // oneLevel 时应该被无视——提示词与实际截断都不跟着它走
+    const result = await designFolders(topics, { complete }, { oneLevel: true, maxTopFolders: 30 })
+    expect(result!.folders).toHaveLength(SHAPE_MAX_SIBLINGS)
+    expect(complete.mock.calls[0]![0]).toContain(`子目录不超过 ${SHAPE_MAX_SIBLINGS} 个`)
   })
 
   it('maxTopFolders 覆盖截断上限，非 oneLevel 时仍给「其他」留位', async () => {
@@ -467,6 +482,25 @@ describe('designTagFolders', () => {
   })
   const gh = (id: string) => item(id, `https://github.com/o/r${id}`)
   const blog = (id: string) => item(id, `https://example.com/${id}`)
+  /**
+   * 造 n 条命中 github 组、同一个主题标签的标签 + 书签。
+   *
+   * I2 之后，命中数 ≤ MAX_LEAF 的组不再为它发目录设计请求（tree.ts 建树时会整组平铺，
+   * 产出必然被丢弃）。凡是要验「组那摊真的发了设计请求」这件事的用例，命中数都要过
+   * MANY = MAX_LEAF + 1 这个门槛，不然 complete 根本不会为组那摊被调用
+   * （见 final-review.md I2）。
+   */
+  const MANY = MAX_LEAF + 1
+  const ghGroup = (n: number, primaryTopic: string, startId = 2): { tags: TagResult[]; items: BookmarkItem[] } => {
+    const tags: TagResult[] = []
+    const items: BookmarkItem[] = []
+    for (let i = 0; i < n; i++) {
+      const id = String(startId + i)
+      tags.push(tag(id, primaryTopic))
+      items.push(gh(id))
+    }
+    return { tags, items }
+  }
 
   it('没勾选聚合组时，全部标签走一次设计', async () => {
     const complete = vi.fn().mockResolvedValue({
@@ -481,12 +515,14 @@ describe('designTagFolders', () => {
   })
 
   it('命中聚合组的书签单独设计，且不进一级目录那次请求', async () => {
+    // 命中数要过 MANY 这个门槛，组那摊的设计请求才会真的发出去（I2）
+    const { tags: ghTags, items: ghItems } = ghGroup(MANY, '智能体框架')
     const complete = vi.fn()
       .mockResolvedValueOnce({ folders: [{ title: 'Agent 框架', topics: ['智能体框架'], children: [] }] })
       .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
     const result = await designTagFolders(
-      [tag('1', 'KV Cache'), tag('2', '智能体框架')],
-      [blog('1'), gh('2')], ['github'], { complete },
+      [tag('1', 'KV Cache'), ...ghTags],
+      [blog('1'), ...ghItems], ['github'], { complete },
     )
     expect(complete).toHaveBeenCalledTimes(2)
     // 聚合组先跑，主题那次是第二次请求——它不该带上组内标签
@@ -496,20 +532,22 @@ describe('designTagFolders', () => {
   })
 
   it('聚合组那次调用限一层', async () => {
+    const { tags: ghTags, items: ghItems } = ghGroup(MANY, '智能体框架')
     const complete = vi.fn().mockResolvedValue({ folders: [] })
-    await designTagFolders([tag('2', '智能体框架')], [gh('2')], ['github'], { complete })
+    await designTagFolders(ghTags, ghItems, ['github'], { complete })
     expect(complete.mock.calls[0]![0]).toContain('只输出一层')
     expect(complete.mock.calls[0]![0]).toContain('GitHub')
   })
 
   it('某一次设计失败时，该批标签原样保留，其余照常归并', async () => {
     // 聚合组先跑，这里失败的是聚合组那摊
+    const { tags: ghTags, items: ghItems } = ghGroup(MANY, '智能体框架')
     const complete = vi.fn()
       .mockRejectedValueOnce(Object.assign(new Error('x'), { retryable: false }))
       .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
     const result = await designTagFolders(
-      [tag('1', 'KV Cache'), tag('2', '智能体框架')],
-      [blog('1'), gh('2')], ['github'], { complete },
+      [tag('1', 'KV Cache'), ...ghTags],
+      [blog('1'), ...ghItems], ['github'], { complete },
     )
     expect(result[0]!.primaryTopic).toBe('LLM 原理')
     expect(result[1]!.primaryTopic).toBe('智能体框架')
@@ -518,21 +556,25 @@ describe('designTagFolders', () => {
   it('主题那摊失败时，聚合组那摊的结果仍然生效', async () => {
     // 聚合组先跑、主题后跑，这里失败的换成主题那摊——顺序调换之后这个方向
     // 之前没有用例覆盖（见 issues review M2）
+    const { tags: ghTags, items: ghItems } = ghGroup(MANY, '智能体框架')
     const complete = vi.fn()
       .mockResolvedValueOnce({ folders: [{ title: 'Agent 框架', topics: ['智能体框架'], children: [] }] })
       .mockRejectedValueOnce(Object.assign(new Error('x'), { retryable: false }))
     const result = await designTagFolders(
-      [tag('1', 'KV Cache'), tag('2', '智能体框架')],
-      [blog('1'), gh('2')], ['github'], { complete },
+      [tag('1', 'KV Cache'), ...ghTags],
+      [blog('1'), ...ghItems], ['github'], { complete },
     )
     expect(result[1]!.primaryTopic).toBe('Agent 框架')
     expect(result[0]!.primaryTopic).toBe('KV Cache')
   })
 
   it('组内子目录实际分到的书签数不足 minFolderSize 时，不报给主题那一轮', async () => {
-    // 「文档解析」装得下 2 条，「语音识别」只装 1 条；tree.ts 建树时会把后者剪掉，
-    // 报给主题那一轮的清单不该包含它，否则组外同主题的书签会被这条「已经存在」的
-    // 假象拦住，映射不到目录（见 issues review I4）
+    // 「文档解析」装得下 MANY-1 条，过 I2 的门槛；「语音识别」只装 1 条，
+    // tree.ts 建树时会把后者剪掉——报给主题那一轮的清单不该包含它，否则组外同主题的
+    // 书签会被这条「已经存在」的假象拦住，映射不到目录（见 issues review I4）
+    const { tags: parserTags, items: parserItems } = ghGroup(MANY - 1, '解析器', 2)
+    const speechTag = tag(String(2 + MANY - 1), '识别模型')
+    const speechItem = gh(String(2 + MANY - 1))
     const complete = vi.fn()
       .mockResolvedValueOnce({
         folders: [
@@ -542,12 +584,8 @@ describe('designTagFolders', () => {
       })
       .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
     await designTagFolders(
-      [
-        tag('1', 'KV Cache'),
-        tag('2', '解析器'), tag('3', '解析器'),
-        tag('4', '识别模型'),
-      ],
-      [blog('1'), gh('2'), gh('3'), gh('4')], ['github'], { complete },
+      [tag('1', 'KV Cache'), ...parserTags, speechTag],
+      [blog('1'), ...parserItems, speechItem], ['github'], { complete },
       { minFolderSize: 2 },
     )
     const topicPrompt = complete.mock.calls[1]![0] as string
@@ -557,17 +595,39 @@ describe('designTagFolders', () => {
   })
 
   it('不传 minFolderSize 时不过滤，组内子目录照样全数报给主题那一轮', async () => {
+    const { tags: ghTags, items: ghItems } = ghGroup(MANY, '识别模型')
     const complete = vi.fn()
       .mockResolvedValueOnce({
         folders: [{ title: '语音识别', topics: ['识别模型'], children: [] }],
       })
       .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
     await designTagFolders(
-      [tag('1', 'KV Cache'), tag('4', '识别模型')],
-      [blog('1'), gh('4')], ['github'], { complete },
+      [tag('1', 'KV Cache'), ...ghTags],
+      [blog('1'), ...ghItems], ['github'], { complete },
     )
     const topicPrompt = complete.mock.calls[1]![0] as string
     expect(topicPrompt).toContain('GitHub/语音识别')
+  })
+
+  it('命中数 ≤ MAX_LEAF 的组不为它发目录设计请求，主题那一轮的已有目录清单里也没有它的子目录名（I2）', async () => {
+    // 命中 10 条，没过 MANY 门槛——tree.ts 建树时会整组平铺，子目录一个都不建，
+    // 跑设计只会产出必然被丢弃的目录名
+    const { tags: ghTags, items: ghItems } = ghGroup(10, '智能体框架')
+    const complete = vi.fn().mockResolvedValueOnce({
+      folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }],
+    })
+    await designTagFolders(
+      [tag('1', 'KV Cache'), ...ghTags],
+      [blog('1'), ...ghItems], ['github'], { complete },
+    )
+    // 只有主题那一次请求——组那摊被跳过，没有花第二次调用
+    expect(complete).toHaveBeenCalledTimes(1)
+    const topicPrompt = complete.mock.calls[0]![0] as string
+    // 组根名仍然报给了主题那一轮（它确实会建出来）
+    expect(topicPrompt).toContain('GitHub')
+    // 但组内标签一个都没被拿去设计，不会有任何「GitHub/xxx」这种幻影子目录名
+    expect(topicPrompt).not.toMatch(/GitHub\/\S/)
+    expect(topicPrompt).not.toContain('智能体框架')
   })
 
   it('保持输入顺序与条数', async () => {
@@ -589,13 +649,15 @@ describe('designTagFolders', () => {
     // 聚合组先跑，因此这里让「已发出的那摊」变成聚合组那摊：
     // isCancelled 前两次探活（摊前总检查、组内逐摊检查）放行，组那摊跑完后
     // 第三次探活（主题那摊开始前）才报取消，主题那摊因此原样保留。
+    // 命中数要过 MANY 门槛，组那摊才会真的发出这次请求（I2）
+    const { tags: ghTags, items: ghItems } = ghGroup(MANY, '智能体框架')
     const complete = vi.fn().mockResolvedValue({
       folders: [{ title: 'Agent 框架', topics: ['智能体框架'], children: [] }],
     })
     let calls = 0
     const result = await designTagFolders(
-      [tag('1', 'KV Cache'), tag('2', '智能体框架')],
-      [blog('1'), gh('2')], ['github'], { complete },
+      [tag('1', 'KV Cache'), ...ghTags],
+      [blog('1'), ...ghItems], ['github'], { complete },
       {
         isCancelled: () => {
           calls += 1
@@ -623,12 +685,13 @@ describe('designTagFolders', () => {
   })
 
   it('聚合组那几摊先跑，主题那摊在后——先后关系是这条链路的全部意义', async () => {
+    const { tags: ghTags, items: ghItems } = ghGroup(MANY, '智能体框架')
     const complete = vi.fn()
       .mockResolvedValueOnce({ folders: [{ title: 'Agent 框架', topics: ['智能体框架'], children: [] }] })
       .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
     await designTagFolders(
-      [tag('1', 'KV Cache'), tag('2', '智能体框架')],
-      [blog('1'), gh('2')], ['github'], { complete },
+      [tag('1', 'KV Cache'), ...ghTags],
+      [blog('1'), ...ghItems], ['github'], { complete },
     )
     // 第一次是聚合组那摊：它认得组内的标签，也带着「只输出一层」
     expect(complete.mock.calls[0]![0]).toContain('智能体框架')
@@ -638,7 +701,9 @@ describe('designTagFolders', () => {
   it('主题那次带上聚合组名与组内设计出来的子目录名', async () => {
     // 「语音合成与克隆」本身是复合名（Task 1/2 的重问逻辑会认出「与」两侧都够长），
     // 所以聚合组那摊会先重问一次；重问原样给回同一个标题，验的仍然是重问结束之后
-    // 落地的最终产物——第三次调用才是主题那次
+    // 落地的最终产物——第三次调用才是主题那次。命中数要过 MANY 门槛，组那摊的设计
+    // 请求才会真的发出去（I2）
+    const { tags: ghTags, items: ghItems } = ghGroup(MANY, '智能体框架')
     const complete = vi.fn()
       .mockResolvedValueOnce({
         folders: [{ title: '语音合成与克隆', topics: ['智能体框架'], children: [] }],
@@ -648,8 +713,8 @@ describe('designTagFolders', () => {
       })
       .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
     await designTagFolders(
-      [tag('1', 'KV Cache'), tag('2', '智能体框架')],
-      [blog('1'), gh('2')], ['github'], { complete },
+      [tag('1', 'KV Cache'), ...ghTags],
+      [blog('1'), ...ghItems], ['github'], { complete },
     )
     const topicPrompt = complete.mock.calls[2]![0] as string
     expect(topicPrompt).toContain('GitHub')
@@ -658,12 +723,13 @@ describe('designTagFolders', () => {
   })
 
   it('聚合组那摊设计失败时，主题那摊仍然知道组名，只是没有子目录名可报', async () => {
+    const { tags: ghTags, items: ghItems } = ghGroup(MANY, '智能体框架')
     const complete = vi.fn()
       .mockRejectedValueOnce(Object.assign(new Error('x'), { retryable: false }))
       .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
     const result = await designTagFolders(
-      [tag('1', 'KV Cache'), tag('2', '智能体框架')],
-      [blog('1'), gh('2')], ['github'], { complete },
+      [tag('1', 'KV Cache'), ...ghTags],
+      [blog('1'), ...ghItems], ['github'], { complete },
     )
     expect(complete.mock.calls[1]![0]).toContain('GitHub')
     // 失败那摊的标签原样保留
