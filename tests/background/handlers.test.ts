@@ -2,7 +2,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest'
 import { handle } from '@/background/handlers'
 import { createFakeBookmarks, type TreeSpec } from '../fakes/fake-bookmarks'
 import { createFakeStorage } from '../fakes/fake-storage'
-import { DEFAULT_SETTINGS, loadCache, saveSettings, type Settings } from '@/storage/settings'
+import { DEFAULT_SETTINGS, SETTINGS_KEY, loadCache, saveSettings, type Settings } from '@/storage/settings'
 import { currentLocale, setLocale } from '@/i18n'
 import type { LlmClient } from '@/llm/client'
 import type { OrganizePlan } from '@/core/types'
@@ -260,13 +260,15 @@ describe('handle', () => {
   // 无论 maxFolderDepth 填几都只会推导出一层，下面这个断言能过纯属巧合，
   // 不是 maxFolderDepth 在起作用（真要验证「设置被忽略」见下面
   // 「analyze 的目录形状由书签数推导」describe 块里专门的用例）
-  it('单书签场景本就撑不起两层，提示词要求只输出一层（与 maxFolderDepth 无关，巧合通过）', async () => {
+  it('单书签场景本就撑不起两层，提示词要求只输出一层（与存量里的 maxFolderDepth 无关，巧合通过）', async () => {
     const { ports } = setup()
-    await saveSettings(ports, {
+    const settings: Settings = {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
-      maxFolderDepth: 1,
-    })
+    }
+    await saveSettings(ports, settings)
+    // maxFolderDepth 已不是设置字段，只能从存储那一侧模拟老用户的存量值
+    await ports.storage.set(SETTINGS_KEY, { ...settings, maxFolderDepth: 1 })
     const complete = vi.fn()
       .mockResolvedValueOnce({ results: [{ bookmark_id: '100', primary_topic: '前端' }] })
       .mockResolvedValueOnce({ folders: [{ title: '前端', topics: ['前端'], children: [] }] })
@@ -2322,7 +2324,11 @@ describe('analyze 的目录形状由书签数推导', () => {
   }
 
   /** 抓住目录设计那一次的提示词。 */
-  async function designPromptFor(count: number, settings: Partial<Settings> = {}): Promise<string> {
+  /**
+   * @param legacyKeys 直接写进**存量记录**的旧键。这些键已经不在 Settings 类型里，
+   *   只能从存储那一侧模拟「老用户机器上躺着这些值」——这也正是它们唯一还可能出现的地方。
+   */
+  async function designPromptFor(count: number, legacyKeys: Record<string, unknown> = {}): Promise<string> {
     const prompts: string[] = []
     const complete = vi.fn(async (prompt: string) => {
       const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
@@ -2342,12 +2348,15 @@ describe('analyze 的目录形状由书签数推导', () => {
     })
     const fake = createFakeBookmarks(treeWith(count))
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
-    await saveSettings(ports, {
+    const settings: Settings = {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
       enforceMinFolderSize: false,
-      ...settings,
-    })
+    }
+    await saveSettings(ports, settings)
+    if (Object.keys(legacyKeys).length > 0) {
+      await ports.storage.set(SETTINGS_KEY, { ...settings, ...legacyKeys })
+    }
     await handle(
       ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
       { createClient: () => ({ complete }), now: () => 1 },
@@ -2378,14 +2387,18 @@ describe('analyze 的目录形状由书签数推导', () => {
     expect(prompt).not.toContain('只输出一层')
   })
 
-  it('不再读 settings.maxTopFolders——那个旋钮在这条路上已经没人听了', async () => {
-    // 把旋钮拧到 6，推导仍然按书签数说 3 个主题（预算 3+1=4，提示词里是 4 − 1 = 3）
+  // 这两条原来是把旋钮当成 Settings 字段拧一下，验「handlers 不读它」。字段删掉后
+  // 旋钮只可能以一种形态出现：老用户机器上的存量记录。断言的对象因此下沉了一层——
+  // 从「读进来了但没人听」变成「连读都不读」，问的仍是同一件事：**装着旧值的那台机器，
+  // 这次整理会不会被它带偏。**
+  it('存量记录里躺着 maxTopFolders=6，目录数仍按书签数推导', async () => {
+    // 旧值说 6，推导仍然按书签数说 3 个主题（预算 3+1=4，提示词里是 4 − 1 = 3）
     const prompt = await designPromptFor(30, { maxTopFolders: 6 })
     expect(prompt).toMatch(/不超过 3 个/)
   })
 
-  it('不再读 settings.maxFolderDepth——层数由书签数定', async () => {
-    // 旋钮说只许一层，但 250 条按推导该有两层
+  it('存量记录里躺着 maxFolderDepth=1，250 条仍然分得出两层', async () => {
+    // 旧值说只许一层，但 250 条按推导该有两层
     const prompt = await designPromptFor(250, { maxFolderDepth: 1 })
     expect(prompt).not.toContain('只输出一层')
   })

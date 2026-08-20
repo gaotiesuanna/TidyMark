@@ -1,7 +1,6 @@
 import type { Ports } from '@/core/ports'
 import type { Locale, UiLocale } from '@/core/locale'
 import type { CachedClassification } from '@/core/types'
-import { MAX_SIBLINGS } from '@/core/tree'
 import type { LlmConfig } from '@/llm/client'
 
 export const SETTINGS_KEY = 'tidymark:settings'
@@ -15,17 +14,6 @@ export interface Settings {
   domainGroups: string[]
   /** 把 GitHub 书签的标题统一成 `repo (owner)`。 */
   rewriteGithubTitles: boolean
-  /** 同一层的目录数上限。只在推翻重建模式下生效。 */
-  maxTopFolders: number
-  /**
-   * 目录最深嵌套到第几层，按**绝对**层级算（见 core/level.ts）：
-   * 书签栏里的目录是一级，「其他书签」自己是一级、它里面的是二级。
-   *
-   * 所以这个数字与「勾了哪里」无关：上限 2 时勾书签栏可以分出二级，
-   * 勾「其他书签」就只能建一层——那一层本身已经是二级了。
-   * 只在推翻重建模式下生效。
-   */
-  maxFolderDepth: number
   /**
    * 是否要求目录至少装下 minFolderSize 个书签才值得单独建立。
    * 关掉时完全不做这项约束。只在推翻重建模式下生效。
@@ -36,10 +24,6 @@ export interface Settings {
   /** 界面与产出的语言。'auto' 时跟随浏览器 UI 语言。 */
   uiLocale: UiLocale
 }
-
-/** 嵌套层数的合法区间。1 就是完全不分子目录；超过 4 层在书签管理器里已经找不着东西。 */
-export const MIN_FOLDER_DEPTH = 1
-export const MAX_FOLDER_DEPTH = 4
 
 /**
  * minFolderSize 这个数字自己的合法区间——不是「目录里的书签数」的区间。
@@ -56,8 +40,6 @@ export const DEFAULT_SETTINGS: Settings = {
   removeEmptyFolders: true,
   domainGroups: [],
   rewriteGithubTitles: false,
-  maxTopFolders: MAX_SIBLINGS,
-  maxFolderDepth: 2,
   enforceMinFolderSize: true,
   minFolderSize: 3,
   uiLocale: 'auto',
@@ -78,29 +60,33 @@ export const PRESETS: Array<{ label: Record<Locale, string>; baseUrl: string; mo
 ]
 
 /**
- * 被 maxFolderDepth 取代的旧开关。只在读取时认，不再写出去。
+ * 被删掉的旧旋钮名单。**一个都不认**——存储里遗留的这些键读都不读，下次保存设置时
+ * 自然被覆盖掉。所以这里没有 `LegacySettings` 那样的类型，`loadSettings` 也不去碰它们。
  *
- * `rebuildStructure` 不在这里：那是**有意不认**。走哪条路现在由 TidyMark 每次按扫描
- * 结果现判（见 core/mode.ts），继续认旧值等于把删掉的开关偷偷留着。存储里遗留的那个
- * 键读都不读，下次保存设置时自然被覆盖掉。
+ * 不认的理由是同一条：这些旋钮当年管的事，今天已经由 TidyMark 自己按当次扫描现判。
+ * 继续认旧值等于把删掉的旋钮偷偷留着——用户在设置页看不到它，行为却还被它牵着走。
+ *
+ * - `rebuildStructure`：当年管「推翻重建还是就地整理」。现在每次按扫描结果现判
+ *   （见 core/mode.ts），用户也能在界面上临时改判，没有一个常驻开关的位置。
+ * - `maxTopFolders`：当年管「同一层最多几个目录」。现在由这次要整理的书签总数推导
+ *   （deriveShape，见 core/shape.ts 与 issues/10-shape-from-count.md）。
+ * - `maxFolderDepth`：当年管「最深嵌到第几层」。同样由 deriveShape 定——书签量撑不起
+ *   两层就只建一层，撑得起才往下分，跟用户勾在哪一层无关。
+ * - `allowSubfolders`：比 `maxFolderDepth` 更早的一代，当年是个「允不允许二级目录」的
+ *   布尔。它曾被翻译成 `maxFolderDepth: 1`；那个目标字段现在也没了，翻译没有落点，
+ *   于是连同被它取代的那一代一起不认。
+ *
+ * 判例：**删掉一个旋钮时，存量值一律读取时忽略，而不是继续在后台生效。**
+ * 代价是「上周关掉过二级目录」的人下次整理会看到行为变化——这是有意接受的：
+ * 那件事现在由书签量说了算，把旧值留着只会让两套逻辑打架。
  */
-interface LegacySettings {
-  allowSubfolders?: boolean
-}
-
 export async function loadSettings(ports: Ports): Promise<Settings> {
-  const stored = await ports.storage.get<Partial<Settings> & LegacySettings>(SETTINGS_KEY)
-  // 上周关掉过「允许二级目录」的人，存储里躺着 false。不认这个旧键就等于把他的选择
-  // 静默翻回默认，而这是「会不会给我建二级目录」这种一眼看得见的行为。
-  // 新键在场时它说了算，否则改不动设置。
-  const legacyDepth = stored?.allowSubfolders === false ? MIN_FOLDER_DEPTH : undefined
+  const stored = await ports.storage.get<Partial<Settings>>(SETTINGS_KEY)
   return {
     llm: { ...DEFAULT_SETTINGS.llm, ...(stored?.llm ?? {}) },
     removeEmptyFolders: stored?.removeEmptyFolders ?? DEFAULT_SETTINGS.removeEmptyFolders,
     domainGroups: stored?.domainGroups ?? DEFAULT_SETTINGS.domainGroups,
     rewriteGithubTitles: stored?.rewriteGithubTitles ?? DEFAULT_SETTINGS.rewriteGithubTitles,
-    maxTopFolders: stored?.maxTopFolders ?? DEFAULT_SETTINGS.maxTopFolders,
-    maxFolderDepth: stored?.maxFolderDepth ?? legacyDepth ?? DEFAULT_SETTINGS.maxFolderDepth,
     enforceMinFolderSize: stored?.enforceMinFolderSize ?? DEFAULT_SETTINGS.enforceMinFolderSize,
     minFolderSize: stored?.minFolderSize ?? DEFAULT_SETTINGS.minFolderSize,
     uiLocale: stored?.uiLocale ?? DEFAULT_SETTINGS.uiLocale,

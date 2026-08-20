@@ -174,8 +174,8 @@ export async function handle(
           const shape = deriveShape(topicN, depthGuard(survivingGroups.length, topicN))
           // 上限只管「要不要再往下分」，不阻止在勾中处建第一层：用户勾了这里就是要在这里
           // 整理，返回「一个目录都不建」看起来像坏了。层数看的是推导出的 shape.depth
-          // 是否到了两层，不是 settings.maxFolderDepth——那个字段仍留在 Settings 里，
-          // 但已经无人读取，删除随清单第 12 项一起处理
+          // 是否到了两层。曾经管这件事的 settings.maxFolderDepth 已随清单第 12 项删掉，
+          // 存量存储里遗留的那个键也读都不读（见 storage/settings.ts 的旧旋钮名单）
           const allowChildren = shape.depth >= 2
           // shape.top 在三层（N > 1200）时是 0——票 10 有意把三层的分配留空，先兜底
           // 退回 SHAPE_MAX_SIBLINGS，不让「其他」以外的目录数塌成 0

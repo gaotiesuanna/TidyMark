@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { SETTINGS_KEY, loadSettings, saveSettings, loadCache, saveCache, DEFAULT_SETTINGS } from '@/storage/settings'
-import { MAX_SIBLINGS } from '@/core/tree'
 import { createFakeStorage } from '../fakes/fake-storage'
 import { createFakeBookmarks } from '../fakes/fake-bookmarks'
 import type { CachedClassification } from '@/core/types'
@@ -16,46 +15,78 @@ describe('设置存取', () => {
     expect(settings.llm.apiKey).toBe('')
   })
 
+  // 存量存储里可能躺着四代旧旋钮：maxTopFolders / maxFolderDepth 是被「按书签数推导形状」
+  // 取代的（第 12 项删掉），allowSubfolders 是更早被 maxFolderDepth 取代的，
+  // rebuildStructure 是被「每次现判走哪条路」取代的。四个键一律读都不读——
+  // 认任何一个都等于把删掉的旋钮偷偷留着。
+  it('存量存储里的四个旧键一个都不读进来', async () => {
+    const p = ports()
+    await p.storage.set(SETTINGS_KEY, {
+      maxTopFolders: 6,
+      maxFolderDepth: 1,
+      allowSubfolders: false,
+      rebuildStructure: true,
+    })
+    const settings = await loadSettings(p)
+    expect(settings).not.toHaveProperty('maxTopFolders')
+    expect(settings).not.toHaveProperty('maxFolderDepth')
+    expect(settings).not.toHaveProperty('allowSubfolders')
+    expect(settings).not.toHaveProperty('rebuildStructure')
+    expect(Object.keys(settings).sort()).toEqual(Object.keys(DEFAULT_SETTINGS).sort())
+  })
+
   it('默认开启整理后清理空文件夹', async () => {
     expect((await loadSettings(ports())).removeEmptyFolders).toBe(true)
   })
 
-  it('默认同层目录上限等于 MAX_SIBLINGS，默认最深两层', async () => {
+  // 原来验的是这两个旋钮的默认值（MAX_SIBLINGS 与 2）。旋钮删掉后默认值无从谈起，
+  // 但「默认设置里不该再冒出这两个键」这件事必须钉住：只要有人手滑把它们写回
+  // DEFAULT_SETTINGS，旋钮就会连同默认值一起复活
+  it('默认设置里不再有同层上限与嵌套层数这两个旋钮', async () => {
     const settings = await loadSettings(ports())
-    expect(settings.maxTopFolders).toBe(MAX_SIBLINGS)
-    expect(settings.maxFolderDepth).toBe(2)
+    expect(settings).not.toHaveProperty('maxTopFolders')
+    expect(settings).not.toHaveProperty('maxFolderDepth')
+    expect(DEFAULT_SETTINGS).not.toHaveProperty('maxTopFolders')
+    expect(DEFAULT_SETTINGS).not.toHaveProperty('maxFolderDepth')
   })
 
-  // 老用户存储里没有这两个键，缺字段必须回落默认值而不是 undefined，
-  // 否则 MAX_SIBLINGS 会变成 undefined 一路传到 slice(0, undefined)
-  it('旧数据缺这两个字段时回落默认值', async () => {
+  // 原来验的是「老用户存储里缺这两个键时回落默认值，而不是 undefined 一路传到
+  // slice(0, undefined)」。字段没了，但那条用例真正在防的事没变：存量记录只要形状
+  // 不全，读出来的设置就必须仍是一份完整可用的设置。toEqual 同时兜住两头——
+  // 少一个字段会漏，多冒出一个旧键也会漏
+  it('存量记录是个空对象时，读出来仍是一份完整的默认设置', async () => {
     const p = ports()
     await p.storage.set(SETTINGS_KEY, {})
-    const settings = await loadSettings(p)
-    expect(settings.maxTopFolders).toBe(MAX_SIBLINGS)
-    expect(settings.maxFolderDepth).toBe(2)
+    expect(await loadSettings(p)).toEqual(DEFAULT_SETTINGS)
   })
 
-  // allowSubfolders 这个布尔开关被 maxFolderDepth 取代了。上周关掉过它的人，
-  // 存储里躺着 false；不认这个旧键就等于把他的选择静默翻回默认，
-  // 而这是「会不会给我建二级目录」这种看得见的行为
-  it('旧的 allowSubfolders=false 认成最深一层', async () => {
-    const p = ports()
-    await p.storage.set(SETTINGS_KEY, { allowSubfolders: false })
-    expect((await loadSettings(p)).maxFolderDepth).toBe(1)
+  // 下面三条问的还是同一件事：**存量存储里躺着旧值时，产品的行为是什么。**
+  // 答案变了——从「翻译成 maxFolderDepth」变成「读都不读」，但问题没变，所以断言
+  // 跟着改口径而不是消失。对照组用同一份空存量：只要旧键还能改动读出来的任何一个
+  // 字段，两边就不相等。层数现在由书签量说了算，验在这一层的是 handlers 那两条
+
+  it('存量里的 allowSubfolders=false 不再改变任何设置——跟没这个键时一模一样', async () => {
+    const legacy = ports()
+    await legacy.storage.set(SETTINGS_KEY, { allowSubfolders: false })
+    const clean = ports()
+    await clean.storage.set(SETTINGS_KEY, {})
+    expect(await loadSettings(legacy)).toEqual(await loadSettings(clean))
   })
 
-  it('旧的 allowSubfolders=true 认成默认的两层', async () => {
+  // 这一条在旧实现下本来就是绿的（true 从来只走 undefined 分支、不改任何字段），
+  // 它守的是反向：哪天有人给 true 补一条映射，这里会红
+  it('存量里的 allowSubfolders=true 同样没有落点，读出来仍是默认设置', async () => {
     const p = ports()
     await p.storage.set(SETTINGS_KEY, { allowSubfolders: true })
-    expect((await loadSettings(p)).maxFolderDepth).toBe(2)
+    expect(await loadSettings(p)).toEqual(DEFAULT_SETTINGS)
   })
 
-  // 新键存在时它说了算，不再看旧键——否则改不动设置
-  it('新键存在时压过旧键', async () => {
+  // 原来验的是「新键在场时压过旧键，否则用户改不动设置」。现在这两个键都不是设置了，
+  // 谁也压不过谁——一起躺在存量里也一起被丢掉
+  it('两代旧键同时躺在存量里，也都进不来', async () => {
     const p = ports()
     await p.storage.set(SETTINGS_KEY, { allowSubfolders: false, maxFolderDepth: 3 })
-    expect((await loadSettings(p)).maxFolderDepth).toBe(3)
+    expect(await loadSettings(p)).toEqual(DEFAULT_SETTINGS)
   })
 
   // 目录太小是这个功能要防的东西（一个目录里只躺一个链接），所以默认就开着
