@@ -295,10 +295,14 @@ describe('ReviewStep 的筛选开关', () => {
 
   // 票 24 的教训：叫人做某件事，就得给他一个能点的东西。用户未必意识到是自己
   // 开的筛选把列表清空了，所以空态不能只提示，还得给一个恢复的出口。
-  it('空态给一个能点的出口，点了就恢复', async () => {
+  // 两个开关都要开着点「清除筛选」：样本 row('a', ['01 GitHub'], 'rule') 的
+  // confidence 是 1，modelOnly 和 markedOnly 各自单独就能把它筛掉，只开一个
+  // 会让另一个 setter 变成空操作，测不出按钮是不是真的把两个开关都关了。
+  it('空态给一个能点的出口，点了就恢复（两个筛选都要真的解除）', async () => {
     setupPlan([row('a', ['01 GitHub'], 'rule')])
     render(<ReviewStep />)
     await userEvent.click(screen.getByText(/只看模型判的/))
+    await userEvent.click(screen.getByText(/只看被标记的/))
     await userEvent.click(screen.getByRole('button', { name: '清除筛选' }))
 
     expect(screen.queryByText(/当前筛选下没有建议/)).toBeNull()
@@ -311,6 +315,7 @@ describe('ReviewStep 的筛选开关', () => {
     setupPlan([])
     render(<ReviewStep />)
     expect(screen.queryByText(/当前筛选下没有建议/)).toBeNull()
+    expect(screen.getByText(/都已在合适的位置/)).toBeTruthy()
   })
 })
 
