@@ -25,6 +25,22 @@ const tree: BookmarkNode[] = [
 
 const roots = (): ReturnType<typeof buildResultTree> => buildResultTree(tree, ['1'], ['10', '11'])
 
+/** 造一个装着 count 条书签的目录，书签本身无关紧要，只为把 total 撑到指定数量。 */
+const folder = (id: string, title: string, count: number): BookmarkNode => ({
+  id,
+  title,
+  children: Array.from({ length: count }, (_, i) => ({
+    id: `${id}-${i}`,
+    title: `b${i}`,
+    url: `https://${id}/${i}`,
+  })),
+})
+
+/** 把若干目录按给定先后挂进书签栏，得到 buildResultTree 能吃的整棵树。 */
+const barWith = (...folders: BookmarkNode[]): BookmarkNode[] => [
+  { id: '0', title: '', children: [{ id: '1', title: '书签栏', children: folders }] },
+]
+
 describe('buildResultTree', () => {
   it('按真实书签树还原层级', () => {
     const bar = roots()[0]!
@@ -49,9 +65,42 @@ describe('buildResultTree', () => {
     expect(stale.total).toBe(1)
   })
 
-  it('同层按书签总数从多到少排序', () => {
-    const totals = roots()[0]!.children.map((c) => c.total)
-    expect(totals).toEqual([...totals].sort((a, b) => b - a))
+  it('同层按编号升序排，与书签数无关', () => {
+    // 树里的先后、编号先后、书签数先后三者两两不同，只有「按编号升序」能得出期望顺序
+    const built = buildResultTree(
+      barWith(folder('93', '03 多的', 9), folder('91', '01 少的', 1), folder('92', '02 中的', 5)),
+      ['1'],
+    )
+    expect(built[0]!.children.map((c) => c.title)).toEqual(['01 少的', '02 中的', '03 多的'])
+  })
+
+  it('没编号的目录跟在带编号的后面，彼此保持树里的先后', () => {
+    const built = buildResultTree(
+      barWith(
+        folder('81', '手工目录甲', 2),
+        folder('82', '01 设计出来的', 3),
+        folder('83', '手工目录乙', 9),
+      ),
+      ['1'],
+    )
+    // 乙的书签比甲多，但没编号的两个只按树里的先后排，甲仍在乙前
+    expect(built[0]!.children.map((c) => c.title)).toEqual([
+      '01 设计出来的',
+      '手工目录甲',
+      '手工目录乙',
+    ])
+  })
+
+  it('子目录同层也按编号升序排，不按书签数', () => {
+    const built = buildResultTree(
+      barWith({
+        id: '70',
+        title: '01 AI',
+        children: [folder('72', '01.2 多的', 6), folder('71', '01.1 少的', 1)],
+      }),
+      ['1'],
+    )
+    expect(built[0]!.children[0]!.children.map((c) => c.title)).toEqual(['01.1 少的', '01.2 多的'])
   })
 
   it('级联勾选的范围只展开最外层的根，不重复', () => {

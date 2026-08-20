@@ -1,3 +1,4 @@
+import { folderNumber } from './order'
 import { findScopeRoots } from './scan'
 import type { BookmarkNode } from './ports'
 
@@ -12,6 +13,24 @@ export interface ResultTreeNode {
   /** 含子目录在内的书签总数。 */
   total: number
   children: ResultTreeNode[]
+}
+
+/**
+ * 与 `core/order.ts` 的 `planFolderOrder` 同一条规则：带编号的排最前、彼此按编号升序，
+ * 没编号的跟在后面、相对顺序不变（返回 0，`Array.prototype.sort` 自 ES2019 起稳定）。
+ *
+ * 结果页那一段文案写着「书签栏的真实结构」，那就得是真实顺序——而书签栏里的真实顺序
+ * 正是 `planFolderOrder` 落进 Chrome 的。此前这里按书签总数降序排，与书签栏对不上，
+ * 而这一页恰恰是拿来对照真实结构的。每行右侧本来就显示书签数，
+ * 「一眼看见哪个最大」不靠排序也拿得到。
+ */
+function byFolderNumber(a: ResultTreeNode, b: ResultTreeNode): number {
+  const left = folderNumber(a.title)
+  const right = folderNumber(b.title)
+  if (left !== null && right !== null) return left - right
+  if (left !== null) return -1
+  if (right !== null) return 1
+  return 0
 }
 
 /**
@@ -34,7 +53,7 @@ export function buildResultTree(
       if (child.url !== undefined) count++
       else children.push(build(child))
     }
-    children.sort((a, b) => b.total - a.total || a.title.localeCompare(b.title))
+    children.sort(byFolderNumber)
     return {
       id: node.id,
       title: node.title,
