@@ -240,7 +240,6 @@ interface State {
    */
   setRowTarget(bookmarkId: string, targetId: string): void
   acceptAll(): void
-  acceptHighConfidence(threshold: number): void
   rejectAll(): void
   apply(): Promise<void>
   undo(): Promise<void>
@@ -472,14 +471,6 @@ export const useStore = create<State>((set, get) => ({
 
   acceptAll() {
     set({ accepted: new Set((get().plan?.rows ?? []).map((r) => r.bookmarkId)) })
-  },
-
-  acceptHighConfidence(threshold) {
-    set({
-      accepted: new Set(
-        (get().plan?.rows ?? []).filter((r) => r.confidence >= threshold).map((r) => r.bookmarkId),
-      ),
-    })
   },
 
   rejectAll() {

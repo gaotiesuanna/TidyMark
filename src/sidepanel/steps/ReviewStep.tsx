@@ -14,7 +14,7 @@ interface ReviewGroup {
 }
 
 export function ReviewStep() {
-  const { plan: rawPlan, accepted, toggleAccepted, acceptAll, acceptHighConfidence, rejectAll, apply, busy, reset, settings, scan } = useStore()
+  const { plan: rawPlan, accepted, toggleAccepted, setRowTarget, acceptAll, rejectAll, apply, busy, reset, settings, scan } = useStore()
   // 显示的编号必须和真正会写进书签栏的一致，所以这里用同一个重排函数
   const plan = useMemo(
     () => (rawPlan === null ? null : renumberPlan(rawPlan, accepted, scan?.folders ?? [])),
@@ -115,7 +115,6 @@ export function ReviewStep() {
 
       <div className="flex gap-1 text-xs">
         <button className="rounded border px-2 py-1 hover:bg-neutral-50" onClick={acceptAll}>{t('reviewAcceptAll')}</button>
-        <button className="rounded border px-2 py-1 hover:bg-neutral-50" onClick={() => acceptHighConfidence(MARK_CONFIDENCE)}>{t('reviewAcceptHigh')}</button>
         <button className="rounded border px-2 py-1 hover:bg-neutral-50" onClick={rejectAll}>{t('reviewRejectAll')}</button>
         {/* 勾选无关的一项，靠 ml-auto 推到另一头，不跟左边三个批量操作混成一排 */}
         <button className="ml-auto rounded border px-2 py-1 text-neutral-500 hover:bg-neutral-50" onClick={exportPlan}>
@@ -144,30 +143,47 @@ export function ReviewStep() {
                 <ul className="space-y-1">
                   {group.rows.map((row) => (
                     <li key={row.bookmarkId} className="rounded border p-2 text-xs">
-                      <label className="flex cursor-pointer items-start gap-2">
-                        <input
-                          type="checkbox"
-                          aria-label={row.title}
-                          className="mt-0.5 h-3.5 w-3.5 shrink-0"
-                          checked={accepted.has(row.bookmarkId)}
-                          onChange={() => toggleAccepted(row.bookmarkId)}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="truncate font-medium">{row.title}</span>
-                            {row.confidence < MARK_CONFIDENCE && (
-                              <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] text-amber-700">{t('reviewLowConfidence')}</span>
-                            )}
-                            <span className="ml-auto shrink-0 text-neutral-400">{Math.round(row.confidence * 100)}%</span>
+                      <div className="flex items-start gap-2">
+                        <label className="flex flex-1 cursor-pointer items-start gap-2">
+                          <input
+                            type="checkbox"
+                            aria-label={row.title}
+                            className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                            checked={accepted.has(row.bookmarkId)}
+                            onChange={() => toggleAccepted(row.bookmarkId)}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate font-medium">{row.title}</span>
+                              {row.confidence < MARK_CONFIDENCE && (
+                                <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] text-amber-700">{t('reviewMarked')}</span>
+                              )}
+                              <span className="ml-auto shrink-0 text-neutral-400">{Math.round(row.confidence * 100)}%</span>
+                            </div>
+                            {/* 目标路径已经是组标题，组内每条只用再交代它原来在哪，不重复目标——
+                                重复的话会跟组标题撞出同一段文字，人扫起来也是噪音。 */}
+                            <div className="mt-1 text-neutral-500">
+                              <span className="line-through">{row.fromPath.join(' / ')}</span>
+                            </div>
+                            <div className="mt-0.5 text-neutral-400">{row.reason}</div>
                           </div>
-                          {/* 目标路径已经是组标题，组内每条只用再交代它原来在哪，不重复目标——
-                              重复的话会跟组标题撞出同一段文字，人扫起来也是噪音。 */}
-                          <div className="mt-1 text-neutral-500">
-                            <span className="line-through">{row.fromPath.join(' / ')}</span>
-                          </div>
-                          <div className="mt-0.5 text-neutral-400">{row.reason}</div>
-                        </div>
-                      </label>
+                        </label>
+                      </div>
+                      {/* 下拉放在 label 外面：label 已经隐式关联了勾选框，选它内部若再塞一个
+                          <select>，点下拉时那次点击会顺带把勾选框的点击也代发一遍
+                          （label 找的是「第一个可关联控件」，不会因为点的是别的控件就放过）。
+                          拒绝之外的第二条路：不满意这条建议，不必只能弃之不用，
+                          可以当场改投到另一个候选目录——选了即改方案、自动勾上（见 setRowTarget）。 */}
+                      <select
+                        aria-label={t('reviewRetarget', row.title)}
+                        className="mt-1 w-full rounded border px-1 py-0.5 text-neutral-700"
+                        value={plan.candidates.find((c) => c.path.join(' / ') === row.toPath.join(' / '))?.id ?? ''}
+                        onChange={(e) => setRowTarget(row.bookmarkId, e.target.value)}
+                      >
+                        {plan.candidates.map((candidate) => (
+                          <option key={candidate.id} value={candidate.id}>{candidate.path.join(' / ')}</option>
+                        ))}
+                      </select>
                     </li>
                   ))}
                 </ul>

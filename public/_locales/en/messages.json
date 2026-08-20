@@ -517,17 +517,22 @@
   "reviewAcceptAll": {
     "message": "Accept all"
   },
-  "reviewAcceptHigh": {
-    "message": "High confidence only"
-  },
   "reviewRejectAll": {
     "message": "Reject all"
   },
   "reviewExportPlan": {
     "message": "Export plan"
   },
-  "reviewLowConfidence": {
-    "message": "Low confidence"
+  "reviewRetarget": {
+    "message": "Move to a different folder: $title$",
+    "placeholders": {
+      "title": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewMarked": {
+    "message": "Worth a look"
   },
   "reviewGroupAllRule": {
     "message": "All matched by domain rules"

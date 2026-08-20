@@ -5,7 +5,7 @@ import { ReviewStep } from '@/sidepanel/steps/ReviewStep'
 import { useStore } from '@/sidepanel/store'
 import { downloadJson } from '@/sidepanel/lib/download'
 import { DEFAULT_SETTINGS } from '@/storage/settings'
-import type { OrganizePlan, PlanRow } from '@/core/types'
+import type { CategoryCandidate, OrganizePlan, PlanRow } from '@/core/types'
 
 vi.mock('@/sidepanel/lib/download', () => ({ downloadJson: vi.fn(), downloadText: vi.fn() }))
 
@@ -35,9 +35,9 @@ describe('ReviewStep', () => {
     expect(screen.getByText(/官方文档/)).toBeDefined()
   })
 
-  it('低置信度条目被标出', () => {
+  it('置信度低于阈值的条目被标出', () => {
     render(<ReviewStep />)
-    expect(screen.getByText('低置信度')).toBeDefined()
+    expect(screen.getByText('值得看一眼')).toBeDefined()
   })
 
   it('复选框反映已接受状态', () => {
@@ -56,13 +56,6 @@ describe('ReviewStep', () => {
     render(<ReviewStep />)
     await userEvent.click(screen.getByText('全部接受'))
     expect(useStore.getState().accepted.size).toBe(2)
-  })
-
-  it('仅接受高置信度按钮剔除低置信度条目', async () => {
-    useStore.setState({ accepted: new Set(['100', '101']) })
-    render(<ReviewStep />)
-    await userEvent.click(screen.getByText('仅高置信度'))
-    expect([...useStore.getState().accepted]).toEqual(['100'])
   })
 
   it('全部拒绝后应用按钮禁用', async () => {
@@ -95,39 +88,45 @@ describe('ReviewStep', () => {
   })
 })
 
+/**
+ * 造一条最简 PlanRow，只暴露测试关心的几个维度：id、目标目录、来源，
+ * confidence 缺省时按来源给个合理默认值（rule 必然高、llm 给个中等值）。
+ */
+function row(id: string, toPath: string[], source: PlanRow['source'], confidence?: number): PlanRow {
+  return {
+    bookmarkId: id,
+    title: `书签 ${id}`,
+    url: `https://example.com/${id}`,
+    fromPath: ['书签栏', '杂项'],
+    toPath,
+    confidence: confidence ?? (source === 'rule' ? 1 : 0.9),
+    reason: source === 'rule' ? '域名规则命中' : '模型判断',
+    source,
+  }
+}
+
+/**
+ * 拿一批行拼出一份最简 plan 塞进 store，rebuildStructure 关着，renumberPlan 就原样直通。
+ * candidates 缺省为空数组——只有测试改投下拉时才需要真的传几个候选目录进来。
+ */
+function setupPlan(rows: PlanRow[], candidates: CategoryCandidate[] = []): void {
+  const groupPlan: OrganizePlan = {
+    id: 'g1', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: false,
+    candidates, operations: [],
+    rows,
+    unchanged: [],
+    summary: {
+      totalBookmarks: rows.length, movedBookmarks: rows.length, unchangedBookmarks: 0,
+      createdFolders: 0, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 0,
+    },
+    warnings: [],
+    tags: [],
+    mergeRoot: null,
+  }
+  useStore.setState({ plan: groupPlan, accepted: new Set(rows.map((r) => r.bookmarkId)), busy: null, error: null })
+}
+
 describe('ReviewStep 的分组', () => {
-  /** 造一条最简 PlanRow，只暴露分组测试关心的三个维度：id、目标目录、来源。 */
-  function row(id: string, toPath: string[], source: PlanRow['source']): PlanRow {
-    return {
-      bookmarkId: id,
-      title: `书签 ${id}`,
-      url: `https://example.com/${id}`,
-      fromPath: ['书签栏', '杂项'],
-      toPath,
-      confidence: source === 'rule' ? 1 : 0.9,
-      reason: source === 'rule' ? '域名规则命中' : '模型判断',
-      source,
-    }
-  }
-
-  /** 拿一批行拼出一份最简 plan 塞进 store，rebuildStructure 关着，renumberPlan 就原样直通。 */
-  function setupPlan(rows: PlanRow[]): void {
-    const groupPlan: OrganizePlan = {
-      id: 'g1', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: false,
-      candidates: [], operations: [],
-      rows,
-      unchanged: [],
-      summary: {
-        totalBookmarks: rows.length, movedBookmarks: rows.length, unchangedBookmarks: 0,
-        createdFolders: 0, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 0,
-      },
-      warnings: [],
-      tags: [],
-      mergeRoot: null,
-    }
-    useStore.setState({ plan: groupPlan, accepted: new Set(rows.map((r) => r.bookmarkId)), busy: null, error: null })
-  }
-
   it('按目标目录分组，组标题是目标路径', () => {
     setupPlan([
       row('a', ['01 前端'], 'llm'), row('b', ['01 前端'], 'llm'), row('c', ['02 后端'], 'llm'),
@@ -157,5 +156,24 @@ describe('ReviewStep 的分组', () => {
     render(<ReviewStep />)
     expect(screen.getByText('书签 a')).toBeTruthy()
     expect(screen.queryByText(/全部来自域名规则/)).toBeNull()
+  })
+})
+
+describe('ReviewStep 的改投与标记', () => {
+  it('每行给一个改投目录的下拉，选了就改方案并自动勾上', async () => {
+    setupPlan([row('a', ['01 前端'], 'llm')], [{ id: 'tmp:1', path: ['01 前端'] }, { id: 'tmp:2', path: ['02 后端'] }])
+    render(<ReviewStep />)
+    await userEvent.selectOptions(screen.getByLabelText('改投目录：书签 a'), 'tmp:2')
+
+    expect(useStore.getState().plan!.rows[0]!.toPath).toEqual(['02 后端'])
+    expect(useStore.getState().accepted.has('a')).toBe(true)
+  })
+
+  it('置信度低于阈值只是标一下，不影响勾选', () => {
+    setupPlan([row('a', ['01 前端'], 'llm', 0.5)])
+    render(<ReviewStep />)
+    expect(screen.getByText(/值得看一眼/)).toBeTruthy()
+    // 默认全选，标记不改变这一点
+    expect(useStore.getState().accepted.has('a')).toBe(true)
   })
 })
