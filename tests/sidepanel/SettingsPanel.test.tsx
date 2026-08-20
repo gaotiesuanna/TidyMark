@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { setLocale } from '@/i18n'
+import { setLocale, t } from '@/i18n'
 import { SettingsPanel } from '@/sidepanel/components/SettingsPanel'
 import { useStore } from '@/sidepanel/store'
 import { DEFAULT_SETTINGS, PRESETS } from '@/storage/settings'
@@ -12,26 +12,30 @@ beforeEach(() => {
   })
 })
 
+/**
+ * 分类参数（同层目录最多几个、最深几层、目录下限）已经全部退成程序自己推导的东西，
+ * 设置页上一个都不该再摆。
+ *
+ * 不逐条点名查 label：那些文案连同 _locales 里的词条一起删掉了，字符串在任何走
+ * i18n 的实现下都不可能再命中——`queryByLabelText('至少几个书签')` 恒为 null，
+ * 把整个 section 原样加回去（文案走英文词条）也照样绿，等于没测。
+ * 改成扫结构：还剩哪几块 section、还有没有数字旋钮。两条都跟具体叫什么名字无关，
+ * 任何一个「拨得动的分类参数」被加回来都得带上标题或数字输入框，跑不掉。
+ */
 describe('SettingsPanel 分类参数', () => {
-  it('不再摆出「同层目录最多几个」——它已经由书签数推导，拨了也不生效', () => {
+  it('设置页只剩模型配置与语言两块——分类参数整段连同标题一起撤走了', () => {
     useStore.setState({ settings: { ...DEFAULT_SETTINGS } })
-    render(<SettingsPanel />)
-    expect(screen.queryByLabelText('同层目录最多几个')).toBeNull()
+    const { container } = render(<SettingsPanel />)
+    const headings = [...container.querySelectorAll('h3')].map((h) => h.textContent)
+    expect(headings).toEqual([t('settingsModelTitle'), t('settingsLangTitle')])
   })
 
-  it('不再摆出「目录最深嵌套几层」——同理', () => {
+  it('设置页里一个数字旋钮都没有——这几个数字用户无从判断，一律由书签量推导', () => {
     useStore.setState({ settings: { ...DEFAULT_SETTINGS } })
-    render(<SettingsPanel />)
-    expect(screen.queryByLabelText('目录最深嵌套几层')).toBeNull()
-  })
-
-  // 原来验的是「目录下限那两项还在——prune 仍然在读它们」。它们已经退成 core 里的
-  // 内部常量 MIN_FOLDER_BOOKMARKS，设置页不该再摆出来：摆着就等于告诉用户他能拨
-  it('不再摆出目录下限那两项——阈值已经退成 core 里的内部常量', () => {
-    useStore.setState({ settings: { ...DEFAULT_SETTINGS } })
-    render(<SettingsPanel />)
-    expect(screen.queryByLabelText('不足几个书签的目录就不单独建立')).toBeNull()
-    expect(screen.queryByLabelText('至少几个书签')).toBeNull()
+    const { container } = render(<SettingsPanel />)
+    // 空断言防身：这一页确实渲染出输入控件了，不是在一个空壳上扫出的零
+    expect(container.querySelectorAll('input').length).toBeGreaterThan(0)
+    expect(container.querySelectorAll('input[type="number"]')).toHaveLength(0)
   })
 
   // 原来验的是「分类偏好那几项一直可编辑」。那几项没了，但它守的规矩没变——设置页里
@@ -42,15 +46,6 @@ describe('SettingsPanel 分类参数', () => {
     expect(container.querySelectorAll('[disabled]')).toHaveLength(0)
     // 空断言防身：页面里确实有控件可查，不是扫了个空壳
     expect(container.querySelectorAll('input, select, button').length).toBeGreaterThan(0)
-  })
-
-  // 原来验的是那段「以下几项只在重新设计目录结构时生效」的说明。段里最后一个旋钮
-  // 撤走之后，说明本身也没有指代对象了——连同整个 section 一起删掉，不留空壳
-  it('分类偏好那一整段连同说明文案一起没了——里面已经一个旋钮都不剩', () => {
-    useStore.setState({ settings: { ...DEFAULT_SETTINGS } })
-    render(<SettingsPanel />)
-    expect(screen.queryByText(/只在.*重新设计/)).toBeNull()
-    expect(screen.queryByText('分类偏好')).toBeNull()
   })
 })
 
