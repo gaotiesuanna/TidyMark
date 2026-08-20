@@ -159,6 +159,11 @@ describe('PreferencesStep 的模式判断', () => {
   it('判一团乱麻时不给逃生口——逃生口只为「误判成已整理」那一个方向存在', () => {
     setup(messyScan)
     render(<PreferencesStep />)
+    // 空断言防身：先证明这一页真渲染了、而且按钮名查询在这一页上确实命中得了东西，
+    // 否则「查不到逃生口」可能只是查错了地方
+    expect(screen.getAllByText(/重新设计整棵目录树/).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: '返回' })).toBeTruthy()
+
     expect(screen.queryByRole('button', { name: '不对，重新设计' })).toBeNull()
   })
 

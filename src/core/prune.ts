@@ -18,7 +18,10 @@ import type { CategoryCandidate, Classification } from './types'
  *
  * 曾经有过 `enforceMinFolderSize` / `minFolderSize` 两个设置项，随清单第 12 项删掉；
  * 存量存储里遗留的那两个键读都不读（见 storage/settings.ts 的旧旋钮名单），
- * 也就是说以前关掉过这个开关的用户，下次整理会吃到这道约束。
+ * 也就是说以前关掉过这个开关的用户，下次整理会吃到这道约束。变的不只是他：旧设置页
+ * 允许这个数字在 2..10 之间拨，所以拧到 5、9 的人下限反而**变松**（原本剪掉的目录这次
+ * 留得住），拧到 2 的人**变紧**。两个方向都有用例盯着（tests/background/handlers.test.ts
+ * 里把存量键拧成 2 / 5 / 9 的那几条），只是这段散文一直只写了「关掉过」那一种。
  */
 export const MIN_FOLDER_BOOKMARKS = 3
 

@@ -143,7 +143,7 @@ describe('ScopeStep 还没配模型时的提示', () => {
     expect(screen.queryByRole('button', { name: '去配置模型' })).toBeNull()
   })
 
-  it('提示在场也不挡路：目录树照常勾得动，扫描照常开得了', async () => {
+  it('提示在场也不挡路：目录树照常勾得动，扫描照常开得了，导出导入也照常在', async () => {
     setKey('')
     render(<ScopeStep />)
     // 前提：这条用例要验的是「提示在场时」，提示不在场就什么也没证明
@@ -154,5 +154,12 @@ describe('ScopeStep 还没配模型时的提示', () => {
 
     const scan = screen.getByRole('button', { name: /扫描选中的/ }) as HTMLButtonElement
     expect(scan.disabled).toBe(false)
+
+    // 导出与导入这两条支线跟模型无关，提示在场时同样得在。上面「导出入口」「导入入口」
+    // 两个 describe 不设 settings，靠 store 初值恰好让提示在场，那是用例顺序说了算的；
+    // 这里显式钉死了 apiKey，「不挡路」的三件事在同一条用例里一起守住
+    expect(screen.getByRole('button', { name: '带文件夹结构' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '纯链接清单' })).toBeTruthy()
+    expect(screen.getByText('选择文件…')).toBeTruthy()
   })
 })
