@@ -195,6 +195,64 @@ describe('ReviewStep 的分组', () => {
     expect(screen.getByText('书签 a')).toBeTruthy()
     expect(screen.queryByText(/全部来自域名规则/)).toBeNull()
   })
+
+  // I4：改投让一行换到另一个组，那个组若被用户手动折叠过，这一行不该当场从文档里消失
+  it('改投到被手动折叠过的组时，那个组会自动展开', async () => {
+    setupPlan(
+      [row('a', ['01 前端'], 'llm', undefined, 'tmp:1'), row('b', ['02 后端'], 'llm', undefined, 'tmp:2')],
+      [{ id: 'tmp:1', path: ['01 前端'] }, { id: 'tmp:2', path: ['02 后端'] }],
+    )
+    render(<ReviewStep />)
+    // 手动折叠目标组「02 后端」——它默认不折叠（不是全规则命中），得先手动点一下。
+    // 用 role 定位组头按钮：候选下拉里也有同名 option，getByText 会连它一起匹配到
+    await userEvent.click(screen.getByRole('button', { name: /02 后端/ }))
+    expect(screen.queryByText('书签 b')).toBeNull()
+
+    // 把 a 改投进这个被折叠的组
+    await userEvent.selectOptions(screen.getByLabelText('改投目录：书签 a'), 'tmp:2')
+
+    // 刚改投的这一行，以及原本就在组里的 b，都应该看得见——不是「刚点完就找不到了」
+    expect(await screen.findByText('书签 a')).toBeTruthy()
+    expect(screen.getByText('书签 b')).toBeTruthy()
+  })
+})
+
+describe('ReviewStep 的筛选开关', () => {
+  it('只看模型判的：筛掉规则命中的行，不影响勾选状态', async () => {
+    setupPlan([row('a', ['01 前端'], 'llm'), row('b', ['01 GitHub'], 'rule')])
+    render(<ReviewStep />)
+    // 「01 GitHub」整组规则命中，默认折叠着，先展开才看得到成员
+    await userEvent.click(screen.getByText(/全部来自域名规则/))
+    expect(screen.getByText('书签 b')).toBeTruthy()
+
+    await userEvent.click(screen.getByText('只看模型判的'))
+
+    expect(screen.getByText('书签 a')).toBeTruthy()
+    expect(screen.queryByText('书签 b')).toBeNull()
+    // 筛选只管看得见看不见，不碰 accepted
+    expect(useStore.getState().accepted.has('b')).toBe(true)
+  })
+
+  it('只看被标记的：筛掉高置信度的行，两个开关可以叠加', async () => {
+    setupPlan([
+      row('a', ['01 前端'], 'llm', 0.5),
+      row('b', ['01 前端'], 'llm', 0.95),
+      row('c', ['02 GitHub'], 'rule', 1),
+    ])
+    render(<ReviewStep />)
+
+    await userEvent.click(screen.getByText('只看被标记的'))
+    expect(screen.getByText('书签 a')).toBeTruthy()
+    expect(screen.queryByText('书签 b')).toBeNull()
+    expect(screen.queryByText('书签 c')).toBeNull()
+
+    // 叠加「只看模型判的」不改变结果——c 已经被置信度筛掉了，规则命中与否不再重要
+    await userEvent.click(screen.getByText('只看模型判的'))
+    expect(screen.getByText('书签 a')).toBeTruthy()
+    expect(screen.queryByText('书签 b')).toBeNull()
+    expect(screen.queryByText('书签 c')).toBeNull()
+    expect(useStore.getState().accepted.size).toBe(3)
+  })
 })
 
 describe('ReviewStep 的改投与标记', () => {
@@ -209,6 +267,22 @@ describe('ReviewStep 的改投与标记', () => {
     expect(useStore.getState().plan!.rows[0]!.toPath).toEqual(['02 后端'])
     expect(useStore.getState().plan!.rows[0]!.toCategoryId).toBe('tmp:2')
     expect(useStore.getState().accepted.has('a')).toBe(true)
+  })
+
+  // I2 回归：下拉的当前值必须直接来自 row.toCategoryId，不能拿 toPath 反查候选——
+  // 反查在「同组另一行被接受、这一行被取消勾选」时会落空，落空后浏览器退回第一个
+  // option，下拉会理直气壮地显示成另一个目录（评审 I2-1）。这里不取消勾选也能钉住：
+  // 两个候选路径字符串故意不逐字相等时，反查一样会落空。
+  it('改投下拉的当前值直接来自 toCategoryId，不靠路径字符串反查候选', () => {
+    setupPlan(
+      [row('a', ['前端'], 'llm', undefined, 'tmp:2')],
+      [{ id: 'tmp:1', path: ['01 前端'] }, { id: 'tmp:2', path: ['02 后端'] }],
+    )
+    render(<ReviewStep />)
+    const select = screen.getByLabelText('改投目录：书签 a') as HTMLSelectElement
+    // row.toPath（'前端'，裸名字）跟任何候选的 path 都逐字对不上，
+    // 若靠反查取值就会落空、退回第一个 option（tmp:1），而真实目标是 tmp:2
+    expect(select.value).toBe('tmp:2')
   })
 
   it('置信度低于阈值只是标一下，不影响勾选', () => {

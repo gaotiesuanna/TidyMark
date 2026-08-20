@@ -520,6 +520,12 @@
   "reviewRejectAll": {
     "message": "全部拒绝"
   },
+  "reviewFilterModelOnly": {
+    "message": "只看模型判的"
+  },
+  "reviewFilterMarkedOnly": {
+    "message": "只看被标记的"
+  },
   "reviewExportPlan": {
     "message": "导出方案"
   },

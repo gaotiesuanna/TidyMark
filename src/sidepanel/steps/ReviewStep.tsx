@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { localDate } from '@/core/export'
 import { MARK_CONFIDENCE, renumberPlan, summarize } from '@/core/plan'
 import type { PlanRow, UnchangedRow } from '@/core/types'
@@ -68,10 +68,57 @@ export function ReviewStep() {
     setCollapsedOverride((prev) => ({ ...prev, [group.key]: !(prev[group.key] ?? group.allRule) }))
   }
   /**
+   * 改投目录或取消勾选会让一行换到另一个组；那个组如果正被用户手动折叠着，
+   * 这一行就会当场从文档里消失，没有任何反馈说明它去了哪（见 I4）。
+   *
+   * 这里记着每个书签上一次渲染时所在的组，一旦发现换组了就强制展开新组。
+   * 「目标组跳到列表最前」这半边不修——那是首次出现顺序的固有结果，接受它。
+   */
+  const prevGroupKeyRef = useRef<Record<string, string>>({})
+  useEffect(() => {
+    const prev = prevGroupKeyRef.current
+    const nextGroupKey: Record<string, string> = {}
+    const toExpand = new Set<string>()
+    for (const group of groups) {
+      for (const row of group.rows) {
+        nextGroupKey[row.bookmarkId] = group.key
+        if (prev[row.bookmarkId] !== undefined && prev[row.bookmarkId] !== group.key) {
+          toExpand.add(group.key)
+        }
+      }
+    }
+    prevGroupKeyRef.current = nextGroupKey
+    if (toExpand.size === 0) return
+    setCollapsedOverride((current) => {
+      const updated = { ...current }
+      for (const key of toExpand) updated[key] = false
+      return updated
+    })
+  }, [groups])
+  /**
    * 未变动区不是待办，默认折叠——用户点开一次只是想确认「这次盖到了多少」，
    * 不像上面按组分的折叠态那样需要按规则命中与否分别决定初值。
    */
   const [unchangedCollapsed, setUnchangedCollapsed] = useState(true)
+  /**
+   * 两个纯展示态的筛选开关：只看模型判的（排除规则命中）、只看被标记的（排除高置信度）。
+   * 不进 store——跟折叠态一样，没有别的地方需要知道它。筛掉的行只是不渲染，
+   * 不碰 accepted，也不影响上面「换组自动展开」的判断（那个判断看的是未筛选的 groups）。
+   */
+  const [modelOnly, setModelOnly] = useState(false)
+  const [markedOnly, setMarkedOnly] = useState(false)
+  const visibleGroups = useMemo<ReviewGroup[]>(
+    () =>
+      groups
+        .map((group) => ({
+          ...group,
+          rows: group.rows.filter(
+            (row) => (!modelOnly || row.source !== 'rule') && (!markedOnly || row.confidence < MARK_CONFIDENCE),
+          ),
+        }))
+        .filter((group) => group.rows.length > 0),
+    [groups, modelOnly, markedOnly],
+  )
   if (plan === null || summary === null) return null
 
   /**
@@ -135,14 +182,31 @@ export function ReviewStep() {
       <div className="flex gap-1 text-xs">
         <button className="rounded border px-2 py-1 hover:bg-neutral-50" onClick={acceptAll}>{t('reviewAcceptAll')}</button>
         <button className="rounded border px-2 py-1 hover:bg-neutral-50" onClick={rejectAll}>{t('reviewRejectAll')}</button>
-        {/* 勾选无关的一项，靠 ml-auto 推到另一头，不跟左边三个批量操作混成一排 */}
+        {/* 两个筛选开关：只管看得见看不见，不碰 accepted，可以叠加 */}
+        <button
+          type="button"
+          aria-pressed={modelOnly}
+          className={`rounded border px-2 py-1 hover:bg-neutral-50 ${modelOnly ? 'border-neutral-800 bg-neutral-800 text-white' : ''}`}
+          onClick={() => setModelOnly((prev) => !prev)}
+        >
+          {t('reviewFilterModelOnly')}
+        </button>
+        <button
+          type="button"
+          aria-pressed={markedOnly}
+          className={`rounded border px-2 py-1 hover:bg-neutral-50 ${markedOnly ? 'border-neutral-800 bg-neutral-800 text-white' : ''}`}
+          onClick={() => setMarkedOnly((prev) => !prev)}
+        >
+          {t('reviewFilterMarkedOnly')}
+        </button>
+        {/* 勾选无关的一项，靠 ml-auto 推到另一头，不跟左边几个混成一排 */}
         <button className="ml-auto rounded border px-2 py-1 text-neutral-500 hover:bg-neutral-50" onClick={exportPlan}>
           {t('reviewExportPlan')}
         </button>
       </div>
 
       <div className="space-y-2">
-        {groups.map((group) => {
+        {visibleGroups.map((group) => {
           const collapsed = collapsedOverride[group.key] ?? group.allRule
           return (
             <div key={group.key} className="space-y-1">
@@ -196,7 +260,10 @@ export function ReviewStep() {
                       <select
                         aria-label={t('reviewRetarget', row.title)}
                         className="mt-1 w-full rounded border px-1 py-0.5 text-neutral-700"
-                        value={plan.candidates.find((c) => c.path.join(' / ') === row.toPath.join(' / '))?.id ?? ''}
+                        // 直接用 row.toCategoryId，不拿 toPath 反查候选——反查在推翻模式下
+                        // 部分取消勾选、以及合并模式两种常见状态下都会落空，落空后浏览器会
+                        // 退回第一个 option，下拉就会理直气壮地显示成另一个目录（见 I2）。
+                        value={row.toCategoryId}
                         onChange={(e) => setRowTarget(row.bookmarkId, e.target.value)}
                       >
                         {plan.candidates.map((candidate) => (

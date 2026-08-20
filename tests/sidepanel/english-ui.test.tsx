@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { render } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { setLocale } from '@/i18n'
 import { makePlan } from '../fakes/plan'
@@ -132,7 +132,7 @@ describe('英文界面渲染守卫：步骤组件', () => {
     assertNoChinese(container, 'StructureStep（合并模式）')
   })
 
-  it('ReviewStep（含新建目录、重命名目录、重命名书签三条摘要，覆盖第 26 行的分支）', () => {
+  it('ReviewStep（含新建目录、重命名目录、重命名书签三条摘要，覆盖第 26 行的分支）', async () => {
     // summary 里的 createdFolders/renamedFolders/renamedBookmarks 由组件用
     // summarize(plan, accepted) 现算，不读 plan.summary 字段——operations 必须
     // 真的包含 create_folder / rename_folder / rename_bookmark，且被接受的
@@ -140,29 +140,40 @@ describe('英文界面渲染守卫：步骤组件', () => {
     // 才会为真，第 26 行那个裸中文句号才会被渲染出来。
     const plan: OrganizePlan = {
       id: 'p1', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: true,
-      candidates: [{ id: 'tmp:1', path: ['react'] }],
+      candidates: [{ id: 'tmp:1', path: ['react'] }, { id: 'tmp:2', path: ['github.com'] }],
       operations: [
         { type: 'create_folder', temporaryId: 'tmp:1', parentId: '1', parentTemporaryId: null, title: 'react' },
+        { type: 'create_folder', temporaryId: 'tmp:2', parentId: '1', parentTemporaryId: null, title: 'github.com' },
         { type: 'rename_folder', folderId: '9', oldTitle: 'misc', newTitle: '01 misc' },
         { type: 'rename_bookmark', bookmarkId: '100', oldTitle: 'react', newTitle: 'react (facebook)' },
         { type: 'move_bookmark', bookmarkId: '100', fromParentId: '9', originalIndex: 0, toCategoryId: 'tmp:1', toTemporaryId: 'tmp:1', confidence: 0.95, reason: 'official docs' },
         { type: 'move_bookmark', bookmarkId: '101', fromParentId: '9', originalIndex: 1, toCategoryId: 'tmp:1', toTemporaryId: 'tmp:1', confidence: 0.4, reason: 'maybe related' },
+        { type: 'move_bookmark', bookmarkId: '102', fromParentId: '9', originalIndex: 2, toCategoryId: 'tmp:2', toTemporaryId: 'tmp:2', confidence: 1, reason: 'matched by domain rule' },
       ],
       rows: [
         { bookmarkId: '100', title: 'React docs', url: 'https://react.dev', fromPath: ['Bookmarks bar', 'Misc'], toPath: ['Bookmarks bar', 'react'], toCategoryId: 'tmp:1', confidence: 0.95, reason: 'official docs', source: 'llm' },
         { bookmarkId: '101', title: 'Uncertain one', url: 'https://x.dev', fromPath: ['Bookmarks bar', 'Misc'], toPath: ['Bookmarks bar', 'react'], toCategoryId: 'tmp:1', confidence: 0.4, reason: 'maybe related', source: 'llm' },
+        // I5：一条规则命中的行，让组级标记 reviewGroupAllRule 也经过这条英文渲染守卫
+        { bookmarkId: '102', title: 'Some repo', url: 'https://github.com/x/y', fromPath: ['Bookmarks bar', 'Misc'], toPath: ['Bookmarks bar', 'github.com'], toCategoryId: 'tmp:2', confidence: 1, reason: 'matched by domain rule', source: 'rule' },
       ],
-      unchanged: [],
-      summary: { totalBookmarks: 2, movedBookmarks: 2, unchangedBookmarks: 0, createdFolders: 1, renamedFolders: 1, renamedBookmarks: 1, lowConfidenceItems: 1 },
+      // I5：三种 kind 各一条，让未变动区的四个词条（标题 + 三条理由）也经过这条英文渲染守卫
+      unchanged: [
+        { bookmarkId: '200', title: 'Already sorted', url: 'https://a.dev', currentPath: ['Bookmarks bar', 'react'], kind: 'inPlace', reason: '' },
+        { bookmarkId: '201', title: 'No good folder', url: 'https://b.dev', currentPath: ['Inbox'], kind: 'noTarget', reason: 'no suitable folder' },
+        { bookmarkId: '202', title: 'Classification failed', url: 'https://c.dev', currentPath: ['Inbox'], kind: 'failed', reason: 'timed out' },
+      ],
+      summary: { totalBookmarks: 6, movedBookmarks: 3, unchangedBookmarks: 3, createdFolders: 2, renamedFolders: 1, renamedBookmarks: 1, lowConfidenceItems: 1 },
       warnings: [],
       tags: [],
       mergeRoot: null,
     }
     useStore.setState({
-      plan, accepted: new Set(['100', '101']), busy: null, error: null, scan: null,
+      plan, accepted: new Set(['100', '101', '102']), busy: null, error: null, scan: null,
       settings: { ...DEFAULT_SETTINGS, removeEmptyFolders: true },
     })
     const { container } = render(<ReviewStep />)
+    // 未变动区默认折叠，四个词条都在里面——不展开就渲染不到，守卫等于没挂上
+    await userEvent.click(screen.getByText(/untouched this round/))
     assertNoChinese(container, 'ReviewStep')
   })
 

@@ -520,6 +520,12 @@
   "reviewRejectAll": {
     "message": "Reject all"
   },
+  "reviewFilterModelOnly": {
+    "message": "Model-judged only"
+  },
+  "reviewFilterMarkedOnly": {
+    "message": "Flagged only"
+  },
   "reviewExportPlan": {
     "message": "Export plan"
   },
