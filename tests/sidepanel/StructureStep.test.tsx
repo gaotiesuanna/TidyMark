@@ -51,7 +51,9 @@ describe('StructureStep', () => {
     expect(screen.getByDisplayValue('AI 工具').closest('li')!.textContent).toContain('2 条将移入')
     expect(screen.getByDisplayValue('前端').closest('div')!.textContent).toContain('2 条将移入')
     expect(screen.getByDisplayValue('React').closest('li')!.textContent).toContain('1 条将移入')
-    expect(screen.getByText('其他').closest('div')!.textContent).toContain('1 条将移入')
+    // 「合并到」下拉现在也会把「其他」列成选项文本，getByText('其他') 会歧义——
+    // 用 selector 精确定位「其他」那一行本身的 <span>（不可删节点用 span 渲染标题，不是 <option>）
+    expect(screen.getByText('其他', { selector: 'span' }).closest('div')!.textContent).toContain('1 条将移入')
   })
 
   it('改名写入 structureEdits', async () => {
@@ -79,7 +81,9 @@ describe('StructureStep', () => {
     render(<StructureStep />)
     expect(screen.queryByRole('button', { name: '删除目录 其他' })).toBeNull()
     expect(screen.queryByDisplayValue('其他')).toBeNull()
-    expect(screen.getByText('其他')).toBeTruthy()
+    // 「其他」现在也会出现在别的目录「合并到」下拉的 <option> 里，getByText('其他') 会歧义——
+    // 用 selector 精确定位它自己那一行的 <span>
+    expect(screen.getByText('其他', { selector: 'span' })).toBeTruthy()
   })
 
   it('点击继续进入 review', async () => {
@@ -172,7 +176,7 @@ describe('StructureStep 合并到', () => {
   it('每个可删节点旁给一个「合并到」的下拉，选了就合并', async () => {
     setupPlan([{ id: 'tmp:1', title: '前端' }, { id: 'tmp:2', title: '后端' }])
     render(<StructureStep />)
-    await userEvent.selectOptions(screen.getByLabelText('合并到：前端'), 'tmp:2')
+    await userEvent.selectOptions(screen.getByLabelText('把「前端」合并到…'), 'tmp:2')
 
     const edits = useStore.getState().structureEdits
     expect(edits.removed).toContain('tmp:1')
@@ -182,7 +186,7 @@ describe('StructureStep 合并到', () => {
   it('下拉里不出现自己', () => {
     setupPlan([{ id: 'tmp:1', title: '前端' }, { id: 'tmp:2', title: '后端' }])
     render(<StructureStep />)
-    const select = screen.getByLabelText('合并到：前端') as HTMLSelectElement
+    const select = screen.getByLabelText('把「前端」合并到…') as HTMLSelectElement
     const values = [...select.options].map((o) => o.value)
     expect(values).not.toContain('tmp:1')
     expect(values).toContain('tmp:2')
@@ -194,7 +198,66 @@ describe('StructureStep 合并到', () => {
       { id: 'tmp:2', title: '后端' },
     ])
     render(<StructureStep />)
-    const select = screen.getByLabelText('合并到：前端') as HTMLSelectElement
+    const select = screen.getByLabelText('把「前端」合并到…') as HTMLSelectElement
     expect([...select.options].map((o) => o.value)).not.toContain('tmp:9')
+  })
+
+  // 票 07 §3：「其他」不能被合并走（removable: false 已经挡住），但可以当接收方——
+  // 把一个碎目录并进「其他」，效果与「删除」一致（对聚合目录还不止如此，见 structure.ts 的回落链）。
+  // 这条守住「一级下拉排除 removable === false」不会被悄悄改回去。
+  it('「其他」不可被合并走，但可以被选为合并目标', () => {
+    setupPlan([{ id: 'tmp:1', title: '前端' }, { id: 'tmp:9', title: '其他' }])
+    render(<StructureStep />)
+    // 「其他」自己那一行不可删，也就没有自己的「合并到」下拉
+    expect(screen.queryByLabelText('把「其他」合并到…')).toBeNull()
+    // 但「前端」的下拉里能选到「其他」
+    const select = screen.getByLabelText('把「前端」合并到…') as HTMLSelectElement
+    expect([...select.options].map((o) => o.value)).toContain('tmp:9')
+  })
+})
+
+describe('StructureStep 合并到（二级下拉）', () => {
+  /** 两个一级目录各带两个二级子目录，专门测「只允许同层合并」在二级这一半是否也被守住（票 07）。 */
+  const twoParentsWithChildren = () => setupPlan([
+    {
+      id: 'tmp:1', title: '前端',
+      children: [{ id: 'tmp:9', title: '构建工具' }, { id: 'tmp:10', title: 'React' }],
+    },
+    {
+      id: 'tmp:2', title: '后端',
+      children: [{ id: 'tmp:11', title: '框架' }],
+    },
+  ])
+
+  it('二级节点的下拉里只出现同一个父目录下的其他二级节点', () => {
+    twoParentsWithChildren()
+    render(<StructureStep />)
+    const select = screen.getByLabelText('把「构建工具」合并到…') as HTMLSelectElement
+    const values = [...select.options].map((o) => o.value)
+    // 同父兄弟必须在
+    expect(values).toContain('tmp:10')
+  })
+
+  it('二级节点的下拉里不出现自己', () => {
+    twoParentsWithChildren()
+    render(<StructureStep />)
+    const select = screen.getByLabelText('把「构建工具」合并到…') as HTMLSelectElement
+    expect([...select.options].map((o) => o.value)).not.toContain('tmp:9')
+  })
+
+  it('二级节点的下拉里不出现任何一级节点', () => {
+    twoParentsWithChildren()
+    render(<StructureStep />)
+    const select = screen.getByLabelText('把「构建工具」合并到…') as HTMLSelectElement
+    const values = [...select.options].map((o) => o.value)
+    expect(values).not.toContain('tmp:1')
+    expect(values).not.toContain('tmp:2')
+  })
+
+  it('二级节点的下拉里不出现别的父目录下的二级节点', () => {
+    twoParentsWithChildren()
+    render(<StructureStep />)
+    const select = screen.getByLabelText('把「构建工具」合并到…') as HTMLSelectElement
+    expect([...select.options].map((o) => o.value)).not.toContain('tmp:11')
   })
 })

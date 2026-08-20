@@ -62,8 +62,11 @@ export function StructureStep() {
                 <span className="shrink-0 text-neutral-400">{t('structureIncoming', String(node.count))}</span>
                 {/* 下拉不放进上面 removable 分支里的 <input>：这里的行本身没有 <label> 包裹，
                     但选项集合仍按「只列同层」严格算，跨层等于移动，本轮不做（票 07）。
-                    「其他」不进选项：它是删除已经会落到的地方（见 structureFallback），
-                    merge 只用来接住真正的目标目录，不重复删除已经有的效果 */}
+                    「其他」进选项：它虽然自己不可被合并走（下面 node.removable 挡住了它自己的下拉），
+                    但可以当接收方——把一个碎目录并进「其他」，对普通主题目录效果与「删除」一致，
+                    但对聚合目录不是重复：聚合目录被删会按书签的 primaryTopic 散开（见 structure.ts
+                    的回落链），只有散不到同名主题时才落「其他」，用户没有别的办法表达「就是想整个
+                    倒进其他」，所以合并到「其他」是一个真实存在、删除表达不了的选项（票 07 §3） */}
                 {node.removable && (
                   <select
                     aria-label={t('structureMergeInto', node.title)}
@@ -75,7 +78,7 @@ export function StructureStep() {
                   >
                     <option value="">{t('structureMergePlaceholder')}</option>
                     {nodes
-                      .filter((sibling) => sibling.id !== node.id && sibling.removable)
+                      .filter((sibling) => sibling.id !== node.id)
                       .map((sibling) => (
                         <option key={sibling.id} value={sibling.id}>{sibling.title}</option>
                       ))}

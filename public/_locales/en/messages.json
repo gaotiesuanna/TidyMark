@@ -441,7 +441,7 @@
     "message": "Merge into…"
   },
   "structureFallback": {
-    "message": "Delete a top-level folder and its bookmarks fall back to \"Other\"; delete a subfolder and they stay in its parent."
+    "message": "Delete a top-level folder and its bookmarks fall back to \"Other\"; delete a subfolder and they stay in its parent. Merging a top-level folder removes its subfolders too, and its bookmarks move into the folder you chose."
   },
   "structureBack": {
     "message": "Back"

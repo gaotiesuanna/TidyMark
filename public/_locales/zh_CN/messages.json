@@ -430,7 +430,7 @@
     }
   },
   "structureMergeInto": {
-    "message": "合并到：$title$",
+    "message": "把「$title$」合并到…",
     "placeholders": {
       "title": {
         "content": "$1"
@@ -441,7 +441,7 @@
     "message": "合并到…"
   },
   "structureFallback": {
-    "message": "删掉一级目录，里面的书签会落到「其他」；删掉子目录，书签留在它的上级目录。"
+    "message": "删掉一级目录，里面的书签会落到「其他」；删掉子目录，书签留在它的上级目录。合并一级目录会连它的子目录一起消失，书签改投所选目录。"
   },
   "structureBack": {
     "message": "返回"
