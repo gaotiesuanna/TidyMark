@@ -180,13 +180,14 @@ export function foldersPrompt(
       : `${index}. Only create a folder if it will hold at least ${minFolderSize} bookmarks. Merge labels that cannot fill one into a neighbouring folder; if none fits, leave them without a folder of their own.`
 
   // 两轮设计从「互相看不见」变成「有先后」：聚合组先定，主题设计在它已知的前提下补剩下的。
-  // （清单第 5 项落地后）只禁语义重叠、不禁同名；今天组会吸收非命中书签，所以同名仍属重叠——
-  // 这条界限要在聚合组改成只装规则命中的书签之后才能再松一次：组外的同主题书签需要一个
-  // 同名目录才有去处（见 issues/10-shape-from-count.md 的补账小节）。
+  // 已松（2026-08-19，计划 2/2）：只禁语义重叠，不禁同名。松绑的前提是「组只装规则命中的
+  // 书签」这条已经成立（票 10 补账第 2 条）——组关起来之后，组外的同主题书签需要一个
+  // 同名目录才有去处，硬禁同名只会把它们赶进「其他」（见 issues/10-shape-from-count.md
+  // 的补账小节）。
   const existingRule = (index: number): string =>
     locale === 'zh_CN'
-      ? `${index}. 这些目录已经存在，是按来源聚合出来的，它们里面的书签已经有归属了（其中「A/B」表示 A 目录下的子目录 B）：${(existingFolders ?? []).join('、')}。不要再设计与它们语义重叠的目录——已经有「语音合成」就不要再造一个「语音生成」。`
-      : `${index}. These folders already exist — they were grouped by source and their bookmarks already have a home ("A/B" means subfolder B under folder A): ${(existingFolders ?? []).join(', ')}. Do not design folders that overlap them in meaning: if "Speech synthesis" is there, do not add another "Voice generation".`
+      ? `${index}. 这些目录已经存在（其中「A/B」表示 A 目录下的子目录 B），但它们只装来自特定来源的书签：${(existingFolders ?? []).join('、')}。你设计的目录装的是别处来的书签，可以与它们同名；要避开的是语义重叠但名字不同的目录——已经有「语音合成」就不要再造一个「文本转语音」。`
+      : `${index}. These folders already exist ("A/B" means subfolder B under folder A), but they only hold bookmarks from one specific source: ${(existingFolders ?? []).join(', ')}. The folders you design hold bookmarks from elsewhere, so it's fine to give them the same name. What to avoid is a folder that overlaps one of these in meaning but uses a different name — if "Speech synthesis" is there, do not add another "Text-to-speech".`
 
   if (locale === 'zh_CN') {
     const head = parentTitle !== undefined

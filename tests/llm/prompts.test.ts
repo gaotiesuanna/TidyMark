@@ -239,6 +239,25 @@ describe('foldersPrompt 的已有目录清单', () => {
     const zh = foldersPrompt('zh_CN', { total: 30, maxSiblings: 8, existingFolders: ['GitHub'] }).join('\n')
     expect(zh).not.toContain('语音合成与克隆')
   })
+
+  // 票 10「关组牵动的两处」之一：组关起来之后，组外的同主题书签需要一个同名目录才有去处，
+  // 硬禁同名会把它们赶进「其他」。规则松成「允许同名、禁近义异名」——语义重叠但名字不同的
+  // 才是真正要挡的（「语音合成」vs「文本转语音」是同一个概念 TTS 的两种叫法）。
+  it('已有目录清单那条规则松成「允许同名、禁近义异名」', () => {
+    const lines = foldersPrompt('zh_CN', {
+      total: 30, maxSiblings: 8, existingFolders: ['GitHub', 'GitHub/语音合成与克隆'],
+    }).join('\n')
+    expect(lines).toContain('同名')
+    expect(lines).toContain('语义重叠')
+  })
+
+  it('英文那份同样松', () => {
+    const lines = foldersPrompt('en', {
+      total: 30, maxSiblings: 8, existingFolders: ['GitHub/Speech synthesis'],
+    }).join('\n')
+    expect(lines).toContain('same name')
+    expect(/[一-鿿]/.test(lines)).toBe(false)
+  })
 })
 
 describe('classifyPrompt 的 topic 规则', () => {

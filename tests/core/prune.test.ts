@@ -138,7 +138,7 @@ describe('pruneSmallFolders', () => {
     expect(targetOf(result, 't1#0')).toBe('t1')
   })
 
-  // 组内子目录在建树那道就按标签数筛过了，分类阶段只会往里加不会往外拿。
+  // 组内的占用在建树时就是确定值——组只装规则命中的书签，分类阶段不会往里加也不会往外拿。
   // 同样带着 domainGroup 标记，一并豁免，规矩才只有一条
   it('聚合组的子目录同样不撤', () => {
     const result = prune({

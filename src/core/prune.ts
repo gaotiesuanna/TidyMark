@@ -103,7 +103,8 @@ export function pruneSmallFolders(input: PruneInput): PruneResult {
   const fallback = input.candidates.find(isFallback) ?? null
 
   // domainGroup 标记盖住整个聚合组子树（见 core/tree.ts 的 mark），组根和组内子目录
-  // 一并豁免。子目录本来也撤不掉——建树已按标签数筛过，分类阶段只会往里加不会往外拿
+  // 一并豁免。子目录本来也撤不掉——组内的占用在建树时就是确定值：组只装规则命中的
+  // 书签，分类阶段既不会往里加、也不会往外拿，没有需要重新数一遍的余地
   const prunable = input.candidates.filter(
     (c) => specById.has(c.id)
       && c.id !== input.mergeRootTemporaryId
