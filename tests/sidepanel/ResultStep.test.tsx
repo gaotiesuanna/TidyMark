@@ -69,10 +69,10 @@ describe('ResultStep', () => {
       .toEqual(['3', '2', '1', '1'])
   })
 
-  // 非推翻模式下 apply 不跑 sortFolders，书签栏里的真实先后没被动过。这一页自称展示
-  // 「整理后的结构」，若还按编号排一遍，带编号的旧目录会被凭空提到最前——那就又是一页
-  // 说谎的结构树，只是换了个说法。
-  it('非推翻模式按书签栏里的真实先后展示，不把带编号的旧目录提到最前', () => {
+  // 这一页自称展示「整理后的结构」，拿到的又正是整理后重新读回的真实树，那就照原样显示。
+  // 连推翻模式也不例外：排序 move 失败（sortedFolders 为 0）、撤销之后，书签栏里带编号的
+  // 目录就是排在没编号的后面，这时按编号重排一遍，这一页就是在说谎。
+  it('一律按书签栏里的真实先后展示，不把带编号的目录提到最前', () => {
     const flatTree: BookmarkNode[] = [
       { id: '0', title: '', children: [
         { id: '1', title: '书签栏', children: [
@@ -82,7 +82,8 @@ describe('ResultStep', () => {
       ]},
     ]
     useStore.setState({
-      plan: { ...plan, rebuildStructure: false },
+      // 推翻模式（plan.rebuildStructure 为 true）下也照样不排
+      plan,
       tree: flatTree,
       applyResult: { ...applyResult, createdFolderIds: [] },
     })

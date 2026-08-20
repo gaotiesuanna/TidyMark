@@ -19,14 +19,9 @@ export function ResultStep() {
       undoResult !== null && undoResult.rebuiltRootIds.length > 0
         ? undoResult.rebuiltRootIds
         : applyResult.mergeRootId === null ? [] : [applyResult.mergeRootId]
-    return buildResultTree(
-      bookmarks,
-      [...plan.scopeRootIds, ...extraRootIds],
-      applyResult.createdFolderIds,
-      // 只有推翻模式把编号顺序真的落进了书签栏；非推翻模式没动过用户的排列，
-      // 这里再按编号排一遍，这一页就跟它自称的「真实结构」对不上了
-      plan.rebuildStructure,
-    )
+    // 不传任何排序开关：这棵树是整理后重新读回的真实树，照原样显示就是「真实结构」。
+    // 推翻模式下 sortFolders 已经把编号序落进了书签栏，读回来本就是编号序
+    return buildResultTree(bookmarks, [...plan.scopeRootIds, ...extraRootIds], applyResult.createdFolderIds)
   }, [bookmarks, plan, applyResult, undoResult])
   if (applyResult === null) return null
 

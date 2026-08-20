@@ -1,4 +1,3 @@
-import { folderNumber } from './order'
 import { findScopeRoots } from './scan'
 import type { BookmarkNode } from './ports'
 
@@ -16,45 +15,29 @@ export interface ResultTreeNode {
 }
 
 /**
- * 与 `core/order.ts` 的 `planFolderOrder` 同一条规则：带编号的排最前、彼此按编号升序，
- * 没编号的跟在后面、相对顺序不变（返回 0，`Array.prototype.sort` 自 ES2019 起稳定）。
- *
- * 结果页那一段文案写着「书签栏的真实结构」，那就得是真实顺序。而「真实顺序」在两种模式下
- * 是两回事，所以这个比较函数只在推翻模式下用（见 `buildResultTree` 的 numberedOrder）：
- *
- * - 推翻模式：`engine/apply.ts` 会跑 `sortFolders`，把 `planFolderOrder` 的顺序真的落进
- *   Chrome，书签栏里的真实顺序就是「带编号的在前、按号升序」。
- * - 非推翻模式：`apply.ts` 明写着不产生编号、不动用户自己的排列，书签栏的真实顺序就是
- *   树里读出来的原始先后。这时再按编号排，等于把带编号的旧目录凭空提到最前面——
- *   那一页照样在说谎，只是换了个说谎方式。
- *
- * （此前这里按书签总数降序排，与书签栏对不上，而这一页恰恰是拿来对照真实结构的。
- * 每行右侧本来就显示书签数，「一眼看见哪个最大」不靠排序也拿得到。）
- */
-function byFolderNumber(a: ResultTreeNode, b: ResultTreeNode): number {
-  const left = folderNumber(a.title)
-  const right = folderNumber(b.title)
-  if (left !== null && right !== null) return left - right
-  if (left !== null) return -1
-  if (right !== null) return 1
-  return 0
-}
-
-/**
  * 从整理完成后重新读取的书签树，构建结果页展示的目录结构。
  *
  * 直接读真实书签树而不是从方案推导：方案只知道「被接受的书签去了哪」，
  * 未接受的书签仍留在原目录里，只看方案会得出一棵与实际不符的树。
  *
- * numberedOrder 由调用方从 `plan.rebuildStructure` 传入：只有推翻模式才真的把编号顺序
- * 落进了书签栏，其余情况一律保留树里的原始先后（见上面 byFolderNumber 的注释）。
- * 三个参数都不给默认值——排不排序是「这一页说不说真话」的开关，得让调用方每次都表态。
+ * **这里一律不排序，这正是它说真话的方式。** 那一页写着「书签栏的真实结构」，
+ * 而手里拿到的就是真实结构：`store.ts` 的 apply/undo 结束都会 `refreshTree()`
+ * 重新读回整棵树，Chrome 返回的 children 本身就是 index 序，也就是书签栏里的真实先后。
+ *
+ * 之所以连「按编号排」也不做：
+ * - 推翻模式下 `engine/apply.ts` 已经跑过 `sortFolders`，把 `planFolderOrder` 的顺序
+ *   真的写进了 Chrome。树读回来时就已经是编号序，这里再排一遍是纯空操作。
+ * - 排序唯一会改变结果的时刻，恰恰是真实树没排成编号序的时刻——排序 move 失败、
+ *   撤销之后目录名改回去、撤销半途失败只有一部分还顶着号……那些时刻排序不是在帮忙，
+ *   是在把一棵没被排过的树画成排过的样子，也就是在说谎。
+ *
+ * （更早的版本按书签总数降序排，同样与书签栏对不上。每行右侧本来就显示书签数，
+ * 「一眼看见哪个最大」不靠排序也拿得到。）
  */
 export function buildResultTree(
   tree: BookmarkNode[],
   scopeRootIds: string[],
   createdFolderIds: string[],
-  numberedOrder: boolean,
 ): ResultTreeNode[] {
   const created = new Set(createdFolderIds)
 
@@ -65,7 +48,6 @@ export function buildResultTree(
       if (child.url !== undefined) count++
       else children.push(build(child))
     }
-    if (numberedOrder) children.sort(byFolderNumber)
     return {
       id: node.id,
       title: node.title,
