@@ -308,13 +308,13 @@
   "prefsStatDepth": {
     "message": "Max depth"
   },
-  "prefsModelTitle": {
+  "settingsModelTitle": {
     "message": "Model settings"
   },
-  "prefsPrivacyKey": {
+  "settingsPrivacyKey": {
     "message": "Your API key is stored in plain text in local browser storage and is never uploaded anywhere."
   },
-  "prefsPrivacyPayload": {
+  "settingsPrivacyPayload": {
     "message": "Only bookmark titles, domains, paths, and current folder names are sent to the model — never URL parameters or page contents."
   },
   "prefsModeAdditive": {
@@ -344,10 +344,10 @@
   "prefsCleanBody": {
     "message": "Deletes folders in scope that contain no bookmarks, including parents left empty after their children were cleared. Scope roots are never deleted, and undo restores the folders along with the bookmarks. One exception: when several folders are merged into one, the source folders and the empty folders inside them are always removed regardless of this switch, and undo restores those too."
   },
-  "prefsGithubTitle": {
+  "settingsGithubTitle": {
     "message": "Normalize GitHub bookmark titles"
   },
-  "prefsGithubBody": {
+  "settingsGithubBody": {
     "message": "Rewrites titles from the URL into \"repo (owner)\", keeping the file name when a specific file is bookmarked. This changes the bookmark's own name, not just its location, and can be undone. It is independent of the checkboxes above — once on, every GitHub bookmark in scope is rewritten."
   },
   "prefsGroupTitle": {

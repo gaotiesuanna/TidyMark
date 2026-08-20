@@ -168,3 +168,37 @@ describe('PreferencesStep 的模式判断', () => {
     expect(screen.getByText('重名目录')).toBeTruthy()
   })
 })
+
+/**
+ * 模型配置与「统一 GitHub 标题」搬进设置页之后的反向守卫：偏好页只留每轮会变的东西。
+ *
+ * queryBy... 为 null 的断言天生可疑——它绿着，你分不清是真的搬走了，还是查错了地方，
+ * 又或者组件压根没渲染（scan 为 null 时 PreferencesStep 直接 return null，那时查什么都是 null）。
+ * 所以每条都先断言一件「搬迁之后仍然留在偏好页上」的东西确实查得到，
+ * 证明这一页真渲染出来了、这类查询在这一页上确实能命中，再去断言搬走的那些查不到。
+ */
+describe('PreferencesStep 不再摆配一次就不动的设置', () => {
+  beforeEach(() => { setup(messyScan) })
+
+  it('模型配置整段都不在偏好页上——它是配一次就不动的，属于设置页', () => {
+    render(<PreferencesStep />)
+    // 空断言防身：这一页确实渲染出内容了
+    expect(screen.getByText(/删除范围内不含任何书签的文件夹/)).toBeTruthy()
+
+    expect(screen.queryByPlaceholderText('Base URL')).toBeNull()
+    expect(screen.queryByPlaceholderText('API Key')).toBeNull()
+    expect(screen.queryByPlaceholderText('Model')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'DeepSeek' })).toBeNull()
+    expect(screen.queryByText(/API Key 明文保存在本地浏览器存储中/)).toBeNull()
+  })
+
+  it('统一 GitHub 标题的开关不在偏好页上——它改的是书签标题，不是这一轮怎么整理', () => {
+    render(<PreferencesStep />)
+    // 空断言防身：同一页上另一个带 GitHub 字样的 label（域名聚合那组）照样查得到，
+    // 所以下面那条 null 不是因为 getByLabelText 在这一页上查不到任何东西
+    expect(screen.getByLabelText('GitHub')).toBeTruthy()
+
+    expect(screen.queryByLabelText(/统一 GitHub 书签标题/)).toBeNull()
+    expect(screen.queryByText(/仓库名 \(作者\)/)).toBeNull()
+  })
+})

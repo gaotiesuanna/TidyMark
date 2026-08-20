@@ -308,13 +308,13 @@
   "prefsStatDepth": {
     "message": "最深层级"
   },
-  "prefsModelTitle": {
+  "settingsModelTitle": {
     "message": "模型配置"
   },
-  "prefsPrivacyKey": {
+  "settingsPrivacyKey": {
     "message": "API Key 明文保存在本地浏览器存储中，不会上传到任何服务器。"
   },
-  "prefsPrivacyPayload": {
+  "settingsPrivacyPayload": {
     "message": "发送给模型的内容仅包含书签标题、域名、路径与所在目录，不含 URL 参数与网页正文。"
   },
   "prefsModeAdditive": {
@@ -344,10 +344,10 @@
   "prefsCleanBody": {
     "message": "删除范围内不含任何书签的文件夹，包括子目录清空后变空的父目录。范围根目录不会被删除，撤销时会连同目录一起还原。合并多个文件夹时例外：源文件夹连同它内部的空目录一律清理，不受本开关约束，撤销同样会还原。"
   },
-  "prefsGithubTitle": {
+  "settingsGithubTitle": {
     "message": "统一 GitHub 书签标题"
   },
-  "prefsGithubBody": {
+  "settingsGithubBody": {
     "message": "把标题按 URL 改写成「仓库名 (作者)」，收藏具体文件时保留文件名。这会改动书签本身的名字，不只是位置；可一键撤销。与上面的勾选无关，开启后范围内所有 GitHub 书签都会改。"
   },
   "prefsGroupTitle": {

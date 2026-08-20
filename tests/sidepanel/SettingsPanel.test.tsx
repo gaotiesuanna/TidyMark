@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { setLocale } from '@/i18n'
 import { SettingsPanel } from '@/sidepanel/components/SettingsPanel'
 import { useStore } from '@/sidepanel/store'
-import { DEFAULT_SETTINGS } from '@/storage/settings'
+import { DEFAULT_SETTINGS, PRESETS } from '@/storage/settings'
 
 beforeEach(() => {
   useStore.setState({
@@ -79,5 +79,56 @@ describe('SettingsPanel 语言', () => {
     render(<SettingsPanel />)
     expect(screen.getByRole('option', { name: '中文' })).toBeTruthy()
     expect(screen.getByRole('option', { name: 'English' })).toBeTruthy()
+  })
+})
+
+/**
+ * 模型配置从偏好页搬进设置页：它是「配一次就不动的」，不属于「这一轮怎么整理」。
+ * 每条都查到具体控件并且真的动它一下——只查文案在不在，搬迁时把 onChange 漏掉也照样绿。
+ */
+describe('SettingsPanel 模型配置', () => {
+  it('摆出 Base URL / API Key / Model 三个输入框', () => {
+    render(<SettingsPanel />)
+    expect(screen.getByPlaceholderText('Base URL')).toBeTruthy()
+    expect(screen.getByPlaceholderText('API Key')).toBeTruthy()
+    expect(screen.getByPlaceholderText('Model')).toBeTruthy()
+  })
+
+  it('API Key 输入框是密码框——侧栏是常开的，明文摆着等于给旁边的人看', () => {
+    render(<SettingsPanel />)
+    expect(screen.getByPlaceholderText('API Key')).toHaveProperty('type', 'password')
+  })
+
+  it('改 API Key 写进 settings.llm', () => {
+    render(<SettingsPanel />)
+    fireEvent.change(screen.getByPlaceholderText('API Key'), { target: { value: 'sk-x' } })
+    expect(useStore.getState().settings.llm.apiKey).toBe('sk-x')
+  })
+
+  it('列出全部供应商预设，点一下同时写 baseUrl 与 model', () => {
+    render(<SettingsPanel />)
+    for (const preset of PRESETS) {
+      expect(screen.getByRole('button', { name: preset.label.zh_CN })).toBeTruthy()
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'DeepSeek' }))
+    const llm = useStore.getState().settings.llm
+    expect(llm.baseUrl).toBe('https://api.deepseek.com/v1')
+    expect(llm.model).toBe('deepseek-chat')
+  })
+
+  it('隐私说明跟着模型配置一起来——填 Key 的地方才是该讲这件事的地方', () => {
+    render(<SettingsPanel />)
+    expect(screen.getByText(/API Key 明文保存在本地浏览器存储中/)).toBeTruthy()
+    expect(screen.getByText(/不含 URL 参数与网页正文/)).toBeTruthy()
+  })
+})
+
+describe('SettingsPanel 统一 GitHub 标题', () => {
+  it('摆出开关，勾了写进 settings.rewriteGithubTitles', () => {
+    render(<SettingsPanel />)
+    const box = screen.getByLabelText(/统一 GitHub 书签标题/) as HTMLInputElement
+    expect(box.checked).toBe(false)
+    fireEvent.click(box)
+    expect(useStore.getState().settings.rewriteGithubTitles).toBe(true)
   })
 })
