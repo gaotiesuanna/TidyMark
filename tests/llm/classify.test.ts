@@ -570,7 +570,9 @@ describe('classifyBookmarks 同 URL 只问一遍', () => {
     expect(logs[0]!.message).toContain('5 条')
     expect(logs[0]!.message).toContain('成功 5 条')
     // 提问数不再冒充书签数，但也不能藏起来——用户得看懂为什么只发了 2 次请求。
-    expect(logs[0]!.message).toContain('2')
+    // 钉整行不钉「2」：耗时那一段也可能含 2（慢机器上「耗时 20ms」），
+    // 那时这条断言会**空过**而不是变红——比 flaky 更难发现。
+    expect(logs[0]!.message).toMatch(/^分类批次 1\/1：5 条（重复 URL 合并后只问了 2 次），成功 5 条，耗时 \d+ms$/)
     // 分级口径跟着换：5 条书签全部成功就是「全成功」，
     // 不能因为 ok(5) 不等于批次长度(2) 而降级成 warn。
     expect(logs[0]!.level).toBe('info')
