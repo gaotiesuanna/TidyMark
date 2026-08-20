@@ -822,7 +822,12 @@ describe('analyze 的域名聚合', () => {
 
 describe('analyze 对聚合组做细分抽取', () => {
   it('勾选聚合组时会为组内书签单独跑一次功能域抽取', async () => {
-    const { ports, deps } = setupAnalyze({ g0: 'https://github.com/o/r0' })
+    // 3 条命中，够着默认 minFolderSize=3 的门槛，组才建得起来
+    const { ports, deps } = setupAnalyze({
+      g0: 'https://github.com/o/r0',
+      g1: 'https://github.com/o/r1',
+      g2: 'https://github.com/o/r2',
+    })
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
       llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
@@ -844,6 +849,86 @@ describe('analyze 对聚合组做细分抽取', () => {
     const prompts = (deps.createClient().complete as ReturnType<typeof vi.fn>).mock.calls
       .map((call) => call[0] as string)
     expect(prompts.some((p) => p.includes('功能域'))).toBe(false)
+  })
+})
+
+describe('analyze 的聚合组预算', () => {
+  /** 造一棵树：github 命中 hits 条，其余 others 条。 */
+  function groupTree(hits: number, others: number): TreeSpec[] {
+    return [{ id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '10', title: '收件箱', children: [
+          ...Array.from({ length: hits }, (_, i) => (
+            { id: `g${i}`, title: `仓库 ${i}`, url: `https://github.com/o/r${i}` }
+          )),
+          ...Array.from({ length: others }, (_, i) => (
+            { id: `n${i}`, title: `文章 ${i}`, url: `https://example.com/${i}` }
+          )),
+        ]},
+      ]},
+    ]}]
+  }
+
+  /**
+   * 造 ports、按提示词分流的假件跑一次 rebuild 模式的 analyze，
+   * 把每次 complete 收到的提示词原样收集起来返回。
+   */
+  async function runAnalyze(tree: TreeSpec[], domainGroups: string[]): Promise<{ prompts: string[] }> {
+    const fake = createFakeBookmarks(tree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    const prompts: string[] = []
+    const complete = vi.fn(async (prompt: string) => {
+      prompts.push(prompt)
+      const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+      if (prompt.includes('候选目录')) {
+        const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)].map((m) => m[1]!)
+        return { results: bookmarkIds.map((id) => (
+          { bookmark_id: id, target_category_id: ids[0] ?? null, confidence: 0.9, reason: 'r' }
+        ))}
+      }
+      if (prompt.includes('标签清单')) {
+        // 标签清单紧跟在提示词正文之后，用它自己的 JSON 里的 topic 字段拼一个能通过
+        // 校验的设计——这几条用例不关心真正建出了什么目录，只关心提示词文案本身
+        const topics = [...new Set([...prompt.matchAll(/"topic":\s*"([^"]+)"/g)].map((m) => m[1]!))]
+        return { folders: [{ title: topics[0] ?? '杂项', topics, children: [] }] }
+      }
+      return { results: bookmarkIds.map((id) => (
+        { bookmark_id: id, primary_topic: '工具', secondary_topic: null }
+      ))}
+    })
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      domainGroups,
+    })
+    const deps = { createClient: () => ({ complete } as unknown as LlmClient), now: () => 1 }
+    await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps)
+    return { prompts }
+  }
+
+  it('命中数不足下限的组不建，那几条书签退回主题那一轮', async () => {
+    // github 只命中 2 条，minFolderSize 是 3 → 组不建
+    const { prompts } = await runAnalyze(groupTree(2, 20), ['github'])
+    const design = prompts.find((p) => p.includes('标签清单'))!
+    // 组不建，于是那 2 条 github 书签的标签也出现在主题那一轮里
+    expect(design).toBeDefined()
+    expect(prompts.some((p) => p.includes('来自「GitHub」'))).toBe(false)
+  })
+
+  it('命中够的组照建，且主题那一轮的预算按 N_主题 与组数算', async () => {
+    const { prompts } = await runAnalyze(groupTree(10, 120), ['github'])
+    // N_主题 = 120，存活组 1 个 → depthGuard(1, 120) = 9（收到 9 仍是一层，所以收得住）。
+    // 120 条按甜点要 ceil(120/12) = 10 个目录，上限 9 这次真的咬合，deriveShape 给出 top = 9。
+    // 传下去的是 9 + 1（兜底那格），提示词里出现的是 10 − 1 = 9。
+    // 挑 120 而不是 60：60 条只要 5 个目录，上限 9 不咬合，那条用例验不出 depthGuard 有没有生效。
+    const design = prompts.find((p) => p.includes('标签清单') && !p.includes('来自「GitHub」'))!
+    expect(design).toMatch(/不超过 9 个/)
+  })
+
+  it('不勾聚合组时主题拿满预算——对照上一条，差的那一格正是组吃掉的', async () => {
+    const { prompts } = await runAnalyze(groupTree(0, 120), [])
+    const design = prompts.find((p) => p.includes('标签清单'))!
+    expect(design).toMatch(/不超过 10 个/)
   })
 })
 

@@ -832,6 +832,10 @@
     "message": "按书签数推导：$wanted$ 个一级目录、$depth$ 层；实际建出 $actual$ 个",
     "placeholders": { "wanted": { "content": "$1" }, "actual": { "content": "$2" }, "depth": { "content": "$3" } }
   },
+  "logGroupsDropped": {
+    "message": "$count$ 个聚合组命中的书签不足 $min$ 本，不单独建目录，这些书签按主题正常分类",
+    "placeholders": { "count": { "content": "$1" }, "min": { "content": "$2" } }
+  },
   "logPrunedSmall": {
     "message": "撤掉 $count$ 个装不满 $min$ 个书签的目录，里面的书签并进上一层",
     "placeholders": {

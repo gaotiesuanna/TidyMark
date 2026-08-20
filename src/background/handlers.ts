@@ -7,7 +7,8 @@ import { findScopeRoots, scanTree } from '@/core/scan'
 import { detectMode } from '@/core/mode'
 import { planTitleRewrites } from '@/core/titles'
 import { buildCategoryTree } from '@/core/tree'
-import { deriveShape, SHAPE_MAX_SIBLINGS } from '@/core/shape'
+import { deriveShape, depthGuard, SHAPE_MAX_SIBLINGS } from '@/core/shape'
+import { matchDomainGroup } from '@/core/domainGroups'
 import { clusterHomeless, dropAlreadyGrouped, planNewFolders, MIN_NEW_FOLDER_SIZE } from '@/core/newTopics'
 import type { Ports } from '@/core/ports'
 import type { Classification, OrganizePlan, TagResult } from '@/core/types'
@@ -136,11 +137,33 @@ export async function handle(
           // 万一没有，?? 0 让它退回改造前的行为，而不是把整次分析弄崩
           const rootLevel = scan.folders.find((f) => f.id === rootId)?.level ?? 0
           const startLevel = rootLevel + 1
+          // 规则命中是确定性的，在跑模型之前就数得出来——不花任何调用（票 10 补账第 3 条）
+          const hitsByGroup = new Map<string, number>()
+          if (settings.domainGroups.length > 0) {
+            for (const bookmark of scan.bookmarks) {
+              const group = matchDomainGroup(bookmark, settings.domainGroups)
+              if (group === null) continue
+              hitsByGroup.set(group.key, (hitsByGroup.get(group.key) ?? 0) + 1)
+            }
+          }
+          // 一级位子现在是稀缺资源，装 1 条的「GitHub」不配占（第 4 条）。
+          // 不够的组不建，那几条书签退回主题那一轮当普通书签处理。
+          // minFolderSize 关掉时不设门槛——用户明确不要这项约束
+          const groupFloor = settings.enforceMinFolderSize ? settings.minFolderSize : 1
+          const survivingGroups = settings.domainGroups.filter(
+            (key) => (hitsByGroup.get(key) ?? 0) >= groupFloor,
+          )
+          const droppedGroups = settings.domainGroups.length - survivingGroups.length
+          if (droppedGroups > 0) {
+            log('tree', t('logGroupsDropped', String(droppedGroups), String(groupFloor)))
+          }
+          // N_主题 = N − Σ 存活组的命中数（第 5 条）
+          const inGroups = survivingGroups.reduce((sum, key) => sum + (hitsByGroup.get(key) ?? 0), 0)
+          const topicN = scan.bookmarks.length - inGroups
           // 目录的数量与层数由这次要整理的书签总数推导，不再由用户拨旋钮
           // （见 issues/10-shape-from-count.md「决定：方案 D」）。
-          // N 暂时按范围内的书签总数算：勾了聚合组时它偏大、推导出的目录数偏多。
-          // 计划 2/2 会把 N_主题 = N − Σ 存活组命中数 与 depthGuard 预算一起补上。
-          const shape = deriveShape(scan.bookmarks.length)
+          // 主题预算：挤到不能再挤，但绝不因为聚合组而让主题多分一层（第 6 条）
+          const shape = deriveShape(topicN, depthGuard(survivingGroups.length, topicN))
           // 上限只管「要不要再往下分」，不阻止在勾中处建第一层：用户勾了这里就是要在这里
           // 整理，返回「一个目录都不建」看起来像坏了。层数看的是推导出的 shape.depth
           // 是否到了两层，不是 settings.maxFolderDepth——那个字段仍留在 Settings 里，
@@ -186,8 +209,8 @@ export async function handle(
           })
           if (isCancelled()) return CANCELLED
           // 组内的共同点已经写在目录名上，通用标签在这里没有区分度，换一套细的重抽
-          if (settings.domainGroups.length > 0) {
-            tags = await refineGroupTags(tags, scan.bookmarks, settings.domainGroups, client, locale, {
+          if (survivingGroups.length > 0) {
+            tags = await refineGroupTags(tags, scan.bookmarks, survivingGroups, client, locale, {
               onLog: (message, level) => log('tags', message, level),
               isCancelled,
             })
@@ -195,7 +218,7 @@ export async function handle(
           }
           // 分批抽标签的模型看不到全局，同义碎片只能在这里归并
           log('tree', t('logTreeStart', String(scan.bookmarks.length)))
-          tags = await designTagFolders(tags, scan.bookmarks, settings.domainGroups, client, locale, {
+          tags = await designTagFolders(tags, scan.bookmarks, survivingGroups, client, locale, {
             onLog: (message, level) => log('tree', message, level),
             isCancelled,
             maxTopFolders,
@@ -226,7 +249,7 @@ export async function handle(
           }
           const tree_ = buildCategoryTree({
             tags, rootId, existingFolders: scan.folders,
-            bookmarks: scan.bookmarks, domainGroups: settings.domainGroups, locale,
+            bookmarks: scan.bookmarks, domainGroups: survivingGroups, locale,
             mergeRoot,
             maxTopFolders,
             maxChildFolders,
