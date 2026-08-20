@@ -231,6 +231,35 @@ describe('renumberPlan', () => {
 })
 
 /**
+ * 「这一行显示什么路径」与「哪些目录会被创建」是两件事：
+ * 取消勾选一行不该让它的目标目录编号凭空消失，只要那个目录因为别的行仍会被建出来。
+ */
+describe('renumberPlan 未勾选的行仍显示目标目录编号', () => {
+  const twoIntoOne = (): OrganizePlan =>
+    buildPlan({
+      id: 'p-strand', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: true,
+      items: ['a', 'b'].map((id, i) => ({
+        id, title: `T${id}`, url: `https://${id}.dev`, parentId: '1', index: i, currentPath: ['书签栏'],
+      })),
+      candidates: [{ id: 'tmp:1', path: ['前端'] }],
+      classifications: ['a', 'b'].map((id) => ({
+        bookmarkId: id, targetCategoryId: 'tmp:1', confidence: 1, reason: '', source: 'llm' as const,
+      })),
+      newFolders: [{ temporaryId: 'tmp:1', parentId: '1', parentTemporaryId: null, title: '前端' }],
+    })
+
+  it('目录因别的行仍会被创建时，未勾选的行照样显示编号', () => {
+    const next = renumberPlan(twoIntoOne(), new Set(['b']), [])
+    expect(next.rows.find((r) => r.bookmarkId === 'a')!.toPath).toEqual(['01 前端'])
+  })
+
+  it('一条都没接受、目录根本不会被创建时，显示裸名字', () => {
+    const next = renumberPlan(twoIntoOne(), new Set(), [])
+    expect(next.rows.find((r) => r.bookmarkId === 'a')!.toPath).toEqual(['前端'])
+  })
+})
+
+/**
  * 多轮整理场景：上一轮留下的编号目录本轮没被设计到，
  * 如果不管它们，就会和本轮的新号撞车（04 金融 与 04 其他并存）。
  */

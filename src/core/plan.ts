@@ -209,12 +209,20 @@ export function renumberPlan(
     if (candidate.path.length === 1) topByTitle.set(candidate.path[0]!, candidate)
   }
 
+  // 两者有意不同源，别再合回一个循环：
+  // targetOf 决定「这一行显示什么路径」，登记全部移动——取消勾选一行，
+  // 不该让它的目标目录编号凭空消失，那个目录还会因为别的行被建出来。
+  // used 决定「哪些目录会被创建、参与编号」，只认已接受的——
+  // 一个书签都没收到的目录根本不会被建出来，不该占号。
+  // 两者一起作用的结果：目录真的不会被创建时，targetOf 查到的 id 不在 renumbered 里，
+  // 那一行自然退回裸名字，此时不带号才是诚实的。
   const used = new Set<string>()
   const targetOf = new Map<string, string>()
   for (const operation of plan.operations) {
-    if (operation.type !== 'move_bookmark' || !accepted.has(operation.bookmarkId)) continue
-    used.add(operation.toCategoryId)
+    if (operation.type !== 'move_bookmark') continue
     targetOf.set(operation.bookmarkId, operation.toCategoryId)
+    if (!accepted.has(operation.bookmarkId)) continue
+    used.add(operation.toCategoryId)
   }
   // 子目录被用到时，它的父目录也必须保留
   for (const id of [...used]) {
