@@ -3,7 +3,7 @@ import { currentLocale, resolveLocale, setLocale, t } from '@/i18n'
 import type { Locale } from '@/core/locale'
 import type { ProgressEvent, ProgressPhase } from '@/background/events'
 import type { BookmarkNode } from '@/core/ports'
-import { MARK_CONFIDENCE, renumberPlan } from '@/core/plan'
+import { renumberPlan, retargetRow } from '@/core/plan'
 import { applyStructureEdits, EMPTY_EDITS, type StructureEdits } from '@/core/structure'
 import type { OrganizeMode } from '@/core/mode'
 import type { OrganizePlan, ScanResult } from '@/core/types'
@@ -231,6 +231,14 @@ interface State {
   confirmStructure(): void
   backToPreferences(): void
   toggleAccepted(bookmarkId: string): void
+  /**
+   * 把一条建议改投到另一个目录——拒绝之外的第二条路。
+   *
+   * 复核页此前对不满意的建议只能拒绝，拒绝等于书签留在原地，那是最差的结果
+   * （见 issues/06-review-at-scale.md「决定 3」）。目标不存在、或这条书签不在方案里时
+   * retargetRow 原样返回同一个 plan，这里靠引用相等判断有没有真的改，没改就不 set。
+   */
+  setRowTarget(bookmarkId: string, targetId: string): void
   acceptAll(): void
   acceptHighConfidence(threshold: number): void
   rejectAll(): void
@@ -396,7 +404,10 @@ export const useStore = create<State>((set, get) => ({
     if (res.kind !== 'analyze') return set({ busy: null, busyKind: null })
     set({
       plan: res.plan,
-      accepted: new Set(res.plan.rows.filter((r) => r.confidence >= MARK_CONFIDENCE).map((r) => r.bookmarkId)),
+      // 默认全选：不勾 = 书签留在原来那个散落的位置 = 彻底找不到；进了一个不太准的主题目录，
+      // 至少还在逐层摸的范围内。放错比不放更可接受，所以默认接受、让标记去引导修正
+      // （见 issues/06-review-at-scale.md「决定 3」）。
+      accepted: new Set(res.plan.rows.map((r) => r.bookmarkId)),
       structureEdits: EMPTY_EDITS,
       // 走哪条路由后台判定并记在 plan 上，界面不再自己猜——
       // 设置里已经没有那个开关了，猜出来的必然是错的
@@ -432,7 +443,8 @@ export const useStore = create<State>((set, get) => ({
     const next = applyStructureEdits(plan, get().structureEdits, currentLocale())
     set({
       plan: next,
-      accepted: new Set(next.rows.filter((r) => r.confidence >= MARK_CONFIDENCE).map((r) => r.bookmarkId)),
+      // 同 analyze()：默认全选，放错比不放更可接受
+      accepted: new Set(next.rows.map((r) => r.bookmarkId)),
       step: 'review',
     })
   },
@@ -446,6 +458,16 @@ export const useStore = create<State>((set, get) => ({
     if (next.has(bookmarkId)) next.delete(bookmarkId)
     else next.add(bookmarkId)
     set({ accepted: next })
+  },
+
+  setRowTarget(bookmarkId, targetId) {
+    const plan = get().plan
+    if (plan === null) return
+    const next = retargetRow(plan, bookmarkId, targetId)
+    // 引用相等表示什么都没改（目标不存在或这条书签不在方案里），不必惊动订阅者
+    if (next === plan) return
+    // 改了目标就当用户认这条了——他刚刚亲手指定了去处
+    set({ plan: next, accepted: new Set(get().accepted).add(bookmarkId) })
   },
 
   acceptAll() {

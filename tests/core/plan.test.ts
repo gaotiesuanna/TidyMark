@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildPlan, filterAccepted, renumberPlan, summarize, MARK_CONFIDENCE } from '@/core/plan'
+import { buildPlan, filterAccepted, renumberPlan, retargetRow, summarize, MARK_CONFIDENCE } from '@/core/plan'
 import type { BookmarkItem, BookmarkOperation, CategoryCandidate, Classification, OrganizePlan } from '@/core/types'
 import { makePlan } from '../fakes/plan'
 
@@ -514,5 +514,48 @@ describe('buildPlan 的未变动区', () => {
 describe('MARK_CONFIDENCE', () => {
   it('阈值是 0.85——0.7 在真实数据上 110 条里只筛出 1 条，形同虚设', () => {
     expect(MARK_CONFIDENCE).toBe(0.85)
+  })
+})
+
+describe('retargetRow', () => {
+  const base = () => buildPlan({
+    id: 'p', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: true,
+    items: [{ id: 'a', title: 'A', url: 'https://a.dev', parentId: '99', index: 0, currentPath: ['收件箱'] }],
+    candidates: [{ id: 'tmp:1', path: ['前端'] }, { id: 'tmp:2', path: ['后端'] }],
+    classifications: [
+      { bookmarkId: 'a', targetCategoryId: 'tmp:1', confidence: 0.9, reason: 'r', source: 'llm' },
+    ],
+    newFolders: [
+      { temporaryId: 'tmp:1', parentId: '1', parentTemporaryId: null, title: '前端' },
+      { temporaryId: 'tmp:2', parentId: '1', parentTemporaryId: null, title: '后端' },
+    ],
+    renameFolders: [], warnings: [], tags: [], titleRewrites: [],
+  })
+
+  it('改目标之后，行与移动操作都指向新目录', () => {
+    const next = retargetRow(base(), 'a', 'tmp:2')
+
+    expect(next.rows[0]!.toPath).toEqual(['后端'])
+    const move = next.operations.find((o) => o.type === 'move_bookmark')!
+    expect(move).toMatchObject({ toCategoryId: 'tmp:2', toTemporaryId: 'tmp:2' })
+  })
+
+  it('改成已有目录时 toTemporaryId 为 null——它不是本轮新建的', () => {
+    const plan = { ...base(), candidates: [...base().candidates, { id: '77', path: ['已有目录'] }] }
+    const next = retargetRow(plan, 'a', '77')
+
+    const move = next.operations.find((o) => o.type === 'move_bookmark')!
+    expect(move).toMatchObject({ toCategoryId: '77', toTemporaryId: null })
+  })
+
+  it('目标不存在时原样返回，不产出一个指向空目录的方案', () => {
+    const plan = base()
+    expect(retargetRow(plan, 'a', '不存在')).toBe(plan)
+  })
+
+  it('不改动别的行', () => {
+    const plan = base()
+    const next = retargetRow(plan, '不存在的书签', 'tmp:2')
+    expect(next).toBe(plan)
   })
 })

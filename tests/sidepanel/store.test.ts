@@ -136,13 +136,13 @@ describe('结构确认步骤', () => {
     expect(state.plan!.candidates.find((c) => c.id === 'tmp:1')!.path).toEqual(['代码仓库'])
   })
 
-  it('confirmStructure 后按置信度重新预选', () => {
+  it('confirmStructure 后重新全选，不再看置信度——放错比不放更可接受', () => {
     const plan = makePlan()
-    plan.rows[0]!.confidence = 0.3
+    plan.rows[0]!.confidence = 0.3 // 就算是低置信度的行，也照样进 accepted
     useStore.setState({ plan, structureEdits: { renames: {}, removed: [] }, accepted: new Set() })
     useStore.getState().confirmStructure()
     const accepted = useStore.getState().accepted
-    expect(accepted.has(plan.rows[0]!.bookmarkId)).toBe(false)
+    expect(accepted.has(plan.rows[0]!.bookmarkId)).toBe(true)
     expect(accepted.has(plan.rows[1]!.bookmarkId)).toBe(true)
   })
 
@@ -371,6 +371,17 @@ describe('放弃这一轮之后，在途结果不再落地', () => {
     await useStore.getState().analyze()
     expect(useStore.getState().step).toBe('structure')
     expect(useStore.getState().plan).not.toBeNull()
+  })
+
+  it('分析完成后默认全部勾选——放错比不放更可接受', async () => {
+    vi.mocked(send).mockImplementation((req: { kind: string }) =>
+      req.kind === 'analyze'
+        ? (Promise.resolve({ ok: true, kind: 'analyze', plan: makePlan() }) as never)
+        : (Promise.resolve({ ok: true }) as never))
+
+    await useStore.getState().analyze()
+    const plan = useStore.getState().plan!
+    expect(useStore.getState().accepted.size).toBe(plan.rows.length)
   })
 
   it('分析后去哪一步由 plan 说了算，不看设置——模式是后台判的', async () => {

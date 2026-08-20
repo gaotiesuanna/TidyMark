@@ -348,6 +348,36 @@ export function summarize(
 }
 
 /**
+ * 把一条建议改投到另一个目录。
+ *
+ * 复核页此前对一条不满意的建议只能「拒绝」，而拒绝等于书签留在原地——按根尺子那是**最差的结果**
+ * （见 issues/06-review-at-scale.md「决定 3」）。有了这个，一次拒绝可以变成一次修正。
+ *
+ * 纯函数：行与移动操作一起改，两处不能只改一处，否则界面显示的去处与真正会写进书签栏的不一致。
+ * 目标不在候选里、或这条书签不在方案里时**原样返回同一个对象**，调用方可以用引用相等判断有没有变。
+ */
+export function retargetRow(plan: OrganizePlan, bookmarkId: string, targetId: string): OrganizePlan {
+  const target = plan.candidates.find((c) => c.id === targetId)
+  if (target === undefined) return plan
+  if (!plan.rows.some((r) => r.bookmarkId === bookmarkId)) return plan
+
+  // 本轮新建的目录才有临时 id；改投到已有目录时它必须是 null，否则 apply 会去找一个不存在的新建记录
+  const isTemporary = plan.operations.some(
+    (o) => o.type === 'create_folder' && o.temporaryId === targetId,
+  )
+
+  return {
+    ...plan,
+    rows: plan.rows.map((r) => (r.bookmarkId === bookmarkId ? { ...r, toPath: target.path } : r)),
+    operations: plan.operations.map((o) =>
+      o.type === 'move_bookmark' && o.bookmarkId === bookmarkId
+        ? { ...o, toCategoryId: targetId, toTemporaryId: isTemporary ? targetId : null }
+        : o,
+    ),
+  }
+}
+
+/**
  * 保留被接受的 move，以及这些 move 真正需要的 create_folder（含其祖先链）。
  * 顺序保证 create_folder 先于 move，且父文件夹先于子文件夹。
  */
