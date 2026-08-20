@@ -9,9 +9,17 @@ export interface StructureEdits {
   renames: Record<string, string>
   /** 被删掉的 candidate id。 */
   removed: string[]
+  /**
+   * 被合并的 candidate id → 接收方 candidate id。
+   *
+   * **合并 = 删除 + 指定去处**：被合并的目录同时出现在 `removed` 里，这里只回答「里面的书签去哪」。
+   * 两件事必须一起写（store 的 `mergeNode` 保证这一点），只写一处会得到
+   * 「目录没了但书签按默认链回落」或「书签改投了但目录还在」两种半截状态。
+   */
+  mergedInto: Record<string, string>
 }
 
-export const EMPTY_EDITS: StructureEdits = { renames: {}, removed: [] }
+export const EMPTY_EDITS: StructureEdits = { renames: {}, removed: [], mergedInto: {} }
 
 /** 结构确认页渲染用的两层视图。 */
 export interface StructureNode {
@@ -137,6 +145,12 @@ export function applyStructureEdits(
     if (!removed.has(categoryId)) return categoryId
     if (seen.has(categoryId)) return fallbackId
     seen.add(categoryId)
+
+    // 用户指定的去处优先于所有默认回落：他刚刚亲手说了这批书签该去哪，
+    // 比「二级回落到父目录」这类默认规则算数。接收方自己也被合并时继续往下走，
+    // 成环由上面的 seen 兜住（落回「其他」，不会转圈）
+    const merged = edits.mergedInto[categoryId]
+    if (merged !== undefined) return resolve(merged, bookmarkId, seen)
 
     const candidate = byId.get(categoryId)
     if (candidate === undefined) return fallbackId
