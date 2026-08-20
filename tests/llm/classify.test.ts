@@ -403,3 +403,141 @@ describe('classifyBookmarks 取消', () => {
     expect(results).toHaveLength(4)
   })
 })
+
+/**
+ * 同 URL 折叠：cacheKey 里书签那一半是 djb2(item.url)，另一半（locale/model/
+ * 候选集）在一轮里是常量——所以同 URL 的两个书签对模型是同一个问题。冷缓存
+ * 下它们本来会一起进批次、一起发出去，等于为同一个问题付两遍钱。
+ *
+ * 折叠的只是「提问」，不是书签：两个书签仍然是两个书签，结果里照常两条。
+ */
+describe('classifyBookmarks 同 URL 只问一遍', () => {
+  it('同 URL 的两个书签只问模型一次，两条都拿到同一个结果', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      results: [{ bookmark_id: '1', target_category_id: '10', confidence: 0.9, reason: '同一个 URL' }],
+    })
+    const results = await classify({
+      items: [item('1', 'https://dup.example/x'), item('2', 'https://dup.example/x')],
+      candidates, client: { complete }, cache: new Map(),
+    })
+
+    // 防身：先确认请求真的发出去了、payload 里确实有这条书签，
+    // 否则下面那条「只出现一次」在「压根没发请求」的实现下也会绿。
+    expect(complete).toHaveBeenCalledTimes(1)
+    const prompt = complete.mock.calls.map((c) => String(c[0])).join('\n')
+    expect(prompt).toContain('"bookmark_id": "1"')
+    expect(prompt.match(/dup\.example/g)).toHaveLength(1)
+
+    expect(results.map((r) => r.bookmarkId)).toEqual(['1', '2'])
+    for (const r of results) {
+      expect(r).toMatchObject({ targetCategoryId: '10', confidence: 0.9, reason: '同一个 URL', source: 'llm' })
+    }
+  })
+
+  /**
+   * 这条钉的是**既有设计的后果**，不是本次新引入的取舍：cacheKey 不含标题，
+   * 所以同 URL 不同标题在缓存眼里就是同一条，模型对第二条也给不出不同答案。
+   * 将来 cacheKey 若改成含标题，这条会红——那时它红得对，是提醒折叠的依据
+   * 跟着变了，该改的是折叠而不是这条用例。
+   */
+  it('同 URL、标题不同，仍然只问一遍', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      results: [{ bookmark_id: '1', target_category_id: '10', confidence: 0.8, reason: 'r' }],
+    })
+    const results = await classify({
+      items: [
+        item('1', 'https://dup.example/x', '第一条标题'),
+        item('2', 'https://dup.example/x', '第二条标题'),
+      ],
+      candidates, client: { complete }, cache: new Map(),
+    })
+
+    expect(complete).toHaveBeenCalledTimes(1)
+    const prompt = String(complete.mock.calls[0]![0])
+    // 先断言代表那条的标题确实在 payload 里（证明这个查询有效），再断言另一条不在。
+    expect(prompt).toContain('第一条标题')
+    expect(prompt).not.toContain('第二条标题')
+    expect(results.map((r) => r.targetCategoryId)).toEqual(['10', '10'])
+  })
+
+  it('三个同 URL 的书签，结果里三个 id 全都有', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      results: [{ bookmark_id: '1', target_category_id: '11', confidence: 0.7, reason: '论文' }],
+    })
+    const results = await classify({
+      items: ['1', '2', '3'].map((id) => item(id, 'https://dup.example/paper')),
+      candidates, client: { complete }, cache: new Map(),
+    })
+
+    expect(complete).toHaveBeenCalledTimes(1)
+    expect(String(complete.mock.calls[0]![0]).match(/dup\.example/g)).toHaveLength(1)
+    expect(results.map((r) => r.bookmarkId)).toEqual(['1', '2', '3'])
+    for (const r of results) {
+      expect(r).toMatchObject({ targetCategoryId: '11', reason: '论文', source: 'llm' })
+    }
+  })
+
+  // 失败的结果同样要扇出：只回填代表那一条的话，同组其余书签会掉到
+  // classifyBookmarks 最后那句 unprocessed 兜底里——「一条失败」变成
+  // 「一条失败 + 一条凭空消失」。
+  it('请求失败时同组其余书签拿到同一条失败结果，不是「未处理」', async () => {
+    const complete = vi.fn().mockRejectedValue(Object.assign(new Error('bad key'), { retryable: false }))
+    const results = await classify({
+      items: ['1', '2', '3'].map((id) => item(id, 'https://dup.example/x')),
+      candidates, client: { complete }, cache: new Map(),
+    })
+
+    expect(complete).toHaveBeenCalledTimes(1)
+    expect(results.map((r) => r.bookmarkId)).toEqual(['1', '2', '3'])
+    for (const r of results) {
+      expect(r).toMatchObject({ targetCategoryId: null, source: 'none', detail: 'Error: bad key' })
+      expect(r.reason).toContain('Error: bad key')
+      expect(r.reason).not.toBe('未处理')
+    }
+  })
+
+  it('模型漏返回该 URL 时同组其余书签也拿到同一条「未返回结果」，不是「未处理」', async () => {
+    const complete = vi.fn().mockResolvedValue({ results: [] })
+    const results = await classify({
+      items: ['1', '2'].map((id) => item(id, 'https://dup.example/x')),
+      candidates, client: { complete }, cache: new Map(),
+    })
+
+    expect(complete).toHaveBeenCalledTimes(1)
+    for (const r of results) {
+      expect(r).toMatchObject({ targetCategoryId: null, source: 'none', reason: '模型未返回该书签的结果' })
+    }
+  })
+
+  // 对照组：防「把所有东西都折叠成一条」的错误实现。
+  it('不同 URL 的书签照常各问各的', async () => {
+    const complete = vi.fn().mockResolvedValue({ results: [] })
+    const items = ['1', '2', '3'].map((id) => item(id, `https://s${id}.dev/x`))
+    await classify({ items, candidates, client: { complete }, cache: new Map(), batchSize: 10 })
+
+    expect(complete).toHaveBeenCalledTimes(1)
+    const prompt = String(complete.mock.calls[0]![0])
+    for (const id of ['1', '2', '3']) expect(prompt).toContain(`"bookmark_id": "${id}"`)
+  })
+
+  // 进度报的是 items.length 的进度，折叠后每批「跑完了几条」不再等于批次长度。
+  // 按批次长度加会让进度条停在一个比总数小的终值上。
+  it('进度终值是书签总数，不是提问次数', async () => {
+    const onProgress = vi.fn()
+    const items = [
+      item('1', 'https://dup.example/x'),
+      item('2', 'https://dup.example/x'),
+      item('3', 'https://other.dev/y'),
+      item('4', 'https://another.dev/z'),
+    ]
+    await classify({
+      items, candidates, client: clientReturning({ results: [] }),
+      cache: new Map(), batchSize: 1, onProgress,
+    })
+    expect(onProgress).toHaveBeenLastCalledWith(4, 4)
+    for (const [done, total] of onProgress.mock.calls as [number, number][]) {
+      expect(total).toBe(4)
+      expect(done).toBeLessThanOrEqual(4)
+    }
+  })
+})

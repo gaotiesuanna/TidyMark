@@ -251,8 +251,33 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
     pending.push(item)
   }
 
+  // 同一个 URL 的两个书签对模型是同一个问题：cacheKey 里书签那一半是
+  // djb2(item.url)，另一半（locale/model/候选集）在一轮里是常量，所以同 URL
+  // 就是同 key。冷缓存下两条都不命中、都进 pending、都进批次发出去，等于为
+  // 同一个问题付两遍钱，而且每轮都付。这里按 URL 分组，每组只派第一条当代表
+  // 进批次，结果再扇出给同组其余书签。
+  //
+  // 分组用 URL 本身而不是 cacheKey：djb2 是 32 位，两个不同的 URL 撞出同一个
+  // key 是可能的（fromCache 第一道校验防的就是这个），用 key 分组会把两个不
+  // 相干的问题合并成一个，比白算一次更糟。反过来同 URL 必然同 key，所以按
+  // URL 分组不会漏掉任何一对该折叠的。
+  //
+  // 折叠的只是「提问」，不是书签：两个书签仍然是两个书签，各自照常出现在
+  // 返回值里、照常被移动，复核页上照常两行。
+  const groups = new Map<string, BookmarkItem[]>()
+  for (const item of pending) {
+    const group = groups.get(item.url)
+    if (group) group.push(item)
+    else groups.set(item.url, [item])
+  }
+  /** 代表背后的整组。代表一定来自 groups，取不到就当只有自己，不至于把进度报少。 */
+  const groupOf = (rep: BookmarkItem): BookmarkItem[] => groups.get(rep.url) ?? [rep]
+
+  const representatives = [...groups.values()].map((group) => group[0]!)
   const batches: BookmarkItem[][] = []
-  for (let i = 0; i < pending.length; i += batchSize) batches.push(pending.slice(i, i + batchSize))
+  for (let i = 0; i < representatives.length; i += batchSize) {
+    batches.push(representatives.slice(i, i + batchSize))
+  }
 
   let done = resolved.size
   input.onProgress?.(done, items.length)
@@ -276,13 +301,22 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
       } else input.onLog?.(summary, 'warn')
       for (let i = 0; i < results.length; i++) {
         const result = results[i]!
-        resolved.set(result.bookmarkId, result)
+        // 结果扇出给同组全部书签：它们问的是同一个问题，答案照抄，只把
+        // bookmarkId 换成各自的。source !== 'llm' 的（请求失败、模型漏返回）
+        // 同样要扇出——否则一条失败会变成「一条失败 + 一条凭空消失」，
+        // 后者会掉进最后那句 unprocessed 兜底里。
+        for (const member of groupOf(batch[i]!)) {
+          resolved.set(member.id, { ...result, bookmarkId: member.id })
+        }
         if (result.source === 'llm') {
           const path = result.targetCategoryId === null ? null : pathById.get(result.targetCategoryId)
           // 目标 id 一定在候选里（runBatch 已按 validIds 过滤过），查不到就宁可不缓存：
           // 不能把「查不到」存成 null，那是「无合适目录」的意思，是另一回事。
           // 注意：null 与 undefined 在这里意思不同，别改成真值判断（如 if (path)）
           // ——那会把「无合适目录」也当成「查不到」，永远不缓存。
+          //
+          // key 取的是 batch[i]（组代表），但 cacheKey 只认 URL，同组书签的
+          // key 完全一样——写一条就够全组下一轮都命中。这正是折叠的依据。
           if (path !== undefined) {
             cache.set(cacheKey(batch[i]!, candidates, locale, model), {
               targetPath: path,
@@ -294,7 +328,10 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
           }
         }
       }
-      done += batch.length
+      // onProgress 报的是 items.length 的进度，所以这里加的是「这批代表背后
+      // 一共多少条书签」，不是批次长度——折叠之后两者不再相等，按批次长度加
+      // 会让进度条停在一个比总数小的终值上。
+      done += batch.reduce((sum, rep) => sum + groupOf(rep).length, 0)
       input.onProgress?.(done, items.length)
     }
   }
