@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { DOMAIN_GROUPS, groupFolderTitle } from '@/core/domainGroups'
 import { detectMode } from '@/core/mode'
 import { currentLocale, t } from '@/i18n'
+import { isModelConfigured } from '@/llm/config'
 import { useStore } from '../store'
 
 export function PreferencesStep() {
@@ -23,7 +24,9 @@ export function PreferencesStep() {
   const rebuild = (modeOverride ?? decision.mode) === 'rebuild'
   // 模型配置在设置页，这里只判断配没配。没配时不禁用按钮：一个禁用的按钮既不解释
   // 为什么，也不给出路；换成一个能点、点了直接落到设置页的按钮永远更好。
-  const needModel = settings.llm.apiKey.trim() === ''
+  // 判断走共用谓词——只认 apiKey 的话，本机 Ollama 用户永远拿不到「开始 AI 分析」，
+  // 点「先去配置模型」又回到他刚配完的设置页，来回打转（见 llm/config.ts）。
+  const needModel = !isModelConfigured(settings.llm)
 
   return (
     <div className="space-y-4">

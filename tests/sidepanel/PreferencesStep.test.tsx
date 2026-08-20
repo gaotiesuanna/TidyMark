@@ -208,12 +208,15 @@ describe('PreferencesStep 不再摆配一次就不动的设置', () => {
  * 禁用的按钮既不解释为什么、也不给出路，所以没配 Key 时它换成一个能点、点了有去处的按钮。
  */
 describe('PreferencesStep 没配模型时的出路', () => {
-  function arrange(apiKey: string): { analyze: ReturnType<typeof vi.fn>; openSettings: ReturnType<typeof vi.fn> } {
+  function arrange(
+    apiKey: string,
+    baseUrl: string = DEFAULT_SETTINGS.llm.baseUrl,
+  ): { analyze: ReturnType<typeof vi.fn>; openSettings: ReturnType<typeof vi.fn> } {
     setup(messyScan)
     const analyze = vi.fn(async () => {})
     const openSettings = vi.fn()
     useStore.setState({
-      settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey } },
+      settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey, baseUrl } },
       analyze, openSettings,
     })
     return { analyze, openSettings }
@@ -259,6 +262,21 @@ describe('PreferencesStep 没配模型时的出路', () => {
     expect(screen.getByRole('button', { name: '开始 AI 分析' })).toBeTruthy()
 
     expect(screen.queryByRole('button', { name: '先去配置模型' })).toBeNull()
+  })
+
+  it('本机 Ollama：apiKey 空着也该拿到「开始 AI 分析」，点了真的开始分析', async () => {
+    // 设置页点一下「本地 Ollama」预设之后就是这个状态：baseUrl 换了，apiKey 一个字没填。
+    // 只认 apiKey 的话这里给的是「先去配置模型」，点它回到他刚配完的设置页——死循环
+    const { analyze, openSettings } = arrange('', 'http://localhost:11434/v1')
+    render(<PreferencesStep />)
+
+    const button = screen.getByRole('button', { name: '开始 AI 分析' }) as HTMLButtonElement
+    expect(button.disabled).toBe(false)
+    expect(screen.queryByRole('button', { name: '先去配置模型' })).toBeNull()
+
+    await userEvent.click(button)
+    expect(analyze).toHaveBeenCalledTimes(1)
+    expect(openSettings).not.toHaveBeenCalled()
   })
 
   it('分析在跑时「开始 AI 分析」照旧禁用', () => {

@@ -3,13 +3,16 @@ import { plural, t } from '@/i18n'
 import { BookmarkTree, topLevelNodes } from '../components/BookmarkTree'
 import { ExportPanel } from '../components/ExportPanel'
 import { ImportPanel } from '../components/ImportPanel'
+import { isModelConfigured } from '@/llm/config'
 import { collectAllFolderIds, useStore } from '../store'
 
 export function ScopeStep() {
   const { tree, checkedIds, toggle, goScan, busy, settings, openSettings } = useStore()
   // 模型配置在设置页，而扫描一步根本用不上它——不在这里先说一声，新用户会一路顺畅
   // 走完勾选和扫描，直到第三步才发现没地方填 Key，那时他已经投入了。
-  const needModel = settings.llm.apiKey.trim() === ''
+  // 「配好了没有」用共用谓词判，不是自己看一眼 apiKey：本机 Ollama 不要 Key，
+  // 只认 apiKey 的话这条提示对他永远不消失（见 llm/config.ts）。
+  const needModel = !isModelConfigured(settings.llm)
   // null 表示还没手动展开过，此时默认只展开根节点，也就是先只看一级目录
   const [expanded, setExpanded] = useState<Set<string> | null>(null)
   const defaultExpanded = useMemo(

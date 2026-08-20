@@ -16,6 +16,7 @@ import { applyPlan } from '@/engine/apply'
 import { loadSnapshot } from '@/engine/snapshot'
 import { undoLast } from '@/engine/undo'
 import { createLlmClient, type LlmClient, type LlmConfig } from '@/llm/client'
+import { isModelConfigured } from '@/llm/config'
 import { classifyBookmarks } from '@/llm/classify'
 import { collectTopics, designTagFolders, nameMergedFolder, nameNewTopics } from '@/llm/folders'
 import { extractTags, refineGroupTags } from '@/llm/tags'
@@ -75,7 +76,10 @@ export async function handle(
       }
 
       case 'analyze': {
-        if (settings.llm.apiKey.trim() === '') {
+        // 本机模型服务器不校验 Key，所以这里问的是「模型配好了没有」而不是「有没有 Key」，
+        // 与选范围页、偏好页共用同一个谓词——三处各判各的时，本地 Ollama 用户会被卡在
+        // 一个界面已经放行、后台仍然拒收的缝里
+        if (!isModelConfigured(settings.llm)) {
           return { ok: false, error: t('errNoApiKey') }
         }
         const tree = await ports.bookmarks.getTree()

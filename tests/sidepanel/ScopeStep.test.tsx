@@ -89,7 +89,10 @@ describe('ScopeStep 导入入口', () => {
  * 而扫描根本不需要 Key——他会一路顺畅走到偏好页才撞墙，那时已经投入了。
  */
 describe('ScopeStep 还没配模型时的提示', () => {
-  /** 提示只看 apiKey 一个条件，baseUrl 与 model 有默认值、不参与判断。 */
+  /**
+   * 默认 baseUrl 是远程厂商（api.openai.com），那条路上「配好了没有」只由 apiKey 决定。
+   * baseUrl 指向本机时是另一回事，单独一条用例守着。
+   */
   function setKey(apiKey: string, openSettings = vi.fn()): ReturnType<typeof vi.fn> {
     useStore.setState({
       settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey } },
@@ -115,6 +118,26 @@ describe('ScopeStep 还没配模型时的提示', () => {
     // 否则「查不到」可能只是查错了地方
     expect(screen.getByText(/勾选你想让 TidyMark 重构的文件夹/)).toBeTruthy()
     expect(screen.getByRole('button', { name: '全部展开' })).toBeTruthy()
+
+    expect(screen.queryByText(/挑一个预设/)).toBeNull()
+    expect(screen.queryByRole('button', { name: '去配置模型' })).toBeNull()
+  })
+
+  it('本机 Ollama 配好之后这条提示就消失了——它压根不要 API Key', () => {
+    useStore.setState({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        // 设置页点一下「本地 Ollama」预设写进来的就是这两个字段，apiKey 一个字都没动
+        llm: { ...DEFAULT_SETTINGS.llm, baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5' },
+      },
+      openSettings: vi.fn(),
+    })
+    render(<ScopeStep />)
+    // 空断言防身：先证明这一页真渲染了、这两种查询在这一页上确实命中得了东西
+    expect(screen.getByText(/勾选你想让 TidyMark 重构的文件夹/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: '全部展开' })).toBeTruthy()
+    // 前提：apiKey 确实还是空的——真填了 Key 的话这条用例守的就不是本机那条路了
+    expect(useStore.getState().settings.llm.apiKey).toBe('')
 
     expect(screen.queryByText(/挑一个预设/)).toBeNull()
     expect(screen.queryByRole('button', { name: '去配置模型' })).toBeNull()

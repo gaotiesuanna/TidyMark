@@ -71,6 +71,27 @@ describe('handle', () => {
     expect((res as { error: string }).error).toContain('API Key')
   })
 
+  it('analyze 在 baseUrl 指向本机时放行空 Key——本机 Ollama 不校验 Key，那道门不该拦他', async () => {
+    const { ports, deps } = setup()
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'qwen2.5' },
+    })
+    const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
+    // 不断言 ok:true——那要整条分析链路都跑通，跟这道守卫是两件事。要守住的是
+    // 「不再被『没有 Key』当场拒掉」
+    expect((res as { error?: string }).error ?? '').not.toContain('API Key')
+
+    // 对照：同一份夹具、同样空 Key，只把 baseUrl 换成远程厂商，那道门立刻就拒——
+    // 证明上面那条不是因为压根没走到这道门才绿的
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-4o-mini' },
+    })
+    const remote = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
+    expect((remote as { error: string }).error).toContain('API Key')
+  })
+
   it('analyze 返回可 Review 的 Plan', async () => {
     const { ports, deps } = setup({
       complete: vi.fn().mockResolvedValue({
