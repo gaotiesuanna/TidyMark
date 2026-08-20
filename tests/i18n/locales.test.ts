@@ -93,3 +93,34 @@ describe('_locales 一致性', () => {
     }
   })
 })
+
+/**
+ * 已经删掉的界面元素，不许再有文案指着它。
+ *
+ * 「推翻现有文件夹结构」那个开关随第 4 项（模式自动判断）一起删了，模式改由产品
+ * 每轮现判。此后 errNoTargetFolders 因为指着它被修过一次，而 prefsGroupBody 与
+ * reviewEmpty **漏了半年**——用户照着文案去界面上找，找不到。
+ *
+ * 这条守的不是某一句话的措辞，是「文案指向的东西必须真实存在」。将来再删掉别的
+ * 界面元素，把它的名字加进下面这张表。
+ */
+const REMOVED_UI = [
+  { zh: '推翻现有文件夹结构', en: 'Rebuild the folder structure', why: '第 4 项删掉的开关，模式现在自动判' },
+]
+
+describe('文案不许指向已删掉的界面元素', () => {
+  for (const { zh, en, why } of REMOVED_UI) {
+    it(`没有文案再提「${zh}」——${why}`, () => {
+      const hits: string[] = []
+      for (const locale of LOCALES) {
+        const catalog = load(locale)
+        for (const [key, entry] of Object.entries(catalog)) {
+          if (entry.message.includes(zh) || entry.message.includes(en)) hits.push(`${locale}/${key}`)
+        }
+      }
+      // 空断言防身：这张表本身不能是空的，否则这条用例什么也没查
+      expect(REMOVED_UI.length).toBeGreaterThan(0)
+      expect(hits).toEqual([])
+    })
+  }
+})

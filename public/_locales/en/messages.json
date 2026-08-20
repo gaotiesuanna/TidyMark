@@ -360,7 +360,7 @@
     "message": "Give these sites their own folders"
   },
   "prefsGroupBody": {
-    "message": "Each checked site becomes its own top-level folder, subdivided by topic inside. Only takes effect when \"Rebuild the folder structure\" is on."
+    "message": "Each checked site becomes its own top-level folder, subdivided by topic inside. It only applies when this run redesigns the tree \u2014 the verdict for this run is shown above."
   },
   "prefsBack": {
     "message": "Back"
@@ -520,7 +520,7 @@
     "message": "Empty folders in scope will be cleaned up afterwards (undoable)."
   },
   "reviewEmpty": {
-    "message": "The AI thinks every bookmark in scope is already in a sensible place, so there is nothing to move. Try a messier folder, or turn on \"Rebuild the folder structure\" to redesign the tree."
+    "message": "The AI thinks every bookmark in scope is already in a sensible place, so there is nothing to move. Try a messier folder \u2014 or, if this run was judged as filing into existing folders, discard it below, scan again, and pick \"Not right \u2014 redesign it\" before starting."
   },
   "reviewAcceptAll": {
     "message": "Accept all"
