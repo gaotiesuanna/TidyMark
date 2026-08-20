@@ -37,7 +37,7 @@ export function makePlan(): OrganizePlan {
   const rows: PlanRow[] = moves.map(([bookmarkId, toCategoryId]) => ({
     bookmarkId, title: bookmarkId, url: `https://x/${bookmarkId}`,
     fromPath: ['旧'], toPath: candidates.find((c) => c.id === toCategoryId)!.path,
-    confidence: 1, reason: 'r',
+    confidence: 1, reason: 'r', source: 'llm',
   }))
   const tags: TagResult[] = [
     { bookmarkId: 'g0', primaryTopic: '前端', secondaryTopic: null },
@@ -48,7 +48,7 @@ export function makePlan(): OrganizePlan {
   ]
   return {
     id: 'p', createdAt: 0, scopeRootIds: ['1'], rebuildStructure: true,
-    candidates, operations, rows, warnings: [], tags, mergeRoot: null,
+    candidates, operations, rows, unchanged: [], warnings: [], tags, mergeRoot: null,
     summary: {
       totalBookmarks: 5, movedBookmarks: 5, unchangedBookmarks: 0,
       createdFolders: 5, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 0,

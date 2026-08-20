@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildPlan, filterAccepted, renumberPlan, summarize, LOW_CONFIDENCE } from '@/core/plan'
+import { buildPlan, filterAccepted, renumberPlan, summarize, MARK_CONFIDENCE } from '@/core/plan'
 import type { BookmarkItem, BookmarkOperation, CategoryCandidate, Classification, OrganizePlan } from '@/core/types'
 import { makePlan } from '../fakes/plan'
 
@@ -77,8 +77,8 @@ describe('buildPlan', () => {
   })
 
   it('置信度低于阈值的计入 lowConfidenceItems', () => {
-    expect(LOW_CONFIDENCE).toBe(0.7)
-    expect(plan().rows.filter((r) => r.confidence < LOW_CONFIDENCE)).toHaveLength(1)
+    expect(MARK_CONFIDENCE).toBe(0.85)
+    expect(plan().rows.filter((r) => r.confidence < MARK_CONFIDENCE)).toHaveLength(1)
   })
 
   it('新建文件夹时 create_folder 操作排在 move 之前', () => {
@@ -426,5 +426,93 @@ describe('buildPlan 合并模式', () => {
     const plan = buildPlan(input)
     expect(plan.rows[0]!.toPath).toEqual(['01 前端'])
     expect(plan.mergeRoot).toBeNull()
+  })
+})
+
+describe('buildPlan 的未变动区', () => {
+  const item = (id: string, parentId: string) => ({
+    id, title: `书签 ${id}`, url: `https://x.dev/${id}`, parentId, index: 0, currentPath: ['收件箱'],
+  })
+
+  it('已经在目标目录里的书签进未变动区，记为「已在正确位置」', () => {
+    const plan = buildPlan({
+      id: 'p', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: false,
+      items: [item('a', '10')],
+      candidates: [{ id: '10', path: ['前端'] }],
+      classifications: [
+        { bookmarkId: 'a', targetCategoryId: '10', confidence: 0.9, reason: 'r', source: 'llm' },
+      ],
+      newFolders: [], renameFolders: [], warnings: [], tags: [], titleRewrites: [],
+    })
+
+    expect(plan.rows).toHaveLength(0)
+    expect(plan.unchanged).toEqual([
+      expect.objectContaining({ bookmarkId: 'a', kind: 'inPlace' }),
+    ])
+  })
+
+  it('模型判「没有合适目录」的进未变动区，记为 noTarget，并带上它的理由', () => {
+    const plan = buildPlan({
+      id: 'p', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: false,
+      items: [item('a', '99')],
+      candidates: [{ id: '10', path: ['前端'] }],
+      classifications: [
+        { bookmarkId: 'a', targetCategoryId: null, confidence: 0, reason: '无合适目录', source: 'llm' },
+      ],
+      newFolders: [], renameFolders: [], warnings: [], tags: [], titleRewrites: [],
+    })
+
+    expect(plan.unchanged).toEqual([
+      expect.objectContaining({ bookmarkId: 'a', kind: 'noTarget', reason: '无合适目录' }),
+    ])
+  })
+
+  it('分类失败的记为 failed——它与「没有合适目录」是两件事，不能混在一起', () => {
+    const plan = buildPlan({
+      id: 'p', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: false,
+      items: [item('a', '99')],
+      candidates: [{ id: '10', path: ['前端'] }],
+      classifications: [
+        { bookmarkId: 'a', targetCategoryId: null, confidence: 0, reason: '分类失败：超时', source: 'none' },
+      ],
+      newFolders: [], renameFolders: [], warnings: [], tags: [], titleRewrites: [],
+    })
+
+    expect(plan.unchanged[0]!.kind).toBe('failed')
+  })
+
+  it('压根没被分类过的也算 failed——它同样是「这次没盖到」', () => {
+    const plan = buildPlan({
+      id: 'p', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: false,
+      items: [item('a', '99')],
+      candidates: [{ id: '10', path: ['前端'] }],
+      classifications: [],
+      newFolders: [], renameFolders: [], warnings: [], tags: [], titleRewrites: [],
+    })
+
+    expect(plan.unchanged[0]!.kind).toBe('failed')
+  })
+
+  it('真的要移动的书签照旧只进 rows，不进未变动区', () => {
+    const plan = buildPlan({
+      id: 'p', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: false,
+      items: [item('a', '99')],
+      candidates: [{ id: '10', path: ['前端'] }],
+      classifications: [
+        { bookmarkId: 'a', targetCategoryId: '10', confidence: 0.9, reason: 'r', source: 'rule' },
+      ],
+      newFolders: [], renameFolders: [], warnings: [], tags: [], titleRewrites: [],
+    })
+
+    expect(plan.unchanged).toEqual([])
+    expect(plan.rows).toHaveLength(1)
+    // source 一路带到行上——复核页要靠它把规则命中的组整组折叠
+    expect(plan.rows[0]!.source).toBe('rule')
+  })
+})
+
+describe('MARK_CONFIDENCE', () => {
+  it('阈值是 0.85——0.7 在真实数据上 110 条里只筛出 1 条，形同虚设', () => {
+    expect(MARK_CONFIDENCE).toBe(0.85)
   })
 })

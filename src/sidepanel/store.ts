@@ -3,7 +3,7 @@ import { currentLocale, resolveLocale, setLocale, t } from '@/i18n'
 import type { Locale } from '@/core/locale'
 import type { ProgressEvent, ProgressPhase } from '@/background/events'
 import type { BookmarkNode } from '@/core/ports'
-import { LOW_CONFIDENCE, renumberPlan } from '@/core/plan'
+import { MARK_CONFIDENCE, renumberPlan } from '@/core/plan'
 import { applyStructureEdits, EMPTY_EDITS, type StructureEdits } from '@/core/structure'
 import type { OrganizeMode } from '@/core/mode'
 import type { OrganizePlan, ScanResult } from '@/core/types'
@@ -396,7 +396,7 @@ export const useStore = create<State>((set, get) => ({
     if (res.kind !== 'analyze') return set({ busy: null, busyKind: null })
     set({
       plan: res.plan,
-      accepted: new Set(res.plan.rows.filter((r) => r.confidence >= LOW_CONFIDENCE).map((r) => r.bookmarkId)),
+      accepted: new Set(res.plan.rows.filter((r) => r.confidence >= MARK_CONFIDENCE).map((r) => r.bookmarkId)),
       structureEdits: EMPTY_EDITS,
       // 走哪条路由后台判定并记在 plan 上，界面不再自己猜——
       // 设置里已经没有那个开关了，猜出来的必然是错的
@@ -432,7 +432,7 @@ export const useStore = create<State>((set, get) => ({
     const next = applyStructureEdits(plan, get().structureEdits, currentLocale())
     set({
       plan: next,
-      accepted: new Set(next.rows.filter((r) => r.confidence >= LOW_CONFIDENCE).map((r) => r.bookmarkId)),
+      accepted: new Set(next.rows.filter((r) => r.confidence >= MARK_CONFIDENCE).map((r) => r.bookmarkId)),
       step: 'review',
     })
   },

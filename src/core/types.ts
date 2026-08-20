@@ -113,6 +113,32 @@ export interface PlanRow {
   toPath: string[]
   confidence: number
   reason: string
+  /** 这条建议是域名规则命中的还是模型判的。复核页靠它把整组规则命中的默认折叠。 */
+  source: 'rule' | 'llm' | 'none'
+}
+
+/**
+ * 这一轮**不会被动**的书签。
+ *
+ * 它们此前被 `buildPlan` 直接跳过，于是复核页上一个字都没有——而按根尺子
+ * 「三个月后逐层浏览摸得到」，**没动的那批恰恰是「找不到」的那批**，用户却完全看不见，
+ * 没法判断这次整理到底盖到了多少（见 issues/05-homeless-bookmarks.md「决定 3」）。
+ */
+export interface UnchangedRow {
+  bookmarkId: string
+  title: string
+  url: string
+  currentPath: string[]
+  /**
+   * - `inPlace`：已经在该去的目录里了。好消息，不是问题。
+   * - `noTarget`：模型判「没有合适目录」。
+   * - `failed`：分类请求失败，或压根没轮到它。
+   *
+   * 三者必须分开显示——它们对用户的含义完全不同，而今天它们混在同一条路上。
+   */
+  kind: 'inPlace' | 'noTarget' | 'failed'
+  /** 分类阶段给的理由；`inPlace` 时为空串。 */
+  reason: string
 }
 
 export interface PlanSummary {
@@ -133,6 +159,8 @@ export interface OrganizePlan {
   candidates: CategoryCandidate[]
   operations: BookmarkOperation[]
   rows: PlanRow[]
+  /** 这一轮没被动过的书签，按原因分三类。见 UnchangedRow。 */
+  unchanged: UnchangedRow[]
   summary: PlanSummary
   /** 部分失败时的提示，例如某些书签因模型报错未能分类。 */
   warnings: string[]

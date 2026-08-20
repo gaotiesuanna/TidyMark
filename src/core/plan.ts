@@ -2,10 +2,17 @@ import { stripNumberPrefix } from './map'
 import type { TitleRewrite } from './titles'
 import type {
   BookmarkItem, BookmarkOperation, CategoryCandidate, Classification,
-  OrganizePlan, PlanRow, PlanSummary, TagResult,
+  OrganizePlan, PlanRow, PlanSummary, TagResult, UnchangedRow,
 } from './types'
 
-export const LOW_CONFIDENCE = 0.7
+/**
+ * 标记「低置信度」用的阈值——只用来在复核页打个提醒标签，不再决定默认勾不勾选
+ * （那部分行为改动留给后面的任务）。
+ *
+ * 原先是 0.7，但真实那一轮 110 条书签里低于它的只有 1 条，形同虚设；
+ * 提到 0.85 能标出 18 条（16%），才是个用户审得完的量。
+ */
+export const MARK_CONFIDENCE = 0.85
 
 export interface NewFolderSpec {
   temporaryId: string
@@ -69,17 +76,44 @@ export function buildPlan(input: BuildPlanInput): OrganizePlan {
 
   const moveOps: BookmarkOperation[] = []
   const rows: PlanRow[] = []
+  const unchanged: UnchangedRow[] = []
+
+  /** 记一条未变动的书签，三类原因共用同一副骨架。 */
+  const markUnchanged = (item: BookmarkItem, kind: UnchangedRow['kind'], reason: string): void => {
+    unchanged.push({
+      bookmarkId: item.id, title: item.title, url: item.url, currentPath: item.currentPath,
+      kind, reason,
+    })
+  }
 
   // 合并把书签移出了它原来的顶层目录，只显示范围根内的相对路径看不出东西去了哪
   const prefix = input.mergeRoot === undefined ? [] : [input.mergeRoot.title]
 
   for (const item of input.items) {
     const classification = byId.get(item.id)
-    if (!classification?.targetCategoryId) continue
+
+    // 压根没被分类到，或分类阶段本身就失败了——这次没盖到它
+    if (classification === undefined || classification.source === 'none') {
+      markUnchanged(item, 'failed', classification?.reason ?? '')
+      continue
+    }
+
+    // 模型判「无合适目录」，或它给的目录在候选里根本查不到
+    if (classification.targetCategoryId === null) {
+      markUnchanged(item, 'noTarget', classification.reason)
+      continue
+    }
     const target = candidateById.get(classification.targetCategoryId)
-    if (!target) continue
+    if (!target) {
+      markUnchanged(item, 'noTarget', classification.reason)
+      continue
+    }
+
     // 已经在目标目录里，无需移动
-    if (item.parentId === classification.targetCategoryId) continue
+    if (item.parentId === classification.targetCategoryId) {
+      markUnchanged(item, 'inPlace', '')
+      continue
+    }
 
     const isTemporary = newFolderIds.has(classification.targetCategoryId)
     moveOps.push({
@@ -100,6 +134,7 @@ export function buildPlan(input: BuildPlanInput): OrganizePlan {
       toPath: [...prefix, ...target.path],
       confidence: classification.confidence,
       reason: classification.reason,
+      source: classification.source,
     })
   }
 
@@ -112,6 +147,7 @@ export function buildPlan(input: BuildPlanInput): OrganizePlan {
     candidates: input.candidates,
     operations,
     rows,
+    unchanged,
     warnings: input.warnings ?? [],
     tags: input.tags ?? [],
     mergeRoot: input.mergeRoot ?? null,
@@ -306,7 +342,7 @@ export function summarize(
     renamedFolders: acceptedOps.filter((o) => o.type === 'rename_folder').length,
     renamedBookmarks: acceptedOps.filter((o) => o.type === 'rename_bookmark').length,
     lowConfidenceItems: plan.rows.filter(
-      (r) => accepted.has(r.bookmarkId) && r.confidence < LOW_CONFIDENCE,
+      (r) => accepted.has(r.bookmarkId) && r.confidence < MARK_CONFIDENCE,
     ).length,
   }
 }

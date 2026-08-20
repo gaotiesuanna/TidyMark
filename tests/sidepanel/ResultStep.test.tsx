@@ -17,9 +17,10 @@ const plan: OrganizePlan = {
     { type: 'move_bookmark', bookmarkId: '101', fromParentId: '1', originalIndex: 1, toCategoryId: 'tmp:1', toTemporaryId: 'tmp:1', confidence: 1, reason: '' },
   ],
   rows: [
-    { bookmarkId: '100', title: 'a', url: 'https://a', fromPath: ['书签栏'], toPath: ['AI', 'RAG'], confidence: 1, reason: '' },
-    { bookmarkId: '101', title: 'b', url: 'https://b', fromPath: ['书签栏'], toPath: ['AI'], confidence: 1, reason: '' },
+    { bookmarkId: '100', title: 'a', url: 'https://a', fromPath: ['书签栏'], toPath: ['AI', 'RAG'], confidence: 1, reason: '', source: 'llm' },
+    { bookmarkId: '101', title: 'b', url: 'https://b', fromPath: ['书签栏'], toPath: ['AI'], confidence: 1, reason: '', source: 'llm' },
   ],
+  unchanged: [],
   summary: { totalBookmarks: 2, movedBookmarks: 2, unchangedBookmarks: 0, createdFolders: 2, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 0 },
   warnings: [],
   tags: [],

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { localDate } from '@/core/export'
-import { LOW_CONFIDENCE, renumberPlan, summarize } from '@/core/plan'
+import { MARK_CONFIDENCE, renumberPlan, summarize } from '@/core/plan'
 import { plural, t } from '@/i18n'
 import { downloadJson } from '../lib/download'
 import { useStore } from '../store'
@@ -75,7 +75,7 @@ export function ReviewStep() {
 
       <div className="flex gap-1 text-xs">
         <button className="rounded border px-2 py-1 hover:bg-neutral-50" onClick={acceptAll}>{t('reviewAcceptAll')}</button>
-        <button className="rounded border px-2 py-1 hover:bg-neutral-50" onClick={() => acceptHighConfidence(LOW_CONFIDENCE)}>{t('reviewAcceptHigh')}</button>
+        <button className="rounded border px-2 py-1 hover:bg-neutral-50" onClick={() => acceptHighConfidence(MARK_CONFIDENCE)}>{t('reviewAcceptHigh')}</button>
         <button className="rounded border px-2 py-1 hover:bg-neutral-50" onClick={rejectAll}>{t('reviewRejectAll')}</button>
         {/* 勾选无关的一项，靠 ml-auto 推到另一头，不跟左边三个批量操作混成一排 */}
         <button className="ml-auto rounded border px-2 py-1 text-neutral-500 hover:bg-neutral-50" onClick={exportPlan}>
@@ -97,7 +97,7 @@ export function ReviewStep() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="truncate font-medium">{row.title}</span>
-                  {row.confidence < LOW_CONFIDENCE && (
+                  {row.confidence < MARK_CONFIDENCE && (
                     <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] text-amber-700">{t('reviewLowConfidence')}</span>
                   )}
                   <span className="ml-auto shrink-0 text-neutral-400">{Math.round(row.confidence * 100)}%</span>
