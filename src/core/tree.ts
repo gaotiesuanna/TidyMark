@@ -2,6 +2,7 @@ import { DOMAIN_GROUPS, groupFolderTitle, matchDomainGroup } from './domainGroup
 import type { Locale } from './locale'
 import { normalizeName, stripNumberPrefix } from './map'
 import type { NewFolderSpec, RenameFolderSpec } from './plan'
+import { MAX_LEAF, SHAPE_MAX_SIBLINGS } from './shape'
 import type { BookmarkItem, CategoryCandidate, Classification, TagResult } from './types'
 
 /** 同一层最多允许的目录数量。目录集合由 llm/folders.ts 设计，这里只做兜底截断。 */
@@ -170,10 +171,16 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
       child.bookmarkIds.push(tag.bookmarkId)
       byTopic.set(topicKey, child)
     }
-    const children = [...byTopic.values()]
-      .filter((c) => c.bookmarkIds.length >= minFolderSize)
-      .sort((a, b) => b.bookmarkIds.length - a.bookmarkIds.length)
-      .slice(0, maxSiblings)
+    // 组内形状只决定「要不要分子目录」（票 10 补账第 8 条）：装得下就整组平铺——
+    // 组已经把来源这一维答完了，再切一层子目录只是把 15 条书签摊成 3 个各 5 条的抽屉，
+    // 不增加区分度，反而多一层要点开。超过叶子容量上限才按主题聚簇。
+    const children = bucket.length <= MAX_LEAF
+      ? []
+      : [...byTopic.values()]
+          .filter((c) => c.bookmarkIds.length >= minFolderSize)
+          .sort((a, b) => b.bookmarkIds.length - a.bookmarkIds.length)
+          // 簇数由标签决定、公式不截断，只受同层上限卡；装不下的尾部平铺在组根下
+          .slice(0, SHAPE_MAX_SIBLINGS)
     const placed = new Set(children.flatMap((c) => c.bookmarkIds))
     domainSections.push({
       title: preferredName(groupTitleByKey.get(key)!),

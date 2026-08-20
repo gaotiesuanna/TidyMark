@@ -3,6 +3,7 @@ import { buildCategoryTree, stripNumberPrefix, MAX_SIBLINGS } from '@/core/tree'
 import type { BuildTreeInput, BuildTreeOutput, ExistingFolder } from '@/core/tree'
 import type { BookmarkItem, TagResult } from '@/core/types'
 import { DOMAIN_GROUPS, groupFolderTitle } from '@/core/domainGroups'
+import { MAX_LEAF, SHAPE_MAX_SIBLINGS } from '@/core/shape'
 
 function tags(spec: Array<[string, string, string | null]>): TagResult[] {
   return spec.map(([bookmarkId, primaryTopic, secondaryTopic]) => ({
@@ -317,8 +318,10 @@ describe('buildCategoryTree 域名聚合', () => {
     expect(tops).toHaveLength(MAX_SIBLINGS + 1)
   })
 
-  it('组内每个主题都生成二级目录', () => {
-    const gh = githubFixture(2, 'AI 工具')
+  it('组内每个主题都生成二级目录（组内总数超过叶子容量上限，触发聚簇）', () => {
+    // 组内形状只决定「要不要分子目录」（票 10 补账第 8 条）：装得下（≤ MAX_LEAF）就整组
+    // 平铺，这里要测的是聚簇分支，book 数必须过 MAX_LEAF。
+    const gh = githubFixture(MAX_LEAF + 1, 'AI 工具')
     const { candidates } = buildTree({
       tags: gh.tags, rootId, existingFolders: [],
       bookmarks: gh.bookmarks, domainGroups: ['github'],
@@ -338,9 +341,10 @@ describe('buildCategoryTree 域名聚合', () => {
   })
 
   it('组内不同主题数超过上限时，排在后面的主题平铺在组根，不建子目录', () => {
-    // MAX_SIBLINGS + 3 个各 1 条书签、互不相同的主题：前 MAX_SIBLINGS 个各自拿到子目录，
-    // 排在后面的 3 个没有子目录名额，书签直接 pin 到组根。
-    const n = MAX_SIBLINGS + 3
+    // SHAPE_MAX_SIBLINGS + 3 个各 1 条书签、互不相同的主题，凑出 MAX_LEAF + 3 条总数——
+    // 既过了叶子容量上限（触发聚簇分支），子目录数又过了二级上限：前 SHAPE_MAX_SIBLINGS
+    // 个各自拿到子目录，排在后面的 3 个没有子目录名额，书签直接 pin 到组根。
+    const n = MAX_LEAF + 3
     const spec = Array.from({ length: n }, (_, i) => [`g${i}`, `主题${i}`, null] as [string, string, null])
     const bookmarks = items(spec.map(([id]) => [id, `https://github.com/o/${id}`]))
     const { candidates, pinned } = buildTree({
@@ -349,22 +353,63 @@ describe('buildCategoryTree 域名聚合', () => {
     })
     const githubTop = candidates.find((c) => base(c.path[0]!) === 'GitHub' && c.path.length === 1)!
     const children = candidates.filter((c) => c.path.length === 2)
-    expect(children).toHaveLength(MAX_SIBLINGS)
+    expect(children).toHaveLength(SHAPE_MAX_SIBLINGS)
 
-    const overflowIds = spec.slice(MAX_SIBLINGS).map(([id]) => id)
+    const overflowIds = spec.slice(SHAPE_MAX_SIBLINGS).map(([id]) => id)
     const overflowPins = pinned.filter((p) => overflowIds.includes(p.bookmarkId))
     expect(overflowPins).toHaveLength(overflowIds.length)
     expect(overflowPins.every((p) => p.targetCategoryId === githubTop.id)).toBe(true)
   })
 
+  it('组内书签不超过叶子容量上限时整组平铺，不建子目录', () => {
+    const out = buildCategoryTree({
+      tags: Array.from({ length: 15 }, (_, i) => (
+        { bookmarkId: `g${i}`, primaryTopic: i % 3 === 0 ? '前端' : '后端', secondaryTopic: null }
+      )),
+      bookmarks: Array.from({ length: 15 }, (_, i) => ({
+        id: `g${i}`, title: `T${i}`, url: `https://github.com/o/r${i}`,
+        parentId: '1', index: i, currentPath: [],
+      })),
+      domainGroups: ['github'],
+      rootId: '1',
+      existingFolders: [],
+      locale: 'zh_CN',
+    })
+    const github = out.newFolders.find((f) => f.title.includes('GitHub'))!
+    const children = out.newFolders.filter((f) => f.parentTemporaryId === github.temporaryId)
+    expect(children).toHaveLength(0)
+    // 15 条全部钉在组根上
+    expect(out.pinned.filter((p) => p.targetCategoryId === github.temporaryId)).toHaveLength(15)
+  })
+
+  it('超过上限才按主题聚簇', () => {
+    const out = buildCategoryTree({
+      tags: Array.from({ length: 30 }, (_, i) => (
+        { bookmarkId: `g${i}`, primaryTopic: i % 2 === 0 ? '前端' : '后端', secondaryTopic: null }
+      )),
+      bookmarks: Array.from({ length: 30 }, (_, i) => ({
+        id: `g${i}`, title: `T${i}`, url: `https://github.com/o/r${i}`,
+        parentId: '1', index: i, currentPath: [],
+      })),
+      domainGroups: ['github'],
+      rootId: '1',
+      existingFolders: [],
+      locale: 'zh_CN',
+    })
+    const github = out.newFolders.find((f) => f.title.includes('GitHub'))!
+    const children = out.newFolders.filter((f) => f.parentTemporaryId === github.temporaryId)
+    expect(children).toHaveLength(2)
+  })
+
   it('pinned 覆盖全部命中书签，且指向二级目录', () => {
-    const gh = githubFixture(3, 'AI 工具')
+    // 组内总数要过 MAX_LEAF 才会分子目录，这个用例测的正是「指向二级目录」这件事。
+    const gh = githubFixture(MAX_LEAF + 1, 'AI 工具')
     const { candidates, pinned } = buildTree({
       tags: gh.tags, rootId, existingFolders: [],
       bookmarks: gh.bookmarks, domainGroups: ['github'],
     })
     const child = candidates.find((c) => c.path.length === 2)!
-    expect(pinned).toHaveLength(3)
+    expect(pinned).toHaveLength(MAX_LEAF + 1)
     expect(pinned.map((p) => p.bookmarkId).sort()).toEqual(gh.bookmarks.map((b) => b.id).sort())
     expect(pinned.every((p) => p.targetCategoryId === child.id)).toBe(true)
     expect(pinned.every((p) => p.confidence === 1 && p.source === 'rule')).toBe(true)
@@ -515,8 +560,10 @@ describe('buildCategoryTree 二级目录开关', () => {
 
   // 聚合组的两层是那个功能本身的定义，用户勾了组就是明确要这个结构
   it('allowChildren=false 不影响域名聚合组内部的细分', () => {
-    const a = githubFixture(3, 'RAG 检索')
-    const b = githubFixture(3, '模型微调', 3)
+    // 组内总数要过 MAX_LEAF 才会分子目录，这里两个主题各出一半、合计过线。
+    const half = Math.ceil((MAX_LEAF + 1) / 2)
+    const a = githubFixture(half, 'RAG 检索')
+    const b = githubFixture(half, '模型微调', half)
     const { candidates } = buildTree({
       tags: [...a.tags, ...b.tags],
       rootId,
@@ -582,8 +629,9 @@ describe('buildCategoryTree 目录下限', () => {
 
   // 组内的独苗子目录同样难看，但组目录自己是用户勾出来的，不能因为人少就撤掉
   it('聚合组内不足下限的子目录不建，书签平铺在组根', () => {
-    const big = githubFixture(4, 'RAG 检索')
-    const small = githubFixture(1, '语音合成', 4)
+    // 组内总数要过 MAX_LEAF 才会分子目录，big 单独就顶到上限，small 紧跟在后面。
+    const big = githubFixture(MAX_LEAF, 'RAG 检索')
+    const small = githubFixture(1, '语音合成', MAX_LEAF)
     const { candidates, pinned } = buildTree({
       tags: [...big.tags, ...small.tags], rootId, existingFolders: [],
       bookmarks: [...big.bookmarks, ...small.bookmarks],
@@ -593,7 +641,7 @@ describe('buildCategoryTree 目录下限', () => {
     expect(paths).toContain('GitHub/RAG 检索')
     expect(paths).not.toContain('GitHub/语音合成')
     const groupRoot = candidates.find((c) => c.path.length === 1 && base(c.path[0]!) === 'GitHub')!
-    expect(pinned.find((p) => p.bookmarkId === 'g4')!.targetCategoryId).toBe(groupRoot.id)
+    expect(pinned.find((p) => p.bookmarkId === `g${MAX_LEAF}`)!.targetCategoryId).toBe(groupRoot.id)
   })
 
   it('聚合组目录本身不受下限影响——用户勾了这个组就是要它', () => {
