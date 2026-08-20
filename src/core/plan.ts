@@ -190,9 +190,10 @@ function hasNumberPrefix(title: string): boolean {
  * 分类模型没往某个目录放书签、或用户没勾选那些建议时，这个目录不会出现，
  * 它占用的号码就会变成空号（01、02、04…）。这里在应用前重排一遍。
  *
- * 传入 scopeFolders 时，上一轮整理留下、本轮没被设计到的编号目录也一起参与重排。
- * 不然它们会顶着旧号码留在原地，和本轮的新号撞车（04 金融 与 04 其他并存）。
- * 判定只看目录名有没有编号前缀：没编号的目录是用户自己建的，一律不动。
+ * 传入 scopeFolders 时，上一轮整理留下、本轮没被设计到的目录会被剥掉旧编号——
+ * 剥掉而不是重新编号，这样既不会和本轮的新号撞车（04 金融 与 04 其他并存），
+ * 也不会让一个本轮没设计过的残留目录看起来像本轮设计的一部分。
+ * 判定只看目录名有没有编号前缀：本来就没编号的目录一律不动。
  *
  * 只对推翻模式生效——非推翻模式的目录名是用户自己的，不该改动。
  */
@@ -245,48 +246,48 @@ export function renumberPlan(
   const currentTitle = (id: string): string =>
     renameByFolderId.get(id)?.oldTitle ?? folderById.get(id)?.title ?? byId.get(id)?.path.at(-1) ?? ''
 
-  /** 重排后要保留的名字（不含编号）。候选目录用本轮设计的名字，其余用它现在的名字。 */
-  const bareName = (id: string): string =>
-    stripNumberPrefix(byId.get(id)?.path.at(-1) ?? folderById.get(id)?.title ?? '')
+  /** 重排后要保留的名字（不含编号）。参与编号的只有候选目录，用的就是本轮设计的名字。 */
+  const bareName = (id: string): string => stripNumberPrefix(byId.get(id)?.path.at(-1) ?? '')
 
   /**
-   * 一级目录一律编号：范围内每个真实存在的一级目录都参与重排，包括用户自建的。
+   * 本轮设计里的一级目录一律编号，包括一个书签都没移入的已有目录。
    * 二级只重排已经带编号的——用户在某个目录下自己整理的子目录保持原样。
    * 两级都排除本轮新建但没收到书签的目录，它们根本不会被创建，不该占号。
+   *
+   * 只管候选目录：没进本轮设计的目录不参与编号，改由 strayIds 那一段剥掉旧编号。
    */
   const participates = (id: string, topLevel: boolean): boolean =>
     used.has(id) || (!newFolderIds.has(id) && (topLevel || hasNumberPrefix(currentTitle(id))))
 
   /**
-   * 本轮没进候选的已有目录，接在设计好的目录后面。
+   * 上一轮留下、本轮没进候选的已有目录。它们不参与编号，只被剥掉旧编号（见下面的剥号段）。
+   *
+   * 层级卡在一、二级：与改动前触及的范围一致，不把更深处的目录卷进来；
+   * 扫描根（depth 0）也不碰——它头上的号属于它的父层，不归本轮管。
    *
    * 合并模式例外：范围内的旧目录正是即将被清空删除的源目录子树，
    * 给它们改名毫无意义，还会让 summary.renamedFolders 虚高。
    */
-  const strays = (matches: (folder: ScopeFolder) => boolean, topLevel: boolean): string[] =>
+  const strayIds: string[] =
     plan.mergeRoot !== null
       ? []
       : scopeFolders
-          .filter((f) => !candidateIds.has(f.id) && matches(f) && (topLevel || hasNumberPrefix(f.title)))
+          .filter((f) => !candidateIds.has(f.id) && (f.depth === 1 || f.depth === 2))
           .map((f) => f.id)
 
   const renumbered = new Map<string, string[]>()
-  const topIds = [
-    ...plan.candidates.filter((c) => c.path.length === 1 && participates(c.id, true)).map((c) => c.id),
-    ...strays((f) => f.depth === 1, true),
-  ]
+  const topIds = plan.candidates
+    .filter((c) => c.path.length === 1 && participates(c.id, true))
+    .map((c) => c.id)
 
   topIds.forEach((topId, index) => {
     const title = `${String(index + 1).padStart(2, '0')} ${bareName(topId)}`
     renumbered.set(topId, [title])
 
     const designedPath = byId.get(topId)?.path[0]
-    const childIds = [
-      ...plan.candidates
-        .filter((c) => c.path.length === 2 && c.path[0] === designedPath && participates(c.id, false))
-        .map((c) => c.id),
-      ...strays((f) => f.depth === 2 && f.parentId === topId, false),
-    ]
+    const childIds = plan.candidates
+      .filter((c) => c.path.length === 2 && c.path[0] === designedPath && participates(c.id, false))
+      .map((c) => c.id)
     childIds.forEach((childId, childIndex) => {
       const childTitle = `${String(childIndex + 1).padStart(2, '0')} ${bareName(childId)}`
       renumbered.set(childId, [title, childTitle])
@@ -298,7 +299,7 @@ export function renumberPlan(
   const pathFor = (candidate: CategoryCandidate): string[] =>
     renumbered.get(candidate.id) ?? candidate.path.map(stripNumberPrefix)
 
-  // 改名操作按重排结果重新生成：既有的可能号码变了，遗留目录则本来就没有改名操作
+  // 改名操作按重排结果重新生成：既有目录的号码可能变了
   const renameOps: BookmarkOperation[] = []
   for (const [id, path] of renumbered) {
     if (newFolderIds.has(id)) continue // 新建目录的名字写在 create_folder 里
@@ -306,6 +307,19 @@ export function renumberPlan(
     const newTitle = path.at(-1)!
     if (oldTitle === newTitle) continue
     renameOps.push({ type: 'rename_folder', folderId: id, oldTitle, newTitle })
+  }
+
+  // 遗留目录剥掉旧编号，而不是跟着重排。那个号是 TidyMark 自己加的，
+  // 给一个本轮没设计过、即将变成残留的目录重新编号，会让它看起来像本轮设计的一部分，
+  // 比残留本身更误导。剥掉之后 planFolderOrder 那条「带编号的在前、没编号的跟在后面」
+  // 会让它自然沉到设计好的目录后面，不必为「排在哪」新造任何机制。
+  // 本来就没编号的目录不碰：那是用户自己建的，不给它平添一次改名。
+  for (const id of strayIds) {
+    const oldTitle = currentTitle(id)
+    if (!hasNumberPrefix(oldTitle)) continue
+    renameOps.push({
+      type: 'rename_folder', folderId: id, oldTitle, newTitle: stripNumberPrefix(oldTitle),
+    })
   }
 
   const operations: BookmarkOperation[] = [

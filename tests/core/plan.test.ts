@@ -260,10 +260,11 @@ describe('renumberPlan 未勾选的行仍显示目标目录编号', () => {
 })
 
 /**
- * 多轮整理场景：上一轮留下的编号目录本轮没被设计到，
- * 如果不管它们，就会和本轮的新号撞车（04 金融 与 04 其他并存）。
+ * 多轮整理场景：上一轮留下的编号目录本轮没被设计到。
+ * 不管它们就会和本轮的新号撞车（04 金融 与 04 其他并存），
+ * 而重新编号又会让它们看起来像本轮设计的一部分——所以剥掉旧编号。
  */
-describe('renumberPlan 重排上一轮遗留的编号目录', () => {
+describe('renumberPlan 处理上一轮遗留的编号目录', () => {
   const scopeFolders = [
     { id: '1', parentId: '0', title: '书签栏', depth: 0 },
     { id: 'f-github', parentId: '1', title: '01 GitHub', depth: 1 },
@@ -303,23 +304,23 @@ describe('renumberPlan 重排上一轮遗留的编号目录', () => {
   const titleOf = (ops: BookmarkOperation[], folderId: string): string | undefined =>
     ops.flatMap((o) => (o.type === 'rename_folder' && o.folderId === folderId ? [o.newTitle] : []))[0]
 
-  it('本轮没设计到但带编号的顶级目录接在后面重排，不再撞号', () => {
+  it('本轮没设计到但带编号的顶级目录被剥掉旧编号，不再撞号', () => {
     const ops = renumberPlan(multiRoundPlan(), new Set(['200', '201']), scopeFolders).operations
-    // 设计的三个占 01-03，遗留的金融顺延到 04
-    expect(titleOf(ops, 'f-finance')).toBe('04 金融')
+    // 设计的三个占 01-03，遗留的金融剥掉旧号变成裸名字，由 planFolderOrder 沉到它们后面
+    expect(titleOf(ops, 'f-finance')).toBe('金融')
   })
 
-  it('本轮没设计到但带编号的子目录跟着父级一起重排', () => {
+  it('本轮没设计到但带编号的子目录同样只剥编号，设计好的子目录照常编号', () => {
     const ops = renumberPlan(multiRoundPlan(), new Set(['200', '201']), scopeFolders).operations
-    // dify 是本轮设计的子目录占 01，遗留的数字人顺延到 02
+    // dify 是本轮设计的子目录占 01，遗留的数字人剥掉旧号，不再跟着占 02
     expect(titleOf(ops, 'f-dify')).toBe('01 dify')
-    expect(titleOf(ops, 'f-avatar')).toBe('02 数字人')
+    expect(titleOf(ops, 'f-avatar')).toBe('数字人')
   })
 
-  it('用户自建的一级目录也必须编号', () => {
+  it('用户自建、本来就没编号的一级目录一动不动', () => {
     const ops = renumberPlan(multiRoundPlan(), new Set(['200', '201']), scopeFolders).operations
-    // 设计的三个占 01-03，遗留的金融 04，用户自建的 fastapi 顺延到 05
-    expect(titleOf(ops, 'f-fastapi')).toBe('05 fastapi')
+    // fastapi 没进本轮设计，也没有旧编号可剥：既不编号，也不该平添一次改名
+    expect(titleOf(ops, 'f-fastapi')).toBeUndefined()
   })
 
   it('二级里用户自建的目录不编号，保持原样', () => {
@@ -332,8 +333,9 @@ describe('renumberPlan 重排上一轮遗留的编号目录', () => {
     // 于是 scopeRootIds 里几乎装着范围内的每个目录。层级只能靠 depth 判断。
     const cascaded = { ...multiRoundPlan(), scopeRootIds: scopeFolders.map((f) => f.id) }
     const ops = renumberPlan(cascaded, new Set(['200', '201']), scopeFolders).operations
-    expect(titleOf(ops, 'f-fastapi')).toBe('05 fastapi')
-    expect(titleOf(ops, 'f-avatar')).toBe('02 数字人')
+    expect(titleOf(ops, 'f-fastapi')).toBeUndefined()
+    expect(titleOf(ops, 'f-avatar')).toBe('数字人')
+    expect(titleOf(ops, 'f-finance')).toBe('金融')
   })
 
   it('范围根本身不参与编号', () => {
@@ -353,6 +355,74 @@ describe('renumberPlan 重排上一轮遗留的编号目录', () => {
     expect(titleOf(ops, 'f-finance')).toBeUndefined()
     expect(titleOf(ops, 'f-avatar')).toBeUndefined()
     expect(titleOf(ops, 'f-dify')).toBe('01 dify')
+  })
+})
+
+/**
+ * 上一轮留下、这一轮没派上用场的目录：剥掉旧编号，而不是重新编号。
+ * 那个号是 TidyMark 自己加的，给一个本轮没设计过的目录重新编号，
+ * 会让残留看起来像本轮设计的一部分——比残留本身更误导。
+ */
+describe('renumberPlan 剥掉遗留目录的旧编号', () => {
+  /** 本轮只设计了一个一级目录「前端」，一条书签 a 投进去。 */
+  const designOneFolder = (): OrganizePlan =>
+    buildPlan({
+      id: 'p-stray', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: true,
+      items: [{
+        id: 'a', title: 'Ta', url: 'https://a.dev', parentId: '1', index: 0, currentPath: ['书签栏'],
+      }],
+      candidates: [{ id: 'tmp:1', path: ['前端'] }],
+      classifications: [{ bookmarkId: 'a', targetCategoryId: 'tmp:1', confidence: 1, reason: '', source: 'llm' }],
+      newFolders: [{ temporaryId: 'tmp:1', parentId: '1', parentTemporaryId: null, title: '前端' }],
+    })
+
+  /** 范围里除了扫描根，只有一个本轮没进候选的旧目录。 */
+  const scopeWithStray = (strayTitle: string) => [
+    { id: '1', parentId: '0', title: '书签栏', depth: 0 },
+    { id: '90', parentId: '1', title: strayTitle, depth: 1 },
+  ]
+
+  const newTitleOf = (ops: BookmarkOperation[], folderId: string): string | undefined =>
+    ops.flatMap((o) => (o.type === 'rename_folder' && o.folderId === folderId ? [o.newTitle] : []))[0]
+
+  const accepted = new Set(['a'])
+
+  it('带编号的遗留目录被剥掉编号，而不是换一个号', () => {
+    const ops = renumberPlan(
+      designOneFolder(), accepted, scopeWithStray('01 语音 Agent 与数字人'),
+    ).operations
+    expect(newTitleOf(ops, '90')).toBe('语音 Agent 与数字人')
+  })
+
+  it('本轮设计的目录从 01 开始，不被遗留目录挤后', () => {
+    const next = renumberPlan(designOneFolder(), accepted, scopeWithStray('01 语音 Agent 与数字人'))
+    expect(next.rows.find((r) => r.bookmarkId === 'a')!.toPath).toEqual(['01 前端'])
+  })
+
+  it('遗留目录本来就没编号时不产生改名，不平添一次改动', () => {
+    const ops = renumberPlan(designOneFolder(), accepted, scopeWithStray('手工目录')).operations
+    expect(newTitleOf(ops, '90')).toBeUndefined()
+  })
+
+  it('合并模式的例外仍在：不碰即将被清空删除的源目录子树', () => {
+    const merged: OrganizePlan = {
+      ...designOneFolder(),
+      mergeRoot: {
+        temporaryId: 'tmp:0', title: 'AI 学习', sourceRootIds: ['1'], sourceTitles: ['书签栏'],
+      },
+    }
+    const ops = renumberPlan(merged, accepted, scopeWithStray('01 语音 Agent 与数字人')).operations
+    expect(newTitleOf(ops, '90')).toBeUndefined()
+  })
+
+  it('扫描根自己带编号也不剥——那个号属于它父层，不归本轮管', () => {
+    const scope = [
+      { id: '1', parentId: '0', title: '01 AI', depth: 0 },
+      { id: '90', parentId: '1', title: '02 语音', depth: 1 },
+    ]
+    const ops = renumberPlan(designOneFolder(), accepted, scope).operations
+    expect(newTitleOf(ops, '1')).toBeUndefined()
+    expect(newTitleOf(ops, '90')).toBe('语音')
   })
 })
 
@@ -413,9 +483,12 @@ describe('renumberPlan 合并模式', () => {
 
   it('非合并模式仍然给遗留目录改名', () => {
     const plan = makePlan()
-    const scopeFolders = [{ id: '80', parentId: '1', title: '旧的子目录', depth: 1 }]
+    // 遗留目录带编号才有改名可做——剥掉它，证明上面那条豁免只属于合并模式
+    const scopeFolders = [{ id: '80', parentId: '1', title: '01 旧的子目录', depth: 1 }]
     const next = renumberPlan(plan, all(plan), scopeFolders)
-    expect(next.operations.some((o) => o.type === 'rename_folder' && o.folderId === '80')).toBe(true)
+    expect(next.operations).toContainEqual(
+      { type: 'rename_folder', folderId: '80', oldTitle: '01 旧的子目录', newTitle: '旧的子目录' },
+    )
   })
 })
 
