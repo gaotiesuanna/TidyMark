@@ -48,6 +48,30 @@ describe('llm 日志文案双语', () => {
     expect(logFoldersRetryFailed('zh_CN', 'x')).not.toBe(logFoldersRetryFailed('en', 'x'))
   })
 
+  it('批次日志省略 asked 或 asked === size 时，文案与折叠不存在时一字不差', () => {
+    expect(logBatchDone('zh_CN', 0, 1, 20, 18, 500)).toBe('分类批次 1/1：20 条，成功 18 条，耗时 500ms')
+    expect(logBatchDone('en', 0, 1, 20, 18, 500)).toBe('Classify batch 1/1: 20 items, 18 succeeded, 500ms')
+    // 绝大多数批次没有重复 URL，asked 会等于 size——那时不许多出任何一个字。
+    expect(logBatchDone('zh_CN', 0, 1, 20, 18, 500, 20)).toBe(logBatchDone('zh_CN', 0, 1, 20, 18, 500))
+    expect(logBatchDone('en', 0, 1, 20, 18, 500, 20)).toBe(logBatchDone('en', 0, 1, 20, 18, 500))
+  })
+
+  it('发生折叠时才多出一句解释，双语且英文里没有中文', () => {
+    const zh = logBatchDone('zh_CN', 0, 1, 5, 5, 1, 2)
+    const en = logBatchDone('en', 0, 1, 5, 5, 1, 2)
+    // 「条」仍然指书签：5 条书签、成功 5 条，2 只出现在解释里。
+    expect(zh).toContain('5 条')
+    expect(zh).toContain('成功 5 条')
+    expect(zh).toContain('2')
+    expect(zh).not.toBe(logBatchDone('zh_CN', 0, 1, 5, 5, 1))
+    expect(en).toContain('5 items')
+    expect(en).toContain('5 succeeded')
+    expect(en).toContain('2')
+    expect(en).not.toBe(logBatchDone('en', 0, 1, 5, 5, 1))
+    expect(/[一-鿿]/.test(en)).toBe(false)
+    expect(zh).not.toBe(en)
+  })
+
   it('未映射到目录的标签数日志双语，带上数字（I5）', () => {
     expect(logNoTopicMapped('zh_CN', 3)).toContain('3')
     expect(/[一-鿿]/.test(logNoTopicMapped('en', 3))).toBe(false)

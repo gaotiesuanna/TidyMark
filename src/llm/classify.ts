@@ -260,18 +260,34 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
   // 分组用 URL 本身而不是 cacheKey：djb2 是 32 位，两个不同的 URL 撞出同一个
   // key 是可能的（fromCache 第一道校验防的就是这个），用 key 分组会把两个不
   // 相干的问题合并成一个，比白算一次更糟。反过来同 URL 必然同 key，所以按
-  // URL 分组不会漏掉任何一对该折叠的。
+  // URL 分组不会漏掉任何一对该折叠的。这不是纸上谈兵：
+  // https://news.example.com/qpWaK9EZKadT 与 https://news.example.com/PkheS7JVe8x9
+  // 的 djb2 都是 1sor99f，tests/llm/classify.test.ts 里有一条用例专门钉着
+  // 它们各问各的。别把这里「优化」成按 cacheKey 分组。
   //
   // 折叠的只是「提问」，不是书签：两个书签仍然是两个书签，各自照常出现在
   // 返回值里、照常被移动，复核页上照常两行。
+  //
+  // 折叠自己欠的账，别推给 cacheKey：cacheKey 不含标题，管的是「跨轮次还能不能
+  // 复用」；而在冷缓存的这一轮里，折叠之前两条各自带着自己的 title 与
+  // current_folder 进 payload，模型本来是能分别判的。折叠之后，非代表那条的
+  // 标题与所在目录在本轮内就到不了模型面前了——这是折叠新引入的损失，不是老账。
+  /** 建组与查组共用这一个 key 函数：两处不同步不会报错，只会静默地不再扇出。 */
+  const groupKey = (bookmark: BookmarkItem): string => bookmark.url
   const groups = new Map<string, BookmarkItem[]>()
   for (const item of pending) {
-    const group = groups.get(item.url)
+    const key = groupKey(item)
+    const group = groups.get(key)
     if (group) group.push(item)
-    else groups.set(item.url, [item])
+    else groups.set(key, [item])
   }
-  /** 代表背后的整组。代表一定来自 groups，取不到就当只有自己，不至于把进度报少。 */
-  const groupOf = (rep: BookmarkItem): BookmarkItem[] => groups.get(rep.url) ?? [rep]
+  /**
+   * 代表背后的整组。代表一定来自 groups.values()，查不到只可能是建组与查组的
+   * key 不同步——那是编程错误，宁可当场炸也不要兜底。这里原本写的是
+   * `?? [rep]`，正是那句兜底让「只改了建组那一侧的 key」这种改动一声不吭地
+   * 通过：不再扇出，重复书签全掉进「未处理」，进度还少报。
+   */
+  const groupOf = (rep: BookmarkItem): BookmarkItem[] => groups.get(groupKey(rep))!
 
   const representatives = [...groups.values()].map((group) => group[0]!)
   const batches: BookmarkItem[][] = []
@@ -288,13 +304,25 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
       if (input.isCancelled?.() === true) return
       const index = cursor++
       const batch = batches[index]!
+      // 日志里的「条」一律指书签，不指请求条目：batch 里装的是代表，一个代表
+      // 背后可能站着若干个同 URL 的书签。用户在同一屏里先看到「N 个书签」、
+      // 后看到「N 条移动建议」，中间这一行换个口径没人看得懂。
+      const size = batch.reduce((sum, rep) => sum + groupOf(rep).length, 0)
       const startedAt = Date.now()
       const results = await runBatch(batch, candidates, client, locale, includeTopicRule)
-      const ok = results.filter((r) => r.source === 'llm').length
-      const summary = logBatchDone(locale, index, batches.length, batch.length, ok, Date.now() - startedAt)
+      // ok 同样按书签数算。一组要么整组成功要么整组失败（结果是照抄代表的），
+      // 所以 ok === size ⟺ 全部代表都成功、ok === 0 ⟺ 没有一个代表成功——
+      // 下面那套「全成功 / 全失败 / 部分」的分级，口径和按请求条目数算时完全一致。
+      let ok = 0
+      for (let i = 0; i < results.length; i++) {
+        if (results[i]!.source === 'llm') ok += groupOf(batch[i]!).length
+      }
+      const summary = logBatchDone(
+        locale, index, batches.length, size, ok, Date.now() - startedAt, batch.length,
+      )
       // 只进开发者控制台，不必双语。
       console.log(`[TidyMark] ${summary}`)
-      if (ok === batch.length) input.onLog?.(summary, 'info')
+      if (ok === size) input.onLog?.(summary, 'info')
       else if (ok === 0) {
         const sep = locale === 'zh_CN' ? '。' : '. '
         input.onLog?.(`${summary}${sep}${results[0]?.reason ?? ''}`, 'error')
@@ -329,9 +357,9 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
         }
       }
       // onProgress 报的是 items.length 的进度，所以这里加的是「这批代表背后
-      // 一共多少条书签」，不是批次长度——折叠之后两者不再相等，按批次长度加
-      // 会让进度条停在一个比总数小的终值上。
-      done += batch.reduce((sum, rep) => sum + groupOf(rep).length, 0)
+      // 一共多少条书签」（上面那个 size），不是批次长度——折叠之后两者不再
+      // 相等，按批次长度加会让进度条停在一个比总数小的终值上。
+      done += size
       input.onProgress?.(done, items.length)
     }
   }

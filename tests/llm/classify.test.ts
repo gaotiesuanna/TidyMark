@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
+import { djb2 } from '@/core/hash'
 import { classifyBookmarks, buildBatchPrompt, cacheKey } from '@/llm/classify'
 import type { ClassifyInput } from '@/llm/classify'
 import type { BookmarkItem, CachedClassification, CategoryCandidate, Classification } from '@/core/types'
@@ -435,10 +436,13 @@ describe('classifyBookmarks 同 URL 只问一遍', () => {
   })
 
   /**
-   * 这条钉的是**既有设计的后果**，不是本次新引入的取舍：cacheKey 不含标题，
-   * 所以同 URL 不同标题在缓存眼里就是同一条，模型对第二条也给不出不同答案。
-   * 将来 cacheKey 若改成含标题，这条会红——那时它红得对，是提醒折叠的依据
-   * 跟着变了，该改的是折叠而不是这条用例。
+   * 这条钉的是折叠**自己引入**的取舍，别推给 cacheKey：cacheKey 不含标题，管的
+   * 是「跨轮次还能不能复用」；而在冷缓存的这一轮里，折叠之前两条各自带着自己的
+   * title 与 current_folder 进 payload，模型本来是能分别判的。折叠之后，非代表
+   * 那条的标题与所在目录在**本轮内**就到不了模型面前——这是新欠的账，不是老账。
+   *
+   * 现在的裁决是折叠优先，代价就是同 URL 只按代表那条的标题判。将来若不想再吃
+   * 这个亏，该改的是折叠（比如把标题也纳入分组依据），那时这条会红，红得对。
    */
   it('同 URL、标题不同，仍然只问一遍', async () => {
     const complete = vi.fn().mockResolvedValue({
@@ -539,5 +543,105 @@ describe('classifyBookmarks 同 URL 只问一遍', () => {
       expect(total).toBe(4)
       expect(done).toBeLessThanOrEqual(4)
     }
+  })
+
+  // 批次日志里的「条」必须和它上下两行同一个口径（上面「N 个书签」、下面
+  // 「N 条移动建议」都按书签算）。折叠之前这一行报的是请求条目数，用户会在
+  // 同一屏里读到 5 → 2 → 5，中间那个 2 没有任何解释。
+  it('批次日志按书签数报，并说明提问数为什么更少', async () => {
+    const logs: Array<{ message: string; level: string }> = []
+    const complete = vi.fn().mockResolvedValue({
+      results: [
+        { bookmark_id: '1', target_category_id: '10', confidence: 0.9, reason: 'r' },
+        { bookmark_id: '5', target_category_id: '11', confidence: 0.9, reason: 'r' },
+      ],
+    })
+    await classify({
+      items: [
+        ...['1', '2', '3', '4'].map((id) => item(id, 'https://dup.example/x')),
+        item('5', 'https://solo.dev/y'),
+      ],
+      candidates, client: { complete }, cache: new Map(),
+      onLog: (message, level) => logs.push({ message, level }),
+    })
+
+    expect(complete).toHaveBeenCalledTimes(1)
+    expect(logs).toHaveLength(1)
+    expect(logs[0]!.message).toContain('5 条')
+    expect(logs[0]!.message).toContain('成功 5 条')
+    // 提问数不再冒充书签数，但也不能藏起来——用户得看懂为什么只发了 2 次请求。
+    expect(logs[0]!.message).toContain('2')
+    // 分级口径跟着换：5 条书签全部成功就是「全成功」，
+    // 不能因为 ok(5) 不等于批次长度(2) 而降级成 warn。
+    expect(logs[0]!.level).toBe('info')
+  })
+
+  it('没有重复 URL 时，批次日志一字不变', async () => {
+    const logs: string[] = []
+    const items = ['1', '2'].map((id) => item(id, `https://s${id}.dev/x`))
+    await classify({
+      items,
+      candidates,
+      client: clientReturning({
+        results: items.map((b) => ({ bookmark_id: b.id, target_category_id: '10', confidence: 0.9, reason: 'r' })),
+      }),
+      cache: new Map(),
+      onLog: (message) => logs.push(message),
+    })
+
+    expect(logs).toHaveLength(1)
+    // 整行钉死：绝大多数批次没有重复 URL，不该为少数情形给所有人加噪音。
+    expect(logs[0]!).toMatch(/^分类批次 1\/1：2 条，成功 2 条，耗时 \d+ms$/)
+  })
+})
+
+/**
+ * 折叠按 `item.url` 分组，而不是按 `cacheKey`——这是对计划书面写法的一处
+ * 有意偏离，这个 describe 是它唯一的护栏。
+ *
+ * 理由：djb2 只有 32 位，两个**不同**的 URL 撞出同一个 key 是可能的，
+ * `fromCache` 里 `cached.url !== item.url` 那道校验防的正是这个；按 key 分组
+ * 等于从另一头绕过那道防线，把两个毫不相干的问题合并成一个，其中一条会被塞进
+ * 另一条的目录——比白算一次糟得多。
+ *
+ * 下面这一对 URL 是真的搜出来的撞车样本，不是造出来的假哈希、不是 mock：
+ *
+ *   https://news.example.com/qpWaK9EZKadT
+ *   https://news.example.com/PkheS7JVe8x9
+ *
+ * 两者 djb2 都是 1sor99f。把 llm/classify.ts 里建组与查组两处 key **一致地**
+ * 换成 cacheKey，下面第二条会红。别把那里「优化」成按 key 分组。
+ */
+describe('classifyBookmarks djb2 撞车的两个 URL 各问各的', () => {
+  const COLLIDING_A = 'https://news.example.com/qpWaK9EZKadT'
+  const COLLIDING_B = 'https://news.example.com/PkheS7JVe8x9'
+
+  it('前提：两个 URL 不同，djb2 与 cacheKey 却相同', () => {
+    expect(COLLIDING_A).not.toBe(COLLIDING_B)
+    expect(djb2(COLLIDING_A)).toBe(djb2(COLLIDING_B))
+    expect(cacheKey(item('1', COLLIDING_A), candidates, 'zh_CN', 'm'))
+      .toBe(cacheKey(item('2', COLLIDING_B), candidates, 'zh_CN', 'm'))
+  })
+
+  it('key 撞了不等于同一个问题：两条都进 payload，各得各的目标', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      results: [
+        { bookmark_id: '1', target_category_id: '10', confidence: 0.9, reason: 'A 的答案' },
+        { bookmark_id: '2', target_category_id: '11', confidence: 0.8, reason: 'B 的答案' },
+      ],
+    })
+    const results = await classify({
+      items: [item('1', COLLIDING_A), item('2', COLLIDING_B)],
+      candidates, client: { complete }, cache: new Map(), batchSize: 10,
+    })
+
+    expect(complete).toHaveBeenCalledTimes(1)
+    const prompt = String(complete.mock.calls[0]![0])
+    expect(prompt).toContain('/qpWaK9EZKadT')
+    expect(prompt).toContain('/PkheS7JVe8x9')
+
+    expect(results.map((r) => r.bookmarkId)).toEqual(['1', '2'])
+    expect(results.map((r) => r.targetCategoryId)).toEqual(['10', '11'])
+    expect(results.map((r) => r.reason)).toEqual(['A 的答案', 'B 的答案'])
   })
 })

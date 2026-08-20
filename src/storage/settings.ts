@@ -19,9 +19,14 @@ export const CACHE_KEY = 'tidymark:classify-cache'
  *
  * 取 10000：一条约 300 字节（key 约 18 + 字段名约 66 + url 约 60 + 一句中文
  * reason 约 75 + targetPath 约 30 + topic 约 12），10000 × 300 B ≈ 3 MB，一次
- * 读写在几十毫秒量级。这个数远高于任何一份真实书签库的规模，所以正常一轮整理
- * 写下的条目不会互相挤掉，被挤掉的只会是换配置之前那套旧 key。上限低于书签库
- * 规模才是要命的：那样每轮都把最早写的那批挤掉，下一轮它们必然落空，缓存等于白留。
+ * 读写在几十毫秒量级。这个数高于绝大多数书签库的规模——注意是绝大多数，不是
+ * 全部：重度用户存下上万条书签是真实存在的。对这些库，缓存会退化成「只有最近
+ * 一万条有缓存」，更早的那批每轮都被挤掉、下一轮必然落空，白读白写一遍。
+ * 在上限之内时则相安无事：正常一轮整理写下的条目不会互相挤掉，被挤掉的只会是
+ * 换配置之前那套旧 key。
+ *
+ * 真要给超大库兜底并不昂贵（unlimitedStorage 在场，开销只有几毫秒），但那是
+ * 另一个决定，不在这里顺手做。
  */
 export const MAX_CACHE_ENTRIES = 10_000
 
@@ -151,6 +156,9 @@ export async function loadCache(ports: Ports): Promise<Map<string, CachedClassif
  */
 export async function saveCache(ports: Ports, cache: Map<string, CachedClassification>): Promise<void> {
   const entries = [...cache]
-  // slice 的负索引在不足上限时原样返回全部条目，不必再判一次长度。
-  await ports.storage.set(CACHE_KEY, entries.slice(-MAX_CACHE_ENTRIES))
+  // 算成正索引而不是写 slice(-MAX_CACHE_ENTRIES)：负索引在不足上限时确实原样
+  // 返回全部条目，但上限为 0 时 -0 会被当成 0，slice(0) 同样返回全部——「一条
+  // 都不留」悄悄变成「不限」。今天 MAX_CACHE_ENTRIES 是常量碰不到，将来有人
+  // 把它调小做实验时不该踩这个坑。
+  await ports.storage.set(CACHE_KEY, entries.slice(Math.max(0, entries.length - MAX_CACHE_ENTRIES)))
 }

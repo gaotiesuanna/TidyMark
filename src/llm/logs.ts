@@ -12,12 +12,24 @@ export function logBatch(locale: Locale, label: string, index: number, total: nu
     : `${label} ${index + 1}/${total}: ${size} items`
 }
 
+/**
+ * `size` 与 `ok` 都按**书签条数**算，不按请求条目数——用户在同一屏里连着读到
+ * 「N 个书签」「这一行」「N 条移动建议」，中间换口径就是一个没有任何解释的数字。
+ *
+ * `asked` 是这批实际发出去的提问数。同 URL 的书签会被折叠成一个提问
+ * （见 llm/classify.ts 的分组），那时 asked < size，多出来的那半句正是为了
+ * 解释请求数为什么比书签数少。省略 `asked` 或 asked === size 时（绝大多数批次
+ * 都是），文案与折叠这件事不存在时一字不差——不为少数情形给所有人加噪音。
+ */
 export function logBatchDone(
-  locale: Locale, index: number, total: number, size: number, ok: number, ms: number,
+  locale: Locale, index: number, total: number, size: number, ok: number, ms: number, asked = size,
 ): string {
-  return locale === 'zh_CN'
-    ? `分类批次 ${index + 1}/${total}：${size} 条，成功 ${ok} 条，耗时 ${ms}ms`
-    : `Classify batch ${index + 1}/${total}: ${size} items, ${ok} succeeded, ${ms}ms`
+  if (locale === 'zh_CN') {
+    const merged = asked < size ? `（重复 URL 合并后只问了 ${asked} 次）` : ''
+    return `分类批次 ${index + 1}/${total}：${size} 条${merged}，成功 ${ok} 条，耗时 ${ms}ms`
+  }
+  const merged = asked < size ? ` (deduplicated to ${asked} requests)` : ''
+  return `Classify batch ${index + 1}/${total}: ${size} items${merged}, ${ok} succeeded, ${ms}ms`
 }
 
 export function logBatchFailed(
