@@ -394,6 +394,9 @@ describe('renumberPlan 剥掉遗留目录的旧编号', () => {
     expect(newTitleOf(ops, '90')).toBe('语音 Agent 与数字人')
   })
 
+  // 护栏，不是守卫：遗留目录从来没进过 topIds（它不是候选），编号只在候选之间分配，
+  // 所以设计出来的目录本来就永远从 01 起。这条钉的是「将来有人把遗留目录也塞进编号序列」
+  // 这类回归——今天它在任何实现下都绿，别指望它证明什么正在生效的逻辑。
   it('本轮设计的目录从 01 开始，不被遗留目录挤后', () => {
     const next = renumberPlan(designOneFolder(), accepted, scopeWithStray('01 语音 Agent 与数字人'))
     expect(next.rows.find((r) => r.bookmarkId === 'a')!.toPath).toEqual(['01 前端'])
@@ -413,6 +416,38 @@ describe('renumberPlan 剥掉遗留目录的旧编号', () => {
     }
     const ops = renumberPlan(merged, accepted, scopeWithStray('01 语音 Agent 与数字人')).operations
     expect(newTitleOf(ops, '90')).toBeUndefined()
+  })
+
+  // 剥号会落盘，而 stripNumberPrefix 每次只剥一层：不拦一下的话，名字本身以数字开头的
+  // 目录会被逐轮蚕食（'01 12 月清单' → '12 月清单' → '月清单'），是不可逆的数据损坏。
+  // 必须真的连跑多轮：只跑一轮的话，第一轮的结果在有没有这个修复时都「看起来像对的」。
+  it('名字本身就以数字开头的遗留目录不被逐轮蚕食', () => {
+    let scope = scopeWithStray('01 12 月清单')
+    const seen: string[] = []
+    for (let round = 0; round < 3; round++) {
+      const ops = renumberPlan(designOneFolder(), accepted, scope).operations
+      const renamed = newTitleOf(ops, '90')
+      // 把本轮的改名落回目录树，下一轮就从改完的名字重新开始——多轮整理的真实情形
+      if (renamed !== undefined) {
+        scope = scope.map((f) => (f.id === '90' ? { ...f, title: renamed } : f))
+      }
+      seen.push(scope.find((f) => f.id === '90')!.title)
+    }
+    expect(seen).toEqual(['01 12 月清单', '01 12 月清单', '01 12 月清单'])
+  })
+
+  // strayIds 的层级卡在一、二级。放宽成 depth >= 1 时没有任何用例变红，这条补上：
+  // 更深处的目录本轮压根没被触及，不该因为顶着个号就被改名。
+  it('三级以下的遗留目录不剥号——本轮触及的范围只到二级', () => {
+    const scope = [
+      { id: '1', parentId: '0', title: '书签栏', depth: 0 },
+      { id: '90', parentId: '1', title: '01 工作', depth: 1 },
+      { id: '91', parentId: '90', title: '01 前端', depth: 2 },
+      { id: '92', parentId: '91', title: '01 深处', depth: 3 },
+    ]
+    const ops = renumberPlan(designOneFolder(), accepted, scope).operations
+    expect(newTitleOf(ops, '91')).toBe('前端')
+    expect(newTitleOf(ops, '92')).toBeUndefined()
   })
 
   it('扫描根自己带编号也不剥——那个号属于它父层，不归本轮管', () => {
@@ -738,5 +773,40 @@ describe('wouldStrandFolder', () => {
   it('方案里根本没有这条书签时返回 false', () => {
     const plan = planWith([item('a', 杂项), item('b', 杂项)], [move('a'), move('b')])
     expect(wouldStrandFolder(plan, new Set(['a', 'b']), '不存在')).toBe(false)
+  })
+
+  // 散在书签栏根下的书签是这个扩展最典型的入场数据，而扫描根在非合并模式下永远不会被删
+  // （applyPlan 给 removeEmpty 的 removableRootIds 是空的，本轮新建的目录还挂在它下面），
+  // 说「不移动它就会保留目录『书签栏』」是乱说。上面 5 条用例的 fromPath 都是两层，
+  // 这条边界原先零覆盖：不加早退的话，这里会和第一条用例一样判成 true。
+  it('原目录就是扫描根时不提示——那个根本轮怎样都不会被删', () => {
+    const 根 = ['书签栏']
+    const plan = planWith([item('a', 根), item('b', 根)], [move('a'), move('b')])
+    expect(wouldStrandFolder(plan, new Set(['a', 'b']), 'a')).toBe(false)
+  })
+
+  // 早退只对非合并模式成立：合并会把源根搬空后连它自己一起删，
+  // 那时「留下它」是真的。少了 mergeRoot 那半条件，这条会红。
+  it('合并模式下扫描根照样提示——源根本来就要被清空删除', () => {
+    const 根 = ['书签栏']
+    const plan: OrganizePlan = {
+      ...planWith([item('a', 根), item('b', 根)], [move('a'), move('b')]),
+      mergeRoot: {
+        temporaryId: 'tmp:0', title: 'AI 学习', sourceRootIds: ['1'], sourceTitles: ['书签栏'],
+      },
+    }
+    expect(wouldStrandFolder(plan, new Set(['a', 'b']), 'a')).toBe(true)
+  })
+
+  // pathKey 的分隔符得是 U+0000：换成 '/' 时，下面两个目录会拼出同一个 key，
+  // b 这个留守者就被算到 a 头上，判成「那个目录本来就会活下来」而漏掉提示。
+  it('目录名里带 / 不会和多层路径撞成同一个目录', () => {
+    const plan = planWith(
+      [item('a', ['书签栏', 'A/B']), item('b', ['书签栏', 'A', 'B'])],
+      [move('a'), move('b')],
+    )
+    // 只勾了 a：b 留在「书签栏/A/B」（两级）里没搬走，但那是另一个目录，
+    // a 仍是「书签栏/『A/B』」（一级、名字里带斜杠）里最后一个要走的
+    expect(wouldStrandFolder(plan, new Set(['a']), 'a')).toBe(true)
   })
 })

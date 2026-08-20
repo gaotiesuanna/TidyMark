@@ -23,6 +23,9 @@ export function ResultStep() {
       bookmarks,
       [...plan.scopeRootIds, ...extraRootIds],
       applyResult.createdFolderIds,
+      // 只有推翻模式把编号顺序真的落进了书签栏；非推翻模式没动过用户的排列，
+      // 这里再按编号排一遍，这一页就跟它自称的「真实结构」对不上了
+      plan.rebuildStructure,
     )
   }, [bookmarks, plan, applyResult, undoResult])
   if (applyResult === null) return null

@@ -316,10 +316,15 @@ export function renumberPlan(
   // 本来就没编号的目录不碰：那是用户自己建的，不给它平添一次改名。
   for (const id of strayIds) {
     const oldTitle = currentTitle(id)
-    if (!hasNumberPrefix(oldTitle)) continue
-    renameOps.push({
-      type: 'rename_folder', folderId: id, oldTitle, newTitle: stripNumberPrefix(oldTitle),
-    })
+    const bare = stripNumberPrefix(oldTitle)
+    // 只剥 TidyMark 自己那一层：stripNumberPrefix 每次只剥一层，而剥完的结果会落盘，
+    // 于是名字本身就以数字开头的目录会被逐轮蚕食
+    // （'01 12 月清单' -> 第二轮 '12 月清单' -> 第三轮 '月清单'）。
+    // 剥完还带数字前缀，就说明剥掉的那一层下面还压着用户自己的名字，这一层不剥。
+    // 代价是这类目录保留旧号、看起来像本轮设计的一部分——两害相权：
+    // 顶着一个旧号只是难看，越剥越短是不可逆的数据损坏。
+    if (bare === oldTitle || hasNumberPrefix(bare)) continue
+    renameOps.push({ type: 'rename_folder', folderId: id, oldTitle, newTitle: bare })
   }
 
   const operations: BookmarkOperation[] = [
@@ -408,7 +413,13 @@ export function retargetRow(plan: OrganizePlan, bookmarkId: string, targetId: st
 /**
  * 路径拼 key 的分隔符用 U+0000：目录名里 '/' 与空格都可能出现，
  * 拿它们当分隔符时 ['A/B'] 与 ['A', 'B'] 会拼出同一个 key，两个不同的目录就撞成一个。
- * 与 llm/classify.ts 的 pathKey 同一套理由（那边早就为这个坑改过一次）。
+ *
+ * 但分隔符只是这里次要的那一半威胁。**主要威胁是不同父目录下的同名目录**：
+ * 这些路径都是相对各自扫描根的，勾了「书签栏」与「其他书签」两个范围根时，
+ * 两边各自的「工作」相对路径都是 `['工作']`，换什么分隔符都挡不住——真要认准身份
+ * 得按 id 认（`scan.ts` 数重名目录、`9f3f4e5` 的复核页分组都是这么做的），
+ * 而 PlanRow / UnchangedRow 现在还没带父目录 id。已开票 29 跟进：
+ * 那个错法是漏说（该提示时没提示），与本函数「宁可少说，不可乱说」的取向一致。
  */
 function pathKey(path: string[]): string {
   return path.join('\u0000')
@@ -434,6 +445,15 @@ export function wouldStrandFolder(
 ): boolean {
   const row = plan.rows.find((r) => r.bookmarkId === bookmarkId)
   if (row === undefined) return false
+
+  // 书签就散在扫描根下面时什么都不说。fromPath[0] 永远是扫描根自己的名字
+  // （scan.ts 是 `walk(root, [], 0)` 起步、进子目录才 `[...path, node.title]`），
+  // 所以长度 1 就等于「它的原目录就是扫描根」。而非合并模式下 applyPlan 给
+  // removeEmpty 的 removableRootIds 是空数组，扫描根一定不会被删——本轮新建的目录
+  // 还挂在它下面呢。这时说「不移动它就会保留目录『书签栏』」是乱说，不是少说。
+  // 合并模式是例外：源根本来就要被搬空删掉，那时这句话是真的。
+  if (row.fromPath.length <= 1 && plan.mergeRoot === null) return false
+
   const from = pathKey(row.fromPath)
 
   // 本轮压根不会动的书签就在这个目录里

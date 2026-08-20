@@ -69,6 +69,29 @@ describe('ResultStep', () => {
       .toEqual(['3', '2', '1', '1'])
   })
 
+  // 非推翻模式下 apply 不跑 sortFolders，书签栏里的真实先后没被动过。这一页自称展示
+  // 「整理后的结构」，若还按编号排一遍，带编号的旧目录会被凭空提到最前——那就又是一页
+  // 说谎的结构树，只是换了个说法。
+  it('非推翻模式按书签栏里的真实先后展示，不把带编号的旧目录提到最前', () => {
+    const flatTree: BookmarkNode[] = [
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '40', title: '杂项', children: [{ id: '400', title: 'x', url: 'https://x' }] },
+          { id: '41', title: '01 工作', children: [{ id: '401', title: 'y', url: 'https://y' }] },
+        ]},
+      ]},
+    ]
+    useStore.setState({
+      plan: { ...plan, rebuildStructure: false },
+      tree: flatTree,
+      applyResult: { ...applyResult, createdFolderIds: [] },
+    })
+    render(<ResultStep />)
+    const section = screen.getByText('整理后的结构').parentElement!
+    expect(within(section).getAllByText(/^(杂项|01 工作)$/).map((el) => el.textContent))
+      .toEqual(['杂项', '01 工作'])
+  })
+
   it('留有未接受书签的旧目录照样显示，不假装它已经空了', () => {
     render(<ResultStep />)
     const section = screen.getByText('整理后的结构').parentElement!

@@ -23,7 +23,7 @@ const tree: BookmarkNode[] = [
   ]},
 ]
 
-const roots = (): ReturnType<typeof buildResultTree> => buildResultTree(tree, ['1'], ['10', '11'])
+const roots = (): ReturnType<typeof buildResultTree> => buildResultTree(tree, ['1'], ['10', '11'], true)
 
 /** 造一个装着 count 条书签的目录，书签本身无关紧要，只为把 total 撑到指定数量。 */
 const folder = (id: string, title: string, count: number): BookmarkNode => ({
@@ -69,7 +69,7 @@ describe('buildResultTree', () => {
     // 树里的先后、编号先后、书签数先后三者两两不同，只有「按编号升序」能得出期望顺序
     const built = buildResultTree(
       barWith(folder('93', '03 多的', 9), folder('91', '01 少的', 1), folder('92', '02 中的', 5)),
-      ['1'],
+      ['1'], [], true,
     )
     expect(built[0]!.children.map((c) => c.title)).toEqual(['01 少的', '02 中的', '03 多的'])
   })
@@ -81,7 +81,7 @@ describe('buildResultTree', () => {
         folder('82', '01 设计出来的', 3),
         folder('83', '手工目录乙', 9),
       ),
-      ['1'],
+      ['1'], [], true,
     )
     // 乙的书签比甲多，但没编号的两个只按树里的先后排，甲仍在乙前
     expect(built[0]!.children.map((c) => c.title)).toEqual([
@@ -98,17 +98,34 @@ describe('buildResultTree', () => {
         title: '01 AI',
         children: [folder('72', '01.2 多的', 6), folder('71', '01.1 少的', 1)],
       }),
-      ['1'],
+      ['1'], [], true,
     )
     expect(built[0]!.children[0]!.children.map((c) => c.title)).toEqual(['01.1 少的', '01.2 多的'])
   })
 
   it('级联勾选的范围只展开最外层的根，不重复', () => {
-    const cascaded = buildResultTree(tree, ['1', '10', '11', '12', '13'])
+    const cascaded = buildResultTree(tree, ['1', '10', '11', '12', '13'], [], true)
     expect(cascaded.map((r) => r.title)).toEqual(['书签栏'])
   })
 
   it('范围外的书签不出现', () => {
-    expect(buildResultTree(tree, ['12']).map((r) => r.title)).toEqual(['02 开发'])
+    expect(buildResultTree(tree, ['12'], [], true).map((r) => r.title)).toEqual(['02 开发'])
+  })
+
+  // 非推翻模式下 apply.ts 不跑 sortFolders，书签栏里的真实顺序就是树里读出来的先后。
+  // 这一页自称展示「真实结构」，这时再按编号排，等于把带编号的旧目录凭空提到最前面。
+  // 同一棵树跑两遍取对照：只有「numberedOrder 说了算」才能同时满足两个断言。
+  it('非推翻模式完全不重排，带编号的旧目录该在后面就在后面', () => {
+    const forest = barWith(
+      { id: '81', title: '杂项', children: [folder('811', '手工子目录', 1), folder('812', '01 子的', 1)] },
+      folder('82', '01 工作', 1),
+    )
+    const real = buildResultTree(forest, ['1'], [], false)
+    expect(real[0]!.children.map((c) => c.title)).toEqual(['杂项', '01 工作'])
+    // 子目录同样不动，别只在最外层放过排序
+    expect(real[0]!.children[0]!.children.map((c) => c.title)).toEqual(['手工子目录', '01 子的'])
+
+    const numbered = buildResultTree(forest, ['1'], [], true)
+    expect(numbered[0]!.children.map((c) => c.title)).toEqual(['01 工作', '杂项'])
   })
 })

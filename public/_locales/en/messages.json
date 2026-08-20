@@ -342,7 +342,7 @@
     "message": "These bookmarks have no usable structure yet, so this run redesigns the whole folder tree."
   },
   "prefsModeRebuildBody": {
-    "message": "Redesigns the whole folder tree. Top-level folders that this run designs get a number prefix (01, 02…). Leftover folders it does not design keep their contents but lose their old number, so they settle below the numbered ones. Second-level folders are only reordered if they already had numbers. The whole run can be undone."
+    "message": "Redesigns the whole folder tree. Top-level folders that this run designs get a number prefix (01, 02…). Leftover folders it does not design keep their contents but lose their old number, so they settle below the numbered ones. One level down, only the second-level folders this run designs get renumbered. The whole run can be undone."
   },
   "prefsModeOverride": {
     "message": "Not right — redesign it"

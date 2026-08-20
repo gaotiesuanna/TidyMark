@@ -375,6 +375,18 @@ describe('ReviewStep 的留下目录提示', () => {
     expect(screen.getByText(/会保留目录「杂项」/)).toBeTruthy()
   })
 
+  // 散在书签栏根下的书签正是这个扩展最典型的入场数据。非合并模式下扫描根一定不会被删
+  // （applyPlan 传给 removeEmpty 的 removableRootIds 是空的，本轮新建的目录还挂在它下面），
+  // 这时说「会保留目录『书签栏』」是乱说。fromPath 只有一层就是这种情形。
+  it('书签本来就散在扫描根下时不提示——那个根本轮怎样都不会被删', async () => {
+    const atRoot = (id: string): PlanRow => ({ ...row(id, ['01 前端'], 'llm'), fromPath: ['书签栏'] })
+    setupPlan([atRoot('a'), atRoot('b')])
+    render(<ReviewStep />)
+    await userEvent.click(screen.getByRole('checkbox', { name: '书签 a' }))
+
+    expect(screen.queryByText(/会保留目录/)).toBeNull()
+  })
+
   // 反向：只有正向断言的话，一个「对所有未勾选的行都提示」的实现也会绿
   it('原目录里还有别的书签不走时，取消勾选不提示——那个目录本来就会活下来', async () => {
     setupPlan([row('a', ['01 前端'], 'llm'), row('b', ['01 前端'], 'llm')])
