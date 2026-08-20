@@ -930,6 +930,15 @@ describe('analyze 的聚合组预算', () => {
     const design = prompts.find((p) => p.includes('标签清单'))!
     expect(design).toMatch(/不超过 10 个/)
   })
+
+  it('聚合组的目录不进分类候选——不然模型会往「GitHub」里塞腾讯云文档', async () => {
+    const { prompts } = await runAnalyze(groupTree(10, 20), ['github'])
+    const classify = prompts.filter((p) => p.includes('候选目录'))
+    expect(classify.length).toBeGreaterThan(0)
+    for (const prompt of classify) {
+      expect(prompt).not.toMatch(/目录=\d* ?GitHub/)
+    }
+  })
 })
 
 describe('analyze 统一 GitHub 书签标题', () => {

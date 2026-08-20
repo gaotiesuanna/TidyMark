@@ -327,12 +327,19 @@ export async function handle(
         const pinnedIds = new Set(pinned.map((p) => p.bookmarkId))
         const toClassify = scan.bookmarks.filter((b) => !pinnedIds.has(b.id))
         log('classify', t('logClassifyStart', String(toClassify.length), String(candidates.length)))
+        // 聚合组的目录（组根与组内子目录，都带 domainGroup 标记）不进候选：
+        // 命中规则的书签已经由 pinned 定好去处，而没命中的书签不该有机会进去
+        // ——组的子目录在候选里，模型就会往「01 GitHub」里塞腾讯云文档（票 10「为什么关组」）。
+        // 只影响分类这一步：候选表本身照旧带着组目录，结果页与 prune 都还要用它。
+        // 非推翻模式的候选来自 buildCandidatesFromFolders，从不打这个标记，这里过滤
+        // 对它是空操作，不改变非推翻模式的行为。
+        const classifyCandidates = candidates.filter((c) => c.domainGroup === undefined)
         // 推翻模式的候选是刚设计出来的，模型永远找得到归属，用不上「无合适目录时
         // 带回 topic」这条规则；让它的分类提示词继续保持这个工作流存在之前的样子，
         // 一个字节都不因为新增的非推翻建目录能力而改变（见 issues review M9）。
         const llmResults = await classifyBookmarks({
           items: toClassify,
-          candidates,
+          candidates: classifyCandidates,
           client,
           cache,
           batchSize: deps.batchSize,
@@ -448,8 +455,12 @@ export async function handle(
           // 复用 classifyBookmarks 而不是另写一个模块——分批、并发、缓存、429 重试、
           // 「没有合适的就返回 null」这些语义它全都有，而这一步要的正是这些。
           const pendingById = new Map(pruned.pending.map((p) => [p.bookmarkId, p]))
-          // 候选里剔掉「其他」自己：这一步的全部意义就是别让它当默认答案
-          const rehomeCandidates = candidates.filter((c) => c.id !== pruned.fallbackId)
+          // 候选里剔掉「其他」自己：这一步的全部意义就是别让它当默认答案。
+          // 聚合组的目录同样要剔掉——这一步跟上面首次分类一样是在给书签找去处，
+          // 漏了这条，模型照样能把改判的书签塞进「01 GitHub」。
+          const rehomeCandidates = candidates
+            .filter((c) => c.id !== pruned.fallbackId)
+            .filter((c) => c.domainGroup === undefined)
           const rehomeItems = scan.bookmarks.filter((b) => pendingById.has(b.id))
           if (rehomeItems.length > 0 && rehomeCandidates.length > 0) {
             // 这一步要发起新的付费请求，取消必须挡在它前面检查——与全文件另外
