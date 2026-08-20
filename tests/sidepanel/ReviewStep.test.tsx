@@ -5,7 +5,7 @@ import { ReviewStep } from '@/sidepanel/steps/ReviewStep'
 import { useStore } from '@/sidepanel/store'
 import { downloadJson } from '@/sidepanel/lib/download'
 import { DEFAULT_SETTINGS } from '@/storage/settings'
-import type { CategoryCandidate, OrganizePlan, PlanRow } from '@/core/types'
+import type { CategoryCandidate, OrganizePlan, PlanRow, UnchangedRow } from '@/core/types'
 
 vi.mock('@/sidepanel/lib/download', () => ({ downloadJson: vi.fn(), downloadText: vi.fn() }))
 
@@ -108,15 +108,16 @@ function row(id: string, toPath: string[], source: PlanRow['source'], confidence
 /**
  * 拿一批行拼出一份最简 plan 塞进 store，rebuildStructure 关着，renumberPlan 就原样直通。
  * candidates 缺省为空数组——只有测试改投下拉时才需要真的传几个候选目录进来。
+ * unchanged 缺省为空数组——只有测试未变动区时才需要真的传几条进来。
  */
-function setupPlan(rows: PlanRow[], candidates: CategoryCandidate[] = []): void {
+function setupPlan(rows: PlanRow[], candidates: CategoryCandidate[] = [], unchanged: UnchangedRow[] = []): void {
   const groupPlan: OrganizePlan = {
     id: 'g1', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: false,
     candidates, operations: [],
     rows,
-    unchanged: [],
+    unchanged,
     summary: {
-      totalBookmarks: rows.length, movedBookmarks: rows.length, unchangedBookmarks: 0,
+      totalBookmarks: rows.length, movedBookmarks: rows.length, unchangedBookmarks: unchanged.length,
       createdFolders: 0, renamedFolders: 0, renamedBookmarks: 0, lowConfidenceItems: 0,
     },
     warnings: [],
@@ -125,6 +126,37 @@ function setupPlan(rows: PlanRow[], candidates: CategoryCandidate[] = []): void 
   }
   useStore.setState({ plan: groupPlan, accepted: new Set(rows.map((r) => r.bookmarkId)), busy: null, error: null })
 }
+
+describe('ReviewStep 的未变动区', () => {
+  it('列出这一轮不会动的书签，默认折叠', () => {
+    setupPlan([row('a', ['01 前端'], 'llm')], undefined, [
+      { bookmarkId: 'x', title: '书签 x', url: 'https://x.dev', currentPath: ['收件箱'], kind: 'noTarget', reason: '无合适目录' },
+    ])
+    render(<ReviewStep />)
+    expect(screen.getByText(/1 条不会动/)).toBeTruthy()
+    expect(screen.queryByText('书签 x')).toBeNull()
+  })
+
+  it('展开后按三种原因分开——它们对用户的含义完全不同', async () => {
+    setupPlan([row('a', ['01 前端'], 'llm')], undefined, [
+      { bookmarkId: 'x', title: '书签 x', url: 'https://x.dev', currentPath: [], kind: 'inPlace', reason: '' },
+      { bookmarkId: 'y', title: '书签 y', url: 'https://y.dev', currentPath: [], kind: 'noTarget', reason: '无合适目录' },
+      { bookmarkId: 'z', title: '书签 z', url: 'https://z.dev', currentPath: [], kind: 'failed', reason: '超时' },
+    ])
+    render(<ReviewStep />)
+    await userEvent.click(screen.getByText(/3 条不会动/))
+
+    expect(screen.getByText(/已经在合适的目录里/)).toBeTruthy()
+    expect(screen.getByText(/没有找到合适的目录/)).toBeTruthy()
+    expect(screen.getByText(/这次没能分类/)).toBeTruthy()
+  })
+
+  it('一条都没有时整个区块不出现', () => {
+    setupPlan([row('a', ['01 前端'], 'llm')], undefined, [])
+    render(<ReviewStep />)
+    expect(screen.queryByText(/不会动/)).toBeNull()
+  })
+})
 
 describe('ReviewStep 的分组', () => {
   it('按目标目录分组，组标题是目标路径', () => {

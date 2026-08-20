@@ -567,6 +567,23 @@
   "reviewSummaryPeriod": {
     "message": "."
   },
+  "reviewUnchangedTitle": {
+    "message": "$count$ items untouched this round",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewUnchangedInPlace": {
+    "message": "Already in the right place"
+  },
+  "reviewUnchangedNoTarget": {
+    "message": "No suitable folder found, left where it was"
+  },
+  "reviewUnchangedFailed": {
+    "message": "Couldn't be classified this time, left where it was"
+  },
   "resultTreeNew": {
     "message": "New"
   },

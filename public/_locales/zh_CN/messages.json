@@ -567,6 +567,23 @@
   "reviewSummaryPeriod": {
     "message": "。"
   },
+  "reviewUnchangedTitle": {
+    "message": "$count$ 条不会动",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewUnchangedInPlace": {
+    "message": "已经在合适的目录里"
+  },
+  "reviewUnchangedNoTarget": {
+    "message": "没有找到合适的目录，留在原处"
+  },
+  "reviewUnchangedFailed": {
+    "message": "这次没能分类，留在原处"
+  },
   "resultTreeNew": {
     "message": "新建"
   },

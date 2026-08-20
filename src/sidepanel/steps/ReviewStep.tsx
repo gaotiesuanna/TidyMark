@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { localDate } from '@/core/export'
 import { MARK_CONFIDENCE, renumberPlan, summarize } from '@/core/plan'
-import type { PlanRow } from '@/core/types'
+import type { PlanRow, UnchangedRow } from '@/core/types'
 import { plural, t } from '@/i18n'
 import { downloadJson } from '../lib/download'
 import { useStore } from '../store'
@@ -11,6 +11,20 @@ interface ReviewGroup {
   key: string
   rows: PlanRow[]
   allRule: boolean
+}
+
+/** 未变动区三段的固定顺序：好消息在前，两种问题在后。 */
+const UNCHANGED_KINDS = ['inPlace', 'noTarget', 'failed'] as const satisfies readonly UnchangedRow['kind'][]
+
+function unchangedKindLabel(kind: UnchangedRow['kind']): string {
+  switch (kind) {
+    case 'inPlace':
+      return t('reviewUnchangedInPlace')
+    case 'noTarget':
+      return t('reviewUnchangedNoTarget')
+    case 'failed':
+      return t('reviewUnchangedFailed')
+  }
 }
 
 export function ReviewStep() {
@@ -53,6 +67,11 @@ export function ReviewStep() {
   function toggleGroup(group: ReviewGroup): void {
     setCollapsedOverride((prev) => ({ ...prev, [group.key]: !(prev[group.key] ?? group.allRule) }))
   }
+  /**
+   * 未变动区不是待办，默认折叠——用户点开一次只是想确认「这次盖到了多少」，
+   * 不像上面按组分的折叠态那样需要按规则命中与否分别决定初值。
+   */
+  const [unchangedCollapsed, setUnchangedCollapsed] = useState(true)
   if (plan === null || summary === null) return null
 
   /**
@@ -192,6 +211,45 @@ export function ReviewStep() {
           )
         })}
       </div>
+
+      {/* 末尾、默认折叠：这不是待办，用户不需要对它做任何操作，只需要知道整理盖到了多少——
+          放前面会挤占真正要审的东西。三种原因分开列，是因为「已经在合适的目录里」是好消息，
+          「没找到合适目录」与「这次没能分类」是两种完全不同的问题，不能混在同一条路上。
+          这里的书签不带勾选框：给个勾选框会让用户以为能对它们做什么。 */}
+      {plan.unchanged.length > 0 && (
+        <div className="space-y-1">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded bg-neutral-100 px-2 py-1 text-left text-xs font-medium hover:bg-neutral-200"
+            onClick={() => setUnchangedCollapsed((prev) => !prev)}
+          >
+            <span className="truncate">{t('reviewUnchangedTitle', String(plan.unchanged.length))}</span>
+          </button>
+
+          {!unchangedCollapsed && (
+            <div className="space-y-2">
+              {UNCHANGED_KINDS.map((kind) => {
+                const rows = plan.unchanged.filter((row) => row.kind === kind)
+                if (rows.length === 0) return null
+                return (
+                  <div key={kind} className="space-y-1">
+                    <p className="text-[10px] font-medium text-neutral-500">{unchangedKindLabel(kind)}</p>
+                    <ul className="space-y-1">
+                      {rows.map((row) => (
+                        <li key={row.bookmarkId} className="rounded border p-2 text-xs">
+                          <div className="truncate font-medium">{row.title}</div>
+                          <div className="mt-1 text-neutral-500">{row.currentPath.join(' / ')}</div>
+                          {row.reason !== '' && <div className="mt-0.5 text-neutral-400">{row.reason}</div>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="sticky bottom-0 flex gap-2 bg-white pt-2">
         <button className="rounded border px-3 py-2 text-sm" onClick={reset}>{t('reviewDiscard')}</button>
