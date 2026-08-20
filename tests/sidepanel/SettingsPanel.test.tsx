@@ -19,13 +19,19 @@ beforeEach(() => {
  * 不逐条点名查 label：那些文案连同 _locales 里的词条一起删掉了，字符串在任何走
  * i18n 的实现下都不可能再命中——`queryByLabelText('至少几个书签')` 恒为 null，
  * 把整个 section 原样加回去（文案走英文词条）也照样绿，等于没测。
- * 改成扫结构：还剩哪几块 section、还有没有数字旋钮。两条都跟具体叫什么名字无关，
- * 任何一个「拨得动的分类参数」被加回来都得带上标题或数字输入框，跑不掉。
+ * 改成扫结构：还剩几块 section、标题是哪两个、还有没有数字旋钮，都跟叫什么名字无关。
+ *
+ * 光扫 h3 和数字框不够——同一个文件里就摆着反例：「统一 GitHub 标题」那块 section
+ * 既没有 h3 也没有 input[type=number]，一个复选框形态的分类参数照这个样子加回来，
+ * 两条断言都抓不住。所以还要数 section：这一页应当恰好三块，多一块就是有东西回来了。
  */
 describe('SettingsPanel 分类参数', () => {
-  it('设置页只剩模型配置与语言两块——分类参数整段连同标题一起撤走了', () => {
+  it('设置页恰好三块、标题只剩模型配置与语言——分类参数整段撤走了', () => {
     useStore.setState({ settings: { ...DEFAULT_SETTINGS } })
     const { container } = render(<SettingsPanel />)
+    // 恰好三块：模型配置、语言、统一 GitHub 标题。数它是为了挡住「没有 h3、也没有数字框」
+    // 的形态——比如一个光杆复选框，那正是被撤掉的 enforceMinFolderSize 的样子
+    expect(container.querySelectorAll('section')).toHaveLength(3)
     const headings = [...container.querySelectorAll('h3')].map((h) => h.textContent)
     expect(headings).toEqual([t('settingsModelTitle'), t('settingsLangTitle')])
   })
