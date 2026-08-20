@@ -216,6 +216,27 @@ export function ReviewStep() {
         </button>
       </div>
 
+      {/* 两个筛选开关叠加把所有行筛没时不能直接留白——那读起来像「一条建议都没有」，
+          而顶部摘要仍是非零总数，等于用沉默说了一件不成立的事。plan.rows.length > 0
+          这个前置条件把它跟上面「这次真的没有建议」的 reviewEmpty 分开：那句话在
+          没有任何筛选时也成立，这句只在筛选把本来存在的行藏起来时才成立，不能混。
+          不把「筛掉了多少」写进来——按钮已经把话说完了，没必要让用户自己做减法。 */}
+      {plan.rows.length > 0 && visibleGroups.length === 0 && (
+        <div className="rounded border bg-neutral-50 p-3 text-xs leading-relaxed text-neutral-500">
+          <p>{t('reviewFilterEmpty')}</p>
+          <button
+            type="button"
+            className="mt-2 rounded border px-2 py-1 hover:bg-white"
+            onClick={() => {
+              setModelOnly(false)
+              setMarkedOnly(false)
+            }}
+          >
+            {t('reviewFilterClear')}
+          </button>
+        </div>
+      )}
+
       <div className="space-y-2">
         {visibleGroups.map((group) => {
           const collapsed = collapsedOverride[group.key] ?? group.allRule

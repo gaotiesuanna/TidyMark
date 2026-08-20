@@ -526,6 +526,12 @@
   "reviewFilterMarkedOnly": {
     "message": "只看被标记的"
   },
+  "reviewFilterEmpty": {
+    "message": "当前筛选下没有建议。"
+  },
+  "reviewFilterClear": {
+    "message": "清除筛选"
+  },
   "reviewExportPlan": {
     "message": "导出方案"
   },

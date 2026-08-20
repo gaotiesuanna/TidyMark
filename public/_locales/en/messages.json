@@ -526,6 +526,12 @@
   "reviewFilterMarkedOnly": {
     "message": "Flagged only"
   },
+  "reviewFilterEmpty": {
+    "message": "No suggestions match the current filters."
+  },
+  "reviewFilterClear": {
+    "message": "Clear filters"
+  },
   "reviewExportPlan": {
     "message": "Export plan"
   },

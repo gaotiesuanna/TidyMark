@@ -281,6 +281,37 @@ describe('ReviewStep 的筛选开关', () => {
     expect(screen.queryByText('书签 c')).toBeNull()
     expect(useStore.getState().accepted.size).toBe(3)
   })
+
+  // 两个开关叠加把所有行筛光时，界面不能直接空白——那读起来像「一条建议都没有」，
+  // 而顶部摘要仍显示非零总数，等于用沉默说了一件不成立的事（清单第五档「别说谎」）。
+  it('筛光之后要说明白是筛没的，不是没有建议', async () => {
+    setupPlan([row('a', ['01 GitHub'], 'rule')])
+    render(<ReviewStep />)
+    // 只看模型判的 —— 这条是规则命中，会被筛掉
+    await userEvent.click(screen.getByText(/只看模型判的/))
+
+    expect(screen.getByText(/当前筛选下没有建议/)).toBeTruthy()
+  })
+
+  // 票 24 的教训：叫人做某件事，就得给他一个能点的东西。用户未必意识到是自己
+  // 开的筛选把列表清空了，所以空态不能只提示，还得给一个恢复的出口。
+  it('空态给一个能点的出口，点了就恢复', async () => {
+    setupPlan([row('a', ['01 GitHub'], 'rule')])
+    render(<ReviewStep />)
+    await userEvent.click(screen.getByText(/只看模型判的/))
+    await userEvent.click(screen.getByRole('button', { name: '清除筛选' }))
+
+    expect(screen.queryByText(/当前筛选下没有建议/)).toBeNull()
+    expect(screen.getByText('01 GitHub')).toBeTruthy()
+  })
+
+  // 「这次没有建议」（plan.rows.length === 0）与「筛没了」是两件不同的事，
+  // 混成一句就等于又说了一次谎——所以本来就空的方案得继续走原来那条 reviewEmpty。
+  it('本来就一条建议都没有时，显示的是原来那句空方案文案，不是筛选空态', () => {
+    setupPlan([])
+    render(<ReviewStep />)
+    expect(screen.queryByText(/当前筛选下没有建议/)).toBeNull()
+  })
 })
 
 describe('ReviewStep 的改投与标记', () => {
