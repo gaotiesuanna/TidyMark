@@ -287,13 +287,36 @@ describe('PreferencesStep 没配模型时的出路', () => {
   })
 })
 
+/**
+ * 预告是无条件渲染的，两种按钮状态下都摆着。两条用例分别钉住一种状态——
+ * 只守「没配模型」那一种的话，把这段挪进 needModel 分支照样全绿，而那个挪法恰好把
+ * 预告从唯一真正需要它的人眼前拿走：权限弹窗只在已经配好、点下「开始 AI 分析」的
+ * 那一刻才会出现。
+ */
 describe('PreferencesStep 的权限预告', () => {
   it('提前说明那一刻会申请哪一个域名的访问权限', () => {
     setup(messyScan)
     render(<PreferencesStep />)
+    // 前提：这一条守的是「还没配模型」那个分支
+    expect(screen.getByRole('button', { name: '先去配置模型' })).toBeTruthy()
+
     const notice = screen.getByText(/只这一个/)
     expect(notice.textContent).toMatch(/模型/)
     // 关键在「只申请你填的那一个」和「安装时一个都没要」——这是卖点，不是免责声明
+    expect(notice.textContent).toMatch(/安装时/)
+  })
+
+  it('已经配好模型时照样摆着——真会撞上那个权限弹窗的恰恰是他', () => {
+    setup(messyScan)
+    useStore.setState({
+      settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey: 'sk-already-configured' } },
+    })
+    render(<PreferencesStep />)
+    // 前提：这一条守的是「已经配好」那个分支，按钮得真是「开始 AI 分析」
+    expect(screen.getByRole('button', { name: '开始 AI 分析' })).toBeTruthy()
+
+    const notice = screen.getByText(/只这一个/)
+    expect(notice.textContent).toMatch(/模型/)
     expect(notice.textContent).toMatch(/安装时/)
   })
 })
