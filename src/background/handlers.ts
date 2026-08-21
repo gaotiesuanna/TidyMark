@@ -17,6 +17,7 @@ import { loadSnapshot } from '@/engine/snapshot'
 import { undoLast } from '@/engine/undo'
 import { createLlmClient, type LlmClient, type LlmConfig } from '@/llm/client'
 import { isModelConfigured } from '@/llm/config'
+import { probeModel } from '@/llm/probe'
 import { classifyBookmarks } from '@/llm/classify'
 import { collectTopics, designTagFolders, nameMergedFolder, nameNewTopics } from '@/llm/folders'
 import { extractTags, refineGroupTags } from '@/llm/tags'
@@ -618,6 +619,20 @@ export async function handle(
       // 取消标记由 service worker 持有，这里只是让消息类型闭合
       case 'cancel':
         return { ok: true, kind: 'cancel' }
+
+      case 'test_model': {
+        // 用真的客户端发一个最小 schema 的请求。不在这里挡「模型没配好」：设置页的
+        // 按钮已经用 isModelConfigured 禁着，而真按下去时，一份空 Key 的配置得到的
+        // 401 → 'auth' 本身就是准确答案，多一道门只会把它换成一句更笼统的话。
+        const result = await probeModel(
+          () => createClient(settings.llm, locale),
+          locale,
+          settings.llm.apiKey,
+          now,
+        )
+        if (!result.ok) return { ok: false, error: result.error, reason: result.reason }
+        return { ok: true, kind: 'test_model', ms: result.ms }
+      }
 
       case 'get_undo_state': {
         const snapshot = await loadSnapshot(ports)

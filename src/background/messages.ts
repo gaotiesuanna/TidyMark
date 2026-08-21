@@ -6,6 +6,13 @@ import type { Settings } from '@/storage/settings'
 import type { ExportNode } from '@/core/export'
 import type { ImportResult } from '@/engine/importTree'
 import type { OrganizeMode } from '@/core/mode'
+import type { TestFailure } from '@/llm/probe'
+
+/**
+ * 失败分类跟着探针本身定义在 llm/probe.ts（那一层零浏览器依赖），这里再导出一次，
+ * 让消息契约自己说得清能带回哪些取值，侧栏不必反向去 llm/ 取类型。
+ */
+export type { TestFailure }
 
 export type Request =
   | { kind: 'get_tree' }
@@ -28,6 +35,11 @@ export type Request =
   | { kind: 'get_undo_state' }
   | { kind: 'import'; nodes: ExportNode[]; targetName: string }
   | { kind: 'cancel' }
+  /**
+   * 当场验一次模型配置。必须走后台：这个功能对着的那次故障，形状是「浏览器普通标签页
+   * 能打开那个域名、而扩展的请求失败」——从侧栏直接 fetch 去测会给出假绿灯。
+   */
+  | { kind: 'test_model' }
 
 export type Response =
   | { ok: true; kind: 'get_tree'; tree: BookmarkNode[] }
@@ -40,5 +52,10 @@ export type Response =
   | { ok: true; kind: 'get_undo_state'; available: boolean; createdAt: number | null }
   | { ok: true; kind: 'import'; result: ImportResult }
   | { ok: true; kind: 'cancel' }
-  /** cancelled 为 true 表示用户主动取消，不是出错。 */
-  | { ok: false; error: string; cancelled?: boolean }
+  /** ms 是这一次请求真实的往返耗时，给用户一个「快不快」的直观印象。 */
+  | { ok: true; kind: 'test_model'; ms: number }
+  /**
+   * cancelled 为 true 表示用户主动取消，不是出错。
+   * reason 只有 test_model 会带：失败时说清是哪一类，别的请求没有这个分类。
+   */
+  | { ok: false; error: string; cancelled?: boolean; reason?: TestFailure }
