@@ -61,6 +61,11 @@ export const PRESETS: Array<{ label: Record<Locale, string>; baseUrl: string; mo
   { label: { zh_CN: 'DeepSeek', en: 'DeepSeek' }, baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
   { label: { zh_CN: 'Kimi', en: 'Kimi' }, baseUrl: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k' },
   { label: { zh_CN: '智谱', en: 'Zhipu' }, baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
+  // OpenCode Go 是网关，一把 Key 后面挂着 DeepSeek / Kimi / GLM / MiMo 等十几个模型。
+  // baseUrl 只到 /v1：官方文档给的是完整端点 https://opencode.ai/zen/go/v1/chat/completions，
+  // 而 client.ts 会自己接上 /chat/completions，照抄文档会拼成两遍。下面有用例钉这条。
+  // 模型 id 在这个端点上不带 opencode-go/ 前缀——那个前缀只用于 OpenCode 自己的配置文件。
+  { label: { zh_CN: 'OpenCode Go', en: 'OpenCode Go' }, baseUrl: 'https://opencode.ai/zen/go/v1', model: 'deepseek-v4-flash' },
   { label: { zh_CN: '本地 Ollama', en: 'Local Ollama' }, baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5' },
 ]
 
