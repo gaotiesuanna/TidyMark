@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SETTINGS_KEY, loadSettings, saveSettings, loadCache, saveCache, DEFAULT_SETTINGS, MAX_CACHE_ENTRIES } from '@/storage/settings'
+import { SETTINGS_KEY, loadSettings, saveSettings, loadCache, saveCache, DEFAULT_SETTINGS, MAX_CACHE_ENTRIES, PRESETS } from '@/storage/settings'
 import { createFakeStorage } from '../fakes/fake-storage'
 import { createFakeBookmarks } from '../fakes/fake-bookmarks'
 import type { CachedClassification } from '@/core/types'
@@ -314,5 +314,31 @@ describe('uiLocale', () => {
     const p = ports()
     await p.storage.set(SETTINGS_KEY, { uiLocale: 'en' })
     expect((await loadSettings(p)).uiLocale).toBe('en')
+  })
+})
+
+/**
+ * 预设填进去的是 baseUrl，不是完整端点——`src/llm/client.ts` 会自己接上
+ * `/chat/completions`。而各家文档给的往往正是**完整端点**（OpenCode Go 的文档写的就是
+ * `https://opencode.ai/zen/go/v1/chat/completions`），照抄粘进来就会拼成两遍，
+ * 而那种错只有在真发请求时才暴露——正是这条守卫要提前抓住的。
+ */
+describe('供应商预设', () => {
+  it('baseUrl 是端点前缀，不是完整端点', () => {
+    expect(PRESETS.length).toBeGreaterThan(0) // 空断言防身：表空了下面的 for 什么也没验
+    for (const preset of PRESETS) {
+      expect(preset.baseUrl).not.toContain('/chat/completions')
+      expect(preset.baseUrl.endsWith('/')).toBe(false) // 尾斜杠会拼出双斜杠
+      expect(() => new URL(preset.baseUrl)).not.toThrow()
+    }
+  })
+
+  it('每条预设都有非空的模型名——留空等于点了预设还得自己查文档', () => {
+    expect(PRESETS.length).toBeGreaterThan(0)
+    for (const preset of PRESETS) {
+      expect(preset.model.trim()).not.toBe('')
+      expect(preset.label.zh_CN.trim()).not.toBe('')
+      expect(preset.label.en.trim()).not.toBe('')
+    }
   })
 })
