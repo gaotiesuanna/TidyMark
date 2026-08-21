@@ -323,6 +323,38 @@
   "settingsPrivacyPayload": {
     "message": "Only bookmark titles, domains, paths, and current folder names are sent to the model — never URL parameters or page contents."
   },
+  "settingsTestModel": {
+    "message": "Test connection"
+  },
+  "settingsTestRunning": {
+    "message": "Testing…"
+  },
+  "settingsTestOk": {
+    "message": "Connection works — $ms$ ms round trip.",
+    "placeholders": {
+      "ms": {
+        "content": "$1"
+      }
+    }
+  },
+  "settingsTestFailAuth": {
+    "message": "The API key was rejected. Check it in your provider's console, or issue a new one."
+  },
+  "settingsTestFailModel": {
+    "message": "The provider does not recognize this model name. Look up the name currently in use in its docs."
+  },
+  "settingsTestFailFormat": {
+    "message": "The endpoint responded, but this model will not answer in the format TidyMark needs. Try another model."
+  },
+  "settingsTestFailNetwork": {
+    "message": "The request never got through. Check your proxy or VPN, and whether another extension is blocking it."
+  },
+  "settingsTestFailPermission": {
+    "message": "TidyMark does not have permission to reach this domain yet. Click Test connection again and allow it."
+  },
+  "settingsTestFailUnknown": {
+    "message": "The test did not finish, so there is no verdict on what went wrong. Try again."
+  },
   "prefsModeAdditive": {
     "message": "These bookmarks look organized already, so this run only files them into the folders you have."
   },

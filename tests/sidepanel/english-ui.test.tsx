@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { setLocale } from '@/i18n'
 import { makePlan } from '../fakes/plan'
@@ -12,7 +12,7 @@ import { ExportPanel } from '@/sidepanel/components/ExportPanel'
 import { ImportPanel } from '@/sidepanel/components/ImportPanel'
 import { ProgressPanel } from '@/sidepanel/components/ProgressPanel'
 import { SettingsPanel } from '@/sidepanel/components/SettingsPanel'
-import { useStore } from '@/sidepanel/store'
+import { useStore, type ModelTest } from '@/sidepanel/store'
 import { EMPTY_EDITS } from '@/core/structure'
 import { DEFAULT_SETTINGS } from '@/storage/settings'
 import type { BookmarkNode } from '@/core/ports'
@@ -334,6 +334,41 @@ describe('英文界面渲染守卫：设置页', () => {
     })
     const { container } = render(<SettingsPanel />)
     assertNoChinese(container, 'SettingsPanel', INTENTIONAL_CHINESE)
+  })
+
+  /**
+   * 「测试连接」的每一句结论都要单独在英文界面下渲染一次。
+   *
+   * 它们平时一句都不在 DOM 里——上面那条只覆盖 idle 态，一句中文文案漏进这五类里
+   * 谁也发现不了。reason 为 undefined 的兜底也要过一遍：那是后台没给分类时唯一会
+   * 显示出来的话。
+   *
+   * 结论只能在挂载**之后**塞进 store：设置页每次挂载都会把它清回 idle（结果不持久化）。
+   */
+  it('SettingsPanel（测试连接的每一种结论）', () => {
+    useStore.setState({ settingsOpen: true, settings: { ...DEFAULT_SETTINGS } })
+    const conclusions: ModelTest[] = [
+      { state: 'running' },
+      { state: 'ok', ms: 640 },
+      { state: 'fail', reason: 'auth', error: 'Model API returned 401: invalid_api_key' },
+      { state: 'fail', reason: 'model', error: 'Model API returned 404: model not found' },
+      { state: 'fail', reason: 'format', error: 'The model did not return valid JSON' },
+      { state: 'fail', reason: 'network', error: 'Failed to fetch' },
+      { state: 'fail', reason: 'permission' },
+      { state: 'fail', error: 'The browser suspended the background.' },
+    ]
+    for (const modelTest of conclusions) {
+      const { container, unmount } = render(<SettingsPanel />)
+      const idleText = container.textContent
+      act(() => useStore.setState({ modelTest }))
+      const label = `${modelTest.state}/${modelTest.reason ?? 'fallback'}`
+      // 防身：这一条结论确实渲染出来了。少了它，塞进 store 的东西被挂载时那次
+      // resetModelTest 清掉、页面还停在 idle，这一整个循环也会照样绿
+      expect(container.textContent, `SettingsPanel（${label}）没有渲染出这条结论`)
+        .not.toBe(idleText)
+      assertNoChinese(container, `SettingsPanel（${label}）`, INTENTIONAL_CHINESE)
+      unmount()
+    }
   })
 })
 

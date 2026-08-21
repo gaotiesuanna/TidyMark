@@ -17,7 +17,8 @@ import type { UndoResult } from '@/engine/undo'
 import type { Settings } from '@/storage/settings'
 import { DEFAULT_SETTINGS } from '@/storage/settings'
 import { send } from './lib/send'
-import { ensureHostPermission } from './lib/permissions'
+import type { TestFailure } from '@/background/messages'
+import { ensureHostPermission, hasHostPermission } from './lib/permissions'
 import { connectProgress, startKeepalive, type ProgressConnection } from './lib/progress'
 import { applyDocumentLang } from './lib/documentLang'
 
@@ -58,6 +59,33 @@ export function nextStepAfterAnalyze(rebuildStructure: boolean): Step {
  */
 function fail(set: (partial: Partial<State>) => void, error: string, retryable: State['retryable']): void {
   set({ busy: null, busyKind: null, retryable, error })
+}
+
+/**
+ * 一次连通性自检的失败分类，比后台那份多一类。
+ *
+ * 'permission' 只可能由这一层给出：能不能访问某个域名要问 `chrome.permissions.contains`，
+ * llm 层零浏览器依赖，答不了，所以 `TestFailure` 里没有它（见 llm/probe.ts）。
+ * 这一层在失败之后复查一次权限，把一句笼统的「请求没能发出去」换成确定的答案——
+ * 这正是本功能对着的那次故障里最缺的东西。
+ */
+export type ModelTestReason = TestFailure | 'permission'
+
+/**
+ * 「测试连接」的即时结果。**不进 Settings、不落盘**：它是一次探针，不是状态。
+ * 重新打开设置页时显示一个上次的绿勾会撒谎——配置早就可能改过了。
+ */
+export interface ModelTest {
+  state: 'idle' | 'running' | 'ok' | 'fail'
+  /** 成功时这一次请求真实的往返耗时，毫秒。 */
+  ms?: number
+  /**
+   * 失败分类。**可能是 undefined**：service worker 被回收时 send 自己造的那个失败、
+   * 以及后台外层 catch 兜到的失败，都只有 error 没有 reason。界面必须有一条兜底文案。
+   */
+  reason?: ModelTestReason
+  /** 失败的原始说明（后台已剥掉 Key）。分类文案给方向，它给证据（状态码、响应体）。 */
+  error?: string
 }
 
 export interface LogLine {
@@ -213,6 +241,16 @@ interface State {
   /** 设置页是否盖在内容区上。不进 Step——设置不是流程的一步，
       混进 Step 会污染 nextStepAfterAnalyze 这类按步骤推进的判断。 */
   settingsOpen: boolean
+  /** 「测试连接」的即时结果，由设置页每次挂载时清回 idle。 */
+  modelTest: ModelTest
+  /**
+   * 设置页挂载的次数，resetModelTest() 时 +1。
+   *
+   * 一次测试可能跑好几秒，这期间用户可以关掉设置页、改完 Key 再打开。在途的那次回来时
+   * 要拿它对一下自己还算不算数——不对的话，一个针对旧配置的结论会写进一个刚刚被清空的
+   * 界面，那正是「显示上次的结论会撒谎」的另一种形态。
+   */
+  modelTestSeq: number
   /** 当前界面语言。App 拿它当 key 强制重挂载，切语言后所有 t() 才会重新求值。 */
   locale: Locale
 
@@ -256,6 +294,13 @@ interface State {
   resetImport(): void
   openSettings(): void
   closeSettings(): void
+  /** 把测试结果清回空白。设置页每次挂载都调它——结果不跨一次开合存活。 */
+  resetModelTest(): void
+  /**
+   * 当场验一次模型配置：先申请权限（按钮点击是干净的用户手势），再让后台用真的客户端
+   * 发一个最小 schema 的请求，失败时说清是哪一类。
+   */
+  testModel(): Promise<void>
   reset(): void
 }
 
@@ -297,6 +342,8 @@ export const useStore = create<State>((set, get) => ({
   importError: null,
   importDone: null,
   settingsOpen: false,
+  modelTest: { state: 'idle' },
+  modelTestSeq: 0,
   // 这行在模块求值期执行，那时 main.tsx 还没 setLocale，取到的必然是 i18n 的初值。
   // 真正的对齐由 main.tsx 在 render 之前补一次 setState 完成。
   locale: currentLocale(),
@@ -589,6 +636,41 @@ export const useStore = create<State>((set, get) => ({
 
   closeSettings() {
     set({ settingsOpen: false })
+  },
+
+  resetModelTest() {
+    set({ modelTest: { state: 'idle' }, modelTestSeq: get().modelTestSeq + 1 })
+  },
+
+  async testModel() {
+    const seq = get().modelTestSeq
+    const baseUrl = get().settings.llm.baseUrl
+    /** 结论过期就丢掉：设置页已经重新开过一次，那时的配置未必还是这一次测的那份。 */
+    const settle = (modelTest: ModelTest): void => {
+      if (get().modelTestSeq !== seq) return
+      set({ modelTest })
+    }
+    set({ modelTest: { state: 'running' } })
+
+    // 权限申请就放在这一刻：chrome.permissions.request() 要用户手势，而按钮点击是干净的
+    // 手势。这顺带把授权从「点开始分析那一刻」前移到了配置时。
+    if (!await ensureHostPermission(baseUrl)) {
+      // 拒了就到此为止，不发消息：那次请求必然失败，而且会把「权限没授到」这个已经确定的
+      // 答案，换成一句笼统的「请求没能发出去」——正是这个功能要消灭的东西。
+      return settle({ state: 'fail', reason: 'permission' })
+    }
+
+    const res = await send({ kind: 'test_model' })
+    if (res.ok && res.kind === 'test_model') return settle({ state: 'ok', ms: res.ms })
+    // 回来的是别的 kind：说不出所以然，只能走兜底那条文案
+    if (res.ok) return settle({ state: 'fail' })
+
+    // 失败之后复查一次权限。后台给的 reason 里没有「权限」这一类，llm 层答不了这个问题；
+    // 而这一刻答案是确定的，一句 'network' 会把人推去查代理、查 DNS、关别的扩展，
+    // 而真正的下一步只是「再点一次并允许」。
+    const reason: ModelTestReason | undefined =
+      await hasHostPermission(baseUrl) ? res.reason : 'permission'
+    settle({ state: 'fail', reason, error: res.error })
   },
 
   reset() {

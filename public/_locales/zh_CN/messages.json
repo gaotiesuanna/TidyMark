@@ -323,6 +323,38 @@
   "settingsPrivacyPayload": {
     "message": "发送给模型的内容仅包含书签标题、域名、路径与所在目录，不含 URL 参数与网页正文。"
   },
+  "settingsTestModel": {
+    "message": "测试连接"
+  },
+  "settingsTestRunning": {
+    "message": "正在测试…"
+  },
+  "settingsTestOk": {
+    "message": "连接正常，往返 $ms$ 毫秒。",
+    "placeholders": {
+      "ms": {
+        "content": "$1"
+      }
+    }
+  },
+  "settingsTestFailAuth": {
+    "message": "API Key 不对或已失效。去供应商控制台核对一下，或者重新生成一个。"
+  },
+  "settingsTestFailModel": {
+    "message": "供应商不认识这个模型名。对照它的文档，改成当前在用的名字。"
+  },
+  "settingsTestFailFormat": {
+    "message": "接口通了，但这个模型不会按要求的格式作答。换一个模型再试。"
+  },
+  "settingsTestFailNetwork": {
+    "message": "请求没能发出去。检查代理或 VPN，也看看有没有别的扩展在拦截。"
+  },
+  "settingsTestFailPermission": {
+    "message": "还没拿到访问这个域名的权限。再点一次「测试连接」并允许。"
+  },
+  "settingsTestFailUnknown": {
+    "message": "测试没跑完，判断不出是哪一类问题。请再试一次。"
+  },
   "prefsModeAdditive": {
     "message": "看起来这批书签已经整理过，这次只把书签归进现有目录。"
   },
