@@ -3,7 +3,7 @@ import type { Locale } from '@/core/locale'
 import { sanitizeUrl } from '@/core/sanitize'
 import type { BookmarkItem, TagResult } from '@/core/types'
 import type { LlmClient } from './client'
-import { logBatch, logBatchFailed } from './logs'
+import { logBatch, logBatchFailed, logBatchPartFailed, logBatchSplit } from './logs'
 import { groupTagsPrompt, tagsPrompt } from './prompts'
 
 export type { TagResult }
@@ -77,6 +77,19 @@ function buildGroupPrompt(locale: Locale, groupTitle: string): (items: BookmarkI
     ].join('\n')
 }
 
+/**
+ * 一批的重试次数，与 classify.ts 的 MAX_RETRIES 同一口径。
+ *
+ * 这条路上原先一次重试都没有：网关抖一下返回 500，整批 25 条书签当场判成
+ * NO_TOPIC、退出目录设计，而 client.ts 早就把 5xx / 429 标成了 retryable，
+ * 只是没人读那个字段。
+ */
+const MAX_RETRIES = 2
+
+function flagged(error: unknown, key: 'retryable' | 'truncated'): boolean {
+  return (error as Record<string, unknown> | null)?.[key] === true
+}
+
 export interface ExtractOptions {
   batchSize?: number
   concurrency?: number
@@ -104,33 +117,98 @@ async function runExtraction(
   let done = 0
   let cursor = 0
 
+  /**
+   * 问一批，返回 bookmark_id → primary_topic；这一批彻底没救时抛出最后一个错误。
+   *
+   * 两种失败分开收场：
+   * - 可重试（429 / 5xx / 网络）——退避后原样再问，最多 MAX_RETRIES 次；
+   * - 截断（client.ts 的 LlmError.truncated）——不重试，原样再问只会在同一个字上
+   *   再断一次，改成对半拆开分别问。拆完仍失败的那一半只丢那一半，同批的另一半
+   *   已经拿到手了，没有理由陪葬。
+   */
+  async function ask(
+    batch: BookmarkItem[],
+    index: number,
+    tally: { attempts: number },
+  ): Promise<Map<string, string>> {
+    let lastError: unknown
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      tally.attempts++
+      try {
+        const raw = (await client.complete(buildOnePrompt(batch), SCHEMA)) as {
+          results?: Array<{ bookmark_id: string; primary_topic: string }>
+        }
+        return new Map((raw.results ?? []).map((r) => [r.bookmark_id, r.primary_topic]))
+      } catch (error) {
+        lastError = error
+        // 只进开发者控制台，不必双语。
+        console.error('[TidyMark] 标签抽取失败：', error)
+        if (!flagged(error, 'retryable')) break
+        if (attempt < MAX_RETRIES) {
+          await new Promise((resolve) => setTimeout(resolve, 2 ** attempt * 500))
+        }
+      }
+    }
+    if (flagged(lastError, 'truncated') && batch.length > 1) {
+      return split(batch, index, lastError, tally)
+    }
+    throw lastError
+  }
+
+  async function split(
+    batch: BookmarkItem[],
+    index: number,
+    cause: unknown,
+    tally: { attempts: number },
+  ): Promise<Map<string, string>> {
+    options.onLog?.(logBatchSplit(locale, label, index, batches.length, batch.length), 'warn')
+    const mid = Math.ceil(batch.length / 2)
+    const merged = new Map<string, string>()
+    const failures: Array<{ size: number; detail: string }> = []
+    // 顺序问而不是并发：外层已经有 concurrency 个 worker 在跑，
+    // 一批刚被截断说明这条线正吃力，没必要再往上叠一倍请求。
+    for (const half of [batch.slice(0, mid), batch.slice(mid)]) {
+      try {
+        for (const [id, topic] of await ask(half, index, tally)) merged.set(id, topic)
+      } catch (error) {
+        failures.push({ size: half.length, detail: String(error) })
+      }
+    }
+    // 两半全军覆没就把原错误交回去，由调用方统一记一条「整批失败」——
+    // 那种情形下再补两条「拆开后仍失败」只是把同一件事说三遍。
+    if (merged.size === 0 && failures.length === 2) throw cause
+    for (const failure of failures) {
+      options.onLog?.(
+        logBatchPartFailed(locale, label, index, batches.length, failure.size, failure.detail),
+        'error',
+      )
+    }
+    return merged
+  }
+
   async function worker(): Promise<void> {
     while (cursor < batches.length) {
       if (options.isCancelled?.() === true) return
       const index = cursor++
       const batch = batches[index]!
+      // 这一批一共问出去多少次——含重试，也含拆批后每一半各自的尝试。
+      const tally = { attempts: 0 }
       try {
-        const raw = (await client.complete(buildOnePrompt(batch), SCHEMA)) as {
-          results?: Array<{ bookmark_id: string; primary_topic: string }>
-        }
-        const byId = new Map((raw.results ?? []).map((r) => [r.bookmark_id, r]))
+        const topics = await ask(batch, index, tally)
         for (const item of batch) {
-          const hit = byId.get(item.id)
           resolved.set(item.id, {
             bookmarkId: item.id,
-            primaryTopic: hit?.primary_topic ?? NO_TOPIC,
+            primaryTopic: topics.get(item.id) ?? NO_TOPIC,
             secondaryTopic: null,
           })
         }
         options.onLog?.(logBatch(locale, label, index, batches.length, batch.length), 'info')
       } catch (error) {
-        // 只进开发者控制台，不必双语。
-        console.error('[TidyMark] 标签抽取失败：', error)
         for (const item of batch) {
           resolved.set(item.id, { bookmarkId: item.id, primaryTopic: NO_TOPIC, secondaryTopic: null })
         }
         options.onLog?.(
-          logBatchFailed(locale, label, index, batches.length, String(error)),
+          logBatchFailed(locale, label, index, batches.length, String(error), tally.attempts),
           'error',
         )
       }

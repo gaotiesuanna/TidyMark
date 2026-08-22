@@ -647,3 +647,85 @@ describe('classifyBookmarks djb2 撞车的两个 URL 各问各的', () => {
     expect(results.map((r) => r.reason)).toEqual(['A 的答案', 'B 的答案'])
   })
 })
+
+describe('分类批次被截断时拆开重问', () => {
+  const truncatedError = (): Error =>
+    Object.assign(new Error('truncated'), { retryable: false, truncated: true })
+  const badKeyError = (): Error => Object.assign(new Error('bad key'), { retryable: false })
+
+  /** 从提示词里读出这次问的是哪几条书签——mock 靠它区分整批与拆开后的半批。 */
+  function idsIn(prompt: string): string[] {
+    return [...prompt.matchAll(/"bookmark_id": "([^"]+)"/g)].map((m) => m[1]!)
+  }
+
+  const four = ['1', '2', '3', '4'].map((id) => item(id, `https://some-blog.dev/${id}`))
+
+  function answer(ids: string[]): unknown {
+    return {
+      results: ids.map((id) => ({
+        bookmark_id: id,
+        target_category_id: '10',
+        confidence: 0.9,
+        reason: 'r' + id,
+      })),
+    }
+  }
+
+  it('拆成两半分别问，结果按顺序拼回去，与书签一一对应', async () => {
+    const complete = vi.fn().mockImplementation((prompt: string) => {
+      const ids = idsIn(prompt)
+      if (ids.length === 4) return Promise.reject(truncatedError())
+      return Promise.resolve(answer(ids))
+    })
+    const results = await classify({
+      items: four, candidates, client: { complete }, cache: new Map(),
+    })
+    expect(results.map((r) => r.bookmarkId)).toEqual(['1', '2', '3', '4'])
+    expect(results.map((r) => r.reason)).toEqual(['r1', 'r2', 'r3', 'r4'])
+    // 整批 1 次 + 两半各 1 次：截断不走重试，原样再问只会再截断一次
+    expect(complete).toHaveBeenCalledTimes(3)
+  })
+
+  it('拆开后仍失败的那一半只丢那一半', async () => {
+    const complete = vi.fn().mockImplementation((prompt: string) => {
+      const ids = idsIn(prompt)
+      if (ids.length === 4) return Promise.reject(truncatedError())
+      if (ids.includes('3')) return Promise.reject(badKeyError())
+      return Promise.resolve(answer(ids))
+    })
+    const results = await classify({
+      items: four, candidates, client: { complete }, cache: new Map(),
+    })
+    expect(results.map((r) => r.source)).toEqual(['llm', 'llm', 'none', 'none'])
+  })
+
+  it('拆到一条还截断就放弃，不无限拆下去', async () => {
+    const complete = vi.fn().mockRejectedValue(truncatedError())
+    const results = await classify({
+      items: four.slice(0, 2), candidates, client: { complete }, cache: new Map(),
+    })
+    expect(results.every((r) => r.source === 'none')).toBe(true)
+    expect(complete).toHaveBeenCalledTimes(3)
+  })
+
+  it('拆批记一条 warn 日志，说清是第几批、多少条被拆', async () => {
+    const logs: Array<{ message: string; level: string }> = []
+    const complete = vi.fn().mockImplementation((prompt: string) => {
+      const ids = idsIn(prompt)
+      if (ids.length === 4) return Promise.reject(truncatedError())
+      return Promise.resolve(answer(ids))
+    })
+    await classify({
+      items: four,
+      candidates,
+      client: { complete },
+      cache: new Map(),
+      onLog: (message, level) => logs.push({ message, level }),
+    })
+    const split = logs.filter((l) => l.message.includes('输出被截断'))
+    expect(split).toHaveLength(1)
+    expect(split[0]!.level).toBe('warn')
+    expect(split[0]!.message).toContain('1/1')
+    expect(split[0]!.message).toContain('4 条')
+  })
+})

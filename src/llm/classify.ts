@@ -5,7 +5,7 @@ import { resolveByRules } from '@/core/map'
 import { sanitizeUrl } from '@/core/sanitize'
 import type { BookmarkItem, CachedClassification, CategoryCandidate, Classification } from '@/core/types'
 import type { LlmClient } from './client'
-import { fallbackReason, logBatchDone } from './logs'
+import { fallbackReason, logBatchDone, logBatchSplit } from './logs'
 import { classifyPrompt } from './prompts'
 
 export interface ClassifyInput {
@@ -166,17 +166,23 @@ function fromCache(
   }
 }
 
+/**
+ * `onSplit` 在这一批因输出被截断而拆开时调一次，参数是被拆的条数。
+ * 日志由调用方记——runBatch 手里没有批次序号，也不该管日志文案。
+ */
 async function runBatch(
   batch: BookmarkItem[],
   candidates: CategoryCandidate[],
   client: LlmClient,
   locale: Locale,
   includeTopicRule: boolean,
+  onSplit: (size: number) => void = () => {},
 ): Promise<Classification[]> {
   const validIds = new Set(candidates.map((c) => c.id))
   // 仅用于满足类型初始化：正常执行路径下，走到最终 return 之前必然先经过下面的
   // catch 把它覆盖成真实错误信息，这个初始值实际不会被用户看到，不必双语。
   let lastError = '未知错误'
+  let truncated = false
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
@@ -207,6 +213,7 @@ async function runBatch(
       })
     } catch (error) {
       lastError = String(error)
+      truncated = (error as { truncated?: boolean }).truncated === true
       // 只进开发者控制台，不进侧栏日志，不必双语。
       console.error('[TidyMark] 分类请求失败：', error)
       const retryable = (error as { retryable?: boolean }).retryable === true
@@ -215,6 +222,19 @@ async function runBatch(
         await new Promise((resolve) => setTimeout(resolve, 2 ** attempt * 500))
       }
     }
+  }
+  // 输出被截断（client.ts 的 LlmError.truncated）：原样再问只会在同一个字上再断
+  // 一次，所以不走上面的重试，改成拆成两半分别问。两半各自返回与自己逐位对齐的
+  // 结果，顺序拼回去，「返回值与 batch 一一对应」这条契约不变（调用方按下标把
+  // results[i] 配给 batch[i]）；拆完仍失败的那一半照常降级为未分类，丢的只有它。
+  if (truncated && batch.length > 1) {
+    onSplit(batch.length)
+    const mid = Math.ceil(batch.length / 2)
+    // 顺序问而不是并发：外层已经有 concurrency 个 worker 在跑，
+    // 一批刚被截断说明这条线正吃力，没必要再往上叠一倍请求。
+    const head = await runBatch(batch.slice(0, mid), candidates, client, locale, includeTopicRule, onSplit)
+    const tail = await runBatch(batch.slice(mid), candidates, client, locale, includeTopicRule, onSplit)
+    return [...head, ...tail]
   }
   return batch.map((item) => unclassified(item, fallbackReason(locale, 'failed', lastError), lastError))
 }
@@ -309,7 +329,14 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
       // 后看到「N 条移动建议」，中间这一行换个口径没人看得懂。
       const size = batch.reduce((sum, rep) => sum + groupOf(rep).length, 0)
       const startedAt = Date.now()
-      const results = await runBatch(batch, candidates, client, locale, includeTopicRule)
+      const results = await runBatch(batch, candidates, client, locale, includeTopicRule, (size) =>
+        input.onLog?.(
+          logBatchSplit(
+            locale, locale === 'zh_CN' ? '分类批次' : 'Classify batch', index, batches.length, size,
+          ),
+          'warn',
+        ),
+      )
       // ok 同样按书签数算。一组要么整组成功要么整组失败（结果是照抄代表的），
       // 所以 ok === size ⟺ 全部代表都成功、ok === 0 ⟺ 没有一个代表成功——
       // 下面那套「全成功 / 全失败 / 部分」的分级，口径和按请求条目数算时完全一致。

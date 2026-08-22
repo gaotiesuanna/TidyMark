@@ -3,6 +3,7 @@ import { LOCALES } from '@/core/locale'
 import {
   fallbackReason, logBatch, logBatchDone, logBatchFailed,
   logCompoundNames, logCompoundNamesRemain, logDuplicateTopics, logFoldersDone, logFoldersFailed,
+  logBatchPartFailed, logBatchSplit, logFamiliesRemain, logFragmentedFamilies,
   logFoldersRetryFailed, logNoTopicMapped,
 } from '@/llm/logs'
 
@@ -11,7 +12,7 @@ describe('llm 日志文案双语', () => {
     for (const locale of LOCALES) {
       expect(logBatch(locale, 'x', 0, 3, 20)).toContain('1/3')
       expect(logBatchDone(locale, 0, 3, 20, 18, 500)).toContain('18')
-      expect(logBatchFailed(locale, 'x', 0, 3, 'boom')).toContain('boom')
+      expect(logBatchFailed(locale, 'x', 0, 3, 'boom', 3)).toContain('boom')
       expect(logFoldersDone(locale, 6, 40)).toContain('6')
       expect(logFoldersFailed(locale, 'boom')).toContain('boom')
       expect(logDuplicateTopics(locale, 'x')).toContain('x')
@@ -76,5 +77,75 @@ describe('llm 日志文案双语', () => {
     expect(logNoTopicMapped('zh_CN', 3)).toContain('3')
     expect(/[一-鿿]/.test(logNoTopicMapped('en', 3))).toBe(false)
     expect(logNoTopicMapped('zh_CN', 3)).not.toBe(logNoTopicMapped('en', 3))
+  })
+})
+
+describe('截断拆批的两条日志', () => {
+  it('拆批日志说清是第几批、多少条被拆', () => {
+    for (const locale of LOCALES) {
+      const line = logBatchSplit(locale, 'x', 0, 12, 25)
+      expect(line).toContain('1/12')
+      expect(line).toContain('25')
+    }
+  })
+
+  it('拆开后仍失败的日志带上条数与错误详情', () => {
+    for (const locale of LOCALES) {
+      const line = logBatchPartFailed(locale, 'x', 2, 12, 13, 'boom')
+      expect(line).toContain('3/12')
+      expect(line).toContain('13')
+      expect(line).toContain('boom')
+    }
+  })
+
+  it('英文版不含中文，且两种语言确实是两份文案', () => {
+    expect(/[一-鿿]/.test(logBatchSplit('en', 'x', 0, 12, 25))).toBe(false)
+    expect(/[一-鿿]/.test(logBatchPartFailed('en', 'x', 0, 12, 13, 'boom'))).toBe(false)
+    expect(logBatchSplit('zh_CN', 'x', 0, 12, 25)).not.toBe(logBatchSplit('en', 'x', 0, 12, 25))
+  })
+
+  it('拆批不是失败：文案里不能说这批书签被排除', () => {
+    expect(logBatchSplit('zh_CN', 'x', 0, 12, 25)).not.toContain('不参与目录设计')
+  })
+})
+
+describe('整批失败的日志', () => {
+  it('说清一共问了几次，读日志的人不必猜有没有重试', () => {
+    expect(logBatchFailed('zh_CN', 'x', 0, 12, 'boom', 3)).toContain('问了 3 次')
+    expect(logBatchFailed('en', 'x', 0, 12, 'boom', 3)).toContain('3 attempts')
+  })
+
+  it('仍然说清是哪一批、丢的书签去了哪', () => {
+    const line = logBatchFailed('zh_CN', 'x', 10, 12, 'boom', 3)
+    expect(line).toContain('11/12')
+    expect(line).toContain('不参与目录设计')
+  })
+
+  it('英文版不含中文', () => {
+    expect(/[一-鿿]/.test(logBatchFailed('en', 'x', 0, 12, 'boom', 3))).toBe(false)
+  })
+})
+
+describe('同族碎目录的两条日志', () => {
+  it('点名到目录，并说清已经重问', () => {
+    const line = logFragmentedFamilies('zh_CN', 'FastAPI教程、FastAPI实战')
+    expect(line).toContain('FastAPI教程、FastAPI实战')
+    expect(line).toContain('重')
+  })
+
+  it('重问后仍在的那条不能说反话——第一版仍在用，不是退回原始标签', () => {
+    const line = logFamiliesRemain('zh_CN', 'FastAPI教程')
+    expect(line).toContain('FastAPI教程')
+    expect(line).not.toContain('保留原始标签')
+  })
+
+  it('两条都双语，英文版不含中文', () => {
+    expect(/[一-鿿]/.test(logFragmentedFamilies('en', 'x'))).toBe(false)
+    expect(/[一-鿿]/.test(logFamiliesRemain('en', 'x'))).toBe(false)
+    expect(logFragmentedFamilies('zh_CN', 'x')).not.toBe(logFragmentedFamilies('en', 'x'))
+  })
+
+  it('两条文案确实不同，不是同一句', () => {
+    expect(logFragmentedFamilies('zh_CN', 'x')).not.toBe(logFamiliesRemain('zh_CN', 'x'))
   })
 })

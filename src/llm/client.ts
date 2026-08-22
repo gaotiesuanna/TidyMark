@@ -8,10 +8,18 @@ export interface LlmConfig {
 
 export class LlmError extends Error {
   readonly retryable: boolean
-  constructor(message: string, retryable: boolean) {
+  /**
+   * 输出被截断（模型没写完就到了 max_tokens）。
+   *
+   * 与 retryable 分开两个字段，因为收场方式正相反：retryable 是「原样再问一次」，
+   * 截断原样再问只会再截断一次，得把这一批拆小了问（见 llm/tags.ts 的 ask）。
+   */
+  readonly truncated: boolean
+  constructor(message: string, retryable: boolean, truncated = false) {
     super(message)
     this.name = 'LlmError'
     this.retryable = retryable
+    this.truncated = truncated
   }
 }
 
@@ -27,14 +35,65 @@ export interface LlmClient {
 const MODES = ['json_schema', 'json_object', 'none'] as const
 type StructuredMode = (typeof MODES)[number]
 
-/** 去掉模型可能加上的 Markdown 代码块或前后废话，取出其中的 JSON。 */
-export function extractJson(content: string): string {
+/**
+ * 从模型输出里截出那段 JSON，并告诉调用方括号有没有闭合。
+ *
+ * 按层级配平着扫，不是找「最后一个右括号」：
+ * - 老写法有条快路径，文本以 `{` 开头就原样返回，于是「先给 JSON、末尾再补一句
+ *   解释」这种输出一个字都不修，直接喂给 JSON.parse 报错；
+ * - 而那句解释里但凡带一个 `}`，找最后一个右括号也会把它一并圈进来。
+ * 字符串内部的括号与转义引号都要跳过，否则 `{"a":"}"}` 会在半路就判定闭合。
+ *
+ * `closed` 为 false 表示扫到头也没回到 0 层——输出被砍断时正是这个形状，
+ * 用来在厂商不给 finish_reason 时兜底判定截断。
+ */
+function sliceJson(content: string): { text: string; closed: boolean } {
   const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(content)
   const text = (fenced?.[1] ?? content).trim()
-  if (text.startsWith('{') || text.startsWith('[')) return text
   const start = text.search(/[{[]/)
-  const end = Math.max(text.lastIndexOf('}'), text.lastIndexOf(']'))
-  return start >= 0 && end > start ? text.slice(start, end + 1) : text
+  if (start < 0) return { text, closed: false }
+
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i]!
+    if (inString) {
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') inString = true
+    else if (ch === '{' || ch === '[') depth++
+    else if (ch === '}' || ch === ']') {
+      depth--
+      if (depth === 0) return { text: text.slice(start, i + 1), closed: true }
+    }
+  }
+  return { text: text.slice(start), closed: false }
+}
+
+/** 去掉模型可能加上的 Markdown 代码块或前后废话，取出其中的 JSON。 */
+export function extractJson(content: string): string {
+  return sliceJson(content).text
+}
+
+/**
+ * 出问题的 content 怎么放进错误信息。
+ *
+ * 只留头部（老写法的 slice(0, 200)）等于把唯一有诊断价值的地方扔了：截断也好、
+ * 末尾拖了一句解释也好，破绽全在尾巴上，而头部永远是一段合法 JSON，看着毫无问题。
+ * 所以头尾都留，只省略中间，并把省掉多少字说出来。
+ */
+const KEEP = 200
+
+function headAndTail(content: string, locale: Locale): string {
+  if (content.length <= KEEP * 2) return content
+  const omitted = content.length - KEEP * 2
+  const middle =
+    locale === 'zh_CN' ? ` …（中间省略 ${omitted} 字）… ` : ` …(${omitted} chars omitted)… `
+  return content.slice(0, KEEP) + middle + content.slice(-KEEP)
 }
 
 /**
@@ -149,23 +208,31 @@ export function createLlmClient(config: LlmConfig, locale: Locale, fetchImpl: ty
         }
 
         const payload = (await response.json()) as {
-          choices?: Array<{ message?: { content?: string } }>
+          choices?: Array<{ message?: { content?: string }; finish_reason?: string }>
         }
         const content = payload.choices?.[0]?.message?.content
+        const finishReason = payload.choices?.[0]?.finish_reason
         if (typeof content !== 'string') {
           throw new LlmError(
             locale === 'zh_CN' ? '模型响应中没有 content 字段' : 'The model response has no content field',
             false,
           )
         }
+        const sliced = sliceJson(content)
         try {
-          return JSON.parse(extractJson(content)) as unknown
+          return JSON.parse(sliced.text) as unknown
         } catch {
+          // 厂商不给 finish_reason 时（网关转发常见）退回看括号有没有闭合。
+          const truncated = finishReason === 'length' || !sliced.closed
+          const reason = finishReason ?? (locale === 'zh_CN' ? '未提供' : 'absent')
+          // 截断标 retryable: false——原样再问一次只会再截断一次，
+          // 该做的是把这一批拆小，那件事由 llm/tags.ts 按 truncated 决定。
           throw new LlmError(
             locale === 'zh_CN'
-              ? `模型返回的不是合法 JSON: ${content.slice(0, 200)}`
-              : `The model did not return valid JSON: ${content.slice(0, 200)}`,
+              ? `模型返回的不是合法 JSON（finish_reason=${reason}，content 共 ${content.length} 字）：${headAndTail(content, locale)}`
+              : `The model did not return valid JSON (finish_reason=${reason}, content ${content.length} chars): ${headAndTail(content, locale)}`,
             false,
+            truncated,
           )
         }
       }

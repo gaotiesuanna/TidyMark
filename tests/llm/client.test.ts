@@ -218,3 +218,83 @@ describe('并发请求共享降级状态时不会互相把台阶踩没', () => {
     expect(fetchImpl.mock.calls.length - before).toBe(1)
   })
 })
+
+describe('非法 JSON 的诊断与截断判定', () => {
+  function jsonFailResponse(content: string, finishReason?: string) {
+    const choice: Record<string, unknown> = { message: { content } }
+    if (finishReason !== undefined) choice.finish_reason = finishReason
+    return new Response(JSON.stringify({ choices: [choice] }), { status: 200 })
+  }
+
+  function clientFor(content: string, finishReason?: string) {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonFailResponse(content, finishReason))
+    return createLlmClient(config, 'zh_CN', fetchImpl as unknown as typeof fetch)
+  }
+
+  /** 半个数组：括号没闭合，正是被 max_tokens 砍断时的形状。 */
+  const CUT = '{"results": [{"bookmark_id": "805", "primary_topic": "MinerU"}, {"bookmark_id": "83'
+
+  it('错误信息带上 finish_reason，用户不必猜是不是被截断', async () => {
+    const error = await clientFor(CUT, 'length').complete('p', schema).catch((e: unknown) => e)
+    expect(String(error)).toContain('finish_reason=length')
+  })
+
+  it('错误信息带上 content 总长，200 字的头部不再是全部线索', async () => {
+    const error = await clientFor(CUT, 'length').complete('p', schema).catch((e: unknown) => e)
+    expect(String(error)).toContain(`content 共 ${CUT.length} 字`)
+  })
+
+  it('content 过长时头尾都留，中间才省略', async () => {
+    const long = `{"results": [${'{"bookmark_id": "1", "primary_topic": "AAA"}, '.repeat(30)}{"bookmark_id": "9`
+    const error = await clientFor(long, 'length').complete('p', schema).catch((e: unknown) => e)
+    expect(String(error)).toContain(long.slice(0, 100))
+    expect(String(error)).toContain(long.slice(-100))
+  })
+
+  it('finish_reason=length 判定为截断', async () => {
+    const error = await clientFor(CUT, 'length').complete('p', schema).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(LlmError)
+    expect((error as LlmError).truncated).toBe(true)
+  })
+
+  it('厂商没给 finish_reason 时，靠括号没闭合判定截断', async () => {
+    const error = await clientFor(CUT).complete('p', schema).catch((e: unknown) => e)
+    expect((error as LlmError).truncated).toBe(true)
+  })
+
+  it('括号闭合了的非法 JSON 不算截断', async () => {
+    const error = await clientFor('{"a": 1,}', 'stop').complete('p', schema).catch((e: unknown) => e)
+    expect((error as LlmError).truncated).toBe(false)
+  })
+
+  it('截断不算可重试：同一个请求只会再截断一次', async () => {
+    const error = await clientFor(CUT, 'length').complete('p', schema).catch((e: unknown) => e)
+    expect((error as LlmError).retryable).toBe(false)
+  })
+
+  it('英文界面下诊断信息里没有中文', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonFailResponse(CUT, 'length'))
+    const client = createLlmClient(config, 'en', fetchImpl as unknown as typeof fetch)
+    const error = await client.complete('p', schema).catch((e: unknown) => e)
+    expect(/[一-鿿]/.test((error as LlmError).message)).toBe(false)
+    expect((error as LlmError).message).toContain('finish_reason=length')
+  })
+})
+
+describe('extractJson 的配平截取', () => {
+  it('砍掉 JSON 后面拖着的解释文字', () => {
+    expect(extractJson('{"a":1}\n注：仅供参考')).toBe('{"a":1}')
+  })
+
+  it('字符串里的花括号不参与配平', () => {
+    expect(extractJson('{"a":"}"}\n以上')).toBe('{"a":"}"}')
+  })
+
+  it('转义引号不会被当成字符串结束', () => {
+    expect(extractJson('{"a":"\\""}尾巴')).toBe('{"a":"\\""}')
+  })
+
+  it('括号没闭合时把剩下的原样交出去，让上层报截断', () => {
+    expect(extractJson('前言\n{"results": [1,')).toBe('{"results": [1,')
+  })
+})

@@ -106,13 +106,27 @@ export const MAX_LOGS = 200
 /** 单行长度上限——接口返回的错误体可能是整段 JSON，完整内容仍在后台 console 里。 */
 export const MAX_LOG_LENGTH = 200
 
+/** 超长时开头保留多少字，其余额度留给结尾。 */
+const HEAD_CHARS = Math.floor(MAX_LOG_LENGTH / 2)
+
+/**
+ * 超长的日志砍中间，不砍尾巴。
+ *
+ * 从头截断会把唯一有诊断价值的地方扔掉：模型输出非法时开头永远是一段合法 JSON，
+ * 破绽全在末尾；接口错误体同样越往后越具体。llm/client.ts 特意把 content 的尾部
+ * 拼进错误信息，就是被这里砍没的——那条修复到不了用户眼前。
+ *
+ * 开头仍要留一截，否则一屏日志里认不出这是哪一条。
+ */
+function truncate(message: string): string {
+  if (message.length <= MAX_LOG_LENGTH) return message
+  return `${message.slice(0, HEAD_CHARS)}…${message.slice(HEAD_CHARS - MAX_LOG_LENGTH)}`
+}
+
 /** 只有带 message 的事件才写日志；纯进度事件不写。 */
 export function appendLog(logs: LogLine[], event: ProgressEvent, id: number): LogLine[] {
   if (event.message === '') return logs
-  const message =
-    event.message.length > MAX_LOG_LENGTH
-      ? `${event.message.slice(0, MAX_LOG_LENGTH)}…`
-      : event.message
+  const message = truncate(event.message)
   const next = [...logs, { id, phase: event.phase, level: event.level ?? 'info', message }]
   return next.length > MAX_LOGS ? next.slice(next.length - MAX_LOGS) : next
 }

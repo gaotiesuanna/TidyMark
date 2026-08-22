@@ -101,7 +101,36 @@ describe('日志长度截断', () => {
     const long = 'x'.repeat(MAX_LOG_LENGTH + 50)
     const logs = appendLog([], { phase: 'classify', message: long, level: 'error' }, 0)
     expect(logs[0]!.message).toHaveLength(MAX_LOG_LENGTH + 1) // 含省略号
-    expect(logs[0]!.message.endsWith('…')).toBe(true)
+  })
+
+  /**
+   * 砍中间不砍尾巴：模型输出非法时开头永远是一段合法 JSON，破绽全在末尾，
+   * 从头截断等于把唯一有诊断价值的地方扔掉（llm/client.ts 特意拼进去的尾部
+   * 就是被这里砍没的）。
+   */
+  it('超长日志保留尾部', () => {
+    const message = `模型返回的不是合法 JSON：${'x'.repeat(MAX_LOG_LENGTH)}破绽在这里`
+    const logs = appendLog([], { phase: 'tags', message, level: 'error' }, 0)
+    expect(logs[0]!.message).toContain('破绽在这里')
+  })
+
+  it('超长日志仍保留开头，一眼认得出是哪一条', () => {
+    const message = `模型返回的不是合法 JSON：${'x'.repeat(MAX_LOG_LENGTH)}破绽在这里`
+    const logs = appendLog([], { phase: 'tags', message, level: 'error' }, 0)
+    expect(logs[0]!.message.startsWith('模型返回的不是合法 JSON：')).toBe(true)
+  })
+
+  it('省略号在中间，不在末尾', () => {
+    const message = `开头${'x'.repeat(MAX_LOG_LENGTH)}结尾`
+    const logs = appendLog([], { phase: 'tags', message, level: 'error' }, 0)
+    expect(logs[0]!.message.endsWith('…')).toBe(false)
+    expect(logs[0]!.message).toContain('…')
+  })
+
+  it('不超长的日志一字不改', () => {
+    const message = 'x'.repeat(MAX_LOG_LENGTH)
+    const logs = appendLog([], { phase: 'tags', message, level: 'error' }, 0)
+    expect(logs[0]!.message).toBe(message)
   })
 })
 

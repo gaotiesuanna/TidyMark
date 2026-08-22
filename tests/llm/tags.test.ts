@@ -137,3 +137,108 @@ describe('refineGroupTags', () => {
     expect(complete).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('extractTags 的失败收场', () => {
+  const serverError = (): Error => Object.assign(new Error('500'), { retryable: true })
+  const badKeyError = (): Error => Object.assign(new Error('bad key'), { retryable: false })
+  const truncatedError = (): Error =>
+    Object.assign(new Error('truncated'), { retryable: false, truncated: true })
+
+  /** 从提示词里读出这次问的是哪几条书签——mock 靠它区分整批与拆开后的半批。 */
+  function idsIn(prompt: string): string[] {
+    return [...prompt.matchAll(/"bookmark_id": "([^"]+)"/g)].map((m) => m[1]!)
+  }
+
+  const four = ['1', '2', '3', '4'].map((id) => item(id, `https://x${id}.dev`))
+
+  it('可重试错误退避重试，下一次成功就不丢这一批', async () => {
+    const complete = vi
+      .fn()
+      .mockRejectedValueOnce(serverError())
+      .mockResolvedValueOnce({ results: [{ bookmark_id: '1', primary_topic: 'React' }] })
+    const results = await extractTags([item('1', 'https://react.dev')], { complete })
+    expect(complete).toHaveBeenCalledTimes(2)
+    expect(results[0]!.primaryTopic).toBe('React')
+  })
+
+  it('可重试错误重试 2 次后才整批降级为空主题', async () => {
+    const complete = vi.fn().mockRejectedValue(serverError())
+    const results = await extractTags([item('1', 'https://a.dev')], { complete })
+    expect(complete).toHaveBeenCalledTimes(3)
+    expect(results[0]!.primaryTopic).toBe(NO_TOPIC)
+  })
+
+  it('不可重试错误立即放弃，不重试', async () => {
+    const complete = vi.fn().mockRejectedValue(badKeyError())
+    await extractTags([item('1', 'https://a.dev')], { complete })
+    expect(complete).toHaveBeenCalledTimes(1)
+  })
+
+  it('截断时拆成两半分别重问，两半的结果都保住', async () => {
+    const complete = vi.fn().mockImplementation((prompt: string) => {
+      const ids = idsIn(prompt)
+      if (ids.length === 4) return Promise.reject(truncatedError())
+      return Promise.resolve({ results: ids.map((id) => ({ bookmark_id: id, primary_topic: 'T' + id })) })
+    })
+    const results = await extractTags(four, { complete })
+    expect(results.map((r) => r.primaryTopic)).toEqual(['T1', 'T2', 'T3', 'T4'])
+    // 整批 1 次 + 两半各 1 次：截断不走重试，原样再问只会再截断一次
+    expect(complete).toHaveBeenCalledTimes(3)
+  })
+
+  it('拆开后仍失败的那一半只丢那一半', async () => {
+    const complete = vi.fn().mockImplementation((prompt: string) => {
+      const ids = idsIn(prompt)
+      if (ids.length === 4) return Promise.reject(truncatedError())
+      if (ids.includes('3')) return Promise.reject(badKeyError())
+      return Promise.resolve({ results: ids.map((id) => ({ bookmark_id: id, primary_topic: 'T' + id })) })
+    })
+    const results = await extractTags(four, { complete })
+    expect(results.map((r) => r.primaryTopic)).toEqual(['T1', 'T2', NO_TOPIC, NO_TOPIC])
+  })
+
+  it('拆到一条还截断就放弃，不无限拆下去', async () => {
+    const complete = vi.fn().mockRejectedValue(truncatedError())
+    const results = await extractTags([item('1', 'https://a.dev'), item('2', 'https://b.dev')], {
+      complete,
+    })
+    expect(results.every((r) => r.primaryTopic === NO_TOPIC)).toBe(true)
+    expect(complete).toHaveBeenCalledTimes(3)
+  })
+
+  it('拆批记 warn、半批失败记 error，两条日志分得开', async () => {
+    const logs: Array<{ message: string; level: string }> = []
+    const complete = vi.fn().mockImplementation((prompt: string) => {
+      const ids = idsIn(prompt)
+      if (ids.length === 4) return Promise.reject(truncatedError())
+      if (ids.includes('3')) return Promise.reject(badKeyError())
+      return Promise.resolve({ results: ids.map((id) => ({ bookmark_id: id, primary_topic: 'T' + id })) })
+    })
+    await extractTags(four, { complete }, { onLog: (message, level) => logs.push({ message, level }) })
+    expect(logs.some((l) => l.level === 'warn' && l.message.includes('输出被截断'))).toBe(true)
+    expect(logs.some((l) => l.level === 'error' && l.message.includes('拆开后仍有 2 条失败'))).toBe(true)
+  })
+
+  it('整批失败的日志带上一共问了几次', async () => {
+    const logs: string[] = []
+    const complete = vi.fn().mockRejectedValue(serverError())
+    await extractTags([item('1', 'https://a.dev')], { complete }, { onLog: (m) => logs.push(m) })
+    expect(logs.some((m) => m.includes('问了 3 次'))).toBe(true)
+  })
+
+  it('拆开后两半各自的尝试都算进这一批的次数', async () => {
+    const logs: string[] = []
+    const complete = vi.fn().mockRejectedValue(truncatedError())
+    await extractTags(four, { complete }, { onLog: (m) => logs.push(m) })
+    // 整批 1 次 + 两半各 1 次 + 再拆成四份各 1 次 = 7
+    expect(logs.some((m) => m.includes('问了 7 次'))).toBe(true)
+  })
+
+  it('两半都失败时只记一条整批失败，不再重复记两条半批失败', async () => {
+    const logs: Array<{ message: string; level: string }> = []
+    const complete = vi.fn().mockRejectedValue(truncatedError())
+    await extractTags(four, { complete }, { onLog: (message, level) => logs.push({ message, level }) })
+    expect(logs.filter((l) => l.message.includes('拆开后仍有'))).toHaveLength(0)
+    expect(logs.filter((l) => l.message.includes('不参与目录设计'))).toHaveLength(1)
+  })
+})

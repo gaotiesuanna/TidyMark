@@ -32,12 +32,41 @@ export function logBatchDone(
   return `Classify batch ${index + 1}/${total}: ${size} items${merged}, ${ok} succeeded, ${ms}ms`
 }
 
+/**
+ * `attempts` 是这一批一共问出去多少次请求（含重试与拆批后各半的尝试）。
+ *
+ * 不写出来，这条日志就跟「一次都没重试」长得一模一样——排查时只能回去读代码
+ * 猜重试有没有生效。次数在这里是唯一能自证的东西。
+ */
 export function logBatchFailed(
-  locale: Locale, label: string, index: number, total: number, detail: string,
+  locale: Locale, label: string, index: number, total: number, detail: string, attempts: number,
 ): string {
   return locale === 'zh_CN'
-    ? `${label} ${index + 1}/${total} 失败，这批书签不参与目录设计：${detail}`
-    : `${label} ${index + 1}/${total} failed; these bookmarks are excluded from folder design: ${detail}`
+    ? `${label} ${index + 1}/${total} 失败（问了 ${attempts} 次都没成），这批书签不参与目录设计：${detail}`
+    : `${label} ${index + 1}/${total} failed after ${attempts} attempts; these bookmarks are excluded from folder design: ${detail}`
+}
+
+/**
+ * 输出被截断，这一批拆开重问。
+ *
+ * 不能沿用 logBatchFailed：那条说的是「这批书签不参与目录设计」，而这里一条都还没丢，
+ * 只是问法换小了。把「多少条被拆」写出来，递归拆到第二层、第三层时读日志才分得清层级。
+ */
+export function logBatchSplit(
+  locale: Locale, label: string, index: number, total: number, size: number,
+): string {
+  return locale === 'zh_CN'
+    ? `${label} ${index + 1}/${total} 输出被截断，${size} 条拆成两半重问`
+    : `${label} ${index + 1}/${total} output was truncated; splitting ${size} items in half and retrying`
+}
+
+/** 拆开之后仍然失败的那一半——丢的只有这几条，同批的另一半已经拿到了。 */
+export function logBatchPartFailed(
+  locale: Locale, label: string, index: number, total: number, size: number, detail: string,
+): string {
+  return locale === 'zh_CN'
+    ? `${label} ${index + 1}/${total} 拆开后仍有 ${size} 条失败，这些书签不参与目录设计：${detail}`
+    : `${label} ${index + 1}/${total}: ${size} items still failed after splitting; those bookmarks are excluded from folder design: ${detail}`
 }
 
 export function logFoldersDone(locale: Locale, folders: number, merged: number): string {
@@ -78,6 +107,25 @@ export function logCompoundNamesRemain(locale: Locale, detail: string): string {
   return locale === 'zh_CN'
     ? `重出后仍有目录名捆着两个概念，按现状继续：${detail}`
     : `Folder names still bundle two concepts after the retry; continuing as is: ${detail}`
+}
+
+/**
+ * 同一个主体被拆成几个装不满的并列目录（「FastAPI教程」「FastAPI实战」…）。
+ *
+ * 与 logCompoundNames 是一对：那条治「一个名字捆两个概念」，这条治「一个概念摊成几个名字」，
+ * 两者共用同一次重问，所以措辞也对齐成「已要求模型重出一版」。
+ */
+export function logFragmentedFamilies(locale: Locale, detail: string): string {
+  return locale === 'zh_CN'
+    ? `同一个主体被拆成了几个装不满的目录，已要求模型重出一版：${detail}`
+    : `One subject was split across several folders too small to fill; asked the model for another pass: ${detail}`
+}
+
+/** 重问之后仍然拆着的那些。第一版（或更好的那一版）仍在用，不是退回原始标签。 */
+export function logFamiliesRemain(locale: Locale, detail: string): string {
+  return locale === 'zh_CN'
+    ? `重出后仍有目录把同一个主体拆着，按现状继续：${detail}`
+    : `Some folders still split one subject after the retry; continuing as is: ${detail}`
 }
 
 /**
