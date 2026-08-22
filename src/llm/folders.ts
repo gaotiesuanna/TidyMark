@@ -8,8 +8,8 @@ import { MAX_LEAF, SHAPE_MAX_SIBLINGS } from '@/core/shape'
 import { NO_TOPIC } from './tags'
 import type { LlmClient } from './client'
 import {
-  logCompoundNames, logCompoundNamesRemain, logDuplicateTopics, logFoldersDone, logFoldersFailed,
-  logFoldersRetryFailed, logNoTopicMapped,
+  logCompoundNames, logCompoundNamesRemain, logDuplicateTopics, logFamiliesRemain,
+  logFoldersDone, logFoldersFailed, logFoldersRetryFailed, logFragmentedFamilies, logNoTopicMapped,
 } from './logs'
 import { foldersPrompt, mergeNamePrompt, newFolderNamesPrompt } from './prompts'
 
@@ -186,6 +186,149 @@ export function isCompoundName(title: string, locale: Locale): boolean {
   return false
 }
 
+export interface FolderFamily {
+  /** 这一族共享的主体名，重问时要点给模型看。 */
+  prefix: string
+  /** 属于这一族的兄弟目录名，保持设计产物里的原始顺序。 */
+  titles: string[]
+}
+
+/**
+ * 英文主体至少这么多字母才作数——比它短的多半是缩写（CI、CLI、Pro-），
+ * 撞上一两个字母不说明是同一个东西。
+ */
+const MIN_ASCII_PREFIX = 3
+/** 中文主体至少两个字：「模」一个字撞得太容易（模型 / 模块 / 模板）。 */
+const MIN_CJK_PREFIX = 2
+
+function commonPrefix(a: string, b: string): string {
+  let i = 0
+  while (i < a.length && i < b.length && a[i] === b[i]) i += 1
+  return a.slice(0, i)
+}
+
+/**
+ * 前缀在这个名字里有没有停在词边界上。
+ *
+ * 「Prometheus监控」与「Protobuf序列化」共享 `Pro`，长度够了却是半个单词——
+ * 后面还接着小写字母就说明单词没写完，不算同一个主体。中日文字符不参与这条判断，
+ * 它们本来就字字可断。
+ */
+function endsAtBoundary(name: string, prefix: string): boolean {
+  const next = name[prefix.length]
+  return next === undefined || !/[a-z0-9]/i.test(next)
+}
+
+/** 两个名字共享的主体名；够不上「同一个主体」时返回 null。 */
+function familyPrefix(a: string, b: string): string | null {
+  const prefix = commonPrefix(a, b).trim()
+  if (prefix === '') return null
+  const min = /[\u4e00-\u9fff]/.test(prefix) ? MIN_CJK_PREFIX : MIN_ASCII_PREFIX
+  if ([...prefix].length < min) return null
+  if (!endsAtBoundary(a, prefix) || !endsAtBoundary(b, prefix)) return null
+  return prefix
+}
+
+/** 一批同层兄弟里所有「共享同一个主体」的族，不看书签数。 */
+function familiesIn(titles: string[]): FolderFamily[] {
+  const candidates = new Set<string>()
+  for (let i = 0; i < titles.length; i += 1) {
+    for (let j = i + 1; j < titles.length; j += 1) {
+      const prefix = familyPrefix(titles[i]!, titles[j]!)
+      if (prefix !== null) candidates.add(prefix)
+    }
+  }
+  // 同一批成员可能被长短两个前缀同时命中（「语音」与「语音识」），只留最长的那个——
+  // 点名给模型看时，越长越像一个真的主体名。
+  const bySignature = new Map<string, FolderFamily>()
+  for (const prefix of candidates) {
+    const members = titles.filter((title) => title.startsWith(prefix) && endsAtBoundary(title, prefix))
+    if (members.length < 2) continue
+    const signature = members.join('\u0000')
+    const kept = bySignature.get(signature)
+    if (kept === undefined || prefix.length > kept.prefix.length) {
+      bySignature.set(signature, { prefix, titles: members })
+    }
+  }
+  return [...bySignature.values()]
+}
+
+/**
+ * 每个目录路径实际吃到多少书签。一级目录那个数含它子目录的那一份——
+ * 分出了子目录的一级目录显然不「碎」，把子目录算进去正好让它躲开下面的判定。
+ */
+function pathCounts(design: FolderDesign, topics: TopicCount[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  const bump = (key: string, n: number): void => {
+    counts.set(key, (counts.get(key) ?? 0) + n)
+  }
+  for (const topic of topics) {
+    const path = design.mapping.get(normalizeName(topic.topic))
+    if (path === undefined || path.length === 0) continue
+    bump(path[0]!, topic.count)
+    if (path.length > 1) bump(`${path[0]!}/${path[1]!}`, topic.count)
+  }
+  return counts
+}
+
+/**
+ * 同一个主体被拆成几个装不满的并列目录——「FastAPI教程」「FastAPI实战」「FastAPI数据库」
+ * 各三五条，本该是一个「FastAPI」。
+ *
+ * 与 isCompoundName 是一对：那条治「一个名字捆了两个概念」，这条治「一个概念摊成了几个名字」。
+ * 提示词规则 1 只要求合并「同义或高度重叠」的标签，而这几个名字既不同义也不重叠——
+ * 它们是同一个主体的不同侧面，模型照规则办事也会这么拆，所以只能在这里兜。
+ *
+ * 两个条件同时成立才算：
+ * - 同主体：共享一个够长、且停在词边界上的前缀（见 familyPrefix）；
+ * - 碎：这一族里多数目录装不到 2 × minFolderSize 个书签。
+ *
+ * 第二条只在一级目录那一摊生效，`ignoreSize` 关掉它——两摊的取舍不一样：
+ *
+ * - **一级目录**的兄弟本来就该彼此差异大，同主体并列多半就是碎片化，但一级位子有 12 个，
+ *   放过一组尺寸健康的（「语音识别」「语音合成」「语音对话」各五六条）代价不大，从严会误伤。
+ * - **组内**已经被聚合组这个共同点关起来了，位子只有 SHAPE_MAX_SIBLINGS 个，同一个主体
+ *   占掉三个格子挤掉的是真正需要区分的东西；而且组内恒为 oneLevel，并起来就是平铺，
+ *   MAX_LEAF 本来就认为一个目录平铺二十条以内是合理的。所以组内同主体就算一族。
+ *
+ * 这个分层是拿真实产出改出来的：74 个 GitHub 仓库设计出 10 个子目录，其中「模型构建/
+ * 部署/推理」与「语音识别/合成/对话」两组吃掉 6 个位子却只装 36 条书签，而按一级目录
+ * 那把尺子量，两组都是 1/3 成员偏小、够不上「多数」，全部放行。
+ *
+ * `minFolderSize` 缺席（用户关掉了这项约束）时两摊都一概不检测：关掉它本就意味着
+ * 「我接受小目录」，这时候还去合并等于绕过用户的开关。
+ */
+export function fragmentedFamilies(
+  design: FolderDesign,
+  topics: TopicCount[],
+  minFolderSize?: number,
+  /** 组内那一摊传 true：同主体就算一族，不再问尺寸。理由见上。 */
+  ignoreSize = false,
+): FolderFamily[] {
+  if (minFolderSize === undefined) return []
+  const counts = pathCounts(design, topics)
+  const threshold = minFolderSize * 2
+  const found: FolderFamily[] = []
+
+  const scan = (titles: string[], keyOf: (title: string) => string): void => {
+    for (const family of familiesIn(titles)) {
+      if (ignoreSize) {
+        found.push(family)
+        continue
+      }
+      const small = family.titles.filter((title) => (counts.get(keyOf(title)) ?? 0) < threshold).length
+      // 「多数」而不是「全部」：一族里混进一个大目录不改变这一族整体是碎的
+      if (small * 2 > family.titles.length) found.push(family)
+    }
+  }
+
+  scan(design.folders.map((folder) => folder.title), (title) => title)
+  for (const folder of design.folders) {
+    scan(folder.children, (child) => `${folder.title}/${child}`)
+  }
+  return found
+}
+
 /**
  * 一次 requestDesign 的结果。不在这里打任何 onLog——一摊可能连着发两次请求
  * （首轮 + 重问），日志该打在哪一次、打给谁看，只有调用方（designFolders）知道
@@ -326,14 +469,18 @@ export async function designFolders(
     return null
   }
 
-  const compound = compoundTitles(first.design, locale)
-  if (compound.length === 0) {
+  const firstIssues = findIssues(first.design, topics, options, locale)
+  if (issueCount(firstIssues) === 0) {
     logAdopted(first, locale, options)
     return first.design
   }
 
-  const detail = compound.join(locale === 'zh_CN' ? '、' : ', ')
-  options.onLog?.(logCompoundNames(locale, detail), 'warn')
+  if (firstIssues.compound.length > 0) {
+    options.onLog?.(logCompoundNames(locale, firstIssues.compound.join(locale === 'zh_CN' ? '、' : ', ')), 'warn')
+  }
+  if (firstIssues.families.length > 0) {
+    options.onLog?.(logFragmentedFamilies(locale, familyDetail(locale, firstIssues.families)), 'warn')
+  }
 
   // 重问是取消之后才新发起的一次请求，不属于「已经在跑的这次请求不中途打断」
   // 这条承诺覆盖的范围——用户点了取消，这次请求本就不该发出去（见 issues review I3）。
@@ -343,9 +490,11 @@ export async function designFolders(
   }
 
   // 只重问一次。重问失败（网络错、返回形状不对）就用第一版——名字不好看，
-  // 也好过整摊书签退回碎片化的原始标签
+  // 也好过整摊书签退回碎片化的原始标签。
+  // 两类毛病共用这一次：分开各问一次会把一摊的请求数从 2 涨到 3，而模型
+  // 一次能同时改掉两样，没有理由拆成两轮。
   const second = await requestDesign(
-    [prompt, '', ...compoundFeedback(locale, compound)].join('\n'),
+    [prompt, '', ...issueFeedback(locale, firstIssues)].join('\n'),
     client, locale, options,
   )
   if (!second.ok) {
@@ -356,20 +505,55 @@ export async function designFolders(
     return first.design
   }
 
-  const remain = compoundTitles(second.design, locale)
-  // 重问回来复合名不比第一版少，说明这一版没有变好——「收手」不等于「必须用它」，
-  // 退回更差的一版与「宁可名字不好看」的兜底哲学不符（见 issues review M8）
-  const useFirst = remain.length >= compound.length
+  const secondIssues = findIssues(second.design, topics, options, locale)
+  // 重问回来毛病总数不比第一版少，说明这一版没有变好——「收手」不等于「必须用它」，
+  // 退回更差的一版与「宁可名字不好看」的兜底哲学不符（见 issues review M8）。
+  // 两类毛病加总起来比，是因为它们共用了同一次重问：只盯其中一类，会出现
+  // 「复合名少了一个、碎目录多了三个」也算变好的荒唐结果。
+  const useFirst = issueCount(secondIssues) >= issueCount(firstIssues)
   const chosen = useFirst ? first : second
-  const remainingNames = useFirst ? compound : remain
-  if (remainingNames.length > 0) {
+  const remaining = useFirst ? firstIssues : secondIssues
+  if (remaining.compound.length > 0) {
     options.onLog?.(
-      logCompoundNamesRemain(locale, remainingNames.join(locale === 'zh_CN' ? '、' : ', ')),
+      logCompoundNamesRemain(locale, remaining.compound.join(locale === 'zh_CN' ? '、' : ', ')),
       'warn',
     )
   }
+  if (remaining.families.length > 0) {
+    options.onLog?.(logFamiliesRemain(locale, familyDetail(locale, remaining.families)), 'warn')
+  }
   logAdopted(chosen, locale, options)
   return chosen.design
+}
+
+/** 一版设计里所有该重问的毛病。两类分开存，日志与反馈都要分别点名。 */
+interface DesignIssues {
+  compound: string[]
+  families: FolderFamily[]
+}
+
+function findIssues(
+  design: FolderDesign,
+  topics: TopicCount[],
+  options: DesignOptions,
+  locale: Locale,
+): DesignIssues {
+  return {
+    compound: compoundTitles(design, locale),
+    families: fragmentedFamilies(design, topics, options.minFolderSize, options.oneLevel === true),
+  }
+}
+
+function issueCount(issues: DesignIssues): number {
+  return issues.compound.length + issues.families.length
+}
+
+/** 同族碎片的展示形态，日志与重问反馈共用一份，两处不会说出不同的名字。 */
+function familyDetail(locale: Locale, families: FolderFamily[]): string {
+  if (locale === 'zh_CN') {
+    return families.map((f) => `「${f.prefix}」：${f.titles.join('、')}`).join('；')
+  }
+  return families.map((f) => `"${f.prefix}": ${f.titles.join(', ')}`).join('; ')
 }
 
 /** 设计里所有复合名，一级与二级都算。 */
@@ -378,18 +562,46 @@ function compoundTitles(design: FolderDesign, locale: Locale): string[] {
   return all.filter((title) => isCompoundName(title, locale))
 }
 
-/** 重问时追加的反馈。必须点名，模型才知道要改哪几个。 */
+/**
+ * 重问时追加的反馈。必须点名，模型才知道要改哪几个。
+ *
+ * 「其余规则不变」这句收在 issueFeedback 末尾统一说一次——两类毛病同时出现时，
+ * 各自再说一遍会让模型以为是两条不同的指示。
+ */
 function compoundFeedback(locale: Locale, names: string[]): string[] {
   if (locale === 'zh_CN') {
     return [
       `刚才那一版里这些目录名把两个概念捆在了一起：${names.join('、')}。`,
-      '请重新设计一版：每个目录只装一个概念，被拆掉的那个概念要么单独开目录，要么并进别处。其余规则不变。',
+      '每个目录只装一个概念，被拆掉的那个概念要么单独开目录，要么并进别处。',
     ]
   }
   return [
     `These folder names from the previous pass bundle two concepts: ${names.join(', ')}.`,
-    'Design another version: one concept per folder. Give the concept you drop its own folder, or fold it into an existing one. Every other rule stays the same.',
+    'One concept per folder. Give the concept you drop its own folder, or fold it into an existing one.',
   ]
+}
+
+/** 同族碎片的反馈。点名到主体，模型才知道并成什么名字。 */
+function familyFeedback(locale: Locale, families: FolderFamily[]): string[] {
+  if (locale === 'zh_CN') {
+    return [
+      `刚才那一版里这几组目录把同一个主体拆成了几个装不满的目录：${familyDetail(locale, families)}。`,
+      '每一组请并成一个以该主体命名的目录，不要按侧面并列拆开。',
+    ]
+  }
+  return [
+    `These folder groups from the previous pass split one subject across several folders too small to fill: ${familyDetail(locale, families)}.`,
+    'Merge each group into a single folder named after that subject, instead of splitting it by aspect.',
+  ]
+}
+
+/** 把这一版的全部毛病拼成一段反馈，末尾统一交代一次「其余规则不变」。 */
+function issueFeedback(locale: Locale, issues: DesignIssues): string[] {
+  const lines: string[] = [locale === 'zh_CN' ? '请重新设计一版。' : 'Design another version.']
+  if (issues.compound.length > 0) lines.push(...compoundFeedback(locale, issues.compound))
+  if (issues.families.length > 0) lines.push(...familyFeedback(locale, issues.families))
+  lines.push(locale === 'zh_CN' ? '其余规则不变。' : 'Every other rule stays the same.')
+  return lines
 }
 
 /**

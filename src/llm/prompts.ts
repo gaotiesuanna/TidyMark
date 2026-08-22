@@ -174,6 +174,20 @@ export function foldersPrompt(
       ? `${index}. 一个目录只装一个概念。禁止用「与」「和」「及」「/」这类连接词把两个概念捆成一个名字——「记忆与向量存储」「配置及排错」这种名字会和别的目录抢同一批书签，换个连接词不算取舍。必须挑一个概念，另一个要么单独开目录，要么并进别处。`
       : `${index}. One concept per folder. Never join two concepts with "and", "&", a slash, or a comma — a name like "Memory and vector storage" fights with other folders over the same bookmarks. Pick one concept; give the other its own folder, or fold it into an existing one.`
 
+  // 与 compoundRule 是一对：那条禁「一个名字捆两个概念」，这条禁「一个概念摊成几个名字」。
+  // 规则 1 只要求合并「同义或高度重叠」的标签，而「FastAPI教程」与「FastAPI用户认证」
+  // 既不同义也不重叠——它们是同一个主体的不同侧面，不点破的话，模型照着规则 1 与
+  // 规则 4（名字要具体）办事，反而正是会拆成这几个（见 llm/folders.ts 的 fragmentedFamilies）。
+  const familyRule = (index: number): string => {
+    // 只出一层的那几摊（组内分摊、allowChildren 关掉）children 恒为空数组，
+    // 提它只会让模型以为还有分层这个选项。
+    const layered = parentTitle === undefined && allowChildren
+    if (locale === 'zh_CN') {
+      return `${index}. 同一个主体不要按侧面拆成多个并列目录——「FastAPI教程」「FastAPI实战」「FastAPI数据库」应该合成一个「FastAPI」目录${layered ? '，并完之后书签多到撑得起来时，才用 children 把它分成侧面' : ''}。`
+    }
+    return `${index}. Never split one subject into parallel folders by aspect — "FastAPI tutorials", "FastAPI in practice" and "FastAPI database" should be a single "FastAPI" folder${layered ? ', and only once it holds enough bookmarks should you use children to split it by aspect' : ''}.`
+  }
+
   const sizeRule = (index: number): string =>
     locale === 'zh_CN'
       ? `${index}. 不要建只装得下不到 ${minFolderSize} 个书签的目录；凑不满的标签并进相近的目录，没有相近的就不必给它单独开目录。`
@@ -230,6 +244,7 @@ export function foldersPrompt(
       '6. 目录名用中文，专有技术名词（React、RAG、MCP）可直接用原文。',
       ...tailRules([
         compoundRule,
+        familyRule,
         existingFolders === undefined || existingFolders.length === 0 ? null : existingRule,
         minFolderSize === undefined ? null : sizeRule,
       ]),
@@ -273,6 +288,7 @@ export function foldersPrompt(
     '6. Write folder names in English. Established technical names (React, RAG, MCP) stay as they are.',
     ...tailRules([
       compoundRule,
+      familyRule,
       existingFolders === undefined || existingFolders.length === 0 ? null : existingRule,
       minFolderSize === undefined ? null : sizeRule,
     ]),

@@ -7,12 +7,14 @@ import {
   nameMergedFolder,
   nameNewTopics,
   isCompoundName,
+  fragmentedFamilies,
   type FolderDesign,
   type DesignOptions,
 } from '@/llm/folders'
 import { NO_TOPIC } from '@/llm/tags'
 import type { BookmarkItem, TagResult } from '@/core/types'
 import type { LlmClient } from '@/llm/client'
+import { normalizeName } from '@/core/map'
 import { MAX_SIBLINGS } from '@/core/tree'
 import { MAX_LEAF, SHAPE_MAX_SIBLINGS } from '@/core/shape'
 
@@ -886,5 +888,254 @@ describe('nameNewTopics', () => {
     const client = { complete: vi.fn().mockResolvedValue({ names: [{ key: '语音合成', name: '语音与音频' }] }) }
     const names = await nameNewTopics(clusters, ['语音与音频', '语音合成'], client, 'zh_CN')
     expect(names.has('语音合成')).toBe(false)
+  })
+})
+
+describe('fragmentedFamilies', () => {
+  type Spec = Array<{ title: string; count?: number; children?: Array<{ title: string; count: number }> }>
+
+  /** 造一份设计产物 + 与之对应的标签清单：每个目录挂一个独占标签，标签的 count 就是它的书签数。 */
+  function designWith(spec: Spec): { design: FolderDesign; topics: Array<{ topic: string; count: number }> } {
+    const folders: FolderDesign['folders'] = []
+    const mapping = new Map<string, string[]>()
+    const topics: Array<{ topic: string; count: number }> = []
+    const add = (path: string[], count: number): void => {
+      const topic = `标签${topics.length}`
+      mapping.set(normalizeName(topic), path)
+      topics.push({ topic, count })
+    }
+    for (const folder of spec) {
+      folders.push({ title: folder.title, children: (folder.children ?? []).map((c) => c.title) })
+      if (folder.count !== undefined) add([folder.title], folder.count)
+      for (const child of folder.children ?? []) add([folder.title, child.title], child.count)
+    }
+    return { design: { folders, mapping }, topics }
+  }
+
+  function flat(spec: Array<[string, number]>): ReturnType<typeof designWith> {
+    return designWith(spec.map(([title, count]) => ({ title, count })))
+  }
+
+  it('同一个主体拆成几个装不满的目录时点名', () => {
+    const { design, topics } = flat([
+      ['FastAPI教程', 5], ['FastAPI实战', 3], ['FastAPI数据库', 3], ['FastAPI用户认证', 3],
+    ])
+    const families = fragmentedFamilies(design, topics, 3)
+    expect(families).toHaveLength(1)
+    expect(families[0]!.prefix).toBe('FastAPI')
+    expect(families[0]!.titles).toEqual([
+      'FastAPI教程', 'FastAPI实战', 'FastAPI数据库', 'FastAPI用户认证',
+    ])
+  })
+
+  it('同族但个个装得满就放过——治的是碎，不是同名', () => {
+    const { design, topics } = flat([['语音识别', 6], ['语音合成', 6], ['语音对话', 5]])
+    expect(fragmentedFamilies(design, topics, 3)).toEqual([])
+  })
+
+  it('一半小一半不小不算碎，要多数', () => {
+    const { design, topics } = flat([['FastAPI教程', 3], ['FastAPI实战', 9]])
+    expect(fragmentedFamilies(design, topics, 3)).toEqual([])
+  })
+
+  it('只有一个成不了族', () => {
+    const { design, topics } = flat([['FastAPI教程', 3], ['Docker部署', 3]])
+    expect(fragmentedFamilies(design, topics, 3)).toEqual([])
+  })
+
+  it('一个名字就是另一个的前缀时算同族', () => {
+    const { design, topics } = flat([['FastAPI', 3], ['FastAPI教程', 3]])
+    expect(fragmentedFamilies(design, topics, 3)[0]!.prefix).toBe('FastAPI')
+  })
+
+  it('公共前缀落在单词中间不算同族', () => {
+    // Prometheus / Protobuf 共享 Pro 三个字母，但那是半个单词
+    const { design, topics } = flat([['Prometheus监控', 3], ['Protobuf序列化', 3]])
+    expect(fragmentedFamilies(design, topics, 3)).toEqual([])
+  })
+
+  it('英文前缀不足三个字母不算同族', () => {
+    const { design, topics } = flat([['CI/CD', 3], ['CLI 工具', 3]])
+    expect(fragmentedFamilies(design, topics, 3)).toEqual([])
+  })
+
+  it('中文前缀不足两个字不算同族', () => {
+    const { design, topics } = flat([['模型部署', 3], ['模块化设计', 3]])
+    expect(fragmentedFamilies(design, topics, 3)).toEqual([])
+  })
+
+  it('minFolderSize 缺席时一概不检测——用户关掉了这项约束', () => {
+    const { design, topics } = flat([['FastAPI教程', 3], ['FastAPI实战', 3]])
+    expect(fragmentedFamilies(design, topics)).toEqual([])
+  })
+
+  it('只在同一层的兄弟之间比，一级不会和别人的二级凑成族', () => {
+    const { design, topics } = designWith([
+      { title: 'FastAPI教程', count: 3 },
+      { title: '容器', children: [{ title: 'FastAPI实战', count: 3 }] },
+    ])
+    expect(fragmentedFamilies(design, topics, 3)).toEqual([])
+  })
+
+  it('同一个父目录下的二级目录之间照样检测', () => {
+    const { design, topics } = designWith([
+      {
+        title: '容器',
+        children: [
+          { title: 'Docker基础', count: 3 },
+          { title: 'Docker网络', count: 3 },
+          { title: 'Docker存储', count: 3 },
+        ],
+      },
+    ])
+    const families = fragmentedFamilies(design, topics, 3)
+    expect(families).toHaveLength(1)
+    expect(families[0]!.titles).toEqual(['Docker基础', 'Docker网络', 'Docker存储'])
+  })
+
+  it('组内那一摊同主体就算一族，尺寸这一关不再问', () => {
+    const { design, topics } = flat([['语音识别', 6], ['语音合成', 6], ['语音对话', 5]])
+    const families = fragmentedFamilies(design, topics, 3, true)
+    expect(families).toHaveLength(1)
+    expect(families[0]!.prefix).toBe('语音')
+    expect(families[0]!.titles).toEqual(['语音识别', '语音合成', '语音对话'])
+  })
+
+  it('同样这三个在一级目录那一摊仍然放过——放开的只有组内', () => {
+    const { design, topics } = flat([['语音识别', 6], ['语音合成', 6], ['语音对话', 5]])
+    expect(fragmentedFamilies(design, topics, 3)).toEqual([])
+  })
+
+  it('组内放开的是尺寸那一关，不是主体那一关', () => {
+    const { design, topics } = flat([['模型部署', 9], ['模块化设计', 9]])
+    expect(fragmentedFamilies(design, topics, 3, true)).toEqual([])
+  })
+
+  it('组内同样要 minFolderSize 在场才检测', () => {
+    const { design, topics } = flat([['语音识别', 6], ['语音合成', 6]])
+    expect(fragmentedFamilies(design, topics, undefined, true)).toEqual([])
+  })
+
+  it('一级目录的条数把子目录的一并算上，撑得起来就不算碎', () => {
+    const { design, topics } = designWith([
+      { title: 'FastAPI教程', children: [{ title: '入门', count: 4 }, { title: '进阶', count: 4 }] },
+      { title: 'FastAPI实战', children: [{ title: '案例', count: 4 }, { title: '踩坑', count: 4 }] },
+    ])
+    expect(fragmentedFamilies(design, topics, 3)).toEqual([])
+  })
+})
+
+describe('designFolders 的同族碎片重问', () => {
+  // 同上面那个 describe：这里显式把 'zh_CN' 写在第 3 个位置参数上，用原始导出。
+  const designFolders = designFoldersRaw
+  const topics = [
+    { topic: 'FastAPI 入门', count: 3 },
+    { topic: 'FastAPI 部署', count: 3 },
+  ]
+  const splitApart = {
+    folders: [
+      { title: 'FastAPI教程', topics: ['FastAPI 入门'], children: [] },
+      { title: 'FastAPI实战', topics: ['FastAPI 部署'], children: [] },
+    ],
+  }
+  const mergedUp = {
+    folders: [{ title: 'FastAPI', topics: ['FastAPI 入门', 'FastAPI 部署'], children: [] }],
+  }
+
+  it('出现同族碎片时点名重问一次，用重问那一版', async () => {
+    const complete = vi.fn().mockResolvedValueOnce(splitApart).mockResolvedValueOnce(mergedUp)
+    const result = await designFolders(topics, { complete }, 'zh_CN', { minFolderSize: 3 })
+
+    expect(complete).toHaveBeenCalledTimes(2)
+    // 反馈要点名到目录，也要点名到主体——模型得知道并成什么
+    expect(complete.mock.calls[1]![0]).toContain('FastAPI教程')
+    expect(complete.mock.calls[1]![0]).toContain('FastAPI实战')
+    expect(result!.folders).toEqual([{ title: 'FastAPI', children: [] }])
+  })
+
+  it('minFolderSize 缺席时不重问', async () => {
+    const complete = vi.fn().mockResolvedValue(splitApart)
+    await designFolders(topics, { complete }, 'zh_CN')
+    expect(complete).toHaveBeenCalledTimes(1)
+  })
+
+  it('重问回来还是一样碎就退回第一版，不采用更差或等同的一版', async () => {
+    const complete = vi.fn().mockResolvedValueOnce(splitApart).mockResolvedValueOnce({
+      folders: [
+        { title: 'FastAPI入门', topics: ['FastAPI 入门'], children: [] },
+        { title: 'FastAPI上线', topics: ['FastAPI 部署'], children: [] },
+      ],
+    })
+    const result = await designFolders(topics, { complete }, 'zh_CN', { minFolderSize: 3 })
+    expect(result!.folders.map((f) => f.title)).toEqual(['FastAPI教程', 'FastAPI实战'])
+  })
+
+  it('复合名与同族碎片同时出现时只重问一次，反馈里两样都点名', async () => {
+    const both = {
+      folders: [
+        { title: 'FastAPI教程与实战', topics: ['FastAPI 入门'], children: [] },
+        { title: 'FastAPI部署', topics: ['FastAPI 部署'], children: [] },
+      ],
+    }
+    const complete = vi.fn().mockResolvedValueOnce(both).mockResolvedValueOnce(mergedUp)
+    await designFolders(topics, { complete }, 'zh_CN', { minFolderSize: 3 })
+
+    expect(complete).toHaveBeenCalledTimes(2)
+    const feedback = complete.mock.calls[1]![0] as string
+    expect(feedback).toContain('两个概念')
+    expect(feedback).toContain('FastAPI教程与实战')
+    expect(feedback).toContain('FastAPI部署')
+  })
+
+  it('日志点名到同族目录', async () => {
+    const logs: string[] = []
+    const complete = vi.fn().mockResolvedValueOnce(splitApart).mockResolvedValueOnce(mergedUp)
+    await designFolders(topics, { complete }, 'zh_CN', {
+      minFolderSize: 3,
+      onLog: (message) => logs.push(message),
+    })
+    expect(logs.some((m) => m.includes('FastAPI教程') && m.includes('FastAPI实战'))).toBe(true)
+  })
+
+  it('重问后仍碎时打「仍碎」那条，不打「已要求重出」那条的复读', async () => {
+    const logs: string[] = []
+    const complete = vi.fn().mockResolvedValueOnce(splitApart).mockResolvedValueOnce(splitApart)
+    await designFolders(topics, { complete }, 'zh_CN', {
+      minFolderSize: 3,
+      onLog: (message) => logs.push(message),
+    })
+    expect(logs.some((m) => m.includes('仍有目录把同一个主体拆着'))).toBe(true)
+  })
+})
+
+describe('designFolders 组内那一摊的同族门槛', () => {
+  const designFolders = designFoldersRaw
+  const topics = [
+    { topic: '语音识别', count: 6 },
+    { topic: '语音合成', count: 6 },
+  ]
+  const splitApart = {
+    folders: [
+      { title: '语音识别', topics: ['语音识别'], children: [] },
+      { title: '语音合成', topics: ['语音合成'], children: [] },
+    ],
+  }
+  const mergedUp = {
+    folders: [{ title: '语音', topics: ['语音识别', '语音合成'], children: [] }],
+  }
+
+  it('组内同主体就重问，尺寸再健康也算', async () => {
+    const complete = vi.fn().mockResolvedValueOnce(splitApart).mockResolvedValueOnce(mergedUp)
+    const result = await designFolders(topics, { complete }, 'zh_CN', {
+      minFolderSize: 3, oneLevel: true, parentTitle: 'GitHub',
+    })
+    expect(complete).toHaveBeenCalledTimes(2)
+    expect(result!.folders).toEqual([{ title: '语音', children: [] }])
+  })
+
+  it('同样这两个在一级目录那一摊不重问', async () => {
+    const complete = vi.fn().mockResolvedValue(splitApart)
+    await designFolders(topics, { complete }, 'zh_CN', { minFolderSize: 3 })
+    expect(complete).toHaveBeenCalledTimes(1)
   })
 })

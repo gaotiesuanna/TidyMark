@@ -175,16 +175,16 @@ describe('foldersPrompt 的复合名禁令', () => {
     expect(lines).toContain('&')
   })
 
-  it('可选规则按实际出现顺序连排编号——没有 minFolderSize 时复合名那条是第 7 条', () => {
+  it('可选规则按实际出现顺序连排编号——没有 minFolderSize 时到第 8 条为止', () => {
     const lines = foldersPrompt('zh_CN', { total: 30, maxSiblings: 8 }).join('\n')
     expect(lines).toContain('7. 一个目录只装一个概念')
-    expect(lines).not.toContain('8. ')
+    expect(lines).not.toContain('9. ')
   })
 
-  it('有 minFolderSize 时它接在复合名那条后面，编号连排到 8', () => {
+  it('有 minFolderSize 时它排在最后，编号连排到 9', () => {
     const lines = foldersPrompt('zh_CN', { total: 30, maxSiblings: 8, minFolderSize: 3 }).join('\n')
     expect(lines).toContain('7. 一个目录只装一个概念')
-    expect(lines).toContain('8. 不要建只装得下不到 3 个书签的目录')
+    expect(lines).toContain('9. 不要建只装得下不到 3 个书签的目录')
   })
 
   it('中文规则把「及」「/」也列进连接词，不只是「与」「和」（I2）', () => {
@@ -211,15 +211,15 @@ describe('foldersPrompt 的已有目录清单', () => {
   it('清单为空时这条规则整条不出现，编号也不跳号', () => {
     const lines = foldersPrompt('zh_CN', { total: 30, maxSiblings: 8, existingFolders: [], minFolderSize: 3 }).join('\n')
     expect(lines).not.toContain('语义重叠')
-    expect(lines).toContain('8. 不要建只装得下不到 3 个书签的目录')
+    expect(lines).toContain('9. 不要建只装得下不到 3 个书签的目录')
   })
 
-  it('清单在场时它是第 8 条，minFolderSize 顺延到第 9 条', () => {
+  it('清单在场时它是第 9 条，minFolderSize 顺延到第 10 条', () => {
     const lines = foldersPrompt('zh_CN', {
       total: 30, maxSiblings: 8, existingFolders: ['GitHub'], minFolderSize: 3,
     }).join('\n')
-    expect(lines).toContain('8. ')
-    expect(lines).toContain('9. 不要建只装得下不到 3 个书签的目录')
+    expect(lines).toMatch(/^9\. .*语义重叠/m)
+    expect(lines).toContain('10. 不要建只装得下不到 3 个书签的目录')
   })
 
   it('英文那份同样带清单', () => {
@@ -361,6 +361,38 @@ describe('newFolderNamesPrompt', () => {
       const text = newFolderNamesPrompt(locale, ['01 GitHub', '02 语音合成']).join('\n')
       expect(text).toContain('01 GitHub')
       expect(text).toContain('02 语音合成')
+    }
+  })
+})
+
+describe('foldersPrompt 的同族拆分禁令', () => {
+  it('带上「同一个主体不要按侧面拆开」，并给出反例', () => {
+    const lines = foldersPrompt('zh_CN', { total: 30, maxSiblings: 8 }).join('\n')
+    expect(lines).toContain('同一个主体')
+    expect(lines).toContain('FastAPI')
+  })
+
+  it('英文版同样有，且整段不含中文', () => {
+    const lines = foldersPrompt('en', { total: 30, maxSiblings: 8 }).join('\n')
+    expect(lines).toContain('FastAPI')
+    expect(/[一-鿿]/.test(lines)).toBe(false)
+  })
+
+  it('紧跟在复合名那条后面——两条治的是同一件事的两面', () => {
+    const lines = foldersPrompt('zh_CN', { total: 30, maxSiblings: 8 }).join('\n')
+    expect(lines).toContain('7. 一个目录只装一个概念')
+    expect(lines).toMatch(/^8\. 同一个主体/m)
+  })
+
+  /** 组内那一摊 children 恒为空数组，提它只会让模型以为还有分层这个选项。 */
+  it('只出一层时这条规则不提 children', () => {
+    for (const opts of [
+      { total: 30, parentTitle: 'GitHub', maxSiblings: 8 },
+      { total: 30, maxSiblings: 8, allowChildren: false },
+    ]) {
+      const rule = foldersPrompt('zh_CN', opts).find((line) => line.includes('同一个主体'))
+      expect(rule).toBeDefined()
+      expect(rule).not.toContain('children')
     }
   })
 })
