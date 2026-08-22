@@ -403,6 +403,13 @@
   "prefsGoConfigure": {
     "message": "先去配置模型"
   },
+  "prefsModelCurrent": {
+    "message": "将使用 $model$",
+    "placeholders": { "model": { "content": "$1" } }
+  },
+  "prefsModelMissing": {
+    "message": "还没配置模型"
+  },
   "prefsPermissionNotice": {
     "message": "开始分析的那一刻，才会向浏览器申请访问你填的那个模型域名——只这一个。安装时 TidyMark 一个网络权限都没要。"
   },

@@ -290,6 +290,28 @@ describe('PreferencesStep 没配模型时的出路', () => {
     render(<PreferencesStep />)
     expect((screen.getByRole('button', { name: '开始 AI 分析' }) as HTMLButtonElement).disabled).toBe(true)
   })
+
+  it('已配好时写出当前模型名——设置藏在齿轮后面，点开始前得看见即将用哪一个', () => {
+    arrange('sk-already-configured')
+    useStore.setState({
+      settings: {
+        ...useStore.getState().settings,
+        llm: { ...useStore.getState().settings.llm, model: 'deepseek-chat' },
+      },
+    })
+    render(<PreferencesStep />)
+    // 空断言防身：这一页是「开始 AI 分析」那个分支，不是「先去配置」
+    expect(screen.getByRole('button', { name: '开始 AI 分析' })).toBeTruthy()
+    expect(screen.getByText(/deepseek-chat/)).toBeTruthy()
+  })
+
+  it('还没配时提醒还未配置，且不把默认模型名摆出来冒充已选', () => {
+    arrange('')
+    render(<PreferencesStep />)
+    expect(screen.getByRole('button', { name: '先去配置模型' })).toBeTruthy()
+    expect(screen.getByText('还没配置模型')).toBeTruthy()
+    expect(screen.queryByText(/gpt-4o-mini/)).toBeNull()
+  })
 })
 
 /**

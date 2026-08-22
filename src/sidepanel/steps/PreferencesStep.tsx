@@ -126,6 +126,11 @@ export function PreferencesStep() {
       </section>
 
       <div className="space-y-2">
+        {/* 模型状态放在按钮上方：设置藏在齿轮后面，点开始前得看见即将用哪一个；
+            没配时也不只靠按钮上那几个字。权限预告仍在两种状态下都摆着。 */}
+        <p className="text-xs leading-relaxed text-neutral-600">
+          {needModel ? t('prefsModelMissing') : t('prefsModelCurrent', settings.llm.model)}
+        </p>
         {/* 权限预告放在按钮上方：申请只发生在点下去的那一刻（chrome.permissions.request()
             要用户手势，设置页是 onChange 即存，放不了），提前说清楚它只要一个域名。
             两种按钮状态下都摆着——它讲的是这条动线接下来会发生什么，不依赖当前是哪个按钮。 */}

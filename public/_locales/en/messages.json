@@ -403,6 +403,13 @@
   "prefsGoConfigure": {
     "message": "Set up the model first"
   },
+  "prefsModelCurrent": {
+    "message": "Using $model$",
+    "placeholders": { "model": { "content": "$1" } }
+  },
+  "prefsModelMissing": {
+    "message": "No model configured yet"
+  },
   "prefsPermissionNotice": {
     "message": "Chrome asks for network access only when the analysis starts, and only for the model domain you entered \u2014 nothing else. TidyMark ships with no network access at all."
   },
