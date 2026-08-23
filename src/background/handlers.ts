@@ -1,5 +1,6 @@
 import { currentLocale, resolveLocale, setLocale, t } from '@/i18n'
 import { buildCandidatesFromFolders, stripNumberPrefix } from '@/core/map'
+import { collapseSameNameFolders } from '@/core/audit'
 import type { Locale } from '@/core/locale'
 import { buildPlan, type NewFolderSpec, type RenameFolderSpec } from '@/core/plan'
 import { MIN_FOLDER_BOOKMARKS, pruneReason, pruneSmallFolders } from '@/core/prune'
@@ -542,6 +543,24 @@ export async function handle(
           classifications = rePruned.classifications
           if (rePruned.prunedTitles.length > 0) {
             log('classify', t('logPrunedSmall', String(rePruned.prunedTitles.length), String(MIN_FOLDER_BOOKMARKS)))
+          }
+        }
+
+        // ---- 结构自检其一：塌掉与上层同名的穿透层 ----
+        // 不分模式跑：非推翻模式下 core/newTopics.ts 同样会在范围根下建新目录，
+        // 同名套娃是同一个 bug。只动 newFolders 里的目录，用户自己的目录一根手指都不碰。
+        // 必须排在下切之前——塌完之后原本第 2 层的目录升到第 1 层，深度预算凭空多出一层。
+        {
+          const collapsed = collapseSameNameFolders({
+            candidates, newFolders, classifications,
+            existingFolders: scan.folders,
+            mergeRootTemporaryId: planMergeRoot?.temporaryId ?? null,
+          })
+          candidates = collapsed.candidates
+          newFolders = collapsed.newFolders
+          classifications = collapsed.classifications
+          if (collapsed.collapsedTitles.length > 0) {
+            log('classify', t('logReviewCollapsed', String(collapsed.collapsedTitles.length)))
           }
         }
 

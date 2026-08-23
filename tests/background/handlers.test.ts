@@ -7,7 +7,7 @@ import { currentLocale, setLocale } from '@/i18n'
 import { LlmError, type LlmClient } from '@/llm/client'
 import type { OrganizePlan } from '@/core/types'
 import type { ProgressEvent } from '@/background/events'
-import { MAX_SIBLINGS } from '@/core/tree'
+import { MAX_SIBLINGS, stripNumberPrefix } from '@/core/tree'
 import { MAX_LEAF } from '@/core/shape'
 import type { OrganizeMode } from '@/core/mode'
 
@@ -811,8 +811,9 @@ async function analyzePlan(
   // 用例要验的是某条路上的行为，模式必须钉死：让它跟着自动判断走，
   // 会把「阈值调了一下」变成一堆无关用例的红叉
   modeOverride: OrganizeMode,
+  scopeRootIds: string[] = ['1'],
 ): Promise<OrganizePlan> {
-  const res = await handle(ports as never, { kind: 'analyze', scopeRootIds: ['1'], modeOverride }, deps as never)
+  const res = await handle(ports as never, { kind: 'analyze', scopeRootIds, modeOverride }, deps as never)
   if (!res.ok || res.kind !== 'analyze') throw new Error(`analyze 应当成功：${JSON.stringify(res)}`)
   return res.plan
 }
@@ -2911,5 +2912,44 @@ describe('test_model 当场验一次模型配置', () => {
     expect(res).toMatchObject({ ok: false, reason: 'format' })
     expect((res as { error: string }).error).not.toMatch(/[一-龥]/)
     setLocale('zh_CN')
+  })
+})
+
+describe('结构自检：同名穿透层', () => {
+  /** 范围根自己就叫「01 GitHub」，里面全是 github.com 书签——用户截图里的那一格。 */
+  function setupSameName() {
+    const fake = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '20', title: '01 GitHub', children: Array.from({ length: 3 }, (_, i) => ({
+            id: `g${i}`, title: `仓库 ${i}`, url: `https://github.com/o/r${i}`,
+          })) },
+        ]},
+      ]},
+    ])
+    // 3 条命中聚合组的书签：≥ MIN_FOLDER_BOOKMARKS 所以组建得起来，
+    // ≤ MAX_LEAF 所以不跑组内细分与组内设计，client 只需答标签抽取那一种提示词
+    const complete = vi.fn(async () => ({
+      results: Array.from({ length: 3 }, (_, i) => ({
+        bookmark_id: `g${i}`, primary_topic: '开源仓库', secondary_topic: null,
+      })),
+    }))
+    return {
+      ports: { bookmarks: fake.api, storage: createFakeStorage() },
+      deps: { createClient: () => ({ complete } as unknown as LlmClient), now: () => 1 },
+    }
+  }
+
+  it('范围根就叫「01 GitHub」时，不再建一个同名的组目录套在里面', async () => {
+    const { ports, deps } = setupSameName()
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      domainGroups: ['github'],
+    })
+    const plan = await analyzePlan(ports, deps, 'rebuild', ['20'])
+    const created = plan.operations.flatMap((o) =>
+      o.type === 'create_folder' ? [stripNumberPrefix(o.title)] : [])
+    expect(created).not.toContain('GitHub')
   })
 })
