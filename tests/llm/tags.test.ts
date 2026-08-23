@@ -242,3 +242,48 @@ describe('extractTags 的失败收场', () => {
     expect(logs.filter((l) => l.message.includes('不参与目录设计'))).toHaveLength(1)
   })
 })
+
+describe('取消之后立刻收手', () => {
+  const serverError = (): Error => Object.assign(new Error('500'), { retryable: true })
+  const truncatedError = (): Error =>
+    Object.assign(new Error('truncated'), { retryable: false, truncated: true })
+
+  /** 第一次请求就把取消标记置上——模拟用户在这一批飞出去之后点了取消。 */
+  function cancelOnFirstCall(error: () => Error) {
+    let cancelled = false
+    const complete = vi.fn((_prompt: string, _schema: object): Promise<unknown> => {
+      cancelled = true
+      return Promise.reject(error())
+    })
+    return { complete, isCancelled: (): boolean => cancelled }
+  }
+
+  it('取消之后不再重试可重试错误', async () => {
+    const { complete, isCancelled } = cancelOnFirstCall(serverError)
+    await extractTags([item('1', 'https://a.dev')], { complete }, { isCancelled })
+    expect(complete).toHaveBeenCalledTimes(1)
+  })
+
+  it('取消之后不再拆批', async () => {
+    const items = ['1', '2', '3', '4'].map((id) => item(id, `https://x${id}.dev`))
+    const { complete, isCancelled } = cancelOnFirstCall(truncatedError)
+    await extractTags(items, { complete }, { isCancelled })
+    expect(complete).toHaveBeenCalledTimes(1)
+  })
+
+  it('取消导致的失败不写「批次失败」日志——用户已经知道自己点了取消', async () => {
+    const logs: string[] = []
+    const { complete, isCancelled } = cancelOnFirstCall(serverError)
+    await extractTags([item('1', 'https://a.dev')], { complete }, {
+      isCancelled,
+      onLog: (message) => logs.push(message),
+    })
+    expect(logs.filter((m) => m.includes('不参与目录设计'))).toHaveLength(0)
+  })
+
+  it('没取消时该重试还是要重试，别把两件事混成一件', async () => {
+    const complete = vi.fn().mockRejectedValue(serverError())
+    await extractTags([item('1', 'https://a.dev')], { complete }, { isCancelled: () => false })
+    expect(complete).toHaveBeenCalledTimes(3)
+  })
+})

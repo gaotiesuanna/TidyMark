@@ -729,3 +729,47 @@ describe('分类批次被截断时拆开重问', () => {
     expect(split[0]!.message).toContain('4 条')
   })
 })
+
+describe('分类取消之后立刻收手', () => {
+  const truncatedError = (): Error =>
+    Object.assign(new Error('truncated'), { retryable: false, truncated: true })
+  const serverError = (): Error => Object.assign(new Error('500'), { retryable: true })
+
+  /** 第一次请求就把取消标记置上——模拟用户在这一批飞出去之后点了取消。 */
+  function cancelOnFirstCall(error: () => Error) {
+    let cancelled = false
+    const complete = vi.fn((_prompt: string, _schema: object): Promise<unknown> => {
+      cancelled = true
+      return Promise.reject(error())
+    })
+    return { complete, isCancelled: (): boolean => cancelled }
+  }
+
+  const four = ['1', '2', '3', '4'].map((id) => item(id, `https://some-blog.dev/${id}`))
+
+  it('取消之后不再重试可重试错误', async () => {
+    const { complete, isCancelled } = cancelOnFirstCall(serverError)
+    await classify({
+      items: [item('1', 'https://some-blog.dev/x')],
+      candidates, client: { complete }, cache: new Map(), isCancelled,
+    })
+    expect(complete).toHaveBeenCalledTimes(1)
+  })
+
+  it('取消之后不再拆批', async () => {
+    const { complete, isCancelled } = cancelOnFirstCall(truncatedError)
+    await classify({ items: four, candidates, client: { complete }, cache: new Map(), isCancelled })
+    expect(complete).toHaveBeenCalledTimes(1)
+  })
+
+  it('取消导致整批没结果时不写 error 日志——那不是失败，是用户喊停', async () => {
+    const logs: Array<{ message: string; level: string }> = []
+    const { complete, isCancelled } = cancelOnFirstCall(serverError)
+    await classify({
+      items: [item('1', 'https://some-blog.dev/x')],
+      candidates, client: { complete }, cache: new Map(), isCancelled,
+      onLog: (message, level) => logs.push({ message, level }),
+    })
+    expect(logs.filter((l) => l.level === 'error')).toHaveLength(0)
+  })
+})

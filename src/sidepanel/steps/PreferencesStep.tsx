@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { scopeFolderPaths } from '@/core/scan'
 import { DOMAIN_GROUPS, groupFolderTitle } from '@/core/domainGroups'
 import { detectMode } from '@/core/mode'
 import { currentLocale, t } from '@/i18n'
@@ -8,6 +9,7 @@ import { useStore } from '../store'
 export function PreferencesStep() {
   const {
     scan, settings, setSettings, analyze, busy, reset, modeOverride, setModeOverride, openSettings,
+    tree, checkedIds,
   } = useStore()
   const locale = currentLocale()
   // 与后台是同一个纯函数——但前提是同一份扫描结果：书签在 goScan 之后、这次
@@ -18,6 +20,10 @@ export function PreferencesStep() {
   const decision = useMemo(
     () => (scan === null ? null : detectMode(scan, locale)),
     [scan, locale],
+  )
+  const scopePaths = useMemo(
+    () => scopeFolderPaths(tree, [...checkedIds]),
+    [tree, checkedIds],
   )
   if (scan === null || decision === null) return null
   const { stats } = scan
@@ -32,6 +38,16 @@ export function PreferencesStep() {
     <div className="space-y-4">
       <section className="rounded border p-3 text-sm">
         <h2 className="mb-2 font-medium">{t('prefsScanTitle')}</h2>
+        {scopePaths.length > 0 && (
+          <div className="mb-2">
+            <p className="text-xs text-neutral-500">{t('prefsScanScope')}</p>
+            <ul>
+              {scopePaths.map((path) => (
+                <li key={path} className="break-all font-mono text-xs">{path}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         <dl className="grid grid-cols-2 gap-y-1 text-xs">
           <dt className="text-neutral-500">{t('prefsStatBookmarks')}</dt><dd>{stats.totalBookmarks}</dd>
           <dt className="text-neutral-500">{t('prefsStatFolders')}</dt><dd>{stats.totalFolders}</dd>

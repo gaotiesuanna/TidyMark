@@ -163,3 +163,54 @@ describe('ScopeStep 还没配模型时的提示', () => {
     expect(screen.getByText('选择文件…')).toBeTruthy()
   })
 })
+
+/**
+ * 扫描按钮此前只报勾中的文件夹数，而下面紧挨着的导出行报的是书签数，两个数字口径不同。
+ * 一个「01 GitHub」里有 10 个子目录、另外 123 条链接直接散在它底下时，按钮说
+ * 「扫描选中的 11 个文件夹」，看着像是那 123 条散链不在范围里——它们其实一直都在
+ * （core/scan.ts 与 core/export.ts 走的是同一个 findScopeRoots + 整棵子树遍历）。
+ * 按钮要报的是这次真正要处理的东西：书签数。
+ */
+describe('ScopeStep 扫描按钮报的数', () => {
+  const withLoose: BookmarkNode[] = [
+    { id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '10', title: 'react', children: [
+          { id: '100', title: 'hooks', children: [
+            { id: '1000', title: 'a', url: 'https://a.test' },
+          ]},
+          { id: '101', title: 'router', children: [
+            { id: '1010', title: 'b', url: 'https://b.test' },
+          ]},
+          // 直接散在 react 底下、没进任何子目录的三条
+          { id: '1020', title: 'c', url: 'https://c.test' },
+          { id: '1021', title: 'd', url: 'https://d.test' },
+          { id: '1022', title: 'e', url: 'https://e.test' },
+        ]},
+      ]},
+    ]},
+  ]
+
+  it('报书签数，并把文件夹数降为附注——散在目录下的书签也算在内', async () => {
+    useStore.setState({ tree: withLoose, checkedIds: new Set(), busy: null, error: null })
+    render(<ScopeStep />)
+    await userEvent.click(screen.getByRole('checkbox', { name: 'react' }))
+    expect(screen.getByRole('button', { name: '扫描选中的 5 条书签（3 个文件夹）' })).toBeTruthy()
+  })
+
+  it('单数也说得通', async () => {
+    const one: BookmarkNode[] = [
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: 'react', children: [
+            { id: '1000', title: 'a', url: 'https://a.test' },
+          ]},
+        ]},
+      ]},
+    ]
+    useStore.setState({ tree: one, checkedIds: new Set(), busy: null, error: null })
+    render(<ScopeStep />)
+    await userEvent.click(screen.getByRole('checkbox', { name: 'react' }))
+    expect(screen.getByRole('button', { name: '扫描选中的 1 条书签（1 个文件夹）' })).toBeTruthy()
+  })
+})

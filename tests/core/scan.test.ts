@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { scanTree } from '@/core/scan'
+import { scanTree, scopeFolderPaths } from '@/core/scan'
 import type { BookmarkNode } from '@/core/ports'
 
 const tree: BookmarkNode[] = [
@@ -68,6 +68,32 @@ describe('scanTree', () => {
     const result = scanTree(tree, [])
     expect(result.bookmarks).toHaveLength(0)
     expect(result.stats.totalBookmarks).toBe(0)
+  })
+})
+
+/**
+ * 偏好页要把这次勾的范围画成 /书签栏/react/ 这种路径，
+ * 不能只报文件夹名——同名目录在不同父下面是两回事。
+ */
+describe('scopeFolderPaths', () => {
+  it('深层目录带上从可见根起的完整路径，首尾都有斜杠', () => {
+    expect(scopeFolderPaths(tree, ['10'])).toEqual(['/书签栏/react/'])
+  })
+
+  it('勾顶层书签栏时路径只有这一段', () => {
+    expect(scopeFolderPaths(tree, ['1'])).toEqual(['/书签栏/'])
+  })
+
+  it('父子同时勾选只报真正的范围根', () => {
+    expect(scopeFolderPaths(tree, ['1', '10', '11'])).toEqual(['/书签栏/'])
+  })
+
+  it('多个范围根各报一条，按树序', () => {
+    expect(scopeFolderPaths(tree, ['10', '2'])).toEqual(['/书签栏/react/', '/其他书签/'])
+  })
+
+  it('空范围是空列表', () => {
+    expect(scopeFolderPaths(tree, [])).toEqual([])
   })
 })
 

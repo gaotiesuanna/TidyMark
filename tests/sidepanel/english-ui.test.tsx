@@ -81,6 +81,7 @@ describe('英文界面渲染守卫：步骤组件', () => {
     }
     useStore.setState({
       scan, settings: { ...DEFAULT_SETTINGS }, modeOverride: null, busy: null,
+      tree, checkedIds: new Set(['10']),
     })
     const { container } = render(<PreferencesStep />)
     assertNoChinese(container, 'PreferencesStep')
@@ -95,6 +96,7 @@ describe('英文界面渲染守卫：步骤组件', () => {
       scan,
       settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey: 'sk-configured' } },
       modeOverride: null, busy: null,
+      tree, checkedIds: new Set(['10']),
     })
     const { container } = render(<PreferencesStep />)
     assertNoChinese(container, 'PreferencesStep（已配好模型）')
@@ -120,6 +122,7 @@ describe('英文界面渲染守卫：步骤组件', () => {
     }
     useStore.setState({
       scan: tidyScan, settings: { ...DEFAULT_SETTINGS }, modeOverride: null, busy: null,
+      tree, checkedIds: new Set(['1']),
     })
     const { container } = render(<PreferencesStep />)
     assertNoChinese(container, 'PreferencesStep（已整理）')

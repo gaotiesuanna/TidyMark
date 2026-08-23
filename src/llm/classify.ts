@@ -166,17 +166,20 @@ function fromCache(
   }
 }
 
-/**
- * `onSplit` 在这一批因输出被截断而拆开时调一次，参数是被拆的条数。
- * 日志由调用方记——runBatch 手里没有批次序号，也不该管日志文案。
- */
+interface BatchHooks {
+  /** 这一批因输出被截断而拆开时调一次，参数是被拆的条数。 */
+  onSplit?: (size: number) => void
+  /** 每次「再发一个请求」之前问一次。日志由调用方记——runBatch 手里没有批次序号。 */
+  isCancelled?: () => boolean
+}
+
 async function runBatch(
   batch: BookmarkItem[],
   candidates: CategoryCandidate[],
   client: LlmClient,
   locale: Locale,
   includeTopicRule: boolean,
-  onSplit: (size: number) => void = () => {},
+  hooks: BatchHooks = {},
 ): Promise<Classification[]> {
   const validIds = new Set(candidates.map((c) => c.id))
   // 仅用于满足类型初始化：正常执行路径下，走到最终 return 之前必然先经过下面的
@@ -216,6 +219,9 @@ async function runBatch(
       truncated = (error as { truncated?: boolean }).truncated === true
       // 只进开发者控制台，不进侧栏日志，不必双语。
       console.error('[TidyMark] 分类请求失败：', error)
+      // 取消之后一个新请求都不再发：那三次注定失败，用户却要眼看着「正在取消」
+      // 多等三个请求加 1.5 秒的退避。
+      if (hooks.isCancelled?.() === true) break
       const retryable = (error as { retryable?: boolean }).retryable === true
       if (!retryable) break
       if (attempt < MAX_RETRIES) {
@@ -227,13 +233,13 @@ async function runBatch(
   // 一次，所以不走上面的重试，改成拆成两半分别问。两半各自返回与自己逐位对齐的
   // 结果，顺序拼回去，「返回值与 batch 一一对应」这条契约不变（调用方按下标把
   // results[i] 配给 batch[i]）；拆完仍失败的那一半照常降级为未分类，丢的只有它。
-  if (truncated && batch.length > 1) {
-    onSplit(batch.length)
+  if (hooks.isCancelled?.() !== true && truncated && batch.length > 1) {
+    hooks.onSplit?.(batch.length)
     const mid = Math.ceil(batch.length / 2)
     // 顺序问而不是并发：外层已经有 concurrency 个 worker 在跑，
     // 一批刚被截断说明这条线正吃力，没必要再往上叠一倍请求。
-    const head = await runBatch(batch.slice(0, mid), candidates, client, locale, includeTopicRule, onSplit)
-    const tail = await runBatch(batch.slice(mid), candidates, client, locale, includeTopicRule, onSplit)
+    const head = await runBatch(batch.slice(0, mid), candidates, client, locale, includeTopicRule, hooks)
+    const tail = await runBatch(batch.slice(mid), candidates, client, locale, includeTopicRule, hooks)
     return [...head, ...tail]
   }
   return batch.map((item) => unclassified(item, fallbackReason(locale, 'failed', lastError), lastError))
@@ -329,14 +335,16 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
       // 后看到「N 条移动建议」，中间这一行换个口径没人看得懂。
       const size = batch.reduce((sum, rep) => sum + groupOf(rep).length, 0)
       const startedAt = Date.now()
-      const results = await runBatch(batch, candidates, client, locale, includeTopicRule, (size) =>
-        input.onLog?.(
-          logBatchSplit(
-            locale, locale === 'zh_CN' ? '分类批次' : 'Classify batch', index, batches.length, size,
+      const results = await runBatch(batch, candidates, client, locale, includeTopicRule, {
+        onSplit: (size) =>
+          input.onLog?.(
+            logBatchSplit(
+              locale, locale === 'zh_CN' ? '分类批次' : 'Classify batch', index, batches.length, size,
+            ),
+            'warn',
           ),
-          'warn',
-        ),
-      )
+        ...(input.isCancelled === undefined ? {} : { isCancelled: input.isCancelled }),
+      })
       // ok 同样按书签数算。一组要么整组成功要么整组失败（结果是照抄代表的），
       // 所以 ok === size ⟺ 全部代表都成功、ok === 0 ⟺ 没有一个代表成功——
       // 下面那套「全成功 / 全失败 / 部分」的分级，口径和按请求条目数算时完全一致。
@@ -349,11 +357,15 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
       )
       // 只进开发者控制台，不必双语。
       console.log(`[TidyMark] ${summary}`)
-      if (ok === size) input.onLog?.(summary, 'info')
-      else if (ok === 0) {
-        const sep = locale === 'zh_CN' ? '。' : '. '
-        input.onLog?.(`${summary}${sep}${results[0]?.reason ?? ''}`, 'error')
-      } else input.onLog?.(summary, 'warn')
+      // 取消之后这一批的成败没有意义：它是被喊停打断的，不是失败。照常打会在侧栏
+      // 刷出 concurrency 条「成功 0 条」的红字，盖住用户真正该看的东西。
+      if (input.isCancelled?.() !== true) {
+        if (ok === size) input.onLog?.(summary, 'info')
+        else if (ok === 0) {
+          const sep = locale === 'zh_CN' ? '。' : '. '
+          input.onLog?.(`${summary}${sep}${results[0]?.reason ?? ''}`, 'error')
+        } else input.onLog?.(summary, 'warn')
+      }
       for (let i = 0; i < results.length; i++) {
         const result = results[i]!
         // 结果扇出给同组全部书签：它们问的是同一个问题，答案照抄，只把

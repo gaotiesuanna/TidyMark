@@ -298,3 +298,57 @@ describe('extractJson 的配平截取', () => {
     expect(extractJson('前言\n{"results": [1,')).toBe('{"results": [1,')
   })
 })
+
+describe('整轮取消信号', () => {
+  function clientWith(signal: AbortSignal, fetchImpl: unknown) {
+    return createLlmClient(config, 'zh_CN', fetchImpl as typeof fetch, signal)
+  }
+
+  it('整轮的信号会交给 fetch，调用方不必每次都传', async () => {
+    const controller = new AbortController()
+    const fetchImpl = vi.fn().mockResolvedValue(okResponse({ ok: true }))
+    await clientWith(controller.signal, fetchImpl).complete('p', schema)
+    expect(fetchImpl.mock.calls[0]![1].signal).toBe(controller.signal)
+  })
+
+  it('单次调用传的 signal 优先于整轮的', async () => {
+    const run = new AbortController()
+    const one = new AbortController()
+    const fetchImpl = vi.fn().mockResolvedValue(okResponse({ ok: true }))
+    await clientWith(run.signal, fetchImpl).complete('p', schema, one.signal)
+    expect(fetchImpl.mock.calls[0]![1].signal).toBe(one.signal)
+  })
+
+  it('取消导致的中断标成不可重试——否则调用方还要各自再问两次', async () => {
+    const controller = new AbortController()
+    const fetchImpl = vi.fn().mockImplementation(() => {
+      controller.abort()
+      return Promise.reject(new DOMException('Aborted', 'AbortError'))
+    })
+    const error = await clientWith(controller.signal, fetchImpl)
+      .complete('p', schema)
+      .catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(LlmError)
+    expect((error as LlmError).retryable).toBe(false)
+  })
+
+  it('没 abort 的网络失败仍然可重试，别把两件事混成一件', async () => {
+    const controller = new AbortController()
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('boom'))
+    const error = await clientWith(controller.signal, fetchImpl)
+      .complete('p', schema)
+      .catch((e: unknown) => e)
+    expect((error as LlmError).retryable).toBe(true)
+  })
+
+  it('中断的错误信息双语，英文版不含中文', async () => {
+    const controller = new AbortController()
+    const fetchImpl = vi.fn().mockImplementation(() => {
+      controller.abort()
+      return Promise.reject(new DOMException('Aborted', 'AbortError'))
+    })
+    const client = createLlmClient(config, 'en', fetchImpl as unknown as typeof fetch, controller.signal)
+    const error = await client.complete('p', schema).catch((e: unknown) => e)
+    expect(/[一-鿿]/.test((error as LlmError).message)).toBe(false)
+  })
+})

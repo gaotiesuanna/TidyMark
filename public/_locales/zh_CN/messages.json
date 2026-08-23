@@ -70,15 +70,37 @@
     "message": "全部收起"
   },
   "scopeScanOne": {
-    "message": "扫描选中的 $count$ 个文件夹",
+    "message": "扫描选中的 $count$ 条书签（$scope$）",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "scope": {
+        "content": "$2"
+      }
+    }
+  },
+  "scopeScanOther": {
+    "message": "扫描选中的 $count$ 条书签（$scope$）",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "scope": {
+        "content": "$2"
+      }
+    }
+  },
+  "scopeScanFolderOne": {
+    "message": "$count$ 个文件夹",
     "placeholders": {
       "count": {
         "content": "$1"
       }
     }
   },
-  "scopeScanOther": {
-    "message": "扫描选中的 $count$ 个文件夹",
+  "scopeScanFolderOther": {
+    "message": "$count$ 个文件夹",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -292,6 +314,9 @@
   },
   "prefsScanTitle": {
     "message": "扫描结果"
+  },
+  "prefsScanScope": {
+    "message": "当前范围"
   },
   "prefsStatBookmarks": {
     "message": "书签"

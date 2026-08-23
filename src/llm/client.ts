@@ -121,7 +121,19 @@ function isUnsupportedResponseFormat(status: number, body: string): boolean {
   return status === 400 && /response_format/i.test(body)
 }
 
-export function createLlmClient(config: LlmConfig, locale: Locale, fetchImpl: typeof fetch = fetch): LlmClient {
+/**
+ * `runSignal` 是整轮分析共用的取消信号，由后台在 analyze 开始时新建、用户点取消时 abort。
+ *
+ * 绑在这里而不是逐次调用传：取消要掐掉的是**所有**在飞的请求，而 tags / classify /
+ * folders 三个调用方各有自己的批次循环，逐个改签名把 signal 串下去只是把同一件事
+ * 说三遍。`complete` 那个逐次的 signal 参数保留，传了就以它为准。
+ */
+export function createLlmClient(
+  config: LlmConfig,
+  locale: Locale,
+  fetchImpl: typeof fetch = fetch,
+  runSignal?: AbortSignal,
+): LlmClient {
   const endpoint = `${config.baseUrl.replace(/\/+$/, '')}/chat/completions`
   // 一旦探明厂商不支持 json_schema 就记住，后续请求不再浪费一次 400。
   let mode: StructuredMode = 'json_schema'
@@ -150,10 +162,11 @@ export function createLlmClient(config: LlmConfig, locale: Locale, fetchImpl: ty
     signal?: AbortSignal,
   ): Promise<Response> {
     const startedAt = Date.now()
+    const effective = signal ?? runSignal
     try {
       return await fetchImpl(endpoint, {
         method: 'POST',
-        signal,
+        signal: effective,
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${config.apiKey}`,
@@ -162,6 +175,11 @@ export function createLlmClient(config: LlmConfig, locale: Locale, fetchImpl: ty
       })
     } catch (error) {
       const elapsed = Date.now() - startedAt
+      // 用户取消导致的中断不是网络故障：标成不可重试，否则三个调用方会各自把
+      // 一个已经断掉的请求再问两次，「正在取消」就要多等好几秒（见 llm/tags.ts 的 ask）。
+      if (effective?.aborted === true) {
+        throw new LlmError(locale === 'zh_CN' ? '请求已取消' : 'The request was cancelled', false)
+      }
       // 只进开发者控制台，不必双语。
       console.error(`[TidyMark] fetch 失败（耗时 ${elapsed}ms）：`, error)
       // 这条消息会经 String(error) 拼进 logBatchFailed / logFoldersFailed 的 detail，

@@ -36,6 +36,14 @@ export interface HandlerDeps {
   onEvent?: EmitProgress
   /** 用户是否点了取消。分析在批次之间检查它。 */
   isCancelled?: () => boolean
+  /**
+   * 整轮分析的取消信号，交给 LlmClient 去掐在飞的请求。
+   *
+   * 和 isCancelled 是两件事，缺一不可：isCancelled 只挡得住「还没发出去的下一批」，
+   * 已经飞出去的那几个（最多 concurrency 个）只有 abort 掐得掉。少了它，用户点完
+   * 取消要等当前批次自己跑完（见 llm/client.ts 的 runSignal）。
+   */
+  signal?: AbortSignal
 }
 
 export async function handle(
@@ -43,7 +51,8 @@ export async function handle(
   request: Request,
   deps: HandlerDeps = {},
 ): Promise<Response> {
-  const createClient = deps.createClient ?? ((config: LlmConfig, locale: Locale) => createLlmClient(config, locale))
+  const createClient = deps.createClient
+    ?? ((config: LlmConfig, locale: Locale) => createLlmClient(config, locale, undefined, deps.signal))
   const now = deps.now ?? (() => Date.now())
   const emit = deps.onEvent ?? ((): void => {})
   const log = (phase: ProgressPhase, message: string, level: 'info' | 'warn' | 'error' = 'info'): void =>

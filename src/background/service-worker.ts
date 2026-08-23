@@ -46,16 +46,38 @@ function emit(event: ProgressEvent): void {
 // 分析在批次之间读取它。
 let cancelled = false
 
+/**
+ * 在飞的请求靠它掐断。
+ *
+ * 只有标记位是不够的：那只挡得住「还没发出去的下一批」，已经飞出去的最多
+ * concurrency 个请求会一直跑到自己结束，用户点完取消得干等着（见 llm/client.ts
+ * 的 runSignal）。每次 analyze 换一个新的——上一轮取消过的那个已经 aborted，
+ * 沿用它会让新一轮第一个请求当场断掉。
+ */
+let controller: AbortController | null = null
+
 chrome.runtime.onMessage.addListener((request: Request, _sender, sendResponse) => {
   if (request.kind === 'cancel') {
     cancelled = true
+    controller?.abort()
     emit({ phase: 'classify', message: t('logCancelRequested'), level: 'warn' })
     sendResponse({ ok: true, kind: 'cancel' })
     return false
   }
-  if (request.kind === 'analyze') cancelled = false
+  if (request.kind === 'analyze') {
+    cancelled = false
+    controller = new AbortController()
+  }
 
-  handle(createChromePorts(), request, { onEvent: emit, isCancelled: () => cancelled })
+  // 只有 analyze 吃这个信号：别的请求（test_model、导入导出）不归取消管，
+  // 把上一轮取消过的 signal 递给它们会让它们当场断在起跑线上。
+  const signal = request.kind === 'analyze' ? controller?.signal : undefined
+
+  handle(createChromePorts(), request, {
+    onEvent: emit,
+    isCancelled: () => cancelled,
+    ...(signal === undefined ? {} : { signal }),
+  })
     .then(sendResponse)
     .catch((error: unknown) => sendResponse({ ok: false, error: String(error) }))
   return true // 保持消息通道开启以支持异步响应
