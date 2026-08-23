@@ -30,65 +30,6 @@ export const CACHE_KEY = 'tidymark:classify-cache'
  */
 export const MAX_CACHE_ENTRIES = 10_000
 
-/** 一条「这个端点上这个模型确实能用」的记录。 */
-export interface ModelUse {
-  baseUrl: string
-  model: string
-}
-
-/**
- * 用过的模型最多留几条。
- *
- * 8 是「一屏下拉能一眼扫完」的量。这份名单的用途是让人在同一个端点上换回刚才那个
- * 模型，不是给他一份完整目录——真要完整目录得去问端点的 /v1/models，那是另一个
- * 出站调用点，README 里「全库只有一个网络请求」那条承诺得跟着改，代价不划算。
- */
-export const MAX_MODEL_HISTORY = 8
-
-/** 端点比对用：末尾斜杠不算另一个端点。 */
-function endpointKey(baseUrl: string): string {
-  return baseUrl.trim().replace(/\/+$/, '')
-}
-
-/**
- * 把一次**成功用过**的模型记进历史，最近的排最前。
- *
- * 只记成功过的（分析真的跑起来、或者设置页的测试按钮返回 ok），手打错的模型名进不来，
- * 下拉里不会攒一堆错字。
- *
- * 按 baseUrl 分别记：同一个模型名在另一个端点上未必存在，两件事不能合并。
- *
- * 没变化时返回**同一个数组引用**——调用点在每次分析成功后都会跑一遍，靠这个恒等
- * 判断跳过一次没必要的写盘。
- */
-export function rememberModel(history: ModelUse[], use: ModelUse): ModelUse[] {
-  const model = use.model.trim()
-  const baseUrl = endpointKey(use.baseUrl)
-  if (model === '' || baseUrl === '') return history
-  const same = (entry: ModelUse): boolean =>
-    endpointKey(entry.baseUrl) === baseUrl && entry.model === model
-  if (history[0] !== undefined && same(history[0])) return history
-  return [{ baseUrl, model }, ...history.filter((entry) => !same(entry))].slice(0, MAX_MODEL_HISTORY)
-}
-
-/**
- * 当前端点下可选的模型名，当前那个永远排第一。
- *
- * 只列同一个 baseUrl 下的：偏好页的下拉要是列出别家的模型，选中它就得连 baseUrl
- * 一起改——那等于在那一页悄悄把端点指到另一家去，已经授过的 host 权限也会失效。
- * 换服务商仍然只在设置页做。
- */
-export function modelChoices(history: ModelUse[], llm: LlmConfig): string[] {
-  const baseUrl = endpointKey(llm.baseUrl)
-  const preset = PRESETS.find((p) => endpointKey(p.baseUrl) === baseUrl)
-  const candidates = [
-    llm.model,
-    ...history.filter((entry) => endpointKey(entry.baseUrl) === baseUrl).map((entry) => entry.model),
-    ...(preset === undefined ? [] : [preset.model]),
-  ]
-  return [...new Set(candidates.filter((model) => model.trim() !== ''))]
-}
-
 export interface Settings {
   llm: LlmConfig
   /** 整理完成后清理范围内不含任何书签的目录。 */
@@ -99,8 +40,6 @@ export interface Settings {
   rewriteGithubTitles: boolean
   /** 界面与产出的语言。'auto' 时跟随浏览器 UI 语言。 */
   uiLocale: UiLocale
-  /** 成功用过的模型，最近的排最前。偏好页的模型下拉从这里取名单。 */
-  modelHistory: ModelUse[]
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -109,7 +48,6 @@ export const DEFAULT_SETTINGS: Settings = {
   domainGroups: [],
   rewriteGithubTitles: false,
   uiLocale: 'auto',
-  modelHistory: [],
 }
 
 /**
@@ -165,7 +103,6 @@ export async function loadSettings(ports: Ports): Promise<Settings> {
     domainGroups: stored?.domainGroups ?? DEFAULT_SETTINGS.domainGroups,
     rewriteGithubTitles: stored?.rewriteGithubTitles ?? DEFAULT_SETTINGS.rewriteGithubTitles,
     uiLocale: stored?.uiLocale ?? DEFAULT_SETTINGS.uiLocale,
-    modelHistory: stored?.modelHistory ?? DEFAULT_SETTINGS.modelHistory,
   }
 }
 

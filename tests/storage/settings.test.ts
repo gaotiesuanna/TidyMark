@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SETTINGS_KEY, loadSettings, saveSettings, loadCache, saveCache, DEFAULT_SETTINGS, MAX_CACHE_ENTRIES, MAX_MODEL_HISTORY, PRESETS, modelChoices, rememberModel } from '@/storage/settings'
+import { SETTINGS_KEY, loadSettings, saveSettings, loadCache, saveCache, DEFAULT_SETTINGS, MAX_CACHE_ENTRIES, PRESETS } from '@/storage/settings'
 import { createFakeStorage } from '../fakes/fake-storage'
 import { createFakeBookmarks } from '../fakes/fake-bookmarks'
 import type { CachedClassification } from '@/core/types'
@@ -340,81 +340,5 @@ describe('供应商预设', () => {
       expect(preset.label.zh_CN.trim()).not.toBe('')
       expect(preset.label.en.trim()).not.toBe('')
     }
-  })
-})
-
-describe('用过的模型', () => {
-  const use = (baseUrl: string, model: string) => ({ baseUrl, model })
-
-  it('记下来的排在最前面', () => {
-    const next = rememberModel([use('https://x/v1', 'a')], use('https://x/v1', 'b'))
-    expect(next).toEqual([use('https://x/v1', 'b'), use('https://x/v1', 'a')])
-  })
-
-  it('同一条再用一次只是提前，不重复', () => {
-    const history = [use('https://x/v1', 'a'), use('https://x/v1', 'b')]
-    expect(rememberModel(history, use('https://x/v1', 'b')))
-      .toEqual([use('https://x/v1', 'b'), use('https://x/v1', 'a')])
-  })
-
-  // 调用点在每次分析成功后都会跑一遍，没变就不该触发一次写盘
-  it('已经在最前面时原样返回同一个数组', () => {
-    const history = [use('https://x/v1', 'a')]
-    expect(rememberModel(history, use('https://x/v1', 'a'))).toBe(history)
-  })
-
-  it('同一个模型名在不同端点上各记一条——端点不同，能不能用是两件事', () => {
-    const next = rememberModel([use('https://x/v1', 'a')], use('https://y/v1', 'a'))
-    expect(next).toHaveLength(2)
-  })
-
-  it('末尾斜杠不算另一个端点', () => {
-    const history = [use('https://x/v1', 'a')]
-    expect(rememberModel(history, use('https://x/v1/', 'a'))).toBe(history)
-  })
-
-  it('模型名为空时不记——那不是一次能用的配置', () => {
-    const history = [use('https://x/v1', 'a')]
-    expect(rememberModel(history, use('https://x/v1', '  '))).toBe(history)
-  })
-
-  it('超过上限时丢掉最旧的', () => {
-    let history: Array<{ baseUrl: string; model: string }> = []
-    for (let i = 0; i <= MAX_MODEL_HISTORY; i++) {
-      history = rememberModel(history, use('https://x/v1', `m${i}`))
-    }
-    expect(history).toHaveLength(MAX_MODEL_HISTORY)
-    expect(history.map((h) => h.model)).not.toContain('m0')
-  })
-})
-
-describe('当前端点下可选的模型', () => {
-  const use = (baseUrl: string, model: string) => ({ baseUrl, model })
-  const llm = (baseUrl: string, model: string) => ({ baseUrl, model, apiKey: 'k' })
-
-  it('当前模型永远在第一个', () => {
-    expect(modelChoices([], llm('https://x/v1', 'now'))[0]).toBe('now')
-  })
-
-  it('并上同一个端点用过的模型', () => {
-    const history = [use('https://x/v1', 'old'), use('https://x/v1', 'now')]
-    expect(modelChoices(history, llm('https://x/v1', 'now'))).toEqual(['now', 'old'])
-  })
-
-  // 换服务商只在设置页做：偏好页的下拉列出别家的模型，选中它就得连 baseUrl 一起改，
-  // 那等于在这一页悄悄把端点指到另一家去，已经授过的 host 权限也会失效
-  it('别的端点用过的模型不进来', () => {
-    const history = [use('https://y/v1', 'other')]
-    expect(modelChoices(history, llm('https://x/v1', 'now'))).toEqual(['now'])
-  })
-
-  it('同一个端点的预设模型也算一个可选项', () => {
-    const preset = PRESETS[0]!
-    expect(modelChoices([], llm(preset.baseUrl, 'now'))).toEqual(['now', preset.model])
-  })
-
-  it('预设模型正是当前模型时不出现两遍', () => {
-    const preset = PRESETS[0]!
-    expect(modelChoices([], llm(preset.baseUrl, preset.model))).toEqual([preset.model])
   })
 })
