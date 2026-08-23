@@ -4,17 +4,7 @@ import { DOMAIN_GROUPS, groupFolderTitle } from '@/core/domainGroups'
 import { detectMode } from '@/core/mode'
 import { currentLocale, t } from '@/i18n'
 import { isModelConfigured } from '@/llm/config'
-import { modelChoices } from '@/storage/settings'
 import { useStore } from '../store'
-
-/**
- * 下拉里那一项「在设置页填别的…」的取值。
- *
- * 用一个模型 id 不可能长成的样子：选中它不是换模型，而是跳去设置页。把「换模型」
- * 和「名单里没有我要的」收进同一个控件，比在旁边再摆一个按钮省一格，而这一页
- * 底下已经摆着返回、开始两个按钮和两段说明了。
- */
-const OPEN_SETTINGS = '::open-settings'
 
 export function PreferencesStep() {
   const {
@@ -43,7 +33,6 @@ export function PreferencesStep() {
   // 判断走共用谓词——只认 apiKey 的话，本机 Ollama 用户永远拿不到「开始 AI 分析」，
   // 点「先去配置模型」又回到他刚配完的设置页，来回打转（见 llm/config.ts）。
   const needModel = !isModelConfigured(settings.llm)
-  const choices = modelChoices(settings.modelHistory, settings.llm)
 
   return (
     <div className="space-y-4">
@@ -155,25 +144,9 @@ export function PreferencesStep() {
       <div className="space-y-2">
         {/* 模型状态放在按钮上方：设置藏在齿轮后面，点开始前得看见即将用哪一个；
             没配时也不只靠按钮上那几个字。权限预告仍在两种状态下都摆着。 */}
-        {needModel ? (
-          <p className="text-xs leading-relaxed text-neutral-600">{t('prefsModelMissing')}</p>
-        ) : (
-          <div className="flex items-center gap-2 text-xs text-neutral-600">
-            <label htmlFor="model-pick">{t('prefsModelLabel')}</label>
-            <select
-              id="model-pick"
-              className="min-w-0 flex-1 rounded border px-1 py-0.5 text-xs"
-              value={settings.llm.model}
-              onChange={(e) => {
-                if (e.target.value === OPEN_SETTINGS) return openSettings()
-                void setSettings({ ...settings, llm: { ...settings.llm, model: e.target.value } })
-              }}
-            >
-              {choices.map((model) => <option key={model} value={model}>{model}</option>)}
-              <option value={OPEN_SETTINGS}>{t('prefsModelElsewhere')}</option>
-            </select>
-          </div>
-        )}
+        <p className="text-xs leading-relaxed text-neutral-600">
+          {needModel ? t('prefsModelMissing') : t('prefsModelCurrent', settings.llm.model)}
+        </p>
         {/* 权限预告放在按钮上方：申请只发生在点下去的那一刻（chrome.permissions.request()
             要用户手势，设置页是 onChange 即存，放不了），提前说清楚它只要一个域名。
             两种按钮状态下都摆着——它讲的是这条动线接下来会发生什么，不依赖当前是哪个按钮。 */}

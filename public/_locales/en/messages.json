@@ -428,11 +428,9 @@
   "prefsGoConfigure": {
     "message": "Set up the model first"
   },
-  "prefsModelLabel": {
-    "message": "Will use"
-  },
-  "prefsModelElsewhere": {
-    "message": "Enter another in Settings…"
+  "prefsModelCurrent": {
+    "message": "Using $model$",
+    "placeholders": { "model": { "content": "$1" } }
   },
   "prefsModelMissing": {
     "message": "No model configured yet"
