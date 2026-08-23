@@ -70,15 +70,37 @@
     "message": "Collapse all"
   },
   "scopeScanOne": {
-    "message": "Scan $count$ selected folder",
+    "message": "Scan $count$ selected bookmark in $scope$",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "scope": {
+        "content": "$2"
+      }
+    }
+  },
+  "scopeScanOther": {
+    "message": "Scan $count$ selected bookmarks in $scope$",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "scope": {
+        "content": "$2"
+      }
+    }
+  },
+  "scopeScanFolderOne": {
+    "message": "$count$ folder",
     "placeholders": {
       "count": {
         "content": "$1"
       }
     }
   },
-  "scopeScanOther": {
-    "message": "Scan $count$ selected folders",
+  "scopeScanFolderOther": {
+    "message": "$count$ folders",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -292,6 +314,9 @@
   },
   "prefsScanTitle": {
     "message": "Scan results"
+  },
+  "prefsScanScope": {
+    "message": "Current scope"
   },
   "prefsStatBookmarks": {
     "message": "Bookmarks"

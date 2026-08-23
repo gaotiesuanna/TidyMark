@@ -6,6 +6,7 @@ import { useStore } from '@/sidepanel/store'
 import { DEFAULT_SETTINGS } from '@/storage/settings'
 import type { OrganizeMode } from '@/core/mode'
 import type { BookmarkItem, FolderItem, ScanResult } from '@/core/types'
+import type { BookmarkNode } from '@/core/ports'
 
 function folder(id: string, title: string, parentId: string | null, depth: number): FolderItem {
   return { id, title, parentId, index: 0, path: [], depth, level: depth }
@@ -345,5 +346,36 @@ describe('PreferencesStep 的权限预告', () => {
     const notice = screen.getByText(/只这一个/)
     expect(notice.textContent).toMatch(/模型/)
     expect(notice.textContent).toMatch(/安装时/)
+  })
+})
+
+/**
+ * 扫完范围进偏好页，人已经看不见自己勾了哪几个目录。
+ * 扫描结果卡要把路径摆出来，而且是 /书签栏/react/ 这种写法——
+ * 只报「react」会跟别处同名目录撞车。
+ */
+describe('PreferencesStep 显示当前选择的文件夹', () => {
+  const tree: BookmarkNode[] = [
+    { id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '10', title: 'react', children: [] },
+        { id: '11', title: '杂项', children: [] },
+      ]},
+    ]},
+  ]
+
+  it('把勾中的深层目录画成 /父/子/ 路径', () => {
+    setup(anyScan)
+    useStore.setState({ tree, checkedIds: new Set(['10']) })
+    render(<PreferencesStep />)
+    expect(screen.getByText('/书签栏/react/')).toBeTruthy()
+  })
+
+  it('级联勾选只显示真正的范围根', () => {
+    setup(anyScan)
+    useStore.setState({ tree, checkedIds: new Set(['1', '10', '11']) })
+    render(<PreferencesStep />)
+    expect(screen.getByText('/书签栏/')).toBeTruthy()
+    expect(screen.queryByText('/书签栏/react/')).toBeNull()
   })
 })

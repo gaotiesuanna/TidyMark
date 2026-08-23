@@ -23,6 +23,27 @@ export function findScopeRoots(tree: BookmarkNode[], scopeRootIds: string[]): Bo
   return roots
 }
 
+/**
+ * 把这次勾的范围根画成 /书签栏/react/ 这种路径。
+ *
+ * 无名根（Chrome 的 id='0'）不占一段——界面上本来就看不见它。
+ * 父子同时勾选时只报真正的范围根，跟 findScopeRoots 同一套去重。
+ */
+export function scopeFolderPaths(tree: BookmarkNode[], scopeRootIds: string[]): string[] {
+  const wanted = new Set(findScopeRoots(tree, scopeRootIds).map((root) => root.id))
+  const paths: string[] = []
+
+  function walk(node: BookmarkNode, ancestors: string[]): void {
+    const titles = node.title === '' ? ancestors : [...ancestors, node.title]
+    if (wanted.has(node.id)) {
+      paths.push(titles.length === 0 ? '/' : `/${titles.join('/')}/`)
+    }
+    for (const child of node.children ?? []) walk(child, titles)
+  }
+  for (const node of tree) walk(node, [])
+  return paths
+}
+
 export function scanTree(tree: BookmarkNode[], scopeRootIds: string[]): ScanResult {
   const bookmarks: BookmarkItem[] = []
   const folders: FolderItem[] = []

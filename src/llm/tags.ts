@@ -143,13 +143,16 @@ async function runExtraction(
         lastError = error
         // 只进开发者控制台，不必双语。
         console.error('[TidyMark] 标签抽取失败：', error)
+        // 取消之后一个新请求都不再发。少了这一句，用户点完取消要眼看着「正在取消」
+        // 再等三个请求加 1.5 秒退避才结束，而那三次注定全部失败。
+        if (options.isCancelled?.() === true) break
         if (!flagged(error, 'retryable')) break
         if (attempt < MAX_RETRIES) {
           await new Promise((resolve) => setTimeout(resolve, 2 ** attempt * 500))
         }
       }
     }
-    if (flagged(lastError, 'truncated') && batch.length > 1) {
+    if (options.isCancelled?.() !== true && flagged(lastError, 'truncated') && batch.length > 1) {
       return split(batch, index, lastError, tally)
     }
     throw lastError
@@ -168,6 +171,8 @@ async function runExtraction(
     // 顺序问而不是并发：外层已经有 concurrency 个 worker 在跑，
     // 一批刚被截断说明这条线正吃力，没必要再往上叠一倍请求。
     for (const half of [batch.slice(0, mid), batch.slice(mid)]) {
+      // 拆到一半用户点了取消：把原错误交回去，剩下那半不再问
+      if (options.isCancelled?.() === true) throw cause
       try {
         for (const [id, topic] of await ask(half, index, tally)) merged.set(id, topic)
       } catch (error) {
@@ -207,10 +212,14 @@ async function runExtraction(
         for (const item of batch) {
           resolved.set(item.id, { bookmarkId: item.id, primaryTopic: NO_TOPIC, secondaryTopic: null })
         }
-        options.onLog?.(
-          logBatchFailed(locale, label, index, batches.length, String(error), tally.attempts),
-          'error',
-        )
+        // 取消导致的失败不写日志：用户已经知道自己点了取消，再刷四条（concurrency 条）
+        // 红色的「批次失败」只是噪音，还会盖住他真正该看的那几条。
+        if (options.isCancelled?.() !== true) {
+          options.onLog?.(
+            logBatchFailed(locale, label, index, batches.length, String(error), tally.attempts),
+            'error',
+          )
+        }
       }
       done += batch.length
       options.onProgress?.(done, items.length)

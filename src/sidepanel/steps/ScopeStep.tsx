@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { plural, t } from '@/i18n'
+import { countScopedBookmarks } from '@/core/export'
 import { BookmarkTree, topLevelNodes } from '../components/BookmarkTree'
 import { ExportPanel } from '../components/ExportPanel'
 import { ImportPanel } from '../components/ImportPanel'
@@ -20,6 +21,16 @@ export function ScopeStep() {
     [tree],
   )
   const expandedIds = expanded ?? defaultExpanded
+  // 按钮报的是「这次要处理多少条书签」，不是勾中几个文件夹：一个目录下的书签既可能
+  // 分在子目录里、也可能直接散着，而目录树只画文件夹，散着的那些在这一页从不显形。
+  // 只报文件夹数时，用户没有任何地方能确认那些散链算不算在内（真实案例：某个目录
+  // 10 个子目录共 73 条、另有 123 条直接散在它底下，按钮却只说「11 个文件夹」）。
+  // 这个数与下面 ExportPanel 报的是同一个函数、同一批书签——扫描和导出走的都是
+  // findScopeRoots 去重后整棵子树遍历，两处口径必须一致，不然更让人怀疑范围对不上。
+  const scopedCount = useMemo(
+    () => countScopedBookmarks(tree, [...checkedIds]),
+    [tree, checkedIds],
+  )
 
   function toggleExpand(id: string): void {
     const next = new Set(expandedIds)
@@ -84,7 +95,20 @@ export function ScopeStep() {
           disabled={checkedIds.size === 0 || busy !== null}
           onClick={() => void goScan()}
         >
-          {plural(checkedIds.size, 'scopeScanOne', 'scopeScanOther', String(checkedIds.size))}
+          {plural(
+            scopedCount,
+            'scopeScanOne',
+            'scopeScanOther',
+            String(scopedCount),
+            // 文件夹数降为附注，但仍要单独过一次 plural：英文的 folder/folders
+            // 由文件夹数决定，跟着书签数的单复数走会拼出「1 bookmark in 2 folder」
+            plural(
+              checkedIds.size,
+              'scopeScanFolderOne',
+              'scopeScanFolderOther',
+              String(checkedIds.size),
+            ),
+          )}
         </button>
         {/* 灰底成组：把「分享书签」这条支线整体降一级，不跟上面的主操作抢注意力。
             组内再用一条分隔线把导出和导入切开。 */}
