@@ -128,6 +128,35 @@
   "phaseImport": {
     "message": "导入"
   },
+  "phaseCleanup": {
+    "message": "清理"
+  },
+  "cleanupDeadFolderTitle": {
+    "message": "失效链接"
+  },
+  "msgCleanupBookmarkGone": {
+    "message": "书签已不存在，跳过：$detail$",
+    "placeholders": { "detail": { "content": "$1" } }
+  },
+  "msgCleanupDeleteFailed": {
+    "message": "删除失败：$detail$",
+    "placeholders": { "detail": { "content": "$1" } }
+  },
+  "msgCleanupMoveFailed": {
+    "message": "移动失败：$detail$",
+    "placeholders": { "detail": { "content": "$1" } }
+  },
+  "msgCleanupFolderNotEmpty": {
+    "message": "目录里还有书签，未删除"
+  },
+  "logCleanupScanDone": {
+    "message": "扫描完成：$groups$ 组重复、$folders$ 个空文件夹",
+    "placeholders": { "groups": { "content": "$1" }, "folders": { "content": "$2" } }
+  },
+  "logCleanupDone": {
+    "message": "清理完成：删除 $deleted$ 条书签、$folders$ 个文件夹，移动 $moved$ 条",
+    "placeholders": { "deleted": { "content": "$1" }, "folders": { "content": "$2" }, "moved": { "content": "$3" } }
+  },
   "progressCancel": {
     "message": "取消"
   },
@@ -344,6 +373,9 @@
   },
   "settingsEndpointAdd": {
     "message": "＋ 加一个端点"
+  },
+  "settingsPresetHint": {
+    "message": "或从预设添加"
   },
   "settingsEndpointDelete": {
     "message": "删除端点"

@@ -15,6 +15,7 @@ import { clusterHomeless, dropAlreadyGrouped, planNewFolders, MIN_NEW_FOLDER_SIZ
 import type { Ports } from '@/core/ports'
 import type { OrganizePlan, TagResult } from '@/core/types'
 import { applyPlan } from '@/engine/apply'
+import { applyCleanup, scanForCleanup } from '@/engine/cleanup'
 import { loadSnapshot } from '@/engine/snapshot'
 import { undoLast } from '@/engine/undo'
 import { createLlmClient, type LlmClient, type LlmConfig } from '@/llm/client'
@@ -706,6 +707,29 @@ export async function handle(
           result.status === 'completed' ? 'info' : 'error',
         )
         return { ok: true, kind: 'apply', result }
+      }
+
+      case 'cleanup_scan': {
+        const scan = await scanForCleanup(ports)
+        log('cleanup', t(
+          'logCleanupScanDone',
+          String(scan.duplicates.length),
+          String(scan.emptyFolders.length),
+        ))
+        return { ok: true, kind: 'cleanup_scan', scan }
+      }
+
+      case 'apply_cleanup': {
+        const result = await applyCleanup(ports, request.input, locale, {
+          onProgress: progress('cleanup'),
+        })
+        log('cleanup', t(
+          'logCleanupDone',
+          String(result.deleted),
+          String(result.removedFolders.length),
+          String(result.moved),
+        ))
+        return { ok: true, kind: 'apply_cleanup', result }
       }
 
       case 'undo': {

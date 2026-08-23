@@ -1,7 +1,7 @@
 /** 侧栏与 service worker 之间推送进度事件的长连接名。 */
 export const PROGRESS_PORT = 'tidymark:progress'
 
-export type ProgressPhase = 'scan' | 'tags' | 'tree' | 'classify' | 'apply' | 'undo' | 'import'
+export type ProgressPhase = 'scan' | 'tags' | 'tree' | 'classify' | 'apply' | 'undo' | 'import' | 'cleanup'
 
 /**
  * 值是 _locales 里的词条键，不是文案——events.ts 要保持零依赖，由渲染方 t() 取文案。
@@ -19,6 +19,7 @@ export const PHASE_LABELS = {
   apply: 'phaseApply',
   undo: 'phaseUndo',
   import: 'phaseImport',
+  cleanup: 'phaseCleanup',
 } as const satisfies Record<ProgressPhase, string>
 
 export interface ProgressEvent {

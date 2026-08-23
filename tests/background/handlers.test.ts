@@ -2780,3 +2780,27 @@ describe('结构自检：撑爆的叶子再切一层', () => {
     expect(plan.warnings.some((w) => w.includes('超过建议上限'))).toBe(true)
   })
 })
+
+describe('cleanup_scan', () => {
+  it('不带范围参数，扫的是整棵树', async () => {
+    const bookmarks = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: 'a', url: 'https://a' },
+        ]},
+        { id: '2', title: '其他书签', children: [
+          { id: '20', title: 'a 又存了一遍', url: 'https://a' },
+        ]},
+      ]},
+    ])
+    const ports = { bookmarks: bookmarks.api, storage: createFakeStorage() }
+
+    const response = await handle(ports, { kind: 'cleanup_scan' })
+
+    expect(response.ok).toBe(true)
+    if (!response.ok || response.kind !== 'cleanup_scan') throw new Error('unexpected')
+    // 跨顶层目录的那一组正是限定范围会漏掉的
+    expect(response.scan.duplicates).toHaveLength(1)
+    expect(response.scan.duplicates[0]!.items.map((i) => i.id).sort()).toEqual(['10', '20'])
+  })
+})

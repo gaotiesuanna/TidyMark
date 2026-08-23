@@ -128,6 +128,35 @@
   "phaseImport": {
     "message": "Importing"
   },
+  "phaseCleanup": {
+    "message": "Cleanup"
+  },
+  "cleanupDeadFolderTitle": {
+    "message": "Dead links"
+  },
+  "msgCleanupBookmarkGone": {
+    "message": "Bookmark no longer exists, skipped: $detail$",
+    "placeholders": { "detail": { "content": "$1" } }
+  },
+  "msgCleanupDeleteFailed": {
+    "message": "Delete failed: $detail$",
+    "placeholders": { "detail": { "content": "$1" } }
+  },
+  "msgCleanupMoveFailed": {
+    "message": "Move failed: $detail$",
+    "placeholders": { "detail": { "content": "$1" } }
+  },
+  "msgCleanupFolderNotEmpty": {
+    "message": "Folder still contains bookmarks, not deleted"
+  },
+  "logCleanupScanDone": {
+    "message": "Scan done: $groups$ duplicate groups, $folders$ empty folders",
+    "placeholders": { "groups": { "content": "$1" }, "folders": { "content": "$2" } }
+  },
+  "logCleanupDone": {
+    "message": "Cleanup done: deleted $deleted$ bookmarks and $folders$ folders, moved $moved$",
+    "placeholders": { "deleted": { "content": "$1" }, "folders": { "content": "$2" }, "moved": { "content": "$3" } }
+  },
   "progressCancel": {
     "message": "Cancel"
   },
@@ -344,6 +373,9 @@
   },
   "settingsEndpointAdd": {
     "message": "+ Add an endpoint"
+  },
+  "settingsPresetHint": {
+    "message": "Or add from a preset"
   },
   "settingsEndpointDelete": {
     "message": "Delete endpoint"

@@ -60,3 +60,21 @@ export function msgRepositionFailed(locale: Locale, detail: string): string {
 export function msgReorderFailed(locale: Locale, detail: string): string {
   return locale === 'zh_CN' ? `排序失败：${detail}` : `Failed to reorder: ${detail}`
 }
+
+// ---- applyCleanup ----
+
+export function msgCleanupBookmarkGone(locale: Locale, detail: string): string {
+  return locale === 'zh_CN' ? `书签已不存在，跳过：${detail}` : `Bookmark no longer exists, skipped: ${detail}`
+}
+
+export function msgCleanupDeleteFailed(locale: Locale, detail: string): string {
+  return locale === 'zh_CN' ? `删除失败：${detail}` : `Delete failed: ${detail}`
+}
+
+export function msgCleanupMoveFailed(locale: Locale, detail: string): string {
+  return locale === 'zh_CN' ? `移动失败：${detail}` : `Move failed: ${detail}`
+}
+
+export function msgCleanupFolderNotEmpty(locale: Locale): string {
+  return locale === 'zh_CN' ? '目录里还有书签，未删除' : 'Folder still contains bookmarks, not deleted'
+}
