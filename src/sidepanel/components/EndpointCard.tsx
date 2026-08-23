@@ -182,9 +182,14 @@ export function EndpointCard({
         </div>
         <div className="flex shrink-0 gap-1">
           {editing ? (
-            <IconAction label={t('settingsEndpointSave')} onClick={save}>
-              <SaveIcon />
-            </IconAction>
+            <>
+              <IconAction label={t('settingsEndpointCancel')} onClick={cancel}>
+                <CloseIcon />
+              </IconAction>
+              <IconAction label={t('settingsEndpointSave')} onClick={save}>
+                <SaveIcon />
+              </IconAction>
+            </>
           ) : (
             <IconAction label={t('settingsEndpointEdit')} onClick={startEdit}>
               <PencilIcon />
@@ -218,16 +223,12 @@ export function EndpointCard({
               onChange={(e) => setDraftKey(e.target.value)}
               onBlur={() => loadCatalog(draftUrl, draftKey)}
             />
-
           </label>
           {problem !== null && (
             <p className="text-[11px] leading-relaxed text-neutral-600">
               {problem === 'full' ? t('settingsBaseUrlFull') : t('settingsBaseUrlEmpty')}
             </p>
           )}
-          <button className={btn} onClick={cancel}>
-            {t('settingsEndpointCancel')}
-          </button>
         </div>
       )}
 

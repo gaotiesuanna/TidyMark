@@ -122,17 +122,20 @@ describe('草稿态', () => {
     expect(screen.getByDisplayValue('sk-x')).toBeTruthy()
   })
 
-  it('点编辑后原编辑位置变成保存图标，并露出添加模型按钮', async () => {
+  it('点编辑后原编辑位置变成保存图标，左侧是取消', async () => {
     arrange()
     expect(screen.queryByRole('button', { name: '保存' })).toBeNull()
     await userEvent.click(screen.getByRole('button', { name: '编辑' }))
     expect(screen.queryByRole('button', { name: '编辑' })).toBeNull()
     const save = screen.getByRole('button', { name: '保存' })
+    const cancelBtn = screen.getByRole('button', { name: '取消' })
     expect(save.querySelector('svg')).toBeTruthy()
-    expect(save).toHaveProperty('title', '保存')
+    expect(cancelBtn.querySelector('svg')).toBeTruthy()
+    expect(cancelBtn.nextElementSibling).toBe(save)
     expect(screen.getByRole('button', { name: '＋ 添加模型' })).toBeTruthy()
     expect(screen.queryByRole('combobox')).toBeNull()
   })
+
 
 
 
