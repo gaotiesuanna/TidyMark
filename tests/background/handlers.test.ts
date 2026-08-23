@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
-import { handle } from '@/background/handlers'
+import { handle, deepenBudget } from '@/background/handlers'
 import { createFakeBookmarks, type TreeSpec } from '../fakes/fake-bookmarks'
 import { createFakeStorage } from '../fakes/fake-storage'
 import { DEFAULT_SETTINGS, SETTINGS_KEY, activeLlm, loadCache, saveSettings, type Settings } from '@/storage/settings'
@@ -2640,6 +2640,40 @@ describe('test_model 当场验一次模型配置', () => {
     expect(res).toMatchObject({ ok: false, reason: 'format' })
     expect((res as { error: string }).error).not.toMatch(/[一-龥]/)
     setLocale('zh_CN')
+  })
+})
+
+describe('下切预算跟着库规模走', () => {
+  // 这个数曾经写死 20。判准 A1 的上限从 20 收到 12 之后（issues/38 的 D2），
+  // deriveShape 瞄准的正好是上限，四成叶子必然超标要切——下切从异常路径变成常规路径，
+  // 20 这个顶在 N≈454 就会被打满（原型见 tools/deepen-budget.mjs）。
+  // 这几条钉住「它跟着规模走」，免得哪天有人把它改回一个常数而没人发现。
+  it('小库仍是下限 20，不因为叶子少就把顶压到不够用', () => {
+    expect(deepenBudget(1)).toBe(20)
+    expect(deepenBudget(10)).toBe(20)   // N≈123 的真实库就是 10 个叶子
+    expect(deepenBudget(20)).toBe(20)
+  })
+
+  it('叶子多过下限时顶跟着叶子走', () => {
+    expect(deepenBudget(42)).toBe(42)    // N≈500
+    expect(deepenBudget(100)).toBe(100)  // N≈1200
+  })
+
+  it('顶随叶子单调不减——规模变大绝不会让预算变小', () => {
+    let prev = 0
+    for (let leaves = 1; leaves <= 200; leaves += 1) {
+      const cur = deepenBudget(leaves)
+      expect(cur).toBeGreaterThanOrEqual(prev)
+      prev = cur
+    }
+  })
+
+  // 实测需要量约 0.5 × leaves（N=1200 时 100 个叶子要 53 次）。留一倍余量是有意的,
+  // 这条钉住余量还在——它掉到 1 倍以下就说明有人把公式改紧了。
+  it('给的顶至少是实测需要量的两倍', () => {
+    for (const leaves of [30, 50, 84, 100]) {
+      expect(deepenBudget(leaves)).toBeGreaterThanOrEqual(Math.ceil(leaves * 0.5) * 2)
+    }
   })
 })
 

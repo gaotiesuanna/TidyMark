@@ -34,12 +34,33 @@ import type { EmitProgress, ProgressPhase } from './events'
 import type { Request, Response } from './messages'
 
 /**
- * 一次分析里最多为「切开撑爆的目录」多花几次模型调用。
+ * 「切开撑爆的目录」这一步最多多花几次模型调用的**下限**。实际预算见 deepenBudget。
  *
- * 够 4 轮 × 5 个超载目录。这是防病态库把钱烧穿的兜底，不是调优旋钮——
- * 正常库根本摸不到它，摸到了说明标签质量已经差到再切也没用。
+ * 这个数曾经是固定上限 20（「够 4 轮 × 5 个超载目录」），并附着一句
+ * 「正常库根本摸不到它」。**判准 A1 的上限从 20 收到 12 之后（见 core/shape.ts 的
+ * MAX_LEAF 与 issues/38-source-vs-topic.md 的 D2），那句话变成假的**：
+ * 原型实测（issues 目录旁的 tools/deepen-budget.mjs）打满预算的规模从
+ * N≈1571 提前到 **N≈454**，而 450 条是个再普通不过的库。
+ *
+ * 病根不在这个数，在于 SWEET_LEAF 与 MAX_LEAF 现在都是 12——deriveShape
+ * **瞄准的正好是上限**，而真实分布里约四成目录高于均值，于是结构上必然有
+ * 四成叶子超标要切。下切因此从异常路径变成了常规路径，而这恰恰是它该做的事：
+ * 「一级具体、撑得起来的才有二级」这个形状 deriveShape 自己产不出来
+ * （它的两层布局是 floor(√leaves)，天生「少而粗的一级」），只能靠下切走出来。
  */
-const MAX_DEEPEN_CALLS = 20
+const MIN_DEEPEN_CALLS = 20
+
+/**
+ * 这一轮允许下切几次：`max(MIN_DEEPEN_CALLS, 推导出的叶子数)`。
+ *
+ * 跟着库规模走而不是写死，因为**它是兜底不是预算**——没有超载目录时循环自己就退出，
+ * 另有一道「产出没比上一轮变好就停」的止损。所以把顶抬高在正常情况下一分钱都不多花，
+ * 只改变病态库的行为。分母取 leaves 不是拍的：实测需要量约 `0.5 × leaves`
+ * （N=1200 时 100 个叶子需要 53 次），留了一倍余量。
+ */
+export function deepenBudget(leaves: number): number {
+  return Math.max(MIN_DEEPEN_CALLS, leaves)
+}
 
 export interface HandlerDeps {
   createClient?: (config: LlmConfig, locale: Locale) => LlmClient
@@ -152,6 +173,11 @@ export async function handle(
         /** 范围根的绝对层级（见 core/level.ts）。下切时算子目录的 startLevel 要用。 */
         let rootLevel = 0
         /**
+         * 下切这一步的调用上限。推翻模式下由形状推导的叶子数算出（见 deepenBudget），
+         * 非推翻模式根本不跑下切，留着下限值当占位。
+         */
+        let deepenCap = MIN_DEEPEN_CALLS
+        /**
          * designTagFolders 覆盖之前的那一代标签。
          *
          * 那一代是 extractTags 抽的逐条真实主题，必然比设计出来的目录名细——
@@ -182,6 +208,7 @@ export async function handle(
           // 整理，返回「一个目录都不建」看起来像坏了。层数看的是推导出的 shape.depth
           // 是否到了两层。曾经管这件事的 settings.maxFolderDepth 已随清单第 12 项删掉，
           // 存量存储里遗留的那个键也读都不读（见 storage/settings.ts 的旧旋钮名单）
+          deepenCap = deepenBudget(shape.leaves)
           const allowChildren = shape.depth >= 2
           // shape.top 在三层（N > 1200）时是 0——票 10 有意把三层的分配留空，先兜底
           // 退回 SHAPE_MAX_SIBLINGS，不让「其他」以外的目录数塌成 0
@@ -559,7 +586,7 @@ export async function handle(
 
             let expandedAny = false
             for (const folder of oversized) {
-              if (deepenCalls >= MAX_DEEPEN_CALLS) break
+              if (deepenCalls >= deepenCap) break
               const mine = new Set(
                 classifications.filter((c) => c.targetCategoryId === folder.id).map((c) => c.bookmarkId),
               )
@@ -609,7 +636,7 @@ export async function handle(
               expandedAny = true
               log('classify', t('logDeepenDone', folder.title, String(expanded.createdCount)))
             }
-            if (!expandedAny || deepenCalls >= MAX_DEEPEN_CALLS) break
+            if (!expandedAny || deepenCalls >= deepenCap) break
 
             // 切出来装不满的子目录交给现成的剪枝收掉：幂等、纯函数、不花钱
             const pruned = pruneSmallFolders({
