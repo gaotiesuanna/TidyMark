@@ -307,7 +307,9 @@ describe('PreferencesStep 的权限预告', () => {
     // 前提：这一条守的是「还没配模型」那个分支
     expect(screen.getByRole('button', { name: '先去配置模型' })).toBeTruthy()
 
-    const notice = screen.getByText(/只这一个/)
+    // 文案改写后不再说「只这一个」——本地清理的失效链接检查另要一项权限，
+    // 这条承诺不再是全局唯一的，改按「才会向浏览器申请访问你填的那个模型域名」定位
+    const notice = screen.getByText(/才会向浏览器申请访问你填的那个模型域名/)
     expect(notice.textContent).toMatch(/模型/)
     // 关键在「只申请你填的那一个」和「安装时一个都没要」——这是卖点，不是免责声明
     expect(notice.textContent).toMatch(/安装时/)
@@ -322,7 +324,9 @@ describe('PreferencesStep 的权限预告', () => {
     // 前提：这一条守的是「已经配好」那个分支，按钮得真是「开始 AI 分析」
     expect(screen.getByRole('button', { name: '开始 AI 分析' })).toBeTruthy()
 
-    const notice = screen.getByText(/只这一个/)
+    // 文案改写后不再说「只这一个」——本地清理的失效链接检查另要一项权限，
+    // 这条承诺不再是全局唯一的，改按「才会向浏览器申请访问你填的那个模型域名」定位
+    const notice = screen.getByText(/才会向浏览器申请访问你填的那个模型域名/)
     expect(notice.textContent).toMatch(/模型/)
     expect(notice.textContent).toMatch(/安装时/)
   })

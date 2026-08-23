@@ -148,6 +148,10 @@
     "message": "Cleanup done: deleted $deleted$ bookmarks and $folders$ folders, moved $moved$",
     "placeholders": { "deleted": { "content": "$1" }, "folders": { "content": "$2" }, "moved": { "content": "$3" } }
   },
+  "logLinkCheckDone": {
+    "message": "Link check done: $count$ checked",
+    "placeholders": { "count": { "content": "$1" } }
+  },
   "cleanupIntro": {
     "message": "These cleanups need no model and make no network requests."
   },
@@ -157,6 +161,18 @@
   "cleanupSectionEmpty": {
     "message": "Empty folders"
   },
+  "cleanupSectionLinks": {
+    "message": "Dead links"
+  },
+  "cleanupLinksStart": {
+    "message": "Start checking (requires access to all websites)"
+  },
+  "cleanupLinksExplain": {
+    "message": "Checking whether a link still exists means actually visiting it. Chrome will now ask for permission to \"read your data on all websites\" — that is the only wording it has for this. If you never press this button it is never requested, and the other two cleanups are unaffected."
+  },
+  "cleanupLinksDenied": {
+    "message": "Permission not granted, so this is skipped. The other two still work."
+  },
   "cleanupGroupExact": {
     "message": "Identical"
   },
@@ -165,6 +181,24 @@
   },
   "cleanupGroupNormalizedHint": {
     "message": "Identical only after ignoring fragments, trailing slashes, and tracking parameters. Unchecked by default — please look."
+  },
+  "cleanupGroupDead": {
+    "message": "Confirmed dead"
+  },
+  "cleanupGroupSuspect": {
+    "message": "Suspicious"
+  },
+  "cleanupGroupSuspectHint": {
+    "message": "403 is usually anti-bot, 401 just needs a login, 5xx means the server is having a bad day, 429 means we asked too fast, and a timeout may just be your connection. None of these are deleted — they are listed only."
+  },
+  "cleanupDeadActionDelete": {
+    "message": "Delete"
+  },
+  "cleanupDeadActionMove": {
+    "message": "Move to \"Dead links\" folder"
+  },
+  "cleanupDeadActionHint": {
+    "message": "Dead links often point at old addresses of your own writing, still recoverable from archive.org. Deleting makes that permanent."
   },
   "cleanupKeepLabel": {
     "message": "Keep this one"
@@ -549,7 +583,7 @@
     "message": "No model configured yet"
   },
   "prefsPermissionNotice": {
-    "message": "Chrome asks for network access only when the analysis starts, and only for the model domain you entered — nothing else. TidyMark ships with no network access at all."
+    "message": "TidyMark asks for no network access when installed. Only when analysis starts does it request access to the model domain you entered. (Local cleanup's \"dead link check\" is a separate permission that needs access to all websites — it is only requested when you press that button yourself.)"
   },
   "structureIntroOne": {
     "message": "The AI designed $folders$ top-level folder to hold $bookmarks$ bookmarks.",
@@ -931,6 +965,9 @@
   },
   "busyImporting": {
     "message": "Importing…"
+  },
+  "busyCheckingLinks": {
+    "message": "Checking links…"
   },
   "errRetry": {
     "message": "Retry"

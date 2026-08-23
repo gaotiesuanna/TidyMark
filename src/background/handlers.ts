@@ -16,6 +16,7 @@ import type { Ports } from '@/core/ports'
 import type { OrganizePlan, TagResult } from '@/core/types'
 import { applyPlan } from '@/engine/apply'
 import { applyCleanup, scanForCleanup } from '@/engine/cleanup'
+import { checkLinks } from '@/engine/linkCheck'
 import { loadSnapshot } from '@/engine/snapshot'
 import { undoLast } from '@/engine/undo'
 import { createLlmClient, type LlmClient, type LlmConfig } from '@/llm/client'
@@ -83,6 +84,8 @@ export interface HandlerDeps {
   signal?: AbortSignal
   /** 列出端点上的模型。测试注入，生产走 GET /models。 */
   listModels?: (baseUrl: string, apiKey: string) => Promise<string[]>
+  /** 仅供测试注入，生产环境使用 checkLinks 的默认值。 */
+  fetchImpl?: typeof fetch
 }
 
 export async function handle(
@@ -733,6 +736,16 @@ export async function handle(
           String(result.moved),
         ))
         return { ok: true, kind: 'apply_cleanup', result }
+      }
+
+      case 'check_links': {
+        const results = await checkLinks(request.targets, {
+          onProgress: progress('cleanup'),
+          ...(deps.signal !== undefined ? { signal: deps.signal } : {}),
+          ...(deps.fetchImpl !== undefined ? { fetchImpl: deps.fetchImpl } : {}),
+        })
+        log('cleanup', t('logLinkCheckDone', String(results.length)))
+        return { ok: true, kind: 'check_links', results }
       }
 
       case 'undo': {

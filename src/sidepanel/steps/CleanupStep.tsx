@@ -62,22 +62,28 @@ function DuplicateGroupCard({ group }: { group: DuplicateGroup }) {
 export function CleanupStep() {
   const {
     tree, cleanupScan, cleanupResult, cleanupChecked, cleanupFolders,
+    cleanupLinks, linkCheckState, cleanupMove, startLinkCheck, toggleCleanupMove, toggleCleanupItem,
     busy, undoAvailable, runCleanupScan, runCleanup, toggleCleanupFolder, undo,
   } = useStore()
 
   useEffect(() => { void runCleanupScan() }, [runCleanupScan])
 
   /**
+   * 「腾空」= 删除 ∪ 移走。移进「失效链接」文件夹的书签同样腾空了原来的位置，
+   * 少并这一半，预览会漏报一部分目录，用户执行完才发现多清了几个。
+   */
+  const vacated = useMemo(
+    () => new Set([...cleanupChecked, ...cleanupMove]),
+    [cleanupChecked, cleanupMove],
+  )
+  /**
    * 空目录这一节跟着上面的勾选实时变。直接显示 cleanupScan.emptyFolders 报的是删除
    * **前**的数字，跟实际清掉的对不上——用户勾掉一批重复项之后新变空的目录必须立刻
    * 显形，否则他执行完才发现多清了几个。
-   *
-   * 传进去的是「腾空」不是「删除」：第③节的「移走」同样腾空了原位置，
-   * Task 8 接上那一节时要把 cleanupMove 一起并进来。
    */
   const willBeEmpty = useMemo(
-    () => emptyAfterRemoval(tree, cleanupScan?.scopeRootIds ?? [], cleanupChecked),
-    [tree, cleanupScan, cleanupChecked],
+    () => emptyAfterRemoval(tree, cleanupScan?.scopeRootIds ?? [], vacated),
+    [tree, cleanupScan, vacated],
   )
   const alreadyEmpty = useMemo(
     () => new Set((cleanupScan?.emptyFolders ?? []).map((f) => f.id)),
@@ -121,7 +127,9 @@ export function CleanupStep() {
 
   const exact = cleanupScan.duplicates.filter((g) => g.kind === 'exact')
   const normalized = cleanupScan.duplicates.filter((g) => g.kind === 'normalized')
-  const total = cleanupChecked.size + cleanupFolders.size
+  const dead = cleanupLinks.filter((l) => l.verdict === 'dead')
+  const suspect = cleanupLinks.filter((l) => l.verdict === 'suspect')
+  const total = cleanupChecked.size + cleanupMove.size + cleanupFolders.size
   const nothing = cleanupScan.duplicates.length === 0 && willBeEmpty.length === 0
 
   return (
@@ -158,6 +166,78 @@ export function CleanupStep() {
             )}
           </section>
         )}
+
+        <section className="space-y-2">
+          <h2 className="text-xs font-medium text-neutral-700">{t('cleanupSectionLinks')}</h2>
+
+          {linkCheckState === 'idle' && (
+            <>
+              {/* 先解释再申请。这段话必须出现在按钮之前，而且要点名 Chrome 会怎么措辞——
+                  用户看到「读取你在所有网站上的数据」时不该是第一次听说这件事 */}
+              <p className="text-[11px] leading-relaxed text-neutral-500">{t('cleanupLinksExplain')}</p>
+              <button
+                className="rounded-md border border-neutral-300 px-2.5 py-1 text-xs hover:border-neutral-400 disabled:opacity-40"
+                disabled={busy !== null}
+                onClick={() => void startLinkCheck()}
+              >
+                {t('cleanupLinksStart')}
+              </button>
+            </>
+          )}
+
+          {linkCheckState === 'denied' && (
+            <p className="text-[11px] leading-relaxed text-neutral-500">{t('cleanupLinksDenied')}</p>
+          )}
+
+          {linkCheckState === 'done' && (
+            <>
+              {dead.length > 0 && (
+                <>
+                  <h3 className="text-[11px] text-neutral-500">{t('cleanupGroupDead')}</h3>
+                  <p className="text-[11px] leading-relaxed text-neutral-400">{t('cleanupDeadActionHint')}</p>
+                  <ul className="space-y-1">
+                    {dead.map((link) => (
+                      <li key={link.bookmarkId} className="flex items-start gap-2">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 shrink-0"
+                          checked={cleanupChecked.has(link.bookmarkId)}
+                          aria-label={`${t('cleanupDeadActionDelete')} ${link.url}`}
+                          onChange={() => toggleCleanupItem(link.bookmarkId)}
+                        />
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 shrink-0"
+                          checked={cleanupMove.has(link.bookmarkId)}
+                          aria-label={`${t('cleanupDeadActionMove')} ${link.url}`}
+                          onChange={() => toggleCleanupMove(link.bookmarkId)}
+                        />
+                        <span className="min-w-0 break-all text-[11px] text-neutral-600">
+                          {link.url}（{link.status}）
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+
+              {suspect.length > 0 && (
+                <>
+                  <h3 className="text-[11px] text-neutral-500">{t('cleanupGroupSuspect')}</h3>
+                  {/* 只读。这一档里每一条都可能是活着的页面，给勾选框等于邀请误删 */}
+                  <p className="text-[11px] leading-relaxed text-neutral-400">{t('cleanupGroupSuspectHint')}</p>
+                  <ul className="space-y-1">
+                    {suspect.map((link) => (
+                      <li key={link.bookmarkId} className="break-all text-[11px] text-neutral-500">
+                        {link.url}（{link.status ?? link.errorKind}）
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </>
+          )}
+        </section>
 
         {willBeEmpty.length > 0 && (
           <section className="space-y-2">

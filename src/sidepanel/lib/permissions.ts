@@ -51,3 +51,17 @@ export async function ensureHostPermission(baseUrl: string): Promise<boolean> {
   if (await hasHostPermission(baseUrl)) return true
   return chrome.permissions.request({ origins: [origin] })
 }
+
+/**
+ * 申请「访问所有网站」。只有失效链接检查用得上它。
+ *
+ * 与 ensureHostPermission 分开是因为两者要的东西本质不同：那个只要用户填的
+ * 那一个域名，这个要全部。Chrome 弹出来的字面是「读取你在所有网站上的数据」，
+ * 是这个扩展至今最吓人的一次弹窗——所以调用方必须先解释再调它，
+ * 而且用户不点那个按钮就永远不该走到这里。
+ */
+export async function ensureAllHostsPermission(): Promise<boolean> {
+  const origins = ['https://*/*', 'http://*/*']
+  if (await chrome.permissions.contains({ origins })) return true
+  return chrome.permissions.request({ origins })
+}

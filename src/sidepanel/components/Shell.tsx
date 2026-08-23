@@ -125,7 +125,7 @@ export function Shell({ children }: { children: ReactNode }) {
               busy={busy}
               progress={progress}
               logs={logs}
-              {...(busyKind === 'analyze' ? { onCancel: () => void cancel() } : {})}
+              {...(busyKind === 'analyze' || busyKind === 'checkLinks' ? { onCancel: () => void cancel() } : {})}
             />
           </>
         )}

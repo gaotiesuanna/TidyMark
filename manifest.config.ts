@@ -9,7 +9,11 @@ export default defineManifest({
   // favicon：HTML 导出要把图标写进 ICON 属性，靠它读 chrome-extension://<id>/_favicon/
   // （只读 Chrome 本地已缓存的图标，不发外部请求）
   permissions: ['bookmarks', 'storage', 'unlimitedStorage', 'sidePanel', 'favicon'],
-  optional_host_permissions: ['https://*/*', 'http://localhost/*', 'http://127.0.0.1/*'],
+  // https 那两条给模型端点用（按用户填的单个域名申请，见 sidepanel/lib/permissions.ts）。
+  // http://*/* 是给失效链接检查加的：纯 http 的老书签恰恰是最可能已经死掉的那批，
+  // 不声明就只能静默跳过它们，那是最糟的结果。
+  // 仍然全是 optional——安装时 TidyMark 一个网络权限都不要，这条没变。
+  optional_host_permissions: ['https://*/*', 'http://*/*', 'http://localhost/*', 'http://127.0.0.1/*'],
   background: { service_worker: 'src/background/service-worker.ts', type: 'module' },
   side_panel: { default_path: 'src/sidepanel/index.html' },
   // 图标由 tools/gen-icon.py 生成，源文件在 public/icons/，改配色或形状后重跑该脚本

@@ -2833,3 +2833,28 @@ describe('cleanup_scan', () => {
     expect(response.scan.duplicates[0]!.items.map((i) => i.id).sort()).toEqual(['10', '20'])
   })
 })
+
+describe('check_links', () => {
+  it('把结果原样带回，非 http(s) 的目标不发请求', async () => {
+    const calls: string[] = []
+    const fetchImpl = (async (input: string | URL | Request) => {
+      calls.push(String(input))
+      return new Response(null, { status: 404 })
+    }) as unknown as typeof fetch
+
+    const ports = { bookmarks: createFakeBookmarks([]).api, storage: createFakeStorage() }
+    const response = await handle(ports, {
+      kind: 'check_links',
+      targets: [
+        { bookmarkId: '1', url: 'https://gone.com/p' },
+        { bookmarkId: '2', url: 'chrome://extensions' },
+      ],
+    }, { fetchImpl })
+
+    expect(response.ok).toBe(true)
+    if (!response.ok || response.kind !== 'check_links') throw new Error('unexpected')
+    expect(response.results).toHaveLength(1)
+    expect(response.results[0]!.verdict).toBe('dead')
+    expect(calls).toEqual(['https://gone.com/p'])
+  })
+})

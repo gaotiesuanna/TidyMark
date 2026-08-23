@@ -16,12 +16,13 @@ import type { DuplicateGroup } from '@/core/duplicates'
 import type { ApplyResult } from '@/engine/apply'
 import type { CleanupResult, CleanupScan } from '@/engine/cleanup'
 import type { ImportResult } from '@/engine/importTree'
+import type { LinkResult } from '@/engine/linkCheck'
 import type { UndoResult } from '@/engine/undo'
 import type { Settings } from '@/storage/settings'
 import { DEFAULT_SETTINGS, activeLlm, endpointKey } from '@/storage/settings'
 import { send } from './lib/send'
 import type { TestFailure } from '@/background/messages'
-import { ensureHostPermission, hasHostPermission } from './lib/permissions'
+import { ensureAllHostsPermission, ensureHostPermission, hasHostPermission } from './lib/permissions'
 import { connectProgress, startKeepalive, type ProgressConnection } from './lib/progress'
 import { applyDocumentLang } from './lib/documentLang'
 
@@ -320,6 +321,16 @@ interface State {
   cleanupChecked: Set<string>
   /** 被勾中待删的空目录 id。 */
   cleanupFolders: Set<string>
+  /** 已经查出来的链接结果，只留 dead 与 suspect 两档——alive 的没什么可给用户看的。 */
+  cleanupLinks: LinkResult[]
+  /**
+   * - `idle`：还没查过，第③节只显示说明和按钮；
+   * - `denied`：用户拒绝了权限，这一节从此显示跳过提示；
+   * - `running` / `done`：查过程与结果。
+   */
+  linkCheckState: 'idle' | 'denied' | 'running' | 'done'
+  /** 选了「移到失效链接文件夹」的死链。与 cleanupChecked（选删除）互斥。 */
+  cleanupMove: Set<string>
 
   init(): Promise<void>
   refreshTree(): Promise<void>
@@ -380,6 +391,13 @@ interface State {
   toggleCleanupItem(id: string): void
   setCleanupKeep(groupKey: string, id: string): void
   toggleCleanupFolder(id: string): void
+  toggleCleanupMove(id: string): void
+  /**
+   * 第③节的入口。先解释、再申请权限、再查——顺序不能换：用户在看懂之前就被
+   * Chrome 那句「读取你在所有网站上的数据」弹脸，十有八九直接点拒绝，
+   * 而拒绝之后再想改就得去扩展设置里翻。解释由界面负责，这里只负责「点了之后」。
+   */
+  startLinkCheck(): Promise<void>
   reset(): void
 }
 
@@ -432,6 +450,9 @@ export const useStore = create<State>((set, get) => ({
   cleanupKeep: {},
   cleanupChecked: new Set(),
   cleanupFolders: new Set(),
+  cleanupLinks: [],
+  linkCheckState: 'idle',
+  cleanupMove: new Set(),
 
   /** 整理或撤销之后重新读一次书签树，结果页据此展示真实结构。 */
   async refreshTree() {
@@ -790,8 +811,7 @@ export const useStore = create<State>((set, get) => ({
     const barId = get().tree[0]?.children?.[0]?.id ?? ''
     const selection: CleanupSelection = {
       deleteBookmarkIds: [...get().cleanupChecked],
-      // 移走那条路是 Task 8 的事，这里恒传空数组
-      moveBookmarkIds: [],
+      moveBookmarkIds: [...get().cleanupMove],
       deleteFolderIds: [...get().cleanupFolders],
     }
     set({ busy: t('busyApplying'), busyKind: 'cleanup', error: null, progress: null, logs: [] })
@@ -816,6 +836,10 @@ export const useStore = create<State>((set, get) => ({
     set({
       undoAvailable: undoRes.ok && undoRes.kind === 'get_undo_state' ? undoRes.available : get().undoAvailable,
     })
+    // 补上 Task 6 漏掉的一步：不刷新的话，store 里的 tree 还是清理前那棵。
+    // 连着做第二次清理时，空目录预览走 emptyAfterRemoval(tree, ...) 用的就是这棵过期的
+    // tree，会按「已经删掉的书签还在」来算，报出一批根本不会变空的目录。
+    await get().refreshTree()
   },
 
   toggleCleanupItem(id) {
@@ -845,6 +869,57 @@ export const useStore = create<State>((set, get) => ({
     if (folders.has(id)) folders.delete(id)
     else folders.add(id)
     set({ cleanupFolders: folders })
+  },
+
+  toggleCleanupMove: (id) => {
+    const move = new Set(get().cleanupMove)
+    const checked = new Set(get().cleanupChecked)
+    if (move.has(id)) move.delete(id)
+    else {
+      move.add(id)
+      // 一条链接不可能既删掉又移走，勾上一个就把另一个摘掉
+      checked.delete(id)
+    }
+    set({ cleanupMove: move, cleanupChecked: checked })
+  },
+
+  startLinkCheck: async () => {
+    if (!(await ensureAllHostsPermission())) {
+      set({ linkCheckState: 'denied' })
+      return
+    }
+    const scan = get().cleanupScan
+    if (scan === null) return
+    const run = get().runSeq
+    set({
+      busy: t('busyCheckingLinks'), busyKind: 'checkLinks',
+      linkCheckState: 'running', error: null, progress: null,
+    })
+    // 一千条书签要查一分多钟，期间持续 ping，别让后台因空闲被回收——
+    // 与 analyze、apply 用的是同一条 keepalive
+    const stopKeepalive = startKeepalive(connection)
+    const res = await send({
+      kind: 'check_links',
+      targets: scan.items.map((item) => ({ bookmarkId: item.id, url: item.url })),
+    }).finally(stopKeepalive)
+    if (isStale(get, set, run)) return
+    if (!res.ok) {
+      set({ linkCheckState: 'idle' })
+      fail(set, res.error, null)
+      return
+    }
+    if (res.kind !== 'check_links') return
+    const interesting = res.results.filter((r) => r.verdict !== 'alive')
+    set({
+      busy: null, busyKind: null,
+      linkCheckState: 'done',
+      cleanupLinks: interesting,
+      // 确定失效默认勾上待删，可疑一条都不勾——分档的全部意义就在这个默认值上
+      cleanupChecked: new Set([
+        ...get().cleanupChecked,
+        ...interesting.filter((r) => r.verdict === 'dead').map((r) => r.bookmarkId),
+      ]),
+    })
   },
 
   async listModels(baseUrl, apiKey) {

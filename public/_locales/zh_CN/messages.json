@@ -148,6 +148,10 @@
     "message": "清理完成：删除 $deleted$ 条书签、$folders$ 个文件夹，移动 $moved$ 条",
     "placeholders": { "deleted": { "content": "$1" }, "folders": { "content": "$2" }, "moved": { "content": "$3" } }
   },
+  "logLinkCheckDone": {
+    "message": "链接检查完成：$count$ 条",
+    "placeholders": { "count": { "content": "$1" } }
+  },
   "cleanupIntro": {
     "message": "这些整理不需要模型，也不会发出任何网络请求。"
   },
@@ -157,6 +161,18 @@
   "cleanupSectionEmpty": {
     "message": "空文件夹"
   },
+  "cleanupSectionLinks": {
+    "message": "失效链接"
+  },
+  "cleanupLinksStart": {
+    "message": "开始检查（需要授权访问所有网站）"
+  },
+  "cleanupLinksExplain": {
+    "message": "要验一个链接还在不在，只能真的去访问它一次。Chrome 接下来会问你要「读取你在所有网站上的数据」——这是它对这项权限唯一的说法。不点这个按钮就永远不会申请，另外两项清理也完全不受影响。"
+  },
+  "cleanupLinksDenied": {
+    "message": "没有授权，这一项跳过。另外两项照常可用。"
+  },
   "cleanupGroupExact": {
     "message": "完全相同"
   },
@@ -165,6 +181,24 @@
   },
   "cleanupGroupNormalizedHint": {
     "message": "忽略了 # 片段、末尾斜杠和追踪参数之后才相同。默认不勾，请自己看一眼。"
+  },
+  "cleanupGroupDead": {
+    "message": "确定失效"
+  },
+  "cleanupGroupSuspect": {
+    "message": "可疑"
+  },
+  "cleanupGroupSuspectHint": {
+    "message": "403 多半是反爬虫在拦、401 只是要登录、5xx 是服务器今天不舒服、429 是我们请求太快、超时可能只是你此刻网不好。这些一律不删，只列给你看。"
+  },
+  "cleanupDeadActionDelete": {
+    "message": "删除"
+  },
+  "cleanupDeadActionMove": {
+    "message": "移到「失效链接」文件夹"
+  },
+  "cleanupDeadActionHint": {
+    "message": "死链里常有你自己写过的东西的旧地址，archive.org 上还能捞回来，删了就真没了。"
   },
   "cleanupKeepLabel": {
     "message": "保留这条"
@@ -549,7 +583,7 @@
     "message": "还没配置模型"
   },
   "prefsPermissionNotice": {
-    "message": "开始分析的那一刻，才会向浏览器申请访问你填的那个模型域名——只这一个。安装时 TidyMark 一个网络权限都没要。"
+    "message": "安装时 TidyMark 一个网络权限都没要。开始分析的那一刻，才会向浏览器申请访问你填的那个模型域名。（本地清理里的「失效链接检查」是另一项权限，要访问所有网站——只有你亲手点那个按钮时才会申请。）"
   },
   "structureIntroOne": {
     "message": "AI 设计了 $folders$ 个一级目录，将容纳 $bookmarks$ 个书签。",
@@ -931,6 +965,9 @@
   },
   "busyImporting": {
     "message": "正在导入…"
+  },
+  "busyCheckingLinks": {
+    "message": "正在检查链接…"
   },
   "errRetry": {
     "message": "重试"

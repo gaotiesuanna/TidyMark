@@ -137,3 +137,77 @@ describe('CleanupStep 空状态', () => {
     expect((screen.getByRole('button', { name: /清理/ }) as HTMLButtonElement).disabled).toBe(true)
   })
 })
+
+describe('CleanupStep 失效链接一节', () => {
+  beforeEach(() => {
+    useStore.setState({ cleanupLinks: [], linkCheckState: 'idle', cleanupMove: new Set() })
+  })
+
+  it('没授权前只有说明和按钮，不列任何结果', () => {
+    render(<CleanupStep />)
+    expect(screen.getByText(/读取你在所有网站上的数据/)).toBeDefined()
+    expect(screen.getByRole('button', { name: /开始检查/ })).toBeDefined()
+    expect(screen.queryByText('确定失效')).toBeNull()
+  })
+
+  it('说明必须排在按钮之前——用户不该在看懂之前就被弹权限', () => {
+    render(<CleanupStep />)
+    const explain = screen.getByText(/读取你在所有网站上的数据/)
+    const button = screen.getByRole('button', { name: /开始检查/ })
+    expect(explain.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('拒绝授权后显示跳过提示，另外两节仍在', () => {
+    useStore.setState({ linkCheckState: 'denied' })
+    render(<CleanupStep />)
+    expect(screen.getByText(/另外两项照常可用/)).toBeDefined()
+    expect(screen.getByText('重复收藏')).toBeDefined()
+  })
+
+  it('确定失效可勾选，可疑那档只读、没有勾选框', () => {
+    useStore.setState({
+      linkCheckState: 'done',
+      cleanupLinks: [
+        { bookmarkId: '200', url: 'https://gone.com/p', verdict: 'dead', status: 404, errorKind: null },
+        { bookmarkId: '201', url: 'https://blocked.com/p', verdict: 'suspect', status: 403, errorKind: null },
+      ],
+      cleanupChecked: new Set(['200']),
+    })
+    render(<CleanupStep />)
+    expect((screen.getByRole('checkbox', { name: '删除 https://gone.com/p' }) as HTMLInputElement).checked).toBe(true)
+    expect(screen.queryByRole('checkbox', { name: /https:\/\/blocked\.com/ })).toBeNull()
+    expect(screen.getByText(/https:\/\/blocked\.com\/p/)).toBeDefined()
+  })
+
+  it('勾了「移走」就自动取消「删除」，两者互斥', async () => {
+    useStore.setState({
+      linkCheckState: 'done',
+      cleanupLinks: [
+        { bookmarkId: '200', url: 'https://gone.com/p', verdict: 'dead', status: 404, errorKind: null },
+      ],
+      cleanupChecked: new Set(['200']),
+    })
+    render(<CleanupStep />)
+    await userEvent.click(screen.getByRole('checkbox', { name: '移到「失效链接」文件夹 https://gone.com/p' }))
+    expect(useStore.getState().cleanupChecked.has('200')).toBe(false)
+    expect(useStore.getState().cleanupMove.has('200')).toBe(true)
+  })
+
+  /**
+   * 最容易漏的一条：移走同样腾空了原位置。只按「删除」那批推演，
+   * 预览会漏报目录，用户执行完才发现多清了几个。
+   */
+  it('选了「移走」的死链也计入空目录推演', () => {
+    useStore.setState({
+      linkCheckState: 'done',
+      cleanupLinks: [
+        { bookmarkId: '120', url: 'https://a.com/p', verdict: 'dead', status: 404, errorKind: null },
+      ],
+      cleanupChecked: new Set(),
+      cleanupMove: new Set(['120']),
+    })
+    render(<CleanupStep />)
+    // 目录丙只有 120 这一条，移走之后它就空了
+    expect(screen.getByText('目录丙')).toBeDefined()
+  })
+})

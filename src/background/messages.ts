@@ -1,6 +1,7 @@
 import type { OrganizePlan, ScanResult } from '@/core/types'
 import type { ApplyResult } from '@/engine/apply'
 import type { CleanupInput, CleanupResult, CleanupScan } from '@/engine/cleanup'
+import type { LinkResult, LinkTarget } from '@/engine/linkCheck'
 import type { UndoResult } from '@/engine/undo'
 import type { BookmarkNode } from '@/core/ports'
 import type { Settings } from '@/storage/settings'
@@ -54,6 +55,11 @@ export type Request =
    */
   | { kind: 'cleanup_scan' }
   | { kind: 'apply_cleanup'; input: CleanupInput }
+  /**
+   * 必须走后台：service worker 才有那份 host 权限的完整上下文，
+   * 而且长时间的批量请求需要 keepalive 撑着，与 analyze 同一条路。
+   */
+  | { kind: 'check_links'; targets: LinkTarget[] }
 
 export type Response =
   | { ok: true; kind: 'get_tree'; tree: BookmarkNode[] }
@@ -71,6 +77,7 @@ export type Response =
   | { ok: true; kind: 'list_models'; models: string[] }
   | { ok: true; kind: 'cleanup_scan'; scan: CleanupScan }
   | { ok: true; kind: 'apply_cleanup'; result: CleanupResult }
+  | { ok: true; kind: 'check_links'; results: LinkResult[] }
   /**
    * cancelled 为 true 表示用户主动取消，不是出错。
    * reason 只有 test_model 会带：失败时说清是哪一类，别的请求没有这个分类。
