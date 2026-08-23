@@ -3,7 +3,7 @@ import { normalizeName, stripNumberPrefix } from './map'
 import type { NewFolderSpec } from './plan'
 import { MAX_LEAF } from './shape'
 import { FALLBACK_TITLE } from './tree'
-import type { CategoryCandidate, Classification } from './types'
+import type { CategoryCandidate, Classification, TagResult } from './types'
 
 /** 读父目录名字只需要这两个字段，FolderItem 可以直接传入。 */
 export interface ExistingFolderRef {
@@ -220,4 +220,109 @@ export function findOversizedFolders(input: OversizedInput): OversizedFolder[] {
 
   // 占用大的排前面：一轮里先切最撑的那个，止损判据（最大占用有没有下降）才有意义
   return found.sort((a, b) => b.count - a.count || a.id.localeCompare(b.id))
+}
+
+/** 下切后的理由会原样显示在结果页，必须双语，且讲的是「为什么被再分一层」。 */
+export function deepenReason(locale: Locale, title: string, count: number, maxLeaf: number): string {
+  return locale === 'zh_CN'
+    ? `「${title}」装了 ${count} 个书签，超过单目录 ${maxLeaf} 个的上限，按主题再分一层`
+    : `"${title}" holds ${count} bookmarks, over the per-folder limit of ${maxLeaf}, so it was split by topic`
+}
+
+/**
+ * 生成不与建树阶段撞号的临时 id。
+ *
+ * 必须沿用 `tmp:` 前缀：core/structure.ts 用 `startsWith('tmp:')` 判断一个目标
+ * 是不是本批新建的目录，换前缀会让结构确认页把新目录当成用户已有的目录。
+ */
+export function createTemporaryIdFactory(existing: NewFolderSpec[]): () => string {
+  let max = 0
+  for (const folder of existing) {
+    const matched = /^tmp:(\d+)$/.exec(folder.temporaryId)
+    if (matched !== null) max = Math.max(max, Number(matched[1]))
+  }
+  return () => `tmp:${++max}`
+}
+
+export interface ExpandInput {
+  /** 要下切的目录。必须是本批新建的——findOversizedFolders 默认只吐这一种。 */
+  parent: CategoryCandidate
+  /**
+   * parent 名下书签的标签，primaryTopic 已被 llm/folders.ts 的 applyDesign
+   * 改写成子目录名。primaryTopic 归一化后为空（含 NO_TOPIC）表示模型没映射它。
+   */
+  tags: TagResult[]
+  /** 当前全量分类。只有 targetCategoryId === parent.id 的会被改写。 */
+  classifications: Classification[]
+  nextTemporaryId: () => string
+  /** parent 原本装了多少条，写进 reason。 */
+  count: number
+  maxLeaf: number
+  locale: Locale
+}
+
+export interface ExpandResult {
+  newFolders: NewFolderSpec[]
+  candidates: CategoryCandidate[]
+  classifications: Classification[]
+  /** 真的建出来的子目录数。0 表示这次没能切开。 */
+  createdCount: number
+}
+
+/**
+ * 把一个撑爆的目录按标签切成子目录。
+ *
+ * 这一步**不花钱**：llm/folders.ts 的 FolderDesign.mapping 是「标签 → 目录路径」，
+ * applyDesign 是纯函数，把书签分进设计好的子目录不需要再问一次模型。调用方只花
+ * 一次 designFolders。
+ *
+ * 两条与 core/tree.ts 对齐的语义：
+ * - 没被映射到的书签**留在父目录里**平铺，与组根的 ownBookmarkIds 是同一个行为；
+ * - 只切得出一个子目录就整个放弃。那一层不承载任何区分度，建出来只是让用户多点一次。
+ */
+export function expandFolder(input: ExpandInput): ExpandResult {
+  const mine = new Set(
+    input.classifications.filter((c) => c.targetCategoryId === input.parent.id).map((c) => c.bookmarkId),
+  )
+
+  const byTopic = new Map<string, { title: string; bookmarkIds: string[] }>()
+  for (const tag of input.tags) {
+    if (!mine.has(tag.bookmarkId)) continue
+    const key = normalizeName(tag.primaryTopic)
+    if (key === '') continue
+    const bucket = byTopic.get(key) ?? { title: tag.primaryTopic, bookmarkIds: [] }
+    bucket.bookmarkIds.push(tag.bookmarkId)
+    byTopic.set(key, bucket)
+  }
+
+  const buckets = [...byTopic.values()].sort((a, b) => b.bookmarkIds.length - a.bookmarkIds.length)
+  if (buckets.length < 2) {
+    return { newFolders: [], candidates: [], classifications: input.classifications, createdCount: 0 }
+  }
+
+  const parentTitle = stripNumberPrefix(input.parent.path.at(-1) ?? '')
+  const reason = deepenReason(input.locale, parentTitle, input.count, input.maxLeaf)
+  const newFolders: NewFolderSpec[] = []
+  const candidates: CategoryCandidate[] = []
+  const targetByBookmark = new Map<string, string>()
+
+  buckets.forEach((bucket, index) => {
+    const title = `${String(index + 1).padStart(2, '0')} ${bucket.title}`
+    const temporaryId = input.nextTemporaryId()
+    newFolders.push({ temporaryId, parentId: null, parentTemporaryId: input.parent.id, title })
+    candidates.push({
+      id: temporaryId,
+      path: [...input.parent.path, title],
+      ...(input.parent.domainGroup === undefined ? {} : { domainGroup: input.parent.domainGroup }),
+    })
+    for (const bookmarkId of bucket.bookmarkIds) targetByBookmark.set(bookmarkId, temporaryId)
+  })
+
+  const classifications = input.classifications.map((c) => {
+    const target = targetByBookmark.get(c.bookmarkId)
+    if (target === undefined || c.targetCategoryId !== input.parent.id) return c
+    return { ...c, targetCategoryId: target, reason }
+  })
+
+  return { newFolders, candidates, classifications, createdCount: newFolders.length }
 }
