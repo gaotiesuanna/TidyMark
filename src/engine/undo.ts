@@ -42,7 +42,7 @@ export async function undoLast(
   // 标题是我们改的，撤销时要还原；其余书签的标题一律不碰
   const renamedByUs = new Set(snapshot.renamedBookmarkIds ?? [])
 
-  // 第 0 趟：重建被删掉的目录。
+  // 第 0 趟：重建被删掉的节点（目录，以及名单上的书签）。
   // 范围根先于其余节点——它们不在 nodes 里，但 nodes 的 parentId 可能指向它们。
   // 合并会有意删掉源根，先把根建出来并登记进 idMap，其下每个节点归位时
   // mapId(parentId) 才能落到新根上；否则整棵子树都会撞上一个已死的 id。
@@ -52,8 +52,20 @@ export async function undoLast(
   // 直接遍历会抛 TypeError，撤销整个失败，用户的书签树就卡在整理后的样子回不来了。
   const idMap = new Map<string, string>()
   const mapId = (id: string): string => idMap.get(id) ?? id
+  // 老快照里没有这个字段（?? [] 兜底，与紧邻的 rootNodes 是同一种考虑），
+  // 空名单 ⇒ 一条书签都不重建 ⇒ 与改动前逐字等价。
+  const deletedByUs = new Set(snapshot.deletedBookmarkIds ?? [])
   for (const node of [...(snapshot.rootNodes ?? []), ...snapshot.nodes]) {
-    if (node.url !== undefined) continue
+    // 不是「书签一律不重建」，而是「只重建我们自己删掉的那些」。
+    //
+    // 最初的方案是把这道闸整个删掉，理由是「AI 整理从不删书签，后面那道
+    // get(id) !== null 会把它们全挡回去，所以是 no-op」。那个论证漏了一种情形：
+    // 用户在 apply 之后自己手动删掉某条书签时，get 也返回 null——于是撤销会把
+    // 他亲手删的东西复活。那是一条刻意的产品不变量，三条既有用例守着它
+    //（「被用户删掉的书签不会被重新创建」及其两个同伴）。
+    //
+    // 「不存在」这个事实说不清原因，所以不靠推断，靠写快照那一方交代的名单。
+    if (node.url !== undefined && !deletedByUs.has(node.id)) continue
     // get 也放进 try：它一旦 reject，异常会穿出整个 undoLast，什么都没还原就结束了。
     // 这一趟里其余每一步失败都只记一条 skip，单次查询没有理由是唯一的例外。
     try {
@@ -61,6 +73,8 @@ export async function undoLast(
       const created = await ports.bookmarks.create({
         parentId: mapId(node.parentId),
         title: node.title,
+        // BookmarksApi.create 的约定：传了 url 建书签，没传建文件夹
+        ...(node.url !== undefined ? { url: node.url } : {}),
       })
       idMap.set(node.id, created.id)
     } catch (error) {

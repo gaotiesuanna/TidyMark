@@ -370,3 +370,175 @@ describe('undoLast 重建被删的范围根', () => {
     expect((await undoLast(ports, 'zh_CN')).status).toBe('completed')
   })
 })
+
+/**
+ * 这一组是回归护栏，不是新功能的用例。
+ *
+ * 第 0 趟原本有一道 `if (node.url !== undefined) continue`，把书签整个挡在重建之外。
+ * 为了让清理能撤销删除，那道闸要拆掉。拆之前必须先钉死：AI 整理这条路上，
+ * 撤销的行为一个字都不能变。
+ *
+ * 它成立的理由是另一道闸还在——`get(node.id) !== null` 就跳过。AI 整理从不删书签
+ * （只移动书签 + 删空目录），所以它快照里每条书签都还活着，照样被跳过。
+ */
+describe('撤销 AI 整理：拆掉书签闸之后行为不变', () => {
+  it('还活着的书签不会被重建成第二份', async () => {
+    const bookmarks = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: '旧目录', children: [
+            { id: '100', title: 'a', url: 'https://a' },
+          ]},
+        ]},
+      ]},
+    ])
+    const storage = createFakeStorage({
+      'tidymark:snapshot': {
+        createdAt: 1, planId: 'p1', scopeRootIds: ['1'],
+        nodes: [
+          { id: '10', parentId: '1', index: 0, title: '旧目录' },
+          { id: '100', parentId: '10', index: 0, title: 'a', url: 'https://a' },
+        ],
+        // AI 整理的快照：它从不删书签，名单恒空
+        deletedBookmarkIds: [],
+        createdFolderIds: [], renamedBookmarkIds: [], rootNodes: [],
+      },
+    })
+    const ports = { bookmarks: bookmarks.api, storage }
+
+    await undoLast(ports, 'zh_CN')
+
+    const tree = await bookmarks.api.getTree()
+    const all: string[] = []
+    const walk = (nodes: typeof tree): void => {
+      for (const n of nodes) {
+        if (n.url !== undefined) all.push(n.id)
+        walk(n.children ?? [])
+      }
+    }
+    walk(tree)
+    expect(all.filter((id) => id === '100')).toHaveLength(1)
+    expect(all).toHaveLength(1)
+  })
+})
+
+describe('撤销本地清理：重建被删掉的节点', () => {
+  it('被删掉的书签能还原，位置也归位', async () => {
+    const bookmarks = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: '目录', children: [
+            { id: '100', title: 'a', url: 'https://a' },
+            { id: '102', title: 'c', url: 'https://c' },
+          ]},
+        ]},
+      ]},
+    ])
+    // 快照记的是删除前的样子：101 排在 100 与 102 中间
+    const storage = createFakeStorage({
+      'tidymark:snapshot': {
+        createdAt: 1, planId: 'c1', scopeRootIds: ['1'],
+        nodes: [
+          { id: '100', parentId: '10', index: 0, title: 'a', url: 'https://a' },
+          { id: '101', parentId: '10', index: 1, title: 'b', url: 'https://b' },
+          { id: '102', parentId: '10', index: 2, title: 'c', url: 'https://c' },
+        ],
+        deletedBookmarkIds: ['101'],
+        createdFolderIds: [], renamedBookmarkIds: [], rootNodes: [],
+      },
+    })
+
+    await undoLast({ bookmarks: bookmarks.api, storage }, 'zh_CN')
+
+    const tree = await bookmarks.api.getTree()
+    const folder = tree[0]!.children![0]!.children![0]!
+    expect(folder.children!.map((n) => n.title)).toEqual(['a', 'b', 'c'])
+    expect(folder.children!.map((n) => n.url)).toEqual(['https://a', 'https://b', 'https://c'])
+  })
+
+  /**
+   * 「删掉最后一条书签导致父目录也变空被清掉」是清理最常见的形状。
+   * 撤销必须先把目录建出来拿到新 id，那条书签才有地方回——靠 idMap 转写。
+   */
+  it('目录连同里面的书签一起被删，能整体还原', async () => {
+    const bookmarks = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [] },
+      ]},
+    ])
+    const storage = createFakeStorage({
+      'tidymark:snapshot': {
+        createdAt: 1, planId: 'c2', scopeRootIds: ['1'],
+        nodes: [
+          { id: '10', parentId: '1', index: 0, title: '没了的目录' },
+          { id: '100', parentId: '10', index: 0, title: 'a', url: 'https://a' },
+        ],
+        deletedBookmarkIds: ['100'],
+        createdFolderIds: [], renamedBookmarkIds: [], rootNodes: [],
+      },
+    })
+
+    await undoLast({ bookmarks: bookmarks.api, storage }, 'zh_CN')
+
+    const bar = (await bookmarks.api.getTree())[0]!.children![0]!
+    const folder = bar.children!.find((n) => n.title === '没了的目录')
+    expect(folder).toBeDefined()
+    expect(folder!.children!.map((n) => n.url)).toEqual(['https://a'])
+  })
+
+  /**
+   * 这条是这次改动最要紧的护栏：名单之外的书签，哪怕已经不存在，也**不重建**。
+   * 「不存在」说不清原因——可能是用户在这中间自己删的，那是他的决定。
+   */
+  it('不在删除名单上的书签即使已消失也不复活', async () => {
+    const bookmarks = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: '目录', children: [] },
+        ]},
+      ]},
+    ])
+    const storage = createFakeStorage({
+      'tidymark:snapshot': {
+        createdAt: 1, planId: 'c4', scopeRootIds: ['1'],
+        nodes: [{ id: '100', parentId: '10', index: 0, title: 'a', url: 'https://a' }],
+        deletedBookmarkIds: [],
+        createdFolderIds: [], renamedBookmarkIds: [], rootNodes: [],
+      },
+    })
+
+    const result = await undoLast({ bookmarks: bookmarks.api, storage }, 'zh_CN')
+
+    const folder = (await bookmarks.api.getTree())[0]!.children![0]!.children![0]!
+    expect(folder.children ?? []).toHaveLength(0)
+    expect(result.skipped.some((s) => s.id === '100')).toBe(true)
+  })
+
+  it('被移走的书签能回到原来的目录', async () => {
+    const bookmarks = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: '原目录', children: [] },
+          { id: '11', title: '失效链接', children: [
+            { id: '100', title: 'a', url: 'https://a' },
+          ]},
+        ]},
+      ]},
+    ])
+    const storage = createFakeStorage({
+      'tidymark:snapshot': {
+        createdAt: 1, planId: 'c3', scopeRootIds: ['1'],
+        // 移走的书签**不进**删除名单：它没被删，撤销走的是归位那一趟
+        nodes: [{ id: '100', parentId: '10', index: 0, title: 'a', url: 'https://a' }],
+        deletedBookmarkIds: [],
+        createdFolderIds: ['11'], renamedBookmarkIds: [], rootNodes: [],
+      },
+    })
+
+    await undoLast({ bookmarks: bookmarks.api, storage }, 'zh_CN')
+
+    const bar = (await bookmarks.api.getTree())[0]!.children![0]!
+    const origin = bar.children!.find((n) => n.title === '原目录')!
+    expect(origin.children!.map((n) => n.id)).toEqual(['100'])
+  })
+})

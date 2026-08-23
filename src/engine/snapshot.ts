@@ -33,6 +33,17 @@ export interface BookmarkSnapshot {
    * 否则其下每个节点归位时 parentId 都指向一个已死的 id。
    */
   rootNodes: SnapshotNode[]
+  /**
+   * 本次操作**打算删除**的书签 id。撤销时只有名单上的书签才会被重建。
+   *
+   * 存在的理由是「不存在」这个事实说不清原因：一条书签在撤销时找不到，可能是
+   * 我们删的（该还回来），也可能是用户在这中间自己删的（不该复活——那是他的决定，
+   * tests/engine/undo.test.ts 里有三条用例守着）。`get(id) === null` 分不出这两者，
+   * 所以由写快照的一方在动手之前就把名单交代清楚。
+   *
+   * 不含被**移走**的书签：它们没被删，撤销走的是归位那一趟。
+   */
+  deletedBookmarkIds: string[]
 }
 
 export async function captureSnapshot(
@@ -61,7 +72,8 @@ export async function captureSnapshot(
 
   return {
     createdAt: Date.now(), planId, scopeRootIds, nodes,
-    createdFolderIds: [], renamedBookmarkIds: [], rootNodes,
+    // AI 整理只移动书签和删空目录，从不删书签，名单恒空
+    createdFolderIds: [], renamedBookmarkIds: [], rootNodes, deletedBookmarkIds: [],
   }
 }
 
