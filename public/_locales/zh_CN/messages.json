@@ -428,9 +428,11 @@
   "prefsGoConfigure": {
     "message": "先去配置模型"
   },
-  "prefsModelCurrent": {
-    "message": "将使用 $model$",
-    "placeholders": { "model": { "content": "$1" } }
+  "prefsModelLabel": {
+    "message": "将使用"
+  },
+  "prefsModelElsewhere": {
+    "message": "在设置页填别的…"
   },
   "prefsModelMissing": {
     "message": "还没配置模型"
