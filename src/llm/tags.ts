@@ -1,10 +1,9 @@
-import { groupFolderTitle, matchDomainGroup } from '@/core/domainGroups'
 import type { Locale } from '@/core/locale'
 import { sanitizeUrl } from '@/core/sanitize'
 import type { BookmarkItem, TagResult } from '@/core/types'
 import type { LlmClient } from './client'
 import { logBatch, logBatchFailed, logBatchPartFailed, logBatchSplit } from './logs'
-import { groupTagsPrompt, tagsPrompt } from './prompts'
+import { tagsPrompt } from './prompts'
 
 export type { TagResult }
 
@@ -58,23 +57,6 @@ function buildPrompt(locale: Locale, items: BookmarkItem[]): string {
     locale === 'zh_CN' ? '书签列表：' : 'Bookmark list:',
     JSON.stringify(payloadOf(items), null, 2),
   ].join('\n')
-}
-
-/**
- * 聚合组内部的细分提示词。
- *
- * 通用提示词要的是「宽泛的一级主题」，可这批书签的共同点已经写在组名上了：
- * 再抽一次「AI」「开发」毫无区分度，105 个 GitHub 仓库会挤进三四个目录。
- * 这里换成问「它解决什么问题」，并明令禁止那些宽泛词。
- */
-function buildGroupPrompt(locale: Locale, groupTitle: string): (items: BookmarkItem[]) => string {
-  return (items) =>
-    [
-      ...groupTagsPrompt(locale, groupTitle),
-      '',
-      locale === 'zh_CN' ? '书签列表：' : 'Bookmark list:',
-      JSON.stringify(payloadOf(items), null, 2),
-    ].join('\n')
 }
 
 /**
@@ -242,45 +224,4 @@ export async function extractTags(
 ): Promise<TagResult[]> {
   const label = locale === 'zh_CN' ? '标签批次' : 'Tag batch'
   return runExtraction(items, client, (batch) => buildPrompt(locale, batch), options, label, locale)
-}
-
-/**
- * 命中聚合组的书签换一套更细的标签重抽一次。
- *
- * 抽取失败的书签保留原来的宽泛标签——好过让它们彻底失去归属。
- */
-export async function refineGroupTags(
-  tags: TagResult[],
-  bookmarks: BookmarkItem[],
-  domainGroups: string[],
-  client: LlmClient,
-  locale: Locale,
-  options: ExtractOptions = {},
-): Promise<TagResult[]> {
-  if (domainGroups.length === 0) return tags
-
-  const byGroup = new Map<string, { title: string; items: BookmarkItem[] }>()
-  for (const item of bookmarks) {
-    const group = matchDomainGroup(item, domainGroups)
-    if (group === null) continue
-    // 这里的 title 只喂给提示词与日志，不是最终目录名——产出层已在 tree.ts 双语化。
-    const bucket = byGroup.get(group.key) ?? { title: groupFolderTitle(group, locale), items: [] }
-    bucket.items.push(item)
-    byGroup.set(group.key, bucket)
-  }
-  if (byGroup.size === 0) return tags
-
-  const refined = new Map<string, TagResult>()
-  for (const { title, items } of byGroup.values()) {
-    if (options.isCancelled?.() === true) break
-    const groupLabel = locale === 'zh_CN' ? `${title} 功能域` : `${title} domains`
-    const results = await runExtraction(
-      items, client, buildGroupPrompt(locale, title), options, groupLabel, locale,
-    )
-    for (const result of results) {
-      if (result.primaryTopic !== NO_TOPIC) refined.set(result.bookmarkId, result)
-    }
-  }
-
-  return tags.map((tag) => refined.get(tag.bookmarkId) ?? tag)
 }

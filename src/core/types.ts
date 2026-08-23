@@ -51,8 +51,6 @@ export interface ScanResult {
 export interface CategoryCandidate {
   id: string
   path: string[]
-  /** 该目录属于哪个域名聚合组；主题目录不带此字段。删除聚合目录时据此决定回落。 */
-  domainGroup?: string
 }
 
 export interface Classification {

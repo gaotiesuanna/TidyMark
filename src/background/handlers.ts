@@ -10,11 +10,10 @@ import { findScopeRoots, scanTree } from '@/core/scan'
 import { detectMode } from '@/core/mode'
 import { planTitleRewrites } from '@/core/titles'
 import { buildCategoryTree } from '@/core/tree'
-import { deriveShape, depthGuard, MAX_LEAF, SHAPE_MAX_SIBLINGS } from '@/core/shape'
-import { matchDomainGroup } from '@/core/domainGroups'
+import { deriveShape, MAX_LEAF, SHAPE_MAX_SIBLINGS } from '@/core/shape'
 import { clusterHomeless, dropAlreadyGrouped, planNewFolders, MIN_NEW_FOLDER_SIZE } from '@/core/newTopics'
 import type { Ports } from '@/core/ports'
-import type { Classification, OrganizePlan, TagResult } from '@/core/types'
+import type { OrganizePlan, TagResult } from '@/core/types'
 import { applyPlan } from '@/engine/apply'
 import { loadSnapshot } from '@/engine/snapshot'
 import { undoLast } from '@/engine/undo'
@@ -25,7 +24,7 @@ import { classifyBookmarks } from '@/llm/classify'
 import {
   applyDesign, collectTopics, designFolders, designTagFolders, nameMergedFolder, nameNewTopics,
 } from '@/llm/folders'
-import { extractTags, refineGroupTags } from '@/llm/tags'
+import { extractTags } from '@/llm/tags'
 import {
   DEFAULT_SETTINGS, activeLlm, findEndpoint, loadCache, loadSettings, saveCache, saveSettings,
 } from '@/storage/settings'
@@ -148,7 +147,6 @@ export async function handle(
         }
         let newFolders: NewFolderSpec[] = []
         let renameFolders: RenameFolderSpec[] = []
-        let pinned: Classification[] = []
         let tags: TagResult[] = []
         let planMergeRoot: NonNullable<OrganizePlan['mergeRoot']> | undefined
         /** 范围根的绝对层级（见 core/level.ts）。下切时算子目录的 startLevel 要用。 */
@@ -156,10 +154,9 @@ export async function handle(
         /**
          * designTagFolders 覆盖之前的那一代标签。
          *
-         * 那一代是逐条的真实主题（组内书签是 llm/tags.ts 的 refineGroupTags 抽的
-         * 「GitHub 功能域」，非组书签是 extractTags 的原始主题），必然比设计出来的
-         * 目录名细——「01 软件工程」这个名字本身就是 design 阶段把若干个功能域聚成
-         * 一簇的产物。留住它，下切就不必再花一次逐条抽取调用。
+         * 那一代是 extractTags 抽的逐条真实主题，必然比设计出来的目录名细——
+         * 「01 软件工程」这个名字本身就是 design 阶段把若干个主题聚成一簇的产物。
+         * 留住它，下切就不必再花一次逐条抽取调用。
          */
         let preDesignTags: TagResult[] = []
 
@@ -178,41 +175,9 @@ export async function handle(
           // 万一没有，?? 0 让它退回改造前的行为，而不是把整次分析弄崩
           rootLevel = scan.folders.find((f) => f.id === rootId)?.level ?? 0
           const startLevel = rootLevel + 1
-          // 规则命中是确定性的，在跑模型之前就数得出来——不花任何调用（票 10 补账第 3 条）
-          const hitsByGroup = new Map<string, number>()
-          if (settings.domainGroups.length > 0) {
-            for (const bookmark of scan.bookmarks) {
-              const group = matchDomainGroup(bookmark, settings.domainGroups)
-              if (group === null) continue
-              hitsByGroup.set(group.key, (hitsByGroup.get(group.key) ?? 0) + 1)
-            }
-          }
-          // 一级位子现在是稀缺资源，装 1 条的「GitHub」不配占（第 4 条）。
-          // 不够的组不建，那几条书签退回主题那一轮当普通书签处理。
-          // 门槛与目录下限是同一个数：一个装不满的聚合组和一个装不满的主题目录，
-          // 浏览成本上没有区别，没有理由给它们两套阈值
-          const survivingGroups = settings.domainGroups.filter(
-            (key) => (hitsByGroup.get(key) ?? 0) >= MIN_FOLDER_BOOKMARKS,
-          )
-          const droppedGroups = settings.domainGroups.length - survivingGroups.length
-          if (droppedGroups > 0) {
-            log('tree', t('logGroupsDropped', String(droppedGroups), String(MIN_FOLDER_BOOKMARKS)))
-          }
-          // 命中数 ≤ MAX_LEAF 的组，core/tree.ts 建树时会整组平铺、子目录一个都不建
-          // （`bucket.length <= MAX_LEAF ? [] : …`）：跑 refineGroupTags 抽的细分标签
-          // 派不上用场，全被丢弃。命中数在跑模型之前已经算好，跳过零成本
-          // （见 final-review.md I2；llm/folders.ts 的组内目录设计同一个门槛，自行按
-          // entries.length 判断，不需要这里再传一次）
-          const groupsNeedingDesign = survivingGroups.filter(
-            (key) => (hitsByGroup.get(key) ?? 0) > MAX_LEAF,
-          )
-          // N_主题 = N − Σ 存活组的命中数（第 5 条）
-          const inGroups = survivingGroups.reduce((sum, key) => sum + (hitsByGroup.get(key) ?? 0), 0)
-          const topicN = scan.bookmarks.length - inGroups
           // 目录的数量与层数由这次要整理的书签总数推导，不再由用户拨旋钮
           // （见 issues/10-shape-from-count.md「决定：方案 D」）。
-          // 主题预算：挤到不能再挤，但绝不因为聚合组而让主题多分一层（第 6 条）
-          const shape = deriveShape(topicN, depthGuard(survivingGroups.length, topicN))
+          const shape = deriveShape(scan.bookmarks.length)
           // 上限只管「要不要再往下分」，不阻止在勾中处建第一层：用户勾了这里就是要在这里
           // 整理，返回「一个目录都不建」看起来像坏了。层数看的是推导出的 shape.depth
           // 是否到了两层。曾经管这件事的 settings.maxFolderDepth 已随清单第 12 项删掉，
@@ -230,10 +195,9 @@ export async function handle(
           // 已有的 `max − 1` 留位逻辑不变，+1 之后再 −1 正好还原出 topWithFallback 个
           // 主题目录，「其他」是白加的第 topWithFallback + 1 格，账不再从推导值里扣。
           // 代价：同层总数（主题 + 其他）因此最多到 topWithFallback + 1 = 11，破判准
-          // A3（同层 ≤ 10）一个位子——这是有意的取舍，依据是 depthGuard 那节裁过的
-          // 同一类判准优先级：同层多两个是线性代价（多扫两行），多一层是指数代价，
-          // A3 是更软的那条；A1 被顶破意味着一个目录能摸到 24 条，逐层浏览时摸不动，
-          // 是根尺子的直接失败。
+          // A3（同层 ≤ 10）一个位子——这是有意的取舍：同层多一个是线性代价（多扫一行），
+          // 多一层是指数代价；A3 是更软的那条。A1 被顶破意味着一个目录能摸到 24 条，
+          // 逐层浏览时摸不动，是根尺子的直接失败。
           // 下限 2（原来的 Math.max(topWithFallback, 2)）在 +1 之后已经天然满足：
           // topWithFallback 最小是 1（N ≤ 12），+1 = 2，与原下限拍出的值相同，
           // 可以去掉这道 max。
@@ -254,19 +218,10 @@ export async function handle(
             isCancelled,
           })
           if (isCancelled()) return CANCELLED
-          // 组内的共同点已经写在目录名上，通用标签在这里没有区分度，换一套细的重抽——
-          // 只抽命中数过了 MAX_LEAF 门槛、真的会分子目录的那几个组
-          if (groupsNeedingDesign.length > 0) {
-            tags = await refineGroupTags(tags, scan.bookmarks, groupsNeedingDesign, client, locale, {
-              onLog: (message, level) => log('tags', message, level),
-              isCancelled,
-            })
-            if (isCancelled()) return CANCELLED
-          }
           // 分批抽标签的模型看不到全局，同义碎片只能在这里归并
           log('tree', t('logTreeStart', String(scan.bookmarks.length)))
           preDesignTags = tags
-          tags = await designTagFolders(tags, scan.bookmarks, survivingGroups, client, locale, {
+          tags = await designTagFolders(tags, client, locale, {
             onLog: (message, level) => log('tree', message, level),
             isCancelled,
             maxTopFolders,
@@ -296,8 +251,7 @@ export async function handle(
             mergeRoot = { parentId, title }
           }
           const tree_ = buildCategoryTree({
-            tags, rootId, existingFolders: scan.folders,
-            bookmarks: scan.bookmarks, domainGroups: survivingGroups, locale,
+            tags, rootId, existingFolders: scan.folders, locale,
             mergeRoot,
             maxTopFolders,
             maxChildFolders,
@@ -315,7 +269,6 @@ export async function handle(
           candidates = tree_.candidates
           newFolders = tree_.newFolders
           renameFolders = tree_.renameFolders
-          pinned = tree_.pinned
           log(
             'tree',
             t(
@@ -347,8 +300,7 @@ export async function handle(
           // 已知偏差（两条，都不影响「校准趋势」这个用途，够用）：
           // 1. 数的是新建的一级目录。复用已有目录时它不进 newFolders（走的是 candidates
           //    与 renameFolders），所以在「已有目录被复用」的库上这个数会偏小。
-          // 2. 数的是挂在范围根/容器下的全部新目录，聚合组目录（domainSections）也在
-          //    其中，而 maxTopFolders 只是主题那一侧的预算——勾了聚合组时这个数会偏大。
+          // 2. 数的是挂在范围根/容器下的全部新目录。
           const containerId = tree_.mergeRootTemporaryId
           const actualTop = tree_.newFolders.filter((f) =>
             containerId === null
@@ -357,9 +309,6 @@ export async function handle(
           ).length
           const effectiveDepth = allowChildren ? 2 : 1
           log('tree', t('logShapeCompared', String(maxTopFolders), String(actualTop), String(effectiveDepth)))
-          if (pinned.length > 0) {
-            log('tree', t('logPinnedSkip', String(pinned.length)))
-          }
         }
 
         // 「归入现有」却一个候选目录都没有。自动判断下够不着：detectMode 在没有任何
@@ -371,17 +320,9 @@ export async function handle(
           return { ok: false, error: t('errNoTargetFolders') }
         }
         const cache = await loadCache(ports)
-        // 已按域名确定归属的书签不必再花一次分类调用
-        const pinnedIds = new Set(pinned.map((p) => p.bookmarkId))
-        const toClassify = scan.bookmarks.filter((b) => !pinnedIds.has(b.id))
+        const toClassify = scan.bookmarks
         log('classify', t('logClassifyStart', String(toClassify.length), String(candidates.length)))
-        // 聚合组的目录（组根与组内子目录，都带 domainGroup 标记）不进候选：
-        // 命中规则的书签已经由 pinned 定好去处，而没命中的书签不该有机会进去
-        // ——组的子目录在候选里，模型就会往「01 GitHub」里塞腾讯云文档（票 10「为什么关组」）。
-        // 只影响分类这一步：候选表本身照旧带着组目录，结果页与 prune 都还要用它。
-        // 非推翻模式的候选来自 buildCandidatesFromFolders，从不打这个标记，这里过滤
-        // 对它是空操作，不改变非推翻模式的行为。
-        const classifyCandidates = candidates.filter((c) => c.domainGroup === undefined)
+        const classifyCandidates = candidates
         // 推翻模式的候选是刚设计出来的，模型永远找得到归属，用不上「无合适目录时
         // 带回 topic」这条规则；让它的分类提示词继续保持这个工作流存在之前的样子，
         // 一个字节都不因为新增的非推翻建目录能力而改变（见 issues review M9）。
@@ -398,7 +339,7 @@ export async function handle(
           model: llm.model,
           includeTopicRule: !rebuild,
         })
-        let classifications = [...pinned, ...llmResults]
+        let classifications = [...llmResults]
         // 已经跑完的批次仍然写进缓存，重来时不必再花一次钱
         await saveCache(ports, cache)
         if (isCancelled()) return CANCELLED
@@ -504,11 +445,7 @@ export async function handle(
           // 「没有合适的就返回 null」这些语义它全都有，而这一步要的正是这些。
           const pendingById = new Map(pruned.pending.map((p) => [p.bookmarkId, p]))
           // 候选里剔掉「其他」自己：这一步的全部意义就是别让它当默认答案。
-          // 聚合组的目录同样要剔掉——这一步跟上面首次分类一样是在给书签找去处，
-          // 漏了这条，模型照样能把改判的书签塞进「01 GitHub」。
-          const rehomeCandidates = candidates
-            .filter((c) => c.id !== pruned.fallbackId)
-            .filter((c) => c.domainGroup === undefined)
+          const rehomeCandidates = candidates.filter((c) => c.id !== pruned.fallbackId)
           const rehomeItems = scan.bookmarks.filter((b) => pendingById.has(b.id))
           if (rehomeItems.length > 0 && rehomeCandidates.length > 0) {
             // 这一步要发起新的付费请求，取消必须挡在它前面检查——与全文件另外

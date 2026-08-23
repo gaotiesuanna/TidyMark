@@ -50,10 +50,10 @@ const messyScan = scanOf([ROOT], Array.from({ length: 5 }, (_, i) => bookmark(`l
  */
 const anyScan = scanOf([ROOT, folder('10', '目录', '1', 1)], [bookmark('a', '10')])
 
-function setup(scan: ScanResult, domainGroups: string[] = [], modeOverride: OrganizeMode | null = null): void {
+function setup(scan: ScanResult, modeOverride: OrganizeMode | null = null): void {
   useStore.setState({
     scan,
-    settings: { ...DEFAULT_SETTINGS, domainGroups },
+    settings: { ...DEFAULT_SETTINGS },
     modeOverride,
     busy: null,
     // setSettings 会打 send()，必须替身；setModeOverride 只写 state，用真的那个
@@ -61,38 +61,15 @@ function setup(scan: ScanResult, domainGroups: string[] = [], modeOverride: Orga
   })
 }
 
-describe('PreferencesStep 域名聚合', () => {
-  beforeEach(() => { setup(anyScan, [], 'rebuild') })
+// 域名聚合那一组勾选框随 issues/38-source-vs-topic.md 的 D4 删掉了。
+// 留一条反向断言：它不该以任何形式再出现在偏好页上。
+describe('PreferencesStep 不再有域名聚合', () => {
+  beforeEach(() => { setup(anyScan, 'rebuild') })
 
-  it('列出所有可选的域名组', () => {
+  it('偏好页上没有域名组的勾选框', () => {
+    render(<PreferencesStep />)
     expect(screen.queryByLabelText('GitHub')).toBeNull()
-    render(<PreferencesStep />)
-    expect(screen.getByLabelText('GitHub')).toBeTruthy()
-    expect(screen.getByLabelText('论文')).toBeTruthy()
-  })
-
-  it('判已整理（additive）时复选框禁用', () => {
-    setup(anyScan, [], 'additive')
-    render(<PreferencesStep />)
-    expect((screen.getByLabelText('GitHub') as HTMLInputElement).disabled).toBe(true)
-  })
-
-  it('判一团乱麻（rebuild）时复选框可用', () => {
-    render(<PreferencesStep />)
-    expect((screen.getByLabelText('GitHub') as HTMLInputElement).disabled).toBe(false)
-  })
-
-  it('勾选后写入 settings.domainGroups', async () => {
-    render(<PreferencesStep />)
-    await userEvent.click(screen.getByLabelText('GitHub'))
-    expect(useStore.getState().settings.domainGroups).toEqual(['github'])
-  })
-
-  it('取消勾选后从 settings.domainGroups 移除', async () => {
-    setup(anyScan, ['github', 'paper'], 'rebuild')
-    render(<PreferencesStep />)
-    await userEvent.click(screen.getByLabelText('GitHub'))
-    expect(useStore.getState().settings.domainGroups).toEqual(['paper'])
+    expect(screen.queryByLabelText('论文')).toBeNull()
   })
 })
 
@@ -137,7 +114,7 @@ describe('PreferencesStep 的模式判断', () => {
     expect(screen.getByRole('button', { name: '不对，重新设计' })).toBeTruthy()
   })
 
-  it('点了逃生口就按推翻模式渲染，域名聚合也跟着可用', async () => {
+  it('点了逃生口就按推翻模式渲染', async () => {
     setup(tidyScan)
     render(<PreferencesStep />)
     await userEvent.click(screen.getByRole('button', { name: '不对，重新设计' }))
@@ -146,7 +123,6 @@ describe('PreferencesStep 的模式判断', () => {
     // 结论句与理由句里都带着「重新设计整棵目录树」这半句，用 getAllByText 而不是 getByText——
     // 两处都命中才是对的，getByText 在这里天然会因多重匹配而炸
     expect(screen.getAllByText(/重新设计整棵目录树/).length).toBeGreaterThan(0)
-    expect((screen.getByLabelText('GitHub') as HTMLInputElement).disabled).toBe(false)
   })
 
   it('推翻之后能改回自动判断', async () => {
@@ -202,9 +178,10 @@ describe('PreferencesStep 不再摆配一次就不动的设置', () => {
 
   it('统一 GitHub 标题的开关不在偏好页上——它改的是书签标题，不是这一轮怎么整理', () => {
     render(<PreferencesStep />)
-    // 空断言防身：同一页上另一个带 GitHub 字样的 label（域名聚合那组）照样查得到，
-    // 所以下面那条 null 不是因为 getByLabelText 在这一页上查不到任何东西
-    expect(screen.getByLabelText('GitHub')).toBeTruthy()
+    // 空断言防身：这一页上确实还渲染着别的勾选框，
+    // 所以下面那条 null 不是因为查询本身在这一页上什么都查不到
+    // （原来拿域名聚合那组的 label 当锚点，它随 issues/38 的 D4 删掉了）
+    expect(screen.getAllByRole('checkbox').length).toBeGreaterThan(0)
 
     expect(screen.queryByLabelText(/统一 GitHub 书签标题/)).toBeNull()
     expect(screen.queryByText(/仓库名 \(作者\)/)).toBeNull()

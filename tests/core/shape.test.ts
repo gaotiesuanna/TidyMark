@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deriveShape, depthGuard, MAX_LEAF, SHAPE_MAX_SIBLINGS } from '@/core/shape'
+import { deriveShape, MAX_LEAF, STRETCH_LEAF, SWEET_LEAF, SHAPE_MAX_SIBLINGS } from '@/core/shape'
 
 describe('deriveShape', () => {
   it('书签少时一层就够，目录数按甜点 12 算', () => {
@@ -16,7 +16,7 @@ describe('deriveShape', () => {
     const shape = deriveShape(180)
     expect(shape.depth).toBe(1)
     expect(shape.top).toBe(SHAPE_MAX_SIBLINGS)
-    expect(shape.perLeaf).toBeLessThanOrEqual(MAX_LEAF)
+    expect(shape.perLeaf).toBeLessThanOrEqual(STRETCH_LEAF)
   })
 
   it('叶子撑过 20 才加一层——深度跳变只发生在 N=201', () => {
@@ -62,8 +62,6 @@ describe('deriveShape', () => {
   it('topCap 收紧时，一层可能装不下——深度会被顶上去', () => {
     // 123 条按甜点要 11 个叶子；cap 收到 6 时 123/6 = 20.5 > 20，一层撑不下，
     // 于是分两层：leaves 仍是 11，branch = max(floor(√11)=3, ceil(11/10)=2, 3) = 3。
-    // **这正是计划 2/2 的 depthGuard 要防的事**——它会从最紧的预算往回找第一个不加深的，
-    // 而它能这么找的前提，就是 topCap 确实参与深度判断（见 tools/shape-with-groups.mjs）。
     expect(deriveShape(123, 6)).toMatchObject({ depth: 2, top: 3, leaves: 11 })
   })
 
@@ -76,7 +74,7 @@ describe('deriveShape', () => {
   it('两层布局的一级目录数必须服从 topCap，不能悄悄超发', () => {
     // 600 条：默认预算下 leaves=50，branch = max(floor(√50)=7, ceil(50/10)=5, 3) = 7。
     // cap 收到 5 时，branch 必须被 topCap 夹住，不能还是不服从预算的 7——
-    // 否则聚合组 + 主题一级目录数会把同层撑爆，depthGuard 算出来的 cap 就白算了。
+    // 否则一级目录数会把同层撑爆。
     expect(deriveShape(600)).toMatchObject({ depth: 2, top: 7 })
     expect(deriveShape(600, 5)).toMatchObject({ depth: 2, top: 5 })
   })
@@ -95,30 +93,32 @@ describe('deriveShape', () => {
   })
 })
 
-describe('depthGuard', () => {
-  it('没有聚合组时就是满预算', () => {
-    expect(depthGuard(0, 123)).toBe(SHAPE_MAX_SIBLINGS)
+describe('MAX_LEAF 与 STRETCH_LEAF 分家', () => {
+  // 两个数一旦被合回一个，issues/38 的 D2 就白做了。这三条各钉住一个理由。
+  it('验算的上限比预测的宽松线紧', () => {
+    expect(MAX_LEAF).toBeLessThan(STRETCH_LEAF)
   })
 
-  it('挤得下就挤——组占掉的位子直接从主题预算里让出来', () => {
-    // 60 条：满预算下 deriveShape(60) 是一层；预算收到 10 − 3 = 7 仍是一层，那就用 7
-    expect(depthGuard(3, 60)).toBe(7)
+  it('验算的上限就是甜点：超过甜点就该往下分', () => {
+    expect(MAX_LEAF).toBe(SWEET_LEAF)
   })
 
-  it('挤到会多分一层时就退回去，一层一层放宽到第一个不加深的', () => {
-    // 123 条：满预算一层；10 − 6 = 4 时 123/4 = 30.75 > 20 会变两层，
-    // 于是往回放宽，取第一个仍是一层的预算
-    const cap = depthGuard(6, 123)
-    expect(deriveShape(123, cap).depth).toBe(deriveShape(123).depth)
-    expect(cap).toBeGreaterThan(4)
+  it('deriveShape 认的是 STRETCH_LEAF，不是 MAX_LEAF', () => {
+    // 123 条：每叶 12.3 条，已经超过 MAX_LEAF(12) 却没超 STRETCH_LEAF(20)，
+    // 所以预测阶段仍是一层——「绝不因为预测就多分一层」（issues/10）。
+    // 那 0.3 条的超额由落成后 findOversizedFolders 按真实占用去收。
+    const shape = deriveShape(123)
+    expect(shape.depth).toBe(1)
+    expect(shape.perLeaf).toBeGreaterThan(MAX_LEAF)
+    expect(shape.perLeaf).toBeLessThanOrEqual(STRETCH_LEAF)
   })
 
-  it('放宽到满预算仍然加深时，就用满预算——不为了不加深而无限放宽', () => {
-    // 书签多到满预算也得两层的量级，depthGuard 不该返回超过上限的值
-    expect(depthGuard(6, 3000)).toBeLessThanOrEqual(SHAPE_MAX_SIBLINGS)
-  })
-
-  it('组数多到把预算压到 0 时至少留 1', () => {
-    expect(depthGuard(20, 50)).toBeGreaterThanOrEqual(1)
+  it('把预测线也收到 12 会让深度跳变从 N=201 提前到 N=121', () => {
+    // 这条钉的是「为什么不能只改一个数」。用 topCap 模拟不了，直接算：
+    // n=121 时 wanted=11、top1=10、perLeaf=12.1——只要预测线是 12 就会被顶去两层，
+    // 而那一段 deriveShape 吐的是 top=3，一级目录只剩三个（issues/38 的 D2 第 2 条）。
+    expect(deriveShape(121)).toMatchObject({ depth: 1, top: 10 })
+    expect(deriveShape(121).perLeaf).toBeGreaterThan(MAX_LEAF)
+    expect(deriveShape(201)).toMatchObject({ depth: 2 })
   })
 })

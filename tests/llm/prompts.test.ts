@@ -3,7 +3,6 @@ import {
   BROAD_WORDS,
   classifyPrompt,
   foldersPrompt,
-  groupTagsPrompt,
   mergeNamePrompt,
   newFolderNamesPrompt,
   tagsPrompt,
@@ -15,7 +14,6 @@ describe('提示词双语', () => {
     for (const locale of LOCALES) {
       expect(classifyPrompt(locale).join('').trim()).not.toBe('')
       expect(tagsPrompt(locale).join('').trim()).not.toBe('')
-      expect(groupTagsPrompt(locale, 'GitHub').join('').trim()).not.toBe('')
       expect(foldersPrompt(locale, { total: 10, maxSiblings: 8 }).join('').trim()).not.toBe('')
       expect(mergeNamePrompt(locale, ['NiceG', 'b_llm']).join('').trim()).not.toBe('')
     }
@@ -23,7 +21,6 @@ describe('提示词双语', () => {
 
   it('英文提示词明确要求用英文作答——漏了这条英文界面会生成中文目录', () => {
     expect(tagsPrompt('en').join(' ')).toMatch(/in English/i)
-    expect(groupTagsPrompt('en', 'GitHub').join(' ')).toMatch(/in English/i)
     expect(foldersPrompt('en', { total: 10, maxSiblings: 8 }).join(' ')).toMatch(/in English/i)
     expect(classifyPrompt('en').join(' ')).toMatch(/in English/i)
   })
@@ -32,18 +29,12 @@ describe('提示词双语', () => {
     expect(tagsPrompt('zh_CN').join(' ')).toContain('中文')
     expect(foldersPrompt('zh_CN', { total: 10, maxSiblings: 8 }).join(' ')).toContain('中文')
     expect(classifyPrompt('zh_CN').join(' ')).toContain('中文')
-    expect(groupTagsPrompt('zh_CN', 'GitHub').join(' ')).toContain('中文')
   })
 
   it('宽泛词表两种语言各自独立，不是互译', () => {
     expect(BROAD_WORDS.zh_CN).toContain('人工智能')
     expect(BROAD_WORDS.en.toLowerCase()).toContain('misc')
     expect(BROAD_WORDS.en).not.toContain('人工智能')
-  })
-
-  it('聚合组提示词会带上组名，并叮嘱不要拿它当分类依据', () => {
-    expect(groupTagsPrompt('zh_CN', 'GitHub').join(' ')).toContain('GitHub')
-    expect(groupTagsPrompt('en', 'GitHub').join(' ')).toContain('GitHub')
   })
 
   it('目录设计提示词带上数量上限', () => {
@@ -196,81 +187,6 @@ describe('foldersPrompt 的复合名禁令', () => {
   it('英文规则把逗号也列进连接词', () => {
     const lines = foldersPrompt('en', { total: 30, maxSiblings: 8 }).join('\n')
     expect(lines).toContain('comma')
-  })
-})
-
-describe('foldersPrompt 的已有目录清单', () => {
-  it('带上清单时点名这些目录已经存在，并禁止造语义重叠的', () => {
-    const lines = foldersPrompt('zh_CN', {
-      total: 30, maxSiblings: 8, existingFolders: ['GitHub', 'GitHub/语音合成与克隆'],
-    }).join('\n')
-    expect(lines).toContain('GitHub/语音合成与克隆')
-    expect(lines).toContain('语义重叠')
-  })
-
-  it('清单为空时这条规则整条不出现，编号也不跳号', () => {
-    const lines = foldersPrompt('zh_CN', { total: 30, maxSiblings: 8, existingFolders: [], minFolderSize: 3 }).join('\n')
-    expect(lines).not.toContain('语义重叠')
-    expect(lines).toContain('9. 不要建只装得下不到 3 个书签的目录')
-  })
-
-  it('清单在场时它是第 9 条，minFolderSize 顺延到第 10 条', () => {
-    const lines = foldersPrompt('zh_CN', {
-      total: 30, maxSiblings: 8, existingFolders: ['GitHub'], minFolderSize: 3,
-    }).join('\n')
-    expect(lines).toMatch(/^9\. .*语义重叠/m)
-    expect(lines).toContain('10. 不要建只装得下不到 3 个书签的目录')
-  })
-
-  it('英文那份同样带清单', () => {
-    const lines = foldersPrompt('en', { total: 30, maxSiblings: 8, existingFolders: ['GitHub/Speech synthesis'] }).join('\n')
-    expect(lines).toContain('GitHub/Speech synthesis')
-    expect(/[一-鿿]/.test(lines)).toBe(false)
-  })
-
-  it('解释清单里 A/B 这种写法的含义（M5）', () => {
-    const zh = foldersPrompt('zh_CN', { total: 30, maxSiblings: 8, existingFolders: ['GitHub'] }).join('\n')
-    expect(zh).toContain('子目录')
-    const en = foldersPrompt('en', { total: 30, maxSiblings: 8, existingFolders: ['GitHub'] }).join('\n')
-    expect(en).toMatch(/subfolder/i)
-  })
-
-  it('范例不再自相矛盾——已有目录的范例不是复合名（M5）', () => {
-    const zh = foldersPrompt('zh_CN', { total: 30, maxSiblings: 8, existingFolders: ['GitHub'] }).join('\n')
-    expect(zh).not.toContain('语音合成与克隆')
-  })
-
-  // 票 10「关组牵动的两处」之一：组关起来之后，组外的同主题书签需要一个同名目录才有去处，
-  // 硬禁同名会把它们赶进「其他」。规则松成「允许同名、禁近义异名」——语义重叠但名字不同的
-  // 才是真正要挡的（「语音合成」vs「文本转语音」是同一个概念 TTS 的两种叫法）。
-  it('已有目录清单那条规则松成「允许同名、禁近义异名」', () => {
-    const lines = foldersPrompt('zh_CN', {
-      total: 30, maxSiblings: 8, existingFolders: ['GitHub', 'GitHub/语音合成与克隆'],
-    }).join('\n')
-    expect(lines).toContain('同名')
-    expect(lines).toContain('语义重叠')
-  })
-
-  it('英文那份同样松', () => {
-    const lines = foldersPrompt('en', {
-      total: 30, maxSiblings: 8, existingFolders: ['GitHub/Speech synthesis'],
-    }).join('\n')
-    expect(lines).toContain('same name')
-    expect(/[一-鿿]/.test(lines)).toBe(false)
-  })
-
-  // 放开同名只该覆盖组内子目录（「A/B」里的 B）——组根名本身（不带「/」，如「GitHub」）
-  // 与聚合组是同一个来源，造一个跟它重名的顶层目录仍然是双胞胎。上面「规则松成……」
-  // 那条只验了「同名」这个词出现，没验清楚放开的范围，这里补上（final-review.md I4）。
-  it('放开同名不含组根名——不带「/」的名字本身仍然不能重用', () => {
-    const zh = foldersPrompt('zh_CN', {
-      total: 30, maxSiblings: 8, existingFolders: ['GitHub', 'GitHub/语音合成'],
-    }).join('\n')
-    expect(zh).toContain('不带「/」的名字本身不要重用')
-    const en = foldersPrompt('en', {
-      total: 30, maxSiblings: 8, existingFolders: ['GitHub', 'GitHub/Speech synthesis'],
-    }).join('\n')
-    expect(en).toMatch(/do not reuse a bare name/i)
   })
 })
 

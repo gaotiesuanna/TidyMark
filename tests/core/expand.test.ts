@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { createTemporaryIdFactory, deepenReason, expandFolder } from '@/core/audit'
 import type { CategoryCandidate, Classification, TagResult } from '@/core/types'
 
-const parent: CategoryCandidate = { id: 'tmp:7', path: ['01 软件工程'], domainGroup: 'github' }
+const parent: CategoryCandidate = { id: 'tmp:7', path: ['01 软件工程'] }
 
 function tag(bookmarkId: string, primaryTopic: string): TagResult {
   return { bookmarkId, primaryTopic, secondaryTopic: null }
@@ -68,15 +68,6 @@ describe('expandFolder', () => {
     )
     expect(result.createdCount).toBe(2)
     expect(result.classifications.find((c) => c.bookmarkId === 'z')).toEqual(other)
-  })
-
-  it('domainGroup 标记由子目录继承', () => {
-    const result = expand(
-      [tag('a', '构建工具'), tag('b', '测试框架')],
-      [classified('a', 'tmp:7'), classified('b', 'tmp:7')],
-    )
-    expect(result.candidates).toHaveLength(2)
-    expect(result.candidates.every((c) => c.domainGroup === 'github')).toBe(true)
   })
 
   it('只切得出一个子目录时不切——那一层不承载任何区分度', () => {

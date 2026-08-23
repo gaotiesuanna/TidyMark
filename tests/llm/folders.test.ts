@@ -12,11 +12,10 @@ import {
   type DesignOptions,
 } from '@/llm/folders'
 import { NO_TOPIC } from '@/llm/tags'
-import type { BookmarkItem, TagResult } from '@/core/types'
+import type { TagResult } from '@/core/types'
 import type { LlmClient } from '@/llm/client'
-import { normalizeName } from '@/core/map'
 import { MAX_SIBLINGS } from '@/core/tree'
-import { MAX_LEAF, SHAPE_MAX_SIBLINGS } from '@/core/shape'
+import { SHAPE_MAX_SIBLINGS } from '@/core/shape'
 
 function tag(bookmarkId: string, primaryTopic: string): TagResult {
   return { bookmarkId, primaryTopic, secondaryTopic: null }
@@ -36,12 +35,10 @@ function designFolders(
 
 function designTagFolders(
   tags: TagResult[],
-  bookmarks: BookmarkItem[],
-  domainGroups: string[],
   client: LlmClient,
   options?: DesignOptions,
 ): Promise<TagResult[]> {
-  return designTagFoldersRaw(tags, bookmarks, domainGroups, client, 'zh_CN', options)
+  return designTagFoldersRaw(tags, client, 'zh_CN', options)
 }
 
 function design(entries: Array<[string, string[]]>, folders: FolderDesign['folders'] = []): FolderDesign {
@@ -478,197 +475,65 @@ describe('designFolders 的复合名重问', () => {
   })
 })
 
+// D4（issues/38）取消域名聚合之后，designTagFolders 只剩一种形态：
+// 全部标签走一次设计。原来的「组内先跑、主题在后」「组名喂给主题那一轮」
+// 那一整套用例随机制一起删掉了。
 describe('designTagFolders', () => {
-  const item = (id: string, url: string): BookmarkItem => ({
-    id, title: 'T' + id, url, parentId: '1', index: 0, currentPath: ['书签栏'],
-  })
-  const gh = (id: string) => item(id, `https://github.com/o/r${id}`)
-  const blog = (id: string) => item(id, `https://example.com/${id}`)
-  /**
-   * 造 n 条命中 github 组、同一个主题标签的标签 + 书签。
-   *
-   * I2 之后，命中数 ≤ MAX_LEAF 的组不再为它发目录设计请求（tree.ts 建树时会整组平铺，
-   * 产出必然被丢弃）。凡是要验「组那摊真的发了设计请求」这件事的用例，命中数都要过
-   * MANY = MAX_LEAF + 1 这个门槛，不然 complete 根本不会为组那摊被调用
-   * （见 final-review.md I2）。
-   */
-  const MANY = MAX_LEAF + 1
-  const ghGroup = (n: number, primaryTopic: string, startId = 2): { tags: TagResult[]; items: BookmarkItem[] } => {
-    const tags: TagResult[] = []
-    const items: BookmarkItem[] = []
-    for (let i = 0; i < n; i++) {
-      const id = String(startId + i)
-      tags.push(tag(id, primaryTopic))
-      items.push(gh(id))
-    }
-    return { tags, items }
-  }
-
-  it('没勾选聚合组时，全部标签走一次设计', async () => {
+  it('全部标签走一次设计', async () => {
     const complete = vi.fn().mockResolvedValue({
       folders: [{ title: 'LLM 原理', topics: ['KV Cache', '注意力机制'], children: [] }],
     })
     const result = await designTagFolders(
-      [tag('1', 'KV Cache'), tag('2', '注意力机制')],
-      [blog('1'), blog('2')], [], { complete },
+      [tag('1', 'KV Cache'), tag('2', '注意力机制')], { complete },
     )
     expect(complete).toHaveBeenCalledTimes(1)
     expect(result.map((t) => t.primaryTopic)).toEqual(['LLM 原理', 'LLM 原理'])
   })
 
-  it('命中聚合组的书签单独设计，且不进一级目录那次请求', async () => {
-    // 命中数要过 MANY 这个门槛，组那摊的设计请求才会真的发出去（I2）
-    const { tags: ghTags, items: ghItems } = ghGroup(MANY, '智能体框架')
-    const complete = vi.fn()
-      .mockResolvedValueOnce({ folders: [{ title: 'Agent 框架', topics: ['智能体框架'], children: [] }] })
-      .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
+  // 这一条钉的是 D4 本身：github.com 的书签不再被任何规则单独拎走，
+  // 它和讲它的那篇博客一起参与同一次主题设计、落进同一个目录。
+  it('github.com 的书签不再被单独拎走，和讲它的博客进同一个目录', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      folders: [{ title: '语音合成', topics: ['GPT-SoVITS'], children: [] }],
+    })
     const result = await designTagFolders(
-      [tag('1', 'KV Cache'), ...ghTags],
-      [blog('1'), ...ghItems], ['github'], { complete },
+      [tag('repo', 'GPT-SoVITS'), tag('post', 'GPT-SoVITS')], { complete },
     )
-    expect(complete).toHaveBeenCalledTimes(2)
-    // 聚合组先跑，主题那次是第二次请求——它不该带上组内标签
-    expect(complete.mock.calls[1]![0]).not.toContain('智能体框架')
-    expect(result[0]!.primaryTopic).toBe('LLM 原理')
-    expect(result[1]!.primaryTopic).toBe('Agent 框架')
+    expect(complete).toHaveBeenCalledTimes(1)
+    expect(result.map((t) => t.primaryTopic)).toEqual(['语音合成', '语音合成'])
   })
 
-  it('聚合组那次调用限一层', async () => {
-    const { tags: ghTags, items: ghItems } = ghGroup(MANY, '智能体框架')
-    const complete = vi.fn().mockResolvedValue({ folders: [] })
-    await designTagFolders(ghTags, ghItems, ['github'], { complete })
-    expect(complete.mock.calls[0]![0]).toContain('只输出一层')
-    expect(complete.mock.calls[0]![0]).toContain('GitHub')
-  })
-
-  it('某一次设计失败时，该批标签原样保留，其余照常归并', async () => {
-    // 聚合组先跑，这里失败的是聚合组那摊
-    const { tags: ghTags, items: ghItems } = ghGroup(MANY, '智能体框架')
-    const complete = vi.fn()
-      .mockRejectedValueOnce(Object.assign(new Error('x'), { retryable: false }))
-      .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
-    const result = await designTagFolders(
-      [tag('1', 'KV Cache'), ...ghTags],
-      [blog('1'), ...ghItems], ['github'], { complete },
-    )
-    expect(result[0]!.primaryTopic).toBe('LLM 原理')
-    expect(result[1]!.primaryTopic).toBe('智能体框架')
-  })
-
-  it('主题那摊失败时，聚合组那摊的结果仍然生效', async () => {
-    // 聚合组先跑、主题后跑，这里失败的换成主题那摊——顺序调换之后这个方向
-    // 之前没有用例覆盖（见 issues review M2）
-    const { tags: ghTags, items: ghItems } = ghGroup(MANY, '智能体框架')
-    const complete = vi.fn()
-      .mockResolvedValueOnce({ folders: [{ title: 'Agent 框架', topics: ['智能体框架'], children: [] }] })
-      .mockRejectedValueOnce(Object.assign(new Error('x'), { retryable: false }))
-    const result = await designTagFolders(
-      [tag('1', 'KV Cache'), ...ghTags],
-      [blog('1'), ...ghItems], ['github'], { complete },
-    )
-    expect(result[1]!.primaryTopic).toBe('Agent 框架')
+  it('设计失败时整摊标签原样保留', async () => {
+    const complete = vi.fn().mockRejectedValue(new Error('boom'))
+    const result = await designTagFolders([tag('1', 'KV Cache')], { complete })
     expect(result[0]!.primaryTopic).toBe('KV Cache')
   })
 
-  it('组内子目录实际分到的书签数不足 minFolderSize 时，不报给主题那一轮', async () => {
-    // 「文档解析」装得下 MANY-1 条，过 I2 的门槛；「语音识别」只装 1 条，
-    // tree.ts 建树时会把后者剪掉——报给主题那一轮的清单不该包含它，否则组外同主题的
-    // 书签会被这条「已经存在」的假象拦住，映射不到目录（见 issues review I4）
-    const { tags: parserTags, items: parserItems } = ghGroup(MANY - 1, '解析器', 2)
-    const speechTag = tag(String(2 + MANY - 1), '识别模型')
-    const speechItem = gh(String(2 + MANY - 1))
-    const complete = vi.fn()
-      .mockResolvedValueOnce({
-        folders: [
-          { title: '文档解析', topics: ['解析器'], children: [] },
-          { title: '语音识别', topics: ['识别模型'], children: [] },
-        ],
-      })
-      .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
-    await designTagFolders(
-      [tag('1', 'KV Cache'), ...parserTags, speechTag],
-      [blog('1'), ...parserItems, speechItem], ['github'], { complete },
-      { minFolderSize: 2 },
-    )
-    const topicPrompt = complete.mock.calls[1]![0] as string
-    expect(topicPrompt).toContain('GitHub/文档解析')
-    expect(topicPrompt).not.toContain('GitHub/语音识别')
-    expect(topicPrompt).toContain('GitHub')
-  })
-
-  it('不传 minFolderSize 时不过滤，组内子目录照样全数报给主题那一轮', async () => {
-    const { tags: ghTags, items: ghItems } = ghGroup(MANY, '识别模型')
-    const complete = vi.fn()
-      .mockResolvedValueOnce({
-        folders: [{ title: '语音识别', topics: ['识别模型'], children: [] }],
-      })
-      .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
-    await designTagFolders(
-      [tag('1', 'KV Cache'), ...ghTags],
-      [blog('1'), ...ghItems], ['github'], { complete },
-    )
-    const topicPrompt = complete.mock.calls[1]![0] as string
-    expect(topicPrompt).toContain('GitHub/语音识别')
-  })
-
-  it('命中数 ≤ MAX_LEAF 的组不为它发目录设计请求，主题那一轮的已有目录清单里也没有它的子目录名（I2）', async () => {
-    // 命中 10 条，没过 MANY 门槛——tree.ts 建树时会整组平铺，子目录一个都不建，
-    // 跑设计只会产出必然被丢弃的目录名
-    const { tags: ghTags, items: ghItems } = ghGroup(10, '智能体框架')
-    const complete = vi.fn().mockResolvedValueOnce({
-      folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }],
-    })
-    await designTagFolders(
-      [tag('1', 'KV Cache'), ...ghTags],
-      [blog('1'), ...ghItems], ['github'], { complete },
-    )
-    // 只有主题那一次请求——组那摊被跳过，没有花第二次调用
-    expect(complete).toHaveBeenCalledTimes(1)
-    const topicPrompt = complete.mock.calls[0]![0] as string
-    // 组根名仍然报给了主题那一轮（它确实会建出来）
-    expect(topicPrompt).toContain('GitHub')
-    // 但组内标签一个都没被拿去设计，不会有任何「GitHub/xxx」这种幻影子目录名
-    expect(topicPrompt).not.toMatch(/GitHub\/\S/)
-    expect(topicPrompt).not.toContain('智能体框架')
-  })
-
   it('保持输入顺序与条数', async () => {
-    const complete = vi.fn().mockResolvedValue({ folders: [] })
-    const result = await designTagFolders(
-      [tag('1', 'a'), tag('2', 'b')], [blog('1'), gh('2')], ['github'], { complete },
-    )
+    const complete = vi.fn().mockResolvedValue({
+      folders: [
+        { title: 'A', topics: ['a'], children: [] },
+        { title: 'B', topics: ['b'], children: [] },
+      ],
+    })
+    const result = await designTagFolders([tag('1', 'b'), tag('2', 'a')], { complete })
     expect(result.map((t) => t.bookmarkId)).toEqual(['1', '2'])
+    expect(result.map((t) => t.primaryTopic)).toEqual(['B', 'A'])
   })
 
   it('标签全空时不发请求', async () => {
     const complete = vi.fn()
-    const result = await designTagFolders([tag('1', NO_TOPIC)], [blog('1')], [], { complete })
+    const result = await designTagFolders([tag('1', NO_TOPIC)], { complete })
     expect(complete).not.toHaveBeenCalled()
     expect(result[0]!.primaryTopic).toBe(NO_TOPIC)
   })
 
-  it('取消后跳过剩余摊子，已发出的那摊结果仍然生效，未处理的摊子原样保留', async () => {
-    // 聚合组先跑，因此这里让「已发出的那摊」变成聚合组那摊：
-    // isCancelled 前两次探活（摊前总检查、组内逐摊检查）放行，组那摊跑完后
-    // 第三次探活（主题那摊开始前）才报取消，主题那摊因此原样保留。
-    // 命中数要过 MANY 门槛，组那摊才会真的发出这次请求（I2）
-    const { tags: ghTags, items: ghItems } = ghGroup(MANY, '智能体框架')
-    const complete = vi.fn().mockResolvedValue({
-      folders: [{ title: 'Agent 框架', topics: ['智能体框架'], children: [] }],
-    })
-    let calls = 0
+  it('取消时不发请求，标签原样保留', async () => {
+    const complete = vi.fn()
     const result = await designTagFolders(
-      [tag('1', 'KV Cache'), ...ghTags],
-      [blog('1'), ...ghItems], ['github'], { complete },
-      {
-        isCancelled: () => {
-          calls += 1
-          return calls > 2
-        },
-      },
+      [tag('1', 'KV Cache')], { complete }, { isCancelled: () => true },
     )
-    expect(complete).toHaveBeenCalledTimes(1)
-    expect(result[1]!.primaryTopic).toBe('Agent 框架')
+    expect(complete).not.toHaveBeenCalled()
     expect(result[0]!.primaryTopic).toBe('KV Cache')
   })
 
@@ -679,100 +544,47 @@ describe('designTagFolders', () => {
         { title: 'B', topics: ['b'], children: [] },
       ],
     })
-    const result = await designTagFolders(
-      [tag('1', 'a'), tag('1', 'b')], [blog('1')], [], { complete },
-    )
+    const result = await designTagFolders([tag('1', 'a'), tag('1', 'b')], { complete })
     expect(result[0]!.primaryTopic).toBe('A')
     expect(result[1]!.primaryTopic).toBe('B')
   })
 
-  it('聚合组那几摊先跑，主题那摊在后——先后关系是这条链路的全部意义', async () => {
-    const { tags: ghTags, items: ghItems } = ghGroup(MANY, '智能体框架')
-    const complete = vi.fn()
-      .mockResolvedValueOnce({ folders: [{ title: 'Agent 框架', topics: ['智能体框架'], children: [] }] })
-      .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
-    await designTagFolders(
-      [tag('1', 'KV Cache'), ...ghTags],
-      [blog('1'), ...ghItems], ['github'], { complete },
-    )
-    // 第一次是聚合组那摊：它认得组内的标签，也带着「只输出一层」
-    expect(complete.mock.calls[0]![0]).toContain('智能体框架')
-    expect(complete.mock.calls[0]![0]).toContain('只输出一层')
-  })
-
-  it('主题那次带上聚合组名与组内设计出来的子目录名', async () => {
-    // 「语音合成与克隆」本身是复合名（Task 1/2 的重问逻辑会认出「与」两侧都够长），
-    // 所以聚合组那摊会先重问一次；重问原样给回同一个标题，验的仍然是重问结束之后
-    // 落地的最终产物——第三次调用才是主题那次。命中数要过 MANY 门槛，组那摊的设计
-    // 请求才会真的发出去（I2）
-    const { tags: ghTags, items: ghItems } = ghGroup(MANY, '智能体框架')
-    const complete = vi.fn()
-      .mockResolvedValueOnce({
-        folders: [{ title: '语音合成与克隆', topics: ['智能体框架'], children: [] }],
-      })
-      .mockResolvedValueOnce({
-        folders: [{ title: '语音合成与克隆', topics: ['智能体框架'], children: [] }],
-      })
-      .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
-    await designTagFolders(
-      [tag('1', 'KV Cache'), ...ghTags],
-      [blog('1'), ...ghItems], ['github'], { complete },
-    )
-    const topicPrompt = complete.mock.calls[2]![0] as string
-    expect(topicPrompt).toContain('GitHub')
-    expect(topicPrompt).toContain('语音合成与克隆')
-    expect(topicPrompt).toContain('语义重叠')
-  })
-
-  it('聚合组那摊设计失败时，主题那摊仍然知道组名，只是没有子目录名可报', async () => {
-    const { tags: ghTags, items: ghItems } = ghGroup(MANY, '智能体框架')
-    const complete = vi.fn()
-      .mockRejectedValueOnce(Object.assign(new Error('x'), { retryable: false }))
-      .mockResolvedValueOnce({ folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }] })
-    const result = await designTagFolders(
-      [tag('1', 'KV Cache'), ...ghTags],
-      [blog('1'), ...ghItems], ['github'], { complete },
-    )
-    expect(complete.mock.calls[1]![0]).toContain('GitHub')
-    // 失败那摊的标签原样保留
-    expect(result[1]!.primaryTopic).toBe('智能体框架')
-  })
-
-  it('没勾选聚合组时，主题那次不带已有目录清单', async () => {
+  it('有标签映射不到目录时打一条 info 日志，说明去处交给分类阶段（I5）', async () => {
+    const logs: string[] = []
     const complete = vi.fn().mockResolvedValue({
       folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }],
     })
-    await designTagFolders([tag('1', 'KV Cache')], [blog('1')], [], { complete })
-    expect(complete.mock.calls[0]![0]).not.toContain('语义重叠')
+    const result = await designTagFolders(
+      [tag('1', 'KV Cache'), tag('2', '注意力机制')], { complete },
+      { onLog: (message) => logs.push(message) },
+    )
+    expect(result[1]!.primaryTopic).toBe(NO_TOPIC)
+    expect(logs.filter((m) => m.includes('没有映射到任何目录'))).toEqual([
+      '主题设计完成后有 1 个标签没有映射到任何目录，去处由分类阶段决定',
+    ])
   })
 
-  it('主题设计后有标签映射不到目录时打一条 info 日志，说明去处交给分类阶段（I5）', async () => {
-    // 设计只认领了 TopicA，TopicB 没有任何目录声明它，applyDesign 会把它置成 NO_TOPIC
-    const logs: Array<[string, string]> = []
+  it('没有标签失去归属时不打这条 info 日志（I5）', async () => {
+    const logs: string[] = []
     const complete = vi.fn().mockResolvedValue({
-      folders: [{ title: 'FolderA', topics: ['TopicA'], children: [] }],
+      folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }],
     })
     await designTagFolders(
-      [tag('1', 'TopicA'), tag('2', 'TopicB')],
-      [blog('1'), blog('2')], [], { complete },
-      { onLog: (message, level) => logs.push([message, level]) },
+      [tag('1', 'KV Cache')], { complete }, { onLog: (message) => logs.push(message) },
     )
-    expect(logs.some(([m, l]) => l === 'info' && m.includes('1') && m.includes('分类'))).toBe(true)
+    expect(logs.filter((m) => m.includes('没有映射到任何目录'))).toEqual([])
   })
 
-  it('主题设计后没有标签失去归属时不打这条 info 日志（I5）', async () => {
-    // logFoldersDone 本身也是 info 级别，这里只断言「未映射」那条不出现，
-    // 不是断言完全没有 info 日志
-    const logs: Array<[string, string]> = []
+  it('原本就是空主题的标签不算「新失去归属」，不触发那条日志', async () => {
+    const logs: string[] = []
     const complete = vi.fn().mockResolvedValue({
-      folders: [{ title: 'FolderA', topics: ['TopicA', 'TopicB'], children: [] }],
+      folders: [{ title: 'LLM 原理', topics: ['KV Cache'], children: [] }],
     })
     await designTagFolders(
-      [tag('1', 'TopicA'), tag('2', 'TopicB')],
-      [blog('1'), blog('2')], [], { complete },
-      { onLog: (message, level) => logs.push([message, level]) },
+      [tag('1', 'KV Cache'), tag('2', NO_TOPIC)], { complete },
+      { onLog: (message) => logs.push(message) },
     )
-    expect(logs.some(([m, l]) => l === 'info' && m.includes('分类'))).toBe(false)
+    expect(logs.filter((m) => m.includes('没有映射到任何目录'))).toEqual([])
   })
 })
 
@@ -892,35 +704,21 @@ describe('nameNewTopics', () => {
 })
 
 describe('fragmentedFamilies', () => {
-  type Spec = Array<{ title: string; count?: number; children?: Array<{ title: string; count: number }> }>
+  type Spec = Array<{ title: string; children?: string[] }>
 
-  /** 造一份设计产物 + 与之对应的标签清单：每个目录挂一个独占标签，标签的 count 就是它的书签数。 */
-  function designWith(spec: Spec): { design: FolderDesign; topics: Array<{ topic: string; count: number }> } {
-    const folders: FolderDesign['folders'] = []
-    const mapping = new Map<string, string[]>()
-    const topics: Array<{ topic: string; count: number }> = []
-    const add = (path: string[], count: number): void => {
-      const topic = `标签${topics.length}`
-      mapping.set(normalizeName(topic), path)
-      topics.push({ topic, count })
+  function designWith(spec: Spec): FolderDesign {
+    return {
+      folders: spec.map((f) => ({ title: f.title, children: f.children ?? [] })),
+      mapping: new Map(),
     }
-    for (const folder of spec) {
-      folders.push({ title: folder.title, children: (folder.children ?? []).map((c) => c.title) })
-      if (folder.count !== undefined) add([folder.title], folder.count)
-      for (const child of folder.children ?? []) add([folder.title, child.title], child.count)
-    }
-    return { design: { folders, mapping }, topics }
   }
+  const flat = (titles: string[]): FolderDesign => designWith(titles.map((title) => ({ title })))
 
-  function flat(spec: Array<[string, number]>): ReturnType<typeof designWith> {
-    return designWith(spec.map(([title, count]) => ({ title, count })))
-  }
-
-  it('同一个主体拆成几个装不满的目录时点名', () => {
-    const { design, topics } = flat([
-      ['FastAPI教程', 5], ['FastAPI实战', 3], ['FastAPI数据库', 3], ['FastAPI用户认证', 3],
-    ])
-    const families = fragmentedFamilies(design, topics, 3)
+  // D1（issues/38）：判据只剩「同主体」一条，尺寸那一关整个撤了。
+  it('同一个主体拆成几个并列目录时点名', () => {
+    const families = fragmentedFamilies(
+      flat(['FastAPI教程', 'FastAPI实战', 'FastAPI数据库', 'FastAPI用户认证']), 3,
+    )
     expect(families).toHaveLength(1)
     expect(families[0]!.prefix).toBe('FastAPI')
     expect(families[0]!.titles).toEqual([
@@ -928,100 +726,67 @@ describe('fragmentedFamilies', () => {
     ])
   })
 
-  it('同族但个个装得满就放过——治的是碎，不是同名', () => {
-    const { design, topics } = flat([['语音识别', 6], ['语音合成', 6], ['语音对话', 5]])
-    expect(fragmentedFamilies(design, topics, 3)).toEqual([])
-  })
-
-  it('一半小一半不小不算碎，要多数', () => {
-    const { design, topics } = flat([['FastAPI教程', 3], ['FastAPI实战', 9]])
-    expect(fragmentedFamilies(design, topics, 3)).toEqual([])
-  })
-
-  it('只有一个成不了族', () => {
-    const { design, topics } = flat([['FastAPI教程', 3], ['Docker部署', 3]])
-    expect(fragmentedFamilies(design, topics, 3)).toEqual([])
-  })
-
-  it('一个名字就是另一个的前缀时算同族', () => {
-    const { design, topics } = flat([['FastAPI', 3], ['FastAPI教程', 3]])
-    expect(fragmentedFamilies(design, topics, 3)[0]!.prefix).toBe('FastAPI')
-  })
-
-  it('公共前缀落在单词中间不算同族', () => {
-    // Prometheus / Protobuf 共享 Pro 三个字母，但那是半个单词
-    const { design, topics } = flat([['Prometheus监控', 3], ['Protobuf序列化', 3]])
-    expect(fragmentedFamilies(design, topics, 3)).toEqual([])
-  })
-
-  it('英文前缀不足三个字母不算同族', () => {
-    const { design, topics } = flat([['CI/CD', 3], ['CLI 工具', 3]])
-    expect(fragmentedFamilies(design, topics, 3)).toEqual([])
-  })
-
-  it('中文前缀不足两个字不算同族', () => {
-    const { design, topics } = flat([['模型部署', 3], ['模块化设计', 3]])
-    expect(fragmentedFamilies(design, topics, 3)).toEqual([])
-  })
-
-  it('minFolderSize 缺席时一概不检测——用户关掉了这项约束', () => {
-    const { design, topics } = flat([['FastAPI教程', 3], ['FastAPI实战', 3]])
-    expect(fragmentedFamilies(design, topics)).toEqual([])
-  })
-
-  it('只在同一层的兄弟之间比，一级不会和别人的二级凑成族', () => {
-    const { design, topics } = designWith([
-      { title: 'FastAPI教程', count: 3 },
-      { title: '容器', children: [{ title: 'FastAPI实战', count: 3 }] },
-    ])
-    expect(fragmentedFamilies(design, topics, 3)).toEqual([])
-  })
-
-  it('同一个父目录下的二级目录之间照样检测', () => {
-    const { design, topics } = designWith([
-      {
-        title: '容器',
-        children: [
-          { title: 'Docker基础', count: 3 },
-          { title: 'Docker网络', count: 3 },
-          { title: 'Docker存储', count: 3 },
-        ],
-      },
-    ])
-    const families = fragmentedFamilies(design, topics, 3)
-    expect(families).toHaveLength(1)
-    expect(families[0]!.titles).toEqual(['Docker基础', 'Docker网络', 'Docker存储'])
-  })
-
-  it('组内那一摊同主体就算一族，尺寸这一关不再问', () => {
-    const { design, topics } = flat([['语音识别', 6], ['语音合成', 6], ['语音对话', 5]])
-    const families = fragmentedFamilies(design, topics, 3, true)
+  // 这一条是 D1 的核心：改判之前它是「同族但个个装得满就放过」。
+  // 真实产出里 FastAPI 那四个正是被尺寸这一关放行的——四个成员里有两个装了
+  // 6 条以上，就够不上「多数偏小」，于是一个主体占掉四个一级位子。
+  it('同族就算一族，尺寸再健康也照样点名', () => {
+    const families = fragmentedFamilies(flat(['语音识别', '语音合成', '语音对话']), 3)
     expect(families).toHaveLength(1)
     expect(families[0]!.prefix).toBe('语音')
     expect(families[0]!.titles).toEqual(['语音识别', '语音合成', '语音对话'])
   })
 
-  it('同样这三个在一级目录那一摊仍然放过——放开的只有组内', () => {
-    const { design, topics } = flat([['语音识别', 6], ['语音合成', 6], ['语音对话', 5]])
-    expect(fragmentedFamilies(design, topics, 3)).toEqual([])
+  it('只有一个成不了族', () => {
+    expect(fragmentedFamilies(flat(['FastAPI教程', 'Docker部署']), 3)).toEqual([])
   })
 
-  it('组内放开的是尺寸那一关，不是主体那一关', () => {
-    const { design, topics } = flat([['模型部署', 9], ['模块化设计', 9]])
-    expect(fragmentedFamilies(design, topics, 3, true)).toEqual([])
+  it('一个名字就是另一个的前缀时算同族', () => {
+    expect(fragmentedFamilies(flat(['FastAPI', 'FastAPI教程']), 3)[0]!.prefix).toBe('FastAPI')
   })
 
-  it('组内同样要 minFolderSize 在场才检测', () => {
-    const { design, topics } = flat([['语音识别', 6], ['语音合成', 6]])
-    expect(fragmentedFamilies(design, topics, undefined, true)).toEqual([])
+  it('公共前缀落在单词中间不算同族', () => {
+    // Prometheus / Protobuf 共享 Pro 三个字母，但那是半个单词
+    expect(fragmentedFamilies(flat(['Prometheus监控', 'Protobuf序列化']), 3)).toEqual([])
   })
 
-  it('一级目录的条数把子目录的一并算上，撑得起来就不算碎', () => {
-    const { design, topics } = designWith([
-      { title: 'FastAPI教程', children: [{ title: '入门', count: 4 }, { title: '进阶', count: 4 }] },
-      { title: 'FastAPI实战', children: [{ title: '案例', count: 4 }, { title: '踩坑', count: 4 }] },
+  it('英文前缀不足三个字母不算同族', () => {
+    expect(fragmentedFamilies(flat(['CI/CD', 'CLI 工具']), 3)).toEqual([])
+  })
+
+  it('中文前缀不足两个字不算同族', () => {
+    expect(fragmentedFamilies(flat(['模型部署', '模块化设计']), 3)).toEqual([])
+  })
+
+  it('minFolderSize 缺席时一概不检测——用户关掉了这项约束', () => {
+    expect(fragmentedFamilies(flat(['FastAPI教程', 'FastAPI实战']))).toEqual([])
+  })
+
+  it('只在同一层的兄弟之间比，一级不会和别人的二级凑成族', () => {
+    const design = designWith([
+      { title: 'FastAPI教程' },
+      { title: '容器', children: ['FastAPI实战'] },
     ])
-    expect(fragmentedFamilies(design, topics, 3)).toEqual([])
+    expect(fragmentedFamilies(design, 3)).toEqual([])
+  })
+
+  it('同一个父目录下的二级目录之间照样检测', () => {
+    const design = designWith([
+      { title: '容器', children: ['Docker基础', 'Docker网络', 'Docker存储'] },
+    ])
+    const families = fragmentedFamilies(design, 3)
+    expect(families).toHaveLength(1)
+    expect(families[0]!.titles).toEqual(['Docker基础', 'Docker网络', 'Docker存储'])
+  })
+
+  // 撤掉尺寸那一关之后，「一级目录的条数把子目录的一并算上」这条豁免也随之消失：
+  // 分出了子目录的同族一级目录照样要合并。合并之后目录太大不必怕——
+  // core/audit.ts 的 findOversizedFolders 会按落成后的真实占用把它再切开。
+  it('分了子目录的同族一级目录同样点名', () => {
+    const design = designWith([
+      { title: 'FastAPI教程', children: ['入门', '进阶'] },
+      { title: 'FastAPI实战', children: ['案例', '踩坑'] },
+    ])
+    expect(fragmentedFamilies(design, 3)[0]!.titles).toEqual(['FastAPI教程', 'FastAPI实战'])
   })
 })
 
@@ -1108,7 +873,9 @@ describe('designFolders 的同族碎片重问', () => {
   })
 })
 
-describe('designFolders 组内那一摊的同族门槛', () => {
+// D1 之前这一组验的是「组内放开尺寸、一级不放开」。两摊现在用同一把尺子，
+// 剩下要钉的是：一级目录那一摊也真的会为尺寸健康的同族重问。
+describe('designFolders 一级与单层用同一把同族尺子', () => {
   const designFolders = designFoldersRaw
   const topics = [
     { topic: '语音识别', count: 6 },
@@ -1124,18 +891,25 @@ describe('designFolders 组内那一摊的同族门槛', () => {
     folders: [{ title: '语音', topics: ['语音识别', '语音合成'], children: [] }],
   }
 
-  it('组内同主体就重问，尺寸再健康也算', async () => {
+  it('一级目录那一摊：同主体就重问，尺寸再健康也算', async () => {
     const complete = vi.fn().mockResolvedValueOnce(splitApart).mockResolvedValueOnce(mergedUp)
-    const result = await designFolders(topics, { complete }, 'zh_CN', {
-      minFolderSize: 3, oneLevel: true, parentTitle: 'GitHub',
-    })
+    const result = await designFolders(topics, { complete }, 'zh_CN', { minFolderSize: 3 })
     expect(complete).toHaveBeenCalledTimes(2)
     expect(result!.folders).toEqual([{ title: '语音', children: [] }])
   })
 
-  it('同样这两个在一级目录那一摊不重问', async () => {
+  it('单层那一摊（下切时用）同样重问', async () => {
+    const complete = vi.fn().mockResolvedValueOnce(splitApart).mockResolvedValueOnce(mergedUp)
+    await designFolders(topics, { complete }, 'zh_CN', {
+      minFolderSize: 3, oneLevel: true, parentTitle: 'FastAPI',
+    })
+    expect(complete).toHaveBeenCalledTimes(2)
+  })
+
+  it('minFolderSize 缺席时两摊都不重问', async () => {
     const complete = vi.fn().mockResolvedValue(splitApart)
-    await designFolders(topics, { complete }, 'zh_CN', { minFolderSize: 3 })
-    expect(complete).toHaveBeenCalledTimes(1)
+    await designFolders(topics, { complete }, 'zh_CN', {})
+    await designFolders(topics, { complete }, 'zh_CN', { oneLevel: true, parentTitle: 'FastAPI' })
+    expect(complete).toHaveBeenCalledTimes(2)
   })
 })

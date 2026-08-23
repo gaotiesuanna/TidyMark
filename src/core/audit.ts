@@ -64,8 +64,8 @@ function renumberChildren(
  *
  * 为什么会出现：core/tree.ts 发射一级目录时只用 findChild(rootId, title) 查
  * **范围根下面的子目录**有没有重名可以复用，从来没跟范围根**自己**的名字比过。
- * 范围根叫「01 GitHub」、又勾了 github 聚合组时，组目录就叫「GitHub」，
- * 于是 `01 GitHub / 01 GitHub / …`。
+ * 范围根叫「01 GitHub」、而设计出来的一级目录里恰好也有一个「GitHub」时，
+ * 就成了 `01 GitHub / 01 GitHub / …`。
  *
  * 为什么 core/prune.ts 接不住：它只撤装不满的目录，而这个目录装得满满的。
  *
@@ -135,11 +135,7 @@ export function collapseSameNameFolders(input: CollapseInput): CollapseResult {
       .map((c) => {
         if (!descendants.has(c.id) || cutAt < 0) return c
         const path = [...c.path.slice(0, cutAt), ...c.path.slice(cutAt + 1)]
-        const inherited =
-          victimCandidate?.domainGroup !== undefined && c.domainGroup === undefined
-            ? { domainGroup: victimCandidate.domainGroup }
-            : {}
-        return { ...c, path, ...inherited }
+        return { ...c, path }
       })
 
     renumberChildren(newFolders, candidates, parentId, parentTemporaryId)
@@ -181,13 +177,13 @@ export interface OversizedInput {
 /**
  * 找出装得过满、值得再切一层的目录。
  *
- * 这是 MAX_LEAF 这条判准第一次对**实际落成的目录**验算。在此之前它只在
- * core/shape.ts 的 deriveShape 里对**书签总数 N** 用过一次，用来推导该分几层——
- * 形状是开工前一次性预测的，预测完没有人回头看。模型完全可以把一个主题设计成
- * 一个装 60 条的目录，而 core/tree.ts 的组内聚簇分完桶之后根本不数每桶多大。
+ * 这是判准 A1 唯一真正生效的地方，用的是 core/shape.ts 的 MAX_LEAF(12)。
+ * deriveShape 那边看的是另一个数（STRETCH_LEAF，20），它只回答「预测该分几层」，
+ * 算的还是平均值——预测故意宽松，宽松能成立的前提正是这里有一道严格验算兜底
+ * （两个数为什么分家见 core/shape.ts 与 issues/38-source-vs-topic.md 的 D2）。
+ * 模型完全可以把一个主题设计成一个装 60 条的目录，只有数过真实归属才拦得住。
  *
- * 占用按 classifications 数，聚合组钉死的那批（pinned）在 handlers.ts 里已经并进
- * classifications，不必另算。
+ * 占用按 classifications 数。
  *
  * 已知偏差：数的是**计划**里的归属，不是应用之后书签栏的真实占用。用户在复核页
  * 取消掉一部分移动后，实际落地的目录会比这里量到的小。这个偏差不修——复核页的
@@ -310,11 +306,7 @@ export function expandFolder(input: ExpandInput): ExpandResult {
     const title = `${String(index + 1).padStart(2, '0')} ${bucket.title}`
     const temporaryId = input.nextTemporaryId()
     newFolders.push({ temporaryId, parentId: null, parentTemporaryId: input.parent.id, title })
-    candidates.push({
-      id: temporaryId,
-      path: [...input.parent.path, title],
-      ...(input.parent.domainGroup === undefined ? {} : { domainGroup: input.parent.domainGroup }),
-    })
+    candidates.push({ id: temporaryId, path: [...input.parent.path, title] })
     for (const bookmarkId of bucket.bookmarkIds) targetByBookmark.set(bookmarkId, temporaryId)
   })
 

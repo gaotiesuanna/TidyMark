@@ -73,33 +73,6 @@ export function tagsPrompt(locale: Locale): string[] {
   ]
 }
 
-export function groupTagsPrompt(locale: Locale, groupTitle: string): string[] {
-  if (locale === 'zh_CN') {
-    return [
-      `下面这些书签全部来自「${groupTitle}」。这个共同点已经体现在目录名上，不要再拿它当分类依据。`,
-      '为每个书签抽取一个「功能域」标签，回答「它解决什么问题」。',
-      '',
-      '规则：',
-      `1. 禁止使用这些宽泛词：${BROAD_WORDS.zh_CN}。`,
-      '2. 用具体的问题域，例如「文档解析」「RAG 检索」「模型微调」「语音合成」「Agent 框架」「可观测性」。',
-      '3. title 通常是「作者/仓库名: 一句话简介」，简介是判断用途最可靠的依据。',
-      '4. 标签用中文，2 到 6 个字；专有技术名词（RAG、MCP、TTS）可直接用原文。',
-      '5. 尽量复用已出现过的标签名，不要为同一概念创造多个说法。',
-    ]
-  }
-  return [
-    `Every bookmark below comes from "${groupTitle}". That shared trait is already in the folder name, so do not use it as the basis for classification.`,
-    'Extract one capability-domain label for each bookmark, answering "what problem does it solve".',
-    '',
-    'Rules:',
-    `1. Never use these vague words: ${BROAD_WORDS.en}.`,
-    '2. Use concrete problem domains, e.g. "Document parsing", "RAG retrieval", "Model fine-tuning", "Speech synthesis", "Agent frameworks", "Observability".',
-    '3. The title is usually "owner/repo: one-line description". That description is the most reliable signal.',
-    '4. Write labels in English, 1 to 3 words. Established technical names (RAG, MCP, TTS) stay as they are.',
-    '5. Reuse labels you have already produced. Do not invent several names for one concept.',
-  ]
-}
-
 /**
  * 层级的说法，按绝对层级（见 core/level.ts）。
  *
@@ -131,13 +104,6 @@ export function foldersPrompt(
     /** 这批目录会被放进哪个目录，用于让模型知道自己在谁下面命名。 */
     containerTitle?: string
     /**
-     * 已经存在、这一轮不需要再设计的目录（聚合组名与组内子目录名，路径写成 `组名/子目录名`）。
-     *
-     * 只有主题那一摊会传：它跑在聚合组那几摊之后，靠这份清单避开双胞胎目录
-     * （见 issues/04-folder-design-defects.md「决定 1」）。空数组等同于不传。
-     */
-    existingFolders?: string[]
-    /**
      * 目录至少要装下几个书签。省略表示不做这项要求（用户关掉了开关）。
      *
      * 标签清单里带着每个标签的书签数，模型有依据算出某个目录会不会太小。
@@ -148,7 +114,7 @@ export function foldersPrompt(
 ): string[] {
   const {
     total, parentTitle, maxSiblings, allowChildren = true, startLevel = 1, containerTitle,
-    existingFolders, minFolderSize,
+    minFolderSize,
   } = opts
   const here = levelName(locale, startLevel)
   const below = levelName(locale, startLevel + 1)
@@ -179,7 +145,7 @@ export function foldersPrompt(
   // 既不同义也不重叠——它们是同一个主体的不同侧面，不点破的话，模型照着规则 1 与
   // 规则 4（名字要具体）办事，反而正是会拆成这几个（见 llm/folders.ts 的 fragmentedFamilies）。
   const familyRule = (index: number): string => {
-    // 只出一层的那几摊（组内分摊、allowChildren 关掉）children 恒为空数组，
+    // 只出一层的那几摊（下切时的分摊、allowChildren 关掉）children 恒为空数组，
     // 提它只会让模型以为还有分层这个选项。
     const layered = parentTitle === undefined && allowChildren
     if (locale === 'zh_CN') {
@@ -192,19 +158,6 @@ export function foldersPrompt(
     locale === 'zh_CN'
       ? `${index}. 不要建只装得下不到 ${minFolderSize} 个书签的目录；凑不满的标签并进相近的目录，没有相近的就不必给它单独开目录。`
       : `${index}. Only create a folder if it will hold at least ${minFolderSize} bookmarks. Merge labels that cannot fill one into a neighbouring folder; if none fits, leave them without a folder of their own.`
-
-  // 两轮设计从「互相看不见」变成「有先后」：聚合组先定，主题设计在它已知的前提下补剩下的。
-  // 已松（2026-08-19，计划 2/2）：只禁语义重叠，不禁同名——但只对「A/B」这类子目录松，
-  // 不带「/」的名字本身（聚合组根名，如「GitHub」）仍然不能重用。松绑的前提是「组只装
-  // 规则命中的书签」这条已经成立（票 10 补账第 2 条）——组关起来之后，组外的同主题书签
-  // 需要一个同名子目录才有去处，硬禁同名只会把它们赶进「其他」（见
-  // issues/10-shape-from-count.md 的补账小节）；但组根名与聚合组是同一个来源，
-  // 造一个跟它重名的顶层目录仍然是双胞胎（见 llm/folders.ts 里 push 组根名那行的注释，
-  // 两处文字曾经打架，见 final-review.md I4）。
-  const existingRule = (index: number): string =>
-    locale === 'zh_CN'
-      ? `${index}. 这些目录已经存在（其中「A/B」表示 A 目录下的子目录 B），但它们只装来自特定来源的书签：${(existingFolders ?? []).join('、')}。「A/B」这样的子目录可以与你设计的目录同名——那装的是别处来的书签；但不带「/」的名字本身不要重用（例如「GitHub」，那和这些目录是同一个来源，会造出一对并排的双胞胎）。要避开的是语义重叠但名字不同的目录——已经有「语音合成」就不要再造一个「文本转语音」。`
-      : `${index}. These folders already exist ("A/B" means subfolder B under folder A), but they only hold bookmarks from one specific source: ${(existingFolders ?? []).join(', ')}. A subfolder like "A/B" may use the same name as your folder — it holds bookmarks from elsewhere. But do not reuse a bare name with no "/" (e.g. "GitHub") — that is the same source, and would create a twin folder sitting right next to it. What to avoid is a folder that overlaps one of these in meaning but uses a different name — if "Speech synthesis" is there, do not add another "Text-to-speech".`
 
   if (locale === 'zh_CN') {
     const head = parentTitle !== undefined
@@ -245,7 +198,6 @@ export function foldersPrompt(
       ...tailRules([
         compoundRule,
         familyRule,
-        existingFolders === undefined || existingFolders.length === 0 ? null : existingRule,
         minFolderSize === undefined ? null : sizeRule,
       ]),
     ]
@@ -289,7 +241,6 @@ export function foldersPrompt(
     ...tailRules([
       compoundRule,
       familyRule,
-      existingFolders === undefined || existingFolders.length === 0 ? null : existingRule,
       minFolderSize === undefined ? null : sizeRule,
     ]),
   ]

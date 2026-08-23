@@ -22,9 +22,10 @@ describe('设置存取', () => {
   // 存量存储里可能躺着几代旧旋钮：maxTopFolders / maxFolderDepth 是被「按书签数推导形状」
   // 取代的（第 12 项删掉），allowSubfolders 是更早被 maxFolderDepth 取代的，
   // rebuildStructure 是被「每次现判走哪条路」取代的，enforceMinFolderSize / minFolderSize
-  // 是被 core 里的内部常量 MIN_FOLDER_BOOKMARKS 取代的。一律读都不读——
+  // 是被 core 里的内部常量 MIN_FOLDER_BOOKMARKS 取代的，domainGroups 是随
+  // issues/38-source-vs-topic.md 的 D4 整个机制删掉的。一律读都不读——
   // 认任何一个都等于把删掉的旋钮偷偷留着。
-  it('存量存储里的六个旧键一个都不读进来', async () => {
+  it('存量存储里的七个旧键一个都不读进来', async () => {
     const p = ports()
     await p.storage.set(SETTINGS_KEY, {
       maxTopFolders: 6,
@@ -33,6 +34,7 @@ describe('设置存取', () => {
       rebuildStructure: true,
       enforceMinFolderSize: false,
       minFolderSize: 5,
+      domainGroups: ['github', 'paper'],
     })
     const settings = await loadSettings(p)
     expect(settings).not.toHaveProperty('maxTopFolders')
@@ -41,6 +43,7 @@ describe('设置存取', () => {
     expect(settings).not.toHaveProperty('rebuildStructure')
     expect(settings).not.toHaveProperty('enforceMinFolderSize')
     expect(settings).not.toHaveProperty('minFolderSize')
+    expect(settings).not.toHaveProperty('domainGroups')
     expect(Object.keys(settings).sort()).toEqual(Object.keys(DEFAULT_SETTINGS).sort())
   })
 
@@ -278,21 +281,20 @@ describe('分类缓存条数上限', () => {
   })
 })
 
-describe('domainGroups 设置', () => {
-  it('默认为空数组', async () => {
-    expect((await loadSettings(ports())).domainGroups).toEqual([])
+// 原来这一组验的是这个旋钮读得回、存得下。旋钮随 D4 删掉后剩下唯一要钉的事：
+// 当初勾过 GitHub 聚合的老用户，下次整理不会被那个存量值偷偷带回旧行为。
+describe('域名聚合旋钮已删除', () => {
+  it('默认设置里没有这个键', () => {
+    expect(DEFAULT_SETTINGS).not.toHaveProperty('domainGroups')
   })
 
-  it('旧版本存档缺少该字段时补上默认值', async () => {
+  it('老用户勾过的组读不进来，也不会漏进保存回去的那份设置', async () => {
     const p = ports()
-    await p.storage.set('tidymark:settings', {})
-    expect((await loadSettings(p)).domainGroups).toEqual([])
-  })
-
-  it('保存后能读回', async () => {
-    const p = ports()
-    await saveSettings(p, { ...DEFAULT_SETTINGS, domainGroups: ['github', 'paper'] })
-    expect((await loadSettings(p)).domainGroups).toEqual(['github', 'paper'])
+    await p.storage.set(SETTINGS_KEY, { ...DEFAULT_SETTINGS, domainGroups: ['github'] })
+    const settings = await loadSettings(p)
+    expect(settings).not.toHaveProperty('domainGroups')
+    await saveSettings(p, settings)
+    expect(await p.storage.get(SETTINGS_KEY)).not.toHaveProperty('domainGroups')
   })
 })
 

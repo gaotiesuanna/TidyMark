@@ -9,7 +9,6 @@ import { LlmError, type LlmClient } from '@/llm/client'
 import type { OrganizePlan } from '@/core/types'
 import type { ProgressEvent } from '@/background/events'
 import { MAX_SIBLINGS, stripNumberPrefix } from '@/core/tree'
-import { MAX_LEAF } from '@/core/shape'
 import type { OrganizeMode } from '@/core/mode'
 
 const tree = [
@@ -103,7 +102,6 @@ describe('handle', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
     const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps) as { plan: { rows: unknown[] } }
@@ -169,7 +167,6 @@ describe('handle', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
     const analyzed = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps) as { plan: { rows: Array<{ bookmarkId: string }> } }
@@ -192,7 +189,6 @@ describe('handle', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: true,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
     const analyzed = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps) as { plan: unknown }
@@ -221,7 +217,6 @@ describe('handle', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-d', model: 'deepseek-chat' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     }
     await handle(ports, { kind: 'save_settings', settings }, deps)
@@ -249,7 +244,6 @@ describe('handle', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
     const complete = vi.fn()
@@ -278,7 +272,6 @@ describe('handle', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
     const classifyPrompts: string[] = []
@@ -344,7 +337,6 @@ describe('handle', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
 
@@ -405,7 +397,6 @@ describe('handle', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
     const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps) as { plan: OrganizePlan }
@@ -429,7 +420,6 @@ describe('handle', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
     const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps)
@@ -454,7 +444,6 @@ describe('handle', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
     const events: ProgressEvent[] = []
@@ -485,7 +474,6 @@ describe('handle', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
     const events: ProgressEvent[] = []
@@ -519,7 +507,6 @@ describe('handle', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
     let cancelled = false
@@ -543,7 +530,6 @@ describe('handle', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
     let cancelled = false
@@ -566,7 +552,6 @@ describe('handle', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
     const complete = vi.fn().mockRejectedValue(
@@ -601,7 +586,6 @@ describe('handle', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
     // 批次并发派发，谁先到达 complete() 顺序不定，按 prompt 里的 bookmark_id 路由
@@ -648,7 +632,6 @@ describe('handle', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
     const complete = vi.fn(async (prompt: string) => {
@@ -694,7 +677,6 @@ describe('handle', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
     // 第一批成功、第二批失败
@@ -819,44 +801,7 @@ async function analyzePlan(
   return res.plan
 }
 
-describe('analyze 的域名聚合', () => {
-  const githubUrls = Object.fromEntries(
-    Array.from({ length: 3 }, (_, i) => [`g${i}`, `https://github.com/o/r${i}`]),
-  )
-
-  it('命中聚合组的书签不进入分类请求', async () => {
-    const { ports, deps, classifyPrompts } = setupAnalyze({
-      ...githubUrls,
-      ...Object.fromEntries(Array.from({ length: 3 }, (_, i) => [`n${i}`, `https://example.com/${i}`])),
-    })
-    await saveSettings(ports, {
-      ...DEFAULT_SETTINGS,
-      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
-      domainGroups: ['github'],
-    })
-    await analyzePlan(ports, deps, 'rebuild')
-
-    expect(classifyPrompts.length).toBeGreaterThan(0)
-    for (const prompt of classifyPrompts) {
-      for (const id of Object.keys(githubUrls)) expect(prompt).not.toContain(`"${id}"`)
-      // 未命中的书签仍要进分类
-      expect(prompt).toContain('"n0"')
-    }
-  })
-
-  it('pinned 的书签进入 plan 且置信度为 1', async () => {
-    const { ports, deps } = setupAnalyze(githubUrls)
-    await saveSettings(ports, {
-      ...DEFAULT_SETTINGS,
-      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
-      domainGroups: ['github'],
-    })
-    const plan = await analyzePlan(ports, deps, 'rebuild')
-    expect(plan.rows).toHaveLength(3)
-    expect(plan.rows.every((r) => r.confidence === 1)).toBe(true)
-    expect(plan.rows.every((r) => r.toPath[0]!.endsWith('GitHub'))).toBe(true)
-  })
-
+describe('analyze 的 plan.tags', () => {
   it('推翻模式下 plan 带上 tags', async () => {
     const { ports, deps } = setupAnalyze({ n0: 'https://a.com/0', n1: 'https://b.com/1' })
     await saveSettings(ports, {
@@ -875,177 +820,6 @@ describe('analyze 的域名聚合', () => {
     })
     const plan = await analyzePlan(ports, deps, 'additive')
     expect(plan.tags).toEqual([])
-  })
-})
-
-describe('analyze 对聚合组做细分抽取', () => {
-  it('勾选聚合组时会为组内书签单独跑一次功能域抽取', async () => {
-    // 命中数要过 I2 的门槛（> MAX_LEAF=20）这次抽取才会真的发出去——命中数 ≤ 20 的组
-    // 建树时整组平铺、不建子目录，refineGroupTags 的产出会被整份丢弃，因此改造后
-    // 这次调用本身就会被跳过（见 final-review.md I2）
-    const urls: Record<string, string> = {}
-    for (let i = 0; i < MAX_LEAF + 1; i++) urls[`g${i}`] = `https://github.com/o/r${i}`
-    const { ports, deps } = setupAnalyze(urls)
-    await saveSettings(ports, {
-      ...DEFAULT_SETTINGS,
-      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
-      domainGroups: ['github'],
-    })
-    await analyzePlan(ports, deps, 'rebuild')
-    const prompts = (deps.createClient().complete as ReturnType<typeof vi.fn>).mock.calls
-      .map((call) => call[0] as string)
-    expect(prompts.some((p) => p.includes('功能域'))).toBe(true)
-  })
-
-  it('没勾选聚合组时不多花这次调用', async () => {
-    const { ports, deps } = setupAnalyze({ n0: 'https://example.com/0' })
-    await saveSettings(ports, {
-      ...DEFAULT_SETTINGS,
-      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
-    })
-    await analyzePlan(ports, deps, 'rebuild')
-    const prompts = (deps.createClient().complete as ReturnType<typeof vi.fn>).mock.calls
-      .map((call) => call[0] as string)
-    expect(prompts.some((p) => p.includes('功能域'))).toBe(false)
-  })
-})
-
-describe('analyze 的聚合组预算', () => {
-  /** 造一棵树：github 命中 hits 条，其余 others 条。 */
-  function groupTree(hits: number, others: number): TreeSpec[] {
-    return [{ id: '0', title: '', children: [
-      { id: '1', title: '书签栏', children: [
-        { id: '10', title: '收件箱', children: [
-          ...Array.from({ length: hits }, (_, i) => (
-            { id: `g${i}`, title: `仓库 ${i}`, url: `https://github.com/o/r${i}` }
-          )),
-          ...Array.from({ length: others }, (_, i) => (
-            { id: `n${i}`, title: `文章 ${i}`, url: `https://example.com/${i}` }
-          )),
-        ]},
-      ]},
-    ]}]
-  }
-
-  /**
-   * 造 ports、按提示词分流的假件跑一次 rebuild 模式的 analyze，
-   * 把每次 complete 收到的提示词原样收集起来返回。
-   */
-  async function runAnalyze(
-    tree: TreeSpec[],
-    domainGroups: string[],
-    /** 直接写进**存量记录**的旧键。它们已经不在 Settings 类型里，只能从存储那一侧模拟。 */
-    legacyKeys: Record<string, unknown> = {},
-  ): Promise<{ prompts: string[]; plan: OrganizePlan }> {
-    const fake = createFakeBookmarks(tree)
-    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
-    const prompts: string[] = []
-    const complete = vi.fn(async (prompt: string) => {
-      prompts.push(prompt)
-      const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
-      if (prompt.includes('候选目录')) {
-        const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)].map((m) => m[1]!)
-        return { results: bookmarkIds.map((id) => (
-          { bookmark_id: id, target_category_id: ids[0] ?? null, confidence: 0.9, reason: 'r' }
-        ))}
-      }
-      if (prompt.includes('标签清单')) {
-        // 标签清单紧跟在提示词正文之后，用它自己的 JSON 里的 topic 字段拼一个能通过
-        // 校验的设计——这几条用例不关心真正建出了什么目录，只关心提示词文案本身
-        const topics = [...new Set([...prompt.matchAll(/"topic":\s*"([^"]+)"/g)].map((m) => m[1]!))]
-        return { folders: [{ title: topics[0] ?? '杂项', topics, children: [] }] }
-      }
-      return { results: bookmarkIds.map((id) => (
-        { bookmark_id: id, primary_topic: '工具', secondary_topic: null }
-      ))}
-    })
-    const settings = {
-      ...DEFAULT_SETTINGS,
-      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
-      domainGroups,
-    }
-    await saveSettings(ports, settings)
-    if (Object.keys(legacyKeys).length > 0) {
-      await ports.storage.set(SETTINGS_KEY, { ...settings, ...legacyKeys })
-    }
-    const deps = { createClient: () => ({ complete } as unknown as LlmClient), now: () => 1 }
-    const res = await handle(
-      ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps,
-    ) as { plan: OrganizePlan }
-    return { prompts, plan: res.plan }
-  }
-
-  /** 计划里真的会被建出来的目录名。组建没建，看这个最直接。 */
-  function createdTitles(plan: OrganizePlan): string[] {
-    return plan.operations.flatMap((o) => (o.type === 'create_folder' ? [o.title] : []))
-  }
-
-  it('命中数不足下限的组不建，那几条书签退回主题那一轮', async () => {
-    // github 只命中 2 条，minFolderSize 是 3 → 组不建
-    const { prompts } = await runAnalyze(groupTree(2, 20), ['github'])
-    const design = prompts.find((p) => p.includes('标签清单'))!
-    // 组不建，于是那 2 条 github 书签的标签也出现在主题那一轮里
-    expect(design).toBeDefined()
-    expect(prompts.some((p) => p.includes('来自「GitHub」'))).toBe(false)
-  })
-
-  // 聚合组的门槛与目录下限是同一个常量。曾经的开关关掉时门槛会塌成 1，命中 1 条的
-  // 「GitHub」就能占掉一个一级位子——存量记录里躺着那个关掉过的开关时不许再发生
-  it('存量记录里躺着 enforceMinFolderSize=false，命中 2 条的组照样不建', async () => {
-    const { plan } = await runAnalyze(groupTree(2, 20), ['github'], { enforceMinFolderSize: false })
-    // 对照组：同一棵树命中够 3 条时组是真的建得出来的，这条断言不是空转
-    expect(createdTitles(plan).some((title) => title.includes('GitHub'))).toBe(false)
-  })
-
-  // 另一个方向：旧阈值往下拧过（2）同样没有落点，门槛仍是 3
-  it('存量记录里躺着 minFolderSize=2，命中 2 条的组照样不建', async () => {
-    const { plan } = await runAnalyze(groupTree(2, 20), ['github'], { minFolderSize: 2 })
-    expect(createdTitles(plan).some((title) => title.includes('GitHub'))).toBe(false)
-  })
-
-  // 上面两条的对照组：门槛就在 3 上，命中 3 条的组建得出来。没有这一条，
-  // 「不建」那两条断言可能只是因为整条聚合组路径压根没跑起来
-  it('命中 3 条的组建得出来——门槛就卡在 MIN_FOLDER_BOOKMARKS 上', async () => {
-    const { plan } = await runAnalyze(groupTree(3, 20), ['github'])
-    expect(createdTitles(plan).some((title) => title.includes('GitHub'))).toBe(true)
-  })
-
-  it('命中够的组照建，且主题那一轮的预算按 N_主题 与组数算', async () => {
-    const { prompts } = await runAnalyze(groupTree(10, 120), ['github'])
-    // N_主题 = 120，存活组 1 个 → depthGuard(1, 120) = 9（收到 9 仍是一层，所以收得住）。
-    // 120 条按甜点要 ceil(120/12) = 10 个目录，上限 9 这次真的咬合，deriveShape 给出 top = 9。
-    // 传下去的是 9 + 1（兜底那格），提示词里出现的是 10 − 1 = 9。
-    // 挑 120 而不是 60：60 条只要 5 个目录，上限 9 不咬合，那条用例验不出 depthGuard 有没有生效。
-    const design = prompts.find((p) => p.includes('标签清单') && !p.includes('来自「GitHub」'))!
-    expect(design).toMatch(/不超过 9 个/)
-  })
-
-  it('命中数 ≤ MAX_LEAF 的组不为它发目录设计请求（I2）', async () => {
-    // 命中 10 条，没过 MAX_LEAF=20 的门槛——组建树时整组平铺，子目录一个都不建，
-    // 跑设计只会产出必然被丢弃的目录名，还会把它们错报成「已存在」喂给主题那一轮
-    const { prompts } = await runAnalyze(groupTree(10, 120), ['github'])
-    const designPrompts = prompts.filter((p) => p.includes('标签清单'))
-    // 只有主题那一轮发了设计请求——组那摊被跳过
-    expect(designPrompts).toHaveLength(1)
-    // 主题那一轮的已有目录清单里只有组根名（组确实会建出来），没有任何幻影子目录名
-    const topicDesign = designPrompts[0]!
-    expect(topicDesign).toContain('GitHub')
-    expect(topicDesign).not.toMatch(/GitHub\/\S/)
-  })
-
-  it('不勾聚合组时主题拿满预算——对照上一条，差的那一格正是组吃掉的', async () => {
-    const { prompts } = await runAnalyze(groupTree(0, 120), [])
-    const design = prompts.find((p) => p.includes('标签清单'))!
-    expect(design).toMatch(/不超过 10 个/)
-  })
-
-  it('聚合组的目录不进分类候选——不然模型会往「GitHub」里塞腾讯云文档', async () => {
-    const { prompts } = await runAnalyze(groupTree(10, 20), ['github'])
-    const classify = prompts.filter((p) => p.includes('候选目录'))
-    expect(classify.length).toBeGreaterThan(0)
-    for (const prompt of classify) {
-      expect(prompt).not.toMatch(/目录=\d* ?GitHub/)
-    }
   })
 })
 
@@ -1144,7 +918,7 @@ async function analyzeMerge(
   await saveSettings(ports, {
     ...DEFAULT_SETTINGS,
     ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
-    removeEmptyFolders: false, domainGroups: [], rewriteGithubTitles: false,
+    removeEmptyFolders: false, rewriteGithubTitles: false,
   })
   const deps = { createClient: () => ({ complete: mergeClient(nameResponse) }), now: () => 1 }
   const res = await handle(ports, { kind: 'analyze', scopeRootIds, modeOverride }, deps) as { plan: OrganizePlan }
@@ -1536,7 +1310,6 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
   }
@@ -1710,7 +1483,6 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: true,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
 
@@ -1788,7 +1560,6 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
     const events: ProgressEvent[] = []
@@ -1856,7 +1627,6 @@ describe('analyze 非推翻模式：级联勾选（review C2）', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
     // 用 tree 夹具：书签栏(1) 下有 react(10)、杂项(11)——级联勾选会把三个 id
@@ -1914,7 +1684,6 @@ describe('analyze 非推翻模式：多个范围根（review I2）', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
 
@@ -1940,7 +1709,6 @@ describe('analyze 非推翻模式：多个范围根（review I2）', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
     const events: ProgressEvent[] = []
@@ -1989,7 +1757,6 @@ describe('analyze 非推翻模式：多个范围根（review I2）', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
-      domainGroups: [],
       rewriteGithubTitles: false,
     })
 
@@ -2156,27 +1923,32 @@ describe('analyze 的 prune 二次判定', () => {
    * pending 里的 fromTitle 会是「其他」而不是「冷门」——那是模型直接选了「其他」，不是
    * 被小目录挤出来的，测不到票面真正要盖的那条路（见 final-review.md I1）。
    *
-   * a* 从 4 条撑到 17 条（原来只有 9 条书签、总数 10）：一级目录数现在由总数推导，
-   * 9~10 条只推导得出 1 个一级目录，减去给「其他」留的位子后连「前端」「冷门」都设计
-   * 不出来。凑够 23 条让推导给出 3 个一级目录，「前端」「冷门」「其他」三个都有位子；
-   * 25 是分类批次大小（classifyBookmarks 默认 batchSize=25）的上限——不能超过它，
-   * 否则第一轮分类会被拆成两批，`prompts`/`classifyCalls` 数的就不再是「问了几轮」了。
-   * 17（而不是原来的 19）是 Task 6 之后新加的一条上限：a* 全进「前端」、c1/c2 也被
-   * 模型直接分去「前端」、二次判定又把 c0 从「冷门」捞进「前端」，17+2+1=20 卡在
-   * MAX_LEAF（20）上不越界——一旦越界，「结构自检其二」会把「前端」再切一层，
-   * 这副夹具要测的是二次判定本身，不该被那条无关的自检路径改写产出的目录形状。
+   * 条数是几道约束夹出来的，动之前先读完这一段：
+   *
+   * - **总数 ≥ 23**：一级目录数由总数推导，9~10 条只推导得出 1 个一级目录，
+   *   减去给「其他」留的位子后连「前端」「冷门」都设计不出来。23 条推导出
+   *   3 个位子，「前端」「冷门」「其他」都摆得下。
+   * - **总数 ≤ 25**：分类批次大小（classifyBookmarks 默认 batchSize=25）的上限。
+   *   超过它第一轮分类会被拆成两批，`prompts`/`classifyCalls` 数的就不再是「问了几轮」。
+   * - **「前端」最终 ≤ MAX_LEAF**：a* 全进「前端」、c1/c2 也被模型直接分去「前端」、
+   *   二次判定又把 c0 从「冷门」捞进「前端」，所以是 a + 3。越界的话「结构自检其二」
+   *   会把「前端」再切一层，而这副夹具要测的是二次判定本身，不该被那条无关的
+   *   自检路径改写产出的目录形状。
+   *
+   * MAX_LEAF 从 20 收到 12（issues/38 的 D2）之后，a=17 就把第三条撑破了（17+3=20）。
+   * 缺的量挪给 d*：a=9 让「前端」正好落在 12 上，d=11 把总数补回 23。
+   * 挪给 d* 而不是别处，是因为 d* 全进「其他」，而一级的「其他」是兜底目录、
+   * 本来就豁免下切（见 core/audit.ts 里 fallbackKey 那一行），涨到多大都不会触发自检。
    */
   const rehomeTree = [
     { id: '0', title: '', children: [
       { id: '1', title: '书签栏', children: [
         { id: '10', title: '收件箱', children: [
-          ...Array.from({ length: 17 }, (_, i) => ({ id: `a${i}`, title: `书签 a${i}`, url: `https://a${i}.dev` })),
+          ...Array.from({ length: 9 }, (_, i) => ({ id: `a${i}`, title: `书签 a${i}`, url: `https://a${i}.dev` })),
           { id: 'c0', title: '书签 c0', url: 'https://c0.dev' },
           { id: 'c1', title: '书签 c1', url: 'https://c1.dev' },
           { id: 'c2', title: '书签 c2', url: 'https://c2.dev' },
-          { id: 'd0', title: '书签 d0', url: 'https://d0.dev' },
-          { id: 'd1', title: '书签 d1', url: 'https://d1.dev' },
-          { id: 'd2', title: '书签 d2', url: 'https://d2.dev' },
+          ...Array.from({ length: 11 }, (_, i) => ({ id: `d${i}`, title: `书签 d${i}`, url: `https://d${i}.dev` })),
         ]},
       ]},
     ]},
@@ -2335,23 +2107,27 @@ describe('analyze 的 prune 二次判定', () => {
   })
 
   it('二次判定改判之后，「其他」若被抽薄会被再撤一遍，不会建出一个不足下限的目录（钉住 C1）', async () => {
-    // 更贴近票面复现场景的最小夹具：min=3，a0..a15（16 条）→ 前端、
+    // 更贴近票面复现场景的最小夹具：min=3，a0..a10（11 条）→ 前端、
     // b0 → 冷门、b1/b2 → 其他；prune 把 b0 并进「其他」使其达标（3 条），
     // 二次判定又把 b0 改判去「前端」，「其他」只剩 b1/b2 两条——
     // 如果没有人在这之后再数一遍，计划里就会凭空出现一个装 2 条、
     // 低于 minFolderSize=3 的「其他」目录。
-    // a 组从 3 条撑到 16 条（凑够 19 条总数）：一级目录数现在由总数推导，
-    // 6 条只推导得出 1 个一级目录，减去给「其他」留的位子后连「前端」都设计不出来；
-    // 25 是分类批次大小上限——不能超过它，否则会被拆成两批，打乱 classifyCalls 计数。
-    // 16（而不是原来的 22）是 Task 6 之后新加的一条上限：a* 全进「前端」、二次判定
-    // 又把 b0 从「冷门」捞进「前端」，16+1=17 留在 MAX_LEAF（20）以下——一旦越界，
-    // 「结构自检其二」会把「前端」再切一层，与这条用例要钉住的 C1（「其他」的二次
-    // 撤销）是两件事，不能让前者改写后者要验的目录形状
+    //
+    // a 组的条数被两头夹着：
+    // - **下界**：一级目录数由总数推导，6 条只推导得出 1 个一级目录，减去给「其他」
+    //   留的位子后连「前端」都设计不出来。总数要够 13 条才推导得出 2 个位子 + 「其他」。
+    // - **上界**：a* 全进「前端」、二次判定又把 b0 从「冷门」捞进「前端」，所以
+    //   「前端」最终是 a + 1，必须 ≤ MAX_LEAF。越界的话「结构自检其二」会把「前端」
+    //   再切一层，与这条用例要钉住的 C1（「其他」的二次撤销）是两件事。
+    // - 另有一条 25 的天花板：分类批次大小上限，超过会被拆成两批、打乱 classifyCalls。
+    //
+    // MAX_LEAF 从 20 收到 12（issues/38 的 D2）之后上界收紧，a 从 16 降到 11
+    // （11+1=12 正好落在线上），总数 14 仍在下界之上
     const minTree = [
       { id: '0', title: '', children: [
         { id: '1', title: '书签栏', children: [
           { id: '10', title: '收件箱', children: [
-            ...Array.from({ length: 16 }, (_, i) => ({ id: `a${i}`, title: `书签 a${i}`, url: `https://a${i}.dev` })),
+            ...Array.from({ length: 11 }, (_, i) => ({ id: `a${i}`, title: `书签 a${i}`, url: `https://a${i}.dev` })),
             { id: 'b0', title: '书签 b0', url: 'https://b0.dev' },
             { id: 'b1', title: '书签 b1', url: 'https://b1.dev' },
             { id: 'b2', title: '书签 b2', url: 'https://b2.dev' },
@@ -2420,75 +2196,6 @@ describe('analyze 的 prune 二次判定', () => {
     expect(res.plan.rows.find((r) => r.bookmarkId === 'b0')?.toPath.at(-1)).toContain('前端')
   })
 
-  it('二次判定那次分类同样不带聚合组目录——不然改判会把书签重新塞回「GitHub」', async () => {
-    // 在「落进其他的书签会带着存活目录再问一次」那副夹具上加一个聚合组：
-    // g0-g2 三条命中 github.com，够上 minFolderSize=3，组会建起来、混进候选表
-    const treeWithGroup = [
-      { id: '0', title: '', children: [
-        { id: '1', title: '书签栏', children: [
-          { id: '10', title: '收件箱', children: [
-            ...Array.from({ length: 19 }, (_, i) => ({ id: `a${i}`, title: `书签 a${i}`, url: `https://a${i}.dev` })),
-            { id: 'c0', title: '书签 c0', url: 'https://c0.dev' },
-            { id: 'c1', title: '书签 c1', url: 'https://c1.dev' },
-            { id: 'c2', title: '书签 c2', url: 'https://c2.dev' },
-            { id: 'd0', title: '书签 d0', url: 'https://d0.dev' },
-            { id: 'd1', title: '书签 d1', url: 'https://d1.dev' },
-            { id: 'd2', title: '书签 d2', url: 'https://d2.dev' },
-            { id: 'g0', title: '仓库 0', url: 'https://github.com/o/r0' },
-            { id: 'g1', title: '仓库 1', url: 'https://github.com/o/r1' },
-            { id: 'g2', title: '仓库 2', url: 'https://github.com/o/r2' },
-          ]},
-        ]},
-      ]},
-    ]
-
-    const prompts: string[] = []
-    const complete = vi.fn(async (prompt: string) => {
-      if (prompt.includes('标签清单')) {
-        return { folders: [
-          { title: '前端', topics: ['前端'], children: [] },
-          { title: '冷门', topics: ['冷门'], children: [] },
-        ]}
-      }
-      if (prompt.includes('候选目录')) {
-        prompts.push(prompt)
-        const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)].map((m) => m[1]!)
-        const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
-        // g0-g2 命中规则，由 pinned 定好去处，压根不会出现在这里的 bookmarkIds 里——
-        // 与第一处那条用例（analyze 的聚合组预算）验的是同一个前提
-        return { results: bookmarkIds.map((id) => ({
-          bookmark_id: id,
-          target_category_id: prompts.length === 1
-            ? (id.startsWith('a') ? ids[0]! : id === 'c0' ? ids[1]! : id.startsWith('c') ? ids[0]! : ids[2]!)
-            : ids[0]!,
-          confidence: prompts.length === 1 ? 0.9 : 0.42,
-          reason: 'r',
-        }))}
-      }
-      const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
-      return { results: bookmarkIds.map((id) => (
-        { bookmark_id: id, primary_topic: tagsOf(id), secondary_topic: null }
-      ))}
-    })
-
-    const fake = createFakeBookmarks(treeWithGroup)
-    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
-    await saveSettings(ports, {
-      ...DEFAULT_SETTINGS,
-      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
-      domainGroups: ['github'],
-    })
-    await handle(
-      ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
-      { createClient: () => ({ complete }), now: () => 1 },
-    )
-
-    // 二次判定确实发生了（不是压根没走到这一步、断言空转）：分类提示词出现了两次
-    expect(prompts).toHaveLength(2)
-    // 最后一次才是二次判定——它跟首次分类一样是在给书签找去处，同样不该看到组目录
-    const rehomePrompt = prompts.at(-1)!
-    expect(rehomePrompt).not.toMatch(/目录=\d* ?GitHub/)
-  })
 })
 
 describe('analyze 的目录形状由书签数推导', () => {
@@ -2936,45 +2643,6 @@ describe('test_model 当场验一次模型配置', () => {
   })
 })
 
-describe('结构自检：同名穿透层', () => {
-  /** 范围根自己就叫「01 GitHub」，里面全是 github.com 书签——用户截图里的那一格。 */
-  function setupSameName() {
-    const fake = createFakeBookmarks([
-      { id: '0', title: '', children: [
-        { id: '1', title: '书签栏', children: [
-          { id: '20', title: '01 GitHub', children: Array.from({ length: 3 }, (_, i) => ({
-            id: `g${i}`, title: `仓库 ${i}`, url: `https://github.com/o/r${i}`,
-          })) },
-        ]},
-      ]},
-    ])
-    // 3 条命中聚合组的书签：≥ MIN_FOLDER_BOOKMARKS 所以组建得起来，
-    // ≤ MAX_LEAF 所以不跑组内细分与组内设计，client 只需答标签抽取那一种提示词
-    const complete = vi.fn(async () => ({
-      results: Array.from({ length: 3 }, (_, i) => ({
-        bookmark_id: `g${i}`, primary_topic: '开源仓库', secondary_topic: null,
-      })),
-    }))
-    return {
-      ports: { bookmarks: fake.api, storage: createFakeStorage() },
-      deps: { createClient: () => ({ complete } as unknown as LlmClient), now: () => 1 },
-    }
-  }
-
-  it('范围根就叫「01 GitHub」时，不再建一个同名的组目录套在里面', async () => {
-    const { ports, deps } = setupSameName()
-    await saveSettings(ports, {
-      ...DEFAULT_SETTINGS,
-      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
-      domainGroups: ['github'],
-    })
-    const plan = await analyzePlan(ports, deps, 'rebuild', ['20'])
-    const created = plan.operations.flatMap((o) =>
-      o.type === 'create_folder' ? [stripNumberPrefix(o.title)] : [])
-    expect(created).not.toContain('GitHub')
-  })
-})
-
 describe('结构自检：撑爆的叶子再切一层', () => {
   const COUNT = 25
 
@@ -3031,7 +2699,6 @@ describe('结构自检：撑爆的叶子再切一层', () => {
   const settings = {
     ...DEFAULT_SETTINGS,
     ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
-    domainGroups: [],
     removeEmptyFolders: false,
     rewriteGithubTitles: false,
   }

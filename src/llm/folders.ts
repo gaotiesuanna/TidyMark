@@ -1,10 +1,9 @@
 import { normalizeName, stripNumberPrefix } from '@/core/map'
-import { groupFolderTitle, matchDomainGroup } from '@/core/domainGroups'
 import type { Locale } from '@/core/locale'
-import type { BookmarkItem, TagResult } from '@/core/types'
+import type { TagResult } from '@/core/types'
 import type { TopicCluster } from '@/core/newTopics'
 import { MAX_SIBLINGS } from '@/core/tree'
-import { MAX_LEAF, SHAPE_MAX_SIBLINGS } from '@/core/shape'
+import { SHAPE_MAX_SIBLINGS } from '@/core/shape'
 import { NO_TOPIC } from './tags'
 import type { LlmClient } from './client'
 import {
@@ -98,20 +97,20 @@ interface RawFolder {
 }
 
 export interface DesignOptions {
-  /** true 时只出一层目录，用于聚合组内部。 */
+  /** true 时只出一层目录。撑爆的目录下切时（core/audit.ts → handlers.ts）走这一支。 */
   oneLevel?: boolean
   /** 只出一层时，把父目录名告诉模型，避免它把组名再当分类依据。 */
   parentTitle?: string
   /**
    * 同一层目录数上限。省略时用 MAX_SIBLINGS。
    *
-   * oneLevel 摊（聚合组内部）不读这个值，固定用 SHAPE_MAX_SIBLINGS——与 core/tree.ts
+   * oneLevel 摊不读这个值，固定用 SHAPE_MAX_SIBLINGS——与 core/tree.ts
    * 组内子目录截断对齐（见 final-review.md I3）。
    */
   maxTopFolders?: number
   /**
    * 二级目录（一级目录下的 children）数量上限。省略时退回 maxTopFolders 的值——
-   * oneLevel 摊（聚合组内部）用不到它，因为 children 恒被强制成空数组；
+   * oneLevel 摊用不到它，因为 children 恒被强制成空数组；
    * 非 oneLevel 摊两层形状下不该复用一级预算，理由见 core/tree.ts 的
    * BuildTreeInput.maxChildFolders。
    */
@@ -124,7 +123,6 @@ export interface DesignOptions {
   containerTitle?: string
   /** 目录至少要装下几个书签。省略表示用户关掉了这项约束。 */
   minFolderSize?: number
-  /** 已经存在的目录（聚合组名与组内子目录名）。只有主题那一摊会传。 */
   existingFolders?: string[]
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => void
   /** 每摊设计开始前检查一次，返回 true 就跳过剩余摊子。 */
@@ -254,77 +252,35 @@ function familiesIn(titles: string[]): FolderFamily[] {
 }
 
 /**
- * 每个目录路径实际吃到多少书签。一级目录那个数含它子目录的那一份——
- * 分出了子目录的一级目录显然不「碎」，把子目录算进去正好让它躲开下面的判定。
- */
-function pathCounts(design: FolderDesign, topics: TopicCount[]): Map<string, number> {
-  const counts = new Map<string, number>()
-  const bump = (key: string, n: number): void => {
-    counts.set(key, (counts.get(key) ?? 0) + n)
-  }
-  for (const topic of topics) {
-    const path = design.mapping.get(normalizeName(topic.topic))
-    if (path === undefined || path.length === 0) continue
-    bump(path[0]!, topic.count)
-    if (path.length > 1) bump(`${path[0]!}/${path[1]!}`, topic.count)
-  }
-  return counts
-}
-
-/**
- * 同一个主体被拆成几个装不满的并列目录——「FastAPI教程」「FastAPI实战」「FastAPI数据库」
- * 各三五条，本该是一个「FastAPI」。
+ * 同一个主体被拆成几个并列目录——「FastAPI教程」「FastAPI实战」「FastAPI数据库」
+ * 本该是一个「FastAPI」，撑得起来再用 children 分侧面。
  *
  * 与 isCompoundName 是一对：那条治「一个名字捆了两个概念」，这条治「一个概念摊成了几个名字」。
  * 提示词规则 1 只要求合并「同义或高度重叠」的标签，而这几个名字既不同义也不重叠——
  * 它们是同一个主体的不同侧面，模型照规则办事也会这么拆，所以只能在这里兜。
  *
- * 两个条件同时成立才算：
- * - 同主体：共享一个够长、且停在词边界上的前缀（见 familyPrefix）；
- * - 碎：这一族里多数目录装不到 2 × minFolderSize 个书签。
+ * 判据只剩一条：**同主体就算一族**——共享一个够长、且停在词边界上的前缀（见 familyPrefix）。
  *
- * 第二条只在一级目录那一摊生效，`ignoreSize` 关掉它——两摊的取舍不一样：
+ * 曾经还有第二条「碎」（这一族里多数目录装不到 2 × minFolderSize 个书签），一级目录那一摊
+ * 用它、组内那一摊用 `ignoreSize` 关掉它。**那个分层判错了**（见
+ * issues/38-source-vs-topic.md 的 D1）：真实产出里「FastAPI教程 / 实战 / 数据库 / 用户认证」
+ * 四个一级目录正是被它放行的——四个成员里有两个装了 6 条以上，就够不上「多数偏小」。
+ * 而尺寸健康根本不构成「不该合并」的理由：一个主体占掉四个一级位子，挤掉的是真正需要
+ * 区分的东西；并起来太大也不必怕，落成之后 core/audit.ts 的 findOversizedFolders 会按
+ * 实际占用把它再切开，那把尺子量的是真实书签数，比设计阶段的估计准。
  *
- * - **一级目录**的兄弟本来就该彼此差异大，同主体并列多半就是碎片化，但一级位子有 12 个，
- *   放过一组尺寸健康的（「语音识别」「语音合成」「语音对话」各五六条）代价不大，从严会误伤。
- * - **组内**已经被聚合组这个共同点关起来了，位子只有 SHAPE_MAX_SIBLINGS 个，同一个主体
- *   占掉三个格子挤掉的是真正需要区分的东西；而且组内恒为 oneLevel，并起来就是平铺，
- *   MAX_LEAF 本来就认为一个目录平铺二十条以内是合理的。所以组内同主体就算一族。
- *
- * 这个分层是拿真实产出改出来的：74 个 GitHub 仓库设计出 10 个子目录，其中「模型构建/
- * 部署/推理」与「语音识别/合成/对话」两组吃掉 6 个位子却只装 36 条书签，而按一级目录
- * 那把尺子量，两组都是 1/3 成员偏小、够不上「多数」，全部放行。
- *
- * `minFolderSize` 缺席（用户关掉了这项约束）时两摊都一概不检测：关掉它本就意味着
+ * `minFolderSize` 缺席（用户关掉了这项约束）时一概不检测：关掉它本就意味着
  * 「我接受小目录」，这时候还去合并等于绕过用户的开关。
  */
 export function fragmentedFamilies(
   design: FolderDesign,
-  topics: TopicCount[],
   minFolderSize?: number,
-  /** 组内那一摊传 true：同主体就算一族，不再问尺寸。理由见上。 */
-  ignoreSize = false,
 ): FolderFamily[] {
   if (minFolderSize === undefined) return []
-  const counts = pathCounts(design, topics)
-  const threshold = minFolderSize * 2
   const found: FolderFamily[] = []
-
-  const scan = (titles: string[], keyOf: (title: string) => string): void => {
-    for (const family of familiesIn(titles)) {
-      if (ignoreSize) {
-        found.push(family)
-        continue
-      }
-      const small = family.titles.filter((title) => (counts.get(keyOf(title)) ?? 0) < threshold).length
-      // 「多数」而不是「全部」：一族里混进一个大目录不改变这一族整体是碎的
-      if (small * 2 > family.titles.length) found.push(family)
-    }
-  }
-
-  scan(design.folders.map((folder) => folder.title), (title) => title)
+  found.push(...familiesIn(design.folders.map((folder) => folder.title)))
   for (const folder of design.folders) {
-    scan(folder.children, (child) => `${folder.title}/${child}`)
+    found.push(...familiesIn(folder.children))
   }
   return found
 }
@@ -540,7 +496,7 @@ function findIssues(
 ): DesignIssues {
   return {
     compound: compoundTitles(design, locale),
-    families: fragmentedFamilies(design, topics, options.minFolderSize, options.oneLevel === true),
+    families: fragmentedFamilies(design, options.minFolderSize),
   }
 }
 
@@ -605,128 +561,41 @@ function issueFeedback(locale: Locale, issues: DesignIssues): string[] {
 }
 
 /**
- * 把标签分成「主题」与「各聚合组」几摊，每摊各设计一次目录。
+ * 全部标签走一次目录设计，把设计结果写回标签。
  *
- * 命中聚合组的书签已经确定落在组目录下，它们的功能域标签（「文档解析」「RAG 检索」）
- * 只该决定组内的子目录。混进一级目录那次请求，顶层会被 GitHub 仓库的细粒度标签淹没。
+ * 曾经分成「主题」与「各聚合组」几摊、每摊各设计一次：命中域名规则的书签先被关进
+ * 组目录，组内再按功能域抽一套标签、单独设计一层子目录。整套机制随
+ * issues/38-source-vs-topic.md 的 D4 删掉——按来源分的第一层把「项目本身」和
+ * 「怎么用这个项目」劈在两个一级目录里（实测 20%），而检索时用户想的是主题，
+ * 不是这条书签当初存的是仓库还是它的文档站。
  *
- * 任何一摊设计失败，只有那一摊退回原始标签，其余照常归并。
+ * 设计失败时整摊标签原样保留：碎片化的目录也好过整摊书签失去归属。
  */
 export async function designTagFolders(
   tags: TagResult[],
-  bookmarks: BookmarkItem[],
-  domainGroups: string[],
   client: LlmClient,
   locale: Locale,
   options: DesignOptions = {},
 ): Promise<TagResult[]> {
-  const bookmarkById = new Map(bookmarks.map((b) => [b.id, b]))
-  // 按下标（而非 bookmarkId）分摊、回填：同一个 bookmarkId 出现两次时两条各自独立映射，
-  // 不会因为共用同一个 key 而互相覆盖
-  const topicEntries: Array<{ index: number; tag: TagResult }> = []
-  const byGroup = new Map<string, { title: string; entries: Array<{ index: number; tag: TagResult }> }>()
+  if (options.isCancelled?.() === true) return tags
 
-  tags.forEach((tag, index) => {
-    const bookmark = domainGroups.length === 0 ? undefined : bookmarkById.get(tag.bookmarkId)
-    const group = bookmark === undefined ? null : matchDomainGroup(bookmark, domainGroups)
-    if (group === null) {
-      topicEntries.push({ index, tag })
-      return
-    }
-    // 这里的 title 只喂给提示词与日志，不是最终目录名——产出层已在 tree.ts 双语化。
-    const bucket = byGroup.get(group.key) ?? { title: groupFolderTitle(group, locale), entries: [] }
-    bucket.entries.push({ index, tag })
-    byGroup.set(group.key, bucket)
-  })
-
-  // 每个下标默认落回原始标签；每摊各自按位写回，等长同序与「每条各自映射」两条承诺都成立
-  const result: TagResult[] = tags.slice()
-  /**
-   * 跑一摊，返回这一摊设计出来、且实际装得下 minFolderSize 的目录（含子目录）标题；
-   * 失败返回空数组。
-   *
-   * 「实际装得下」按 applyDesign 之后每条标签落在哪条路径下现数，不是模型设计产物里
-   * 自称的 topics 数——模型可能漏映射或多映射，数出来的才是真会建出的书签数
-   * （见 issues review I4）。
-   *
-   * 已知偏差：这里只按 minFolderSize 过滤，没有再模拟 core/tree.ts 的
-   * `maxSiblings` 截断——组内子目录数超过上限时，被截掉的那几个仍会报给主题那一轮，
-   * 当作「已经存在」。这个残留多报是接受的（见评审 I4 的取舍），
-   * 因为按数量截断需要先排序、再和 tree.ts 的排序规则对齐，成本明显更高，
-   * 而 minFolderSize 已经能过滤掉多报里最常见的那一类（装不满的小目录）。
-   */
-  const run = async (
-    entries: Array<{ index: number; tag: TagResult }>,
-    batchOptions: DesignOptions,
-  ): Promise<string[]> => {
-    const batch = entries.map((entry) => entry.tag)
-    const design = await designFolders(collectTopics(batch), client, locale, batchOptions)
-    // 设计失败就保留原始标签：碎片化的目录也好过整摊书签失去归属
-    const next = design === null ? batch : applyDesign(batch, design)
-    next.forEach((tag, i) => {
-      result[entries[i]!.index] = tag
-    })
-    if (design === null) return []
-
-    // 数一数 applyDesign 之后每条路径实际分到几个书签
-    const counts = new Map<string, number>()
-    for (const tag of next) {
-      if (tag.primaryTopic === NO_TOPIC) continue
-      const path = tag.secondaryTopic === null ? tag.primaryTopic : `${tag.primaryTopic}/${tag.secondaryTopic}`
-      counts.set(path, (counts.get(path) ?? 0) + 1)
-    }
-    const minSize = batchOptions.minFolderSize
-    const fitsMin = (path: string): boolean => minSize === undefined || (counts.get(path) ?? 0) >= minSize
-
-    // 聚合组那几摊一律 oneLevel（children 恒为空），所以这里返回的实际就是一层目录名；
-    // children 那半边是为了将来万一放开二级时不必回头改，路径写成 `父/子`
-    return design.folders.flatMap((f) => [
-      ...(fitsMin(f.title) ? [f.title] : []),
-      ...f.children.filter((c) => fitsMin(`${f.title}/${c}`)).map((c) => `${f.title}/${c}`),
-    ])
+  // 「不许语义重叠」会让模型主动不建某些目录，那些标签映射不到目录、被 applyDesign
+  // 置成 NO_TOPIC，最终去处交给分类阶段决定（见 issues review I5）。
+  // 这里只数、不拦：规则本身不改，只是把它的代价变得可观测。
+  const before = new Set(
+    tags.map((tag, index) => (tag.primaryTopic === NO_TOPIC ? index : -1)).filter((i) => i >= 0),
+  )
+  const design = await designFolders(collectTopics(tags), client, locale, options)
+  // 设计失败就保留原始标签：碎片化的目录也好过整摊书签失去归属
+  if (design === null) return tags
+  const next = applyDesign(tags, design)
+  const newlyUnmapped = next.filter(
+    (tag, index) => !before.has(index) && tag.primaryTopic === NO_TOPIC,
+  ).length
+  if (newlyUnmapped > 0) {
+    options.onLog?.(logNoTopicMapped(locale, newlyUnmapped), 'info')
   }
-
-  // 聚合组那几摊先跑，主题那摊在后：主题设计要知道组里已经有什么，才不会造出一对
-  // 抢同一批书签的双胞胎（见 issues/04-folder-design-defects.md「决定 1」）。
-  // 顺序调换的另一面：中途取消时先落地的是聚合组那几摊，主题那摊整摊退回原始标签。
-  // 不过唯一的调用点（background/handlers.ts）在取消后直接 return，这份部分落地的
-  // 结果实际上不会被用来建树——这条语义只有测试看得见（见 issues review M4）。
-  const existingFolders: string[] = []
-  if (options.isCancelled?.() !== true) {
-    for (const { title, entries } of byGroup.values()) {
-      if (options.isCancelled?.() === true) break
-      // 组名本身也要报给主题那一轮：造一个跟「GitHub」重叠的顶层目录同样是双胞胎
-      // （规则文案区分了这一条和下面子目录名的松紧，见 llm/prompts.ts 的 existingRule，I4）
-      existingFolders.push(title)
-      // entries 就是这个组命中的全部书签，entries.length 与 background/handlers.ts
-      // 算好的 hitsByGroup 同一个数（两边用同一个 domainGroups 集合各自对 matchDomainGroup
-      // 归并，一一对应）。命中数 ≤ MAX_LEAF 时 core/tree.ts 会整组平铺、子目录一个都不建
-      // （`bucket.length <= MAX_LEAF ? [] : …`），这里跑设计只会产出必然被丢弃的目录名，
-      // 还会把它们错报成「已存在」喂给主题那一轮，变成一条谁都造不出来的幻影约束。
-      // 提前跳过这次设计调用，零成本；同一命中数门槛也让 handlers.ts 跳过 refineGroupTags
-      // 那次功能域细分抽取，两次一起省（见 final-review.md I2）
-      if (entries.length <= MAX_LEAF) continue
-      const designed = await run(entries, { ...options, oneLevel: true, parentTitle: title })
-      existingFolders.push(...designed.map((name) => `${title}/${name}`))
-    }
-    if (options.isCancelled?.() !== true) {
-      // 「不许语义重叠」会让主题那一轮主动不建某些目录，那些标签映射不到目录、
-      // 被 applyDesign 置成 NO_TOPIC，最终去处交给分类阶段决定（见 issues review I5）。
-      // 这里只数、不拦：规则本身不改，只是把它的代价变得可观测。
-      const before = new Set(
-        topicEntries.filter((e) => e.tag.primaryTopic === NO_TOPIC).map((e) => e.index),
-      )
-      await run(topicEntries, existingFolders.length === 0 ? options : { ...options, existingFolders })
-      const newlyUnmapped = topicEntries.filter(
-        (e) => !before.has(e.index) && result[e.index]!.primaryTopic === NO_TOPIC,
-      ).length
-      if (newlyUnmapped > 0) {
-        options.onLog?.(logNoTopicMapped(locale, newlyUnmapped), 'info')
-      }
-    }
-  }
-
-  return result
+  return next
 }
 
 const NAME_SCHEMA = {

@@ -449,12 +449,6 @@
   "settingsGithubBody": {
     "message": "Rewrites titles from the URL into \"repo (owner)\", keeping the file name when a specific file is bookmarked. This changes the bookmark's own name, not just its location, and can be undone. However this round is organized, the switch stands on its own: while it is on, every GitHub bookmark in scope is rewritten."
   },
-  "prefsGroupTitle": {
-    "message": "Give these sites their own folders"
-  },
-  "prefsGroupBody": {
-    "message": "Each checked site becomes its own top-level folder, subdivided by topic inside. It only applies when this run redesigns the tree \u2014 the verdict for this run is shown above."
-  },
   "prefsBack": {
     "message": "Back"
   },
@@ -474,7 +468,7 @@
     "message": "No model configured yet"
   },
   "prefsPermissionNotice": {
-    "message": "Chrome asks for network access only when the analysis starts, and only for the model domain you entered \u2014 nothing else. TidyMark ships with no network access at all."
+    "message": "Chrome asks for network access only when the analysis starts, and only for the model domain you entered — nothing else. TidyMark ships with no network access at all."
   },
   "structureIntroOne": {
     "message": "The AI designed $folders$ top-level folder to hold $bookmarks$ bookmarks.",
@@ -622,7 +616,7 @@
     "message": "Empty folders in scope will be cleaned up afterwards (undoable)."
   },
   "reviewEmpty": {
-    "message": "The AI thinks every bookmark in scope is already in a sensible place, so there is nothing to move. Try a messier folder \u2014 or, if this run was judged as filing into existing folders, discard it below, scan again, and pick \"Not right \u2014 redesign it\" before starting."
+    "message": "The AI thinks every bookmark in scope is already in a sensible place, so there is nothing to move. Try a messier folder — or, if this run was judged as filing into existing folders, discard it below, scan again, and pick \"Not right — redesign it\" before starting."
   },
   "reviewAcceptAll": {
     "message": "Accept all"
@@ -946,23 +940,43 @@
   },
   "logDuplicateFolders": {
     "message": "$count$ duplicate-named folders in this scope were folded away, leaving only the first of each name as a candidate — to the model they were the same line, and offering them all would only scatter related bookmarks",
-    "placeholders": { "count": { "content": "$1" } }
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
   },
   "logModeAdditive": {
     "message": "These bookmarks are already organized — this run only files them into existing folders: $reason$",
-    "placeholders": { "reason": { "content": "$1" } }
+    "placeholders": {
+      "reason": {
+        "content": "$1"
+      }
+    }
   },
   "logModeRebuild": {
     "message": "These bookmarks have no usable structure yet — this run redesigns the whole folder tree: $reason$",
-    "placeholders": { "reason": { "content": "$1" } }
+    "placeholders": {
+      "reason": {
+        "content": "$1"
+      }
+    }
   },
   "logModeOverriddenRebuild": {
     "message": "Redesigning the whole folder tree as you asked — the automatic judgment is skipped this run (it would have said: $reason$)",
-    "placeholders": { "reason": { "content": "$1" } }
+    "placeholders": {
+      "reason": {
+        "content": "$1"
+      }
+    }
   },
   "logModeOverriddenAdditive": {
     "message": "Filing bookmarks into existing folders as you asked — the automatic judgment is skipped this run (it would have said: $reason$)",
-    "placeholders": { "reason": { "content": "$1" } }
+    "placeholders": {
+      "reason": {
+        "content": "$1"
+      }
+    }
   },
   "logTagsStart": {
     "message": "Extracting topic tags for $count$ bookmarks",
@@ -993,11 +1007,17 @@
   },
   "logShapeCompared": {
     "message": "Derived from the bookmark count: $wanted$ top-level folders, $depth$ level(s); actually built $actual$",
-    "placeholders": { "wanted": { "content": "$1" }, "actual": { "content": "$2" }, "depth": { "content": "$3" } }
-  },
-  "logGroupsDropped": {
-    "message": "$count$ domain group(s) matched fewer than $min$ bookmarks, so no folder is created for them; those bookmarks are classified by topic like any other",
-    "placeholders": { "count": { "content": "$1" }, "min": { "content": "$2" } }
+    "placeholders": {
+      "wanted": {
+        "content": "$1"
+      },
+      "actual": {
+        "content": "$2"
+      },
+      "depth": {
+        "content": "$3"
+      }
+    }
   },
   "logPrunedSmall": {
     "message": "Dropped $count$ folders holding fewer than $min$ bookmarks; their bookmarks moved up one level",
@@ -1012,23 +1032,55 @@
   },
   "logReviewCollapsed": {
     "message": "Removed $count$ folder(s) sharing a name with the folder above them; their contents moved up one level",
-    "placeholders": { "count": { "content": "$1" } }
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
   },
   "logDeepenStart": {
     "message": "\"$title$\" holds $count$ bookmarks, over the per-folder limit of $max$; splitting it by topic",
-    "placeholders": { "title": { "content": "$1" }, "count": { "content": "$2" }, "max": { "content": "$3" } }
+    "placeholders": {
+      "title": {
+        "content": "$1"
+      },
+      "count": {
+        "content": "$2"
+      },
+      "max": {
+        "content": "$3"
+      }
+    }
   },
   "logDeepenDone": {
     "message": "\"$title$\" was split into $count$ subfolders",
-    "placeholders": { "title": { "content": "$1" }, "count": { "content": "$2" } }
+    "placeholders": {
+      "title": {
+        "content": "$1"
+      },
+      "count": {
+        "content": "$2"
+      }
+    }
   },
   "logDeepenSkipped": {
     "message": "\"$title$\" is large, but its tags are not distinct enough to split; left as is",
-    "placeholders": { "title": { "content": "$1" } }
+    "placeholders": {
+      "title": {
+        "content": "$1"
+      }
+    }
   },
   "warnOversizedFolder": {
     "message": "\"$title$\" holds $count$ bookmarks, over the recommended limit; browsing it one by one will be tedious",
-    "placeholders": { "title": { "content": "$1" }, "count": { "content": "$2" } }
+    "placeholders": {
+      "title": {
+        "content": "$1"
+      },
+      "count": {
+        "content": "$2"
+      }
+    }
   },
   "logRehomeStart": {
     "message": "$count$ bookmarks lost their folder; looking for the best home among the folders that survived",
@@ -1058,14 +1110,6 @@
     "message": "Could not name the merged folder, using \"$name$\"",
     "placeholders": {
       "name": {
-        "content": "$1"
-      }
-    }
-  },
-  "logPinnedSkip": {
-    "message": "$count$ bookmarks grouped by domain, skipping AI classification",
-    "placeholders": {
-      "count": {
         "content": "$1"
       }
     }

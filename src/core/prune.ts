@@ -85,11 +85,9 @@ export function pruneReason(
  * 标签数预估，而书签最终落在哪个目录是分类阶段定的——模型完全可以把一个五条标签的
  * 主题拆着送去别处，留下一个只剩一条的目录。只有数过真实归属才知道结果长什么样。
  *
- * 四条不撤的规矩：
+ * 三条不撤的规矩：
  * - 用户已有的目录不撤。里面只有一个书签是他自己的安排，整理不该顺手拆了它。
  * - 合并模式的容器目录不撤。它是容器不是分类。
- * - 聚合组的目录不撤。core/tree.ts 建树时就放行了它们——用户勾了那个组就是明确要
- *   这个结构，这里再撤等于两层规矩打架，勾了 GitHub 聚合却看不到 GitHub 目录。
  * - 还有存活子目录的父目录不撤，否则那些子目录没有父目录可挂。
  *
  * 还有一处看着矛盾、其实是对的：**建树时无条件放行「其他」，prune 这里却会撤它**。
@@ -123,13 +121,8 @@ export function pruneSmallFolders(input: PruneInput): PruneResult {
     c.path.length === 1 && normalizeName(stripNumberPrefix(c.path[0]!)) === fallbackKey
   const fallback = input.candidates.find(isFallback) ?? null
 
-  // domainGroup 标记盖住整个聚合组子树（见 core/tree.ts 的 mark），组根和组内子目录
-  // 一并豁免。子目录本来也撤不掉——组内的占用在建树时就是确定值：组只装规则命中的
-  // 书签，分类阶段既不会往里加、也不会往外拿，没有需要重新数一遍的余地
   const prunable = input.candidates.filter(
-    (c) => specById.has(c.id)
-      && c.id !== input.mergeRootTemporaryId
-      && c.domainGroup === undefined,
+    (c) => specById.has(c.id) && c.id !== input.mergeRootTemporaryId,
   )
   const order = [...prunable].sort(
     (a, b) => b.path.length - a.path.length || Number(isFallback(a)) - Number(isFallback(b)),

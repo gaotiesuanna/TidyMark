@@ -133,15 +133,8 @@ export function applyStructureEdits(
     if (parent !== undefined && removed.has(parent)) removed.add(candidate.id)
   }
 
-  const topByTopic = new Map<string, string>()
-  for (const candidate of plan.candidates) {
-    if (candidate.path.length !== 1 || candidate.domainGroup !== undefined) continue
-    topByTopic.set(normalizeName(stripNumberPrefix(candidate.path[0]!)), candidate.id)
-  }
-  const topicOf = new Map(plan.tags.map((t) => [t.bookmarkId, t.primaryTopic]))
-
   /** 书签原本的目标目录若被删，算出它该落到哪里；null 表示无处可去、不再移动。 */
-  function resolve(categoryId: string, bookmarkId: string, seen: Set<string>): string | null {
+  function resolve(categoryId: string, seen: Set<string>): string | null {
     if (!removed.has(categoryId)) return categoryId
     if (seen.has(categoryId)) return fallbackId
     seen.add(categoryId)
@@ -150,21 +143,15 @@ export function applyStructureEdits(
     // 比「二级回落到父目录」这类默认规则算数。接收方自己也被合并时继续往下走，
     // 成环由上面的 seen 兜住（落回「其他」，不会转圈）
     const merged = edits.mergedInto[categoryId]
-    if (merged !== undefined) return resolve(merged, bookmarkId, seen)
+    if (merged !== undefined) return resolve(merged, seen)
 
     const candidate = byId.get(categoryId)
     if (candidate === undefined) return fallbackId
 
     // 二级目录回落到父目录，而不是「其他」
     const parent = parentOf.get(categoryId)
-    if (parent !== undefined) return resolve(parent, bookmarkId, seen)
+    if (parent !== undefined) return resolve(parent, seen)
 
-    // 聚合目录按书签自己的主题回落到同名主题目录
-    if (candidate.domainGroup !== undefined) {
-      const topic = topicOf.get(bookmarkId) ?? ''
-      const hit = topic === '' ? undefined : topByTopic.get(normalizeName(topic))
-      if (hit !== undefined && hit !== categoryId) return resolve(hit, bookmarkId, seen)
-    }
     return fallbackId
   }
 
@@ -186,7 +173,7 @@ export function applyStructureEdits(
   const retarget = new Map<string, string | null>()
   for (const operation of plan.operations) {
     if (operation.type !== 'move_bookmark') continue
-    retarget.set(operation.bookmarkId, resolve(operation.toCategoryId, operation.bookmarkId, new Set()))
+    retarget.set(operation.bookmarkId, resolve(operation.toCategoryId, new Set()))
   }
 
   const operations = plan.operations.flatMap((operation): BookmarkOperation[] => {

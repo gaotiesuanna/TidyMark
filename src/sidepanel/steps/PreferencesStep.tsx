@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import { scopeFolderPaths } from '@/core/scan'
-import { DOMAIN_GROUPS, groupFolderTitle } from '@/core/domainGroups'
 import { detectMode } from '@/core/mode'
 import { currentLocale, t } from '@/i18n'
 import { isLocalBaseUrl, isModelConfigured } from '@/llm/config'
@@ -143,37 +142,6 @@ export function PreferencesStep() {
           </span>
         </label>
 
-        <div className="mt-3 border-t pt-3">
-          <p className="text-sm">
-            {t('prefsGroupTitle')}
-            <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-400">
-              {t('prefsGroupBody')}
-            </span>
-          </p>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-            {DOMAIN_GROUPS.map((group) => (
-              <label
-                key={group.key}
-                className={`flex items-center gap-1.5 text-xs ${rebuild ? '' : 'text-neutral-300'}`}
-              >
-                <input
-                  type="checkbox"
-                  aria-label={groupFolderTitle(group, locale)}
-                  className="h-3.5 w-3.5"
-                  disabled={!rebuild}
-                  checked={settings.domainGroups.includes(group.key)}
-                  onChange={(e) => void setSettings({
-                    ...settings,
-                    domainGroups: e.target.checked
-                      ? [...settings.domainGroups, group.key]
-                      : settings.domainGroups.filter((key) => key !== group.key),
-                  })}
-                />
-                {groupFolderTitle(group, locale)}
-              </label>
-            ))}
-          </div>
-        </div>
       </section>
 
       <div className="space-y-2">

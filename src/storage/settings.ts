@@ -60,8 +60,6 @@ export interface Settings {
   active: { baseUrl: string; model: string }
   /** 整理完成后清理范围内不含任何书签的目录。 */
   removeEmptyFolders: boolean
-  /** 勾选的域名聚合组 key，见 core/domainGroups.ts。为空表示不聚合。 */
-  domainGroups: string[]
   /** 把 GitHub 书签的标题统一成 `repo (owner)`。 */
   rewriteGithubTitles: boolean
   /** 界面与产出的语言。'auto' 时跟随浏览器 UI 语言。 */
@@ -75,7 +73,6 @@ export const DEFAULT_SETTINGS: Settings = {
   endpoints: [{ baseUrl: DEFAULT_BASE_URL, apiKey: '', models: [DEFAULT_MODEL] }],
   active: { baseUrl: DEFAULT_BASE_URL, model: DEFAULT_MODEL },
   removeEmptyFolders: true,
-  domainGroups: [],
   rewriteGithubTitles: false,
   uiLocale: 'auto',
 }
@@ -147,6 +144,11 @@ export const PRESETS: Array<{ label: Record<Locale, string>; baseUrl: string; mo
  *   主题有多分散，跑完一次才看得出来），现在退成 core 里的内部常量
  *   `MIN_FOLDER_BOOKMARKS`（见 core/prune.ts）。**约束一律生效**——以前关掉过开关的人
  *   下次整理会吃到它，这是删旋钮的代价，不是回归。
+ * - `domainGroups`：当年管「哪些域名按来源聚成一个目录」（GitHub、论文、视频……）。
+ *   随 issues/38-source-vs-topic.md 的 D4 整个机制删掉——按来源分的第一层要求用户先
+ *   回答「这条我当初存的是仓库还是它的文档站」，而实测 20% 的非 GitHub 书签与自己的
+ *   仓库被劈在两个一级目录里。存量里勾过的组读都不读；已经建出来的 `01 GitHub`
+ *   目录不会被删，非推翻模式下它退成一个普通候选目录（D7）。
  *
  * 判例：**删掉一个旋钮时，存量值一律读取时忽略，而不是继续在后台生效。**
  * 代价是「上周关掉过二级目录」的人下次整理会看到行为变化——这是有意接受的：
@@ -168,7 +170,6 @@ export async function loadSettings(ports: Ports): Promise<Settings> {
     endpoints: migrated.endpoints,
     active: migrated.active,
     removeEmptyFolders: stored?.removeEmptyFolders ?? DEFAULT_SETTINGS.removeEmptyFolders,
-    domainGroups: stored?.domainGroups ?? DEFAULT_SETTINGS.domainGroups,
     rewriteGithubTitles: stored?.rewriteGithubTitles ?? DEFAULT_SETTINGS.rewriteGithubTitles,
     uiLocale: stored?.uiLocale ?? DEFAULT_SETTINGS.uiLocale,
   }

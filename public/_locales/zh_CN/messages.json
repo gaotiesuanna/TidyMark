@@ -449,12 +449,6 @@
   "settingsGithubBody": {
     "message": "把标题按 URL 改写成「仓库名 (作者)」，收藏具体文件时保留文件名。这会改动书签本身的名字，不只是位置；可一键撤销。这一轮怎么整理不影响它：只要开着，范围内所有 GitHub 书签都会改。"
   },
-  "prefsGroupTitle": {
-    "message": "单独聚合这些站点"
-  },
-  "prefsGroupBody": {
-    "message": "勾选的站点会各自成为一个顶级目录，目录内再按主题细分。只在这次判为「重新设计」时生效——上方写着这次判的是哪种。"
-  },
   "prefsBack": {
     "message": "返回"
   },
@@ -654,7 +648,7 @@
     }
   },
   "reviewStrandNote": {
-    "message": "\u4e0d\u79fb\u52a8\u5b83\u5c31\u4f1a\u4fdd\u7559\u76ee\u5f55\u300c$folder$\u300d\u3002",
+    "message": "不移动它就会保留目录「$folder$」。",
     "placeholders": {
       "folder": {
         "content": "$1"
@@ -946,23 +940,43 @@
   },
   "logDuplicateFolders": {
     "message": "范围内有 $count$ 个重名目录被折叠掉了，只留同名中的第一个当候选——它们对模型是同一行，都发出去只会让同类书签被分散",
-    "placeholders": { "count": { "content": "$1" } }
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
   },
   "logModeAdditive": {
     "message": "这批书签已经整理过，这次只把书签归进现有目录：$reason$",
-    "placeholders": { "reason": { "content": "$1" } }
+    "placeholders": {
+      "reason": {
+        "content": "$1"
+      }
+    }
   },
   "logModeRebuild": {
     "message": "这批书签还没有成形的结构，这次重新设计整棵目录树：$reason$",
-    "placeholders": { "reason": { "content": "$1" } }
+    "placeholders": {
+      "reason": {
+        "content": "$1"
+      }
+    }
   },
   "logModeOverriddenRebuild": {
     "message": "已按你的选择改成重新设计整棵目录树，本次不走自动判断（本来判断是：$reason$）",
-    "placeholders": { "reason": { "content": "$1" } }
+    "placeholders": {
+      "reason": {
+        "content": "$1"
+      }
+    }
   },
   "logModeOverriddenAdditive": {
     "message": "已按你的选择改成只把书签归进现有目录，本次不走自动判断（本来判断是：$reason$）",
-    "placeholders": { "reason": { "content": "$1" } }
+    "placeholders": {
+      "reason": {
+        "content": "$1"
+      }
+    }
   },
   "logTagsStart": {
     "message": "开始为 $count$ 个书签抽取主题标签",
@@ -993,11 +1007,17 @@
   },
   "logShapeCompared": {
     "message": "按书签数推导：$wanted$ 个一级目录、$depth$ 层；实际建出 $actual$ 个",
-    "placeholders": { "wanted": { "content": "$1" }, "actual": { "content": "$2" }, "depth": { "content": "$3" } }
-  },
-  "logGroupsDropped": {
-    "message": "$count$ 个聚合组命中的书签不足 $min$ 本，不单独建目录，这些书签按主题正常分类",
-    "placeholders": { "count": { "content": "$1" }, "min": { "content": "$2" } }
+    "placeholders": {
+      "wanted": {
+        "content": "$1"
+      },
+      "actual": {
+        "content": "$2"
+      },
+      "depth": {
+        "content": "$3"
+      }
+    }
   },
   "logPrunedSmall": {
     "message": "撤掉 $count$ 个装不满 $min$ 个书签的目录，里面的书签并进上一层",
@@ -1012,23 +1032,55 @@
   },
   "logReviewCollapsed": {
     "message": "撤掉 $count$ 个与上层同名的目录，里面的内容并进上一层",
-    "placeholders": { "count": { "content": "$1" } }
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
   },
   "logDeepenStart": {
     "message": "「$title$」装了 $count$ 个书签，超过单目录 $max$ 个的上限，正在按主题再分一层",
-    "placeholders": { "title": { "content": "$1" }, "count": { "content": "$2" }, "max": { "content": "$3" } }
+    "placeholders": {
+      "title": {
+        "content": "$1"
+      },
+      "count": {
+        "content": "$2"
+      },
+      "max": {
+        "content": "$3"
+      }
+    }
   },
   "logDeepenDone": {
     "message": "「$title$」切成 $count$ 个子目录",
-    "placeholders": { "title": { "content": "$1" }, "count": { "content": "$2" } }
+    "placeholders": {
+      "title": {
+        "content": "$1"
+      },
+      "count": {
+        "content": "$2"
+      }
+    }
   },
   "logDeepenSkipped": {
     "message": "「$title$」偏大，但标签不足以再分，保持原样",
-    "placeholders": { "title": { "content": "$1" } }
+    "placeholders": {
+      "title": {
+        "content": "$1"
+      }
+    }
   },
   "warnOversizedFolder": {
     "message": "「$title$」装了 $count$ 个书签，超过建议上限，逐条浏览会比较费劲",
-    "placeholders": { "title": { "content": "$1" }, "count": { "content": "$2" } }
+    "placeholders": {
+      "title": {
+        "content": "$1"
+      },
+      "count": {
+        "content": "$2"
+      }
+    }
   },
   "logRehomeStart": {
     "message": "$count$ 本书签的目录被撤，正在为它们找存活目录里最合适的去处",
@@ -1058,14 +1110,6 @@
     "message": "合并目录命名失败，使用「$name$」",
     "placeholders": {
       "name": {
-        "content": "$1"
-      }
-    }
-  },
-  "logPinnedSkip": {
-    "message": "$count$ 个书签按域名聚合，跳过 AI 分类",
-    "placeholders": {
-      "count": {
         "content": "$1"
       }
     }

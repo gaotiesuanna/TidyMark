@@ -125,36 +125,6 @@ describe('pruneSmallFolders', () => {
     expect(result.prunedTitles).toEqual([])
   })
 
-  // core/tree.ts 建树时明确放行了聚合组目录（「用户勾了那个组就是明确要这个结构」）。
-  // 这道再把它撤掉，两层规矩就打架了——用户勾了 GitHub 聚合，却看不到 GitHub 目录
-  it('聚合组目录不撤，哪怕组里只有两个书签', () => {
-    const result = prune({
-      candidates: [{ id: 't1', path: ['01 GitHub'], domainGroup: 'github' }, cand('t3', '02 其他')],
-      newFolders: [top('t1', '01 GitHub'), top('t3', '02 其他')],
-      classifications: [...into('t1', 2), ...into('t3', 3)],
-      minFolderSize: 3,
-    })
-    expect(titles(result.newFolders)).toContain('01 GitHub')
-    expect(targetOf(result, 't1#0')).toBe('t1')
-  })
-
-  // 组内的占用在建树时就是确定值——组只装规则命中的书签，分类阶段不会往里加也不会往外拿。
-  // 同样带着 domainGroup 标记，一并豁免，规矩才只有一条
-  it('聚合组的子目录同样不撤', () => {
-    const result = prune({
-      candidates: [
-        { id: 't1', path: ['01 GitHub'], domainGroup: 'github' },
-        { id: 't2', path: ['01 GitHub', '01 RAG 检索'], domainGroup: 'github' },
-        cand('t3', '02 其他'),
-      ],
-      newFolders: [top('t1', '01 GitHub'), child('t2', 't1', '01 RAG 检索'), top('t3', '02 其他')],
-      classifications: [...into('t1', 3), ...into('t2', 1), ...into('t3', 3)],
-      minFolderSize: 3,
-    })
-    expect(titles(result.newFolders)).toContain('01 RAG 检索')
-    expect(targetOf(result, 't2#0')).toBe('t2')
-  })
-
   // 「其他」是最后的去处，它自己都不够数时没有下一站了
   it('「其他」自己不足下限时也撤掉，里面的书签保持原位', () => {
     const result = prune({

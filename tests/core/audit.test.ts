@@ -2,14 +2,15 @@ import { describe, it, expect } from 'vitest'
 import { collapseSameNameFolders, findOversizedFolders } from '@/core/audit'
 import type { CollapseInput } from '@/core/audit'
 import type { NewFolderSpec } from '@/core/plan'
+import { MAX_LEAF } from '@/core/shape'
 import type { CategoryCandidate, Classification } from '@/core/types'
 
 const rootId = 'root'
 /** 范围根自己就叫「01 GitHub」——用户截图里的那一格。 */
 const existingFolders = [{ id: rootId, title: '01 GitHub' }]
 
-function cand(id: string, path: string[], domainGroup?: string): CategoryCandidate {
-  return domainGroup === undefined ? { id, path } : { id, path, domainGroup }
+function cand(id: string, path: string[]): CategoryCandidate {
+  return { id, path }
 }
 function top(temporaryId: string, title: string): NewFolderSpec {
   return { temporaryId, parentId: rootId, parentTemporaryId: null, title }
@@ -39,9 +40,9 @@ describe('collapseSameNameFolders', () => {
   it('范围根叫 GitHub 时，组目录「01 GitHub」被塌掉，子目录上提并重编号', () => {
     const result = collapse({
       candidates: [
-        cand('tmp:1', ['01 GitHub'], 'github'),
-        cand('tmp:2', ['01 GitHub', '01 软件工程'], 'github'),
-        cand('tmp:3', ['01 GitHub', '02 大模型'], 'github'),
+        cand('tmp:1', ['01 GitHub']),
+        cand('tmp:2', ['01 GitHub', '01 软件工程']),
+        cand('tmp:3', ['01 GitHub', '02 大模型']),
       ],
       newFolders: [top('tmp:1', '01 GitHub'), child('tmp:2', 'tmp:1', '01 软件工程'), child('tmp:3', 'tmp:1', '02 大模型')],
       classifications: [...into('tmp:1', 2), ...into('tmp:2', 5)],
@@ -114,26 +115,35 @@ describe('collapseSameNameFolders', () => {
     expect(result.candidates.map((c) => c.path)).toEqual([['01 软件工程']])
   })
 
-  it('domainGroup 标记由子目录继承', () => {
-    const result = collapse({
-      candidates: [cand('tmp:1', ['01 GitHub'], 'github'), cand('tmp:2', ['01 GitHub', '01 软件工程'])],
-      newFolders: [top('tmp:1', '01 GitHub'), child('tmp:2', 'tmp:1', '01 软件工程')],
-    })
-    expect(result.candidates[0]?.domainGroup).toBe('github')
-  })
 })
 
 describe('findOversizedFolders', () => {
   const base = { locale: 'zh_CN' as const }
 
-  it('装超过 20 条的新建目录进清单，没超的不进', () => {
+  // 阈值就是 MAX_LEAF，不写死数字——issues/38 的 D2 把它从 20 收到了 12，
+  // 写死的话下次再调这个判准，测试会先于实现「通过」，把改动放过去。
+  it('装超过 MAX_LEAF 条的新建目录进清单，正好装满的不进', () => {
     const result = findOversizedFolders({
       ...base,
       candidates: [cand('tmp:1', ['01 软件工程']), cand('tmp:2', ['02 大模型'])],
       newFolders: [top('tmp:1', '01 软件工程'), top('tmp:2', '02 大模型')],
-      classifications: [...into('tmp:1', 63), ...into('tmp:2', 20)],
+      classifications: [...into('tmp:1', MAX_LEAF + 1), ...into('tmp:2', MAX_LEAF)],
     })
-    expect(result).toEqual([{ id: 'tmp:1', title: '软件工程', count: 63, level: 1 }])
+    expect(result).toEqual([
+      { id: 'tmp:1', title: '软件工程', count: MAX_LEAF + 1, level: 1 },
+    ])
+  })
+
+  // D2 的行为变化本身也要有人盯着：装 20 条的目录，改判之前安然无恙、改判之后要切。
+  // 真实数据里 `02 语音合成`、`03 界面与显示` 各 13 条，正是被这一格捞起来的那批。
+  it('装 13 条的目录现在算超标——判准 A1 由 8–20 改判 8–12', () => {
+    const result = findOversizedFolders({
+      ...base,
+      candidates: [cand('tmp:1', ['01 语音合成'])],
+      newFolders: [top('tmp:1', '01 语音合成')],
+      classifications: into('tmp:1', 13),
+    })
+    expect(result.map((f) => f.title)).toEqual(['语音合成'])
   })
 
   it('清单按占用从大到小排，同一轮里先切最撑的那个', () => {

@@ -100,17 +100,18 @@ describe('applyStructureEdits 删除', () => {
     expect(targetOf(next, 'r0')).toBe('tmp:3')
   })
 
-  it('删聚合目录，书签按 primaryTopic 回落到同名主题目录', () => {
+  // 这里原来有一条「删聚合目录时按 primaryTopic 回落到同名主题目录」的分支：
+  // 组内书签被组关起来，删掉组之后它们的主题标签是唯一还认得的线索。
+  // 随 issues/38 的 D4 取消域名聚合一起删掉——没有组，就没有「组内书签」这一类，
+  // 一级目录被删就是一级目录被删，一律落「其他」，回落链只剩两条规矩。
+  it('删一级目录时，它下面子目录里的书签也落到「其他」，不再看主题标签', () => {
     const next = applyStructureEdits(makePlan(), { renames: {}, removed: ['tmp:1'], mergedInto: {} }, 'zh_CN')
-    expect(targetOf(next, 'g0')).toBe('tmp:3') // primaryTopic 为「前端」
+    // g0 的 primaryTopic 是「前端」，恰好有个同名的 tmp:3——照样不去那里
+    expect(targetOf(next, 'g0')).toBe('tmp:5')
+    expect(targetOf(next, 'g1')).toBe('tmp:5')
   })
 
-  it('删聚合目录时没有同名主题目录的书签落到「其他」', () => {
-    const next = applyStructureEdits(makePlan(), { renames: {}, removed: ['tmp:1'], mergedInto: {} }, 'zh_CN')
-    expect(targetOf(next, 'g1')).toBe('tmp:5') // primaryTopic 为「冷门」，无同名目录
-  })
-
-  it('英文下删聚合目录，没有同名主题目录的书签落到 Other', () => {
+  it('英文下删一级目录，书签落到 Other', () => {
     const next = applyStructureEdits(
       makePlanWithEnglishFallback(), { renames: {}, removed: ['tmp:1'], mergedInto: {} }, 'en',
     )
