@@ -379,3 +379,75 @@ describe('PreferencesStep 显示当前选择的文件夹', () => {
     expect(screen.queryByText('/书签栏/react/')).toBeNull()
   })
 })
+
+describe('偏好页的模型下拉', () => {
+  function arrange(
+    model: string,
+    modelHistory: Array<{ baseUrl: string; model: string }> = [],
+    apiKey = 'sk-x',
+  ): { openSettings: ReturnType<typeof vi.fn> } {
+    setup(messyScan)
+    const openSettings = vi.fn()
+    useStore.setState({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        llm: { baseUrl: 'https://x/v1', apiKey, model },
+        modelHistory,
+      },
+      openSettings,
+    })
+    return { openSettings }
+  }
+
+  const picker = () => screen.getByRole('combobox', { name: '将使用' }) as HTMLSelectElement
+
+  it('列出这个端点用过的模型，当前那个是选中项', () => {
+    arrange('glm-5.2', [
+      { baseUrl: 'https://x/v1', model: 'glm-5.2' },
+      { baseUrl: 'https://x/v1', model: 'glm-4-flash' },
+    ])
+    render(<PreferencesStep />)
+
+    expect(picker().value).toBe('glm-5.2')
+    expect([...picker().options].map((o) => o.value))
+      .toEqual(['glm-5.2', 'glm-4-flash', '::open-settings'])
+  })
+
+  // 换服务商仍然只在设置页做：这里列出别家的模型，选中它就得连 baseUrl 一起改，
+  // 等于在这一页悄悄把端点指到另一家去，已经授过的 host 权限也会失效
+  it('别的端点用过的模型不出现在名单里', () => {
+    arrange('glm-5.2', [{ baseUrl: 'https://elsewhere/v1', model: 'gpt-4o-mini' }])
+    render(<PreferencesStep />)
+
+    expect([...picker().options].map((o) => o.value)).not.toContain('gpt-4o-mini')
+  })
+
+  it('换一个模型就写进设置', async () => {
+    arrange('glm-5.2', [
+      { baseUrl: 'https://x/v1', model: 'glm-5.2' },
+      { baseUrl: 'https://x/v1', model: 'glm-4-flash' },
+    ])
+    render(<PreferencesStep />)
+
+    await userEvent.selectOptions(picker(), 'glm-4-flash')
+    expect(useStore.getState().settings.llm.model).toBe('glm-4-flash')
+  })
+
+  it('选「在设置页填别的…」时开设置页，模型一个字都不改', async () => {
+    const { openSettings } = arrange('glm-5.2')
+    render(<PreferencesStep />)
+
+    await userEvent.selectOptions(picker(), '::open-settings')
+    expect(openSettings).toHaveBeenCalledTimes(1)
+    expect(useStore.getState().settings.llm.model).toBe('glm-5.2')
+  })
+
+  it('还没配模型时不摆下拉——那一步该走的是「先去配置模型」', () => {
+    arrange('glm-5.2', [], '')
+    render(<PreferencesStep />)
+    // 空断言防身：先证明这一页确实渲染在「还没配」那个分支上
+    expect(screen.getByRole('button', { name: '先去配置模型' })).toBeTruthy()
+
+    expect(screen.queryByRole('combobox', { name: '将使用' })).toBeNull()
+  })
+})
