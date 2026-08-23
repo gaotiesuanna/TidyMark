@@ -5,6 +5,12 @@
   "extDescription": {
     "message": "Reorganize your Chrome bookmarks with AI — every change is previewed, confirmed, and undoable"
   },
+  "shellModeOrganize": {
+    "message": "AI organize"
+  },
+  "shellModeCleanup": {
+    "message": "Local cleanup"
+  },
   "shellStepScope": {
     "message": "Scope"
   },
@@ -141,6 +147,56 @@
   "logCleanupDone": {
     "message": "Cleanup done: deleted $deleted$ bookmarks and $folders$ folders, moved $moved$",
     "placeholders": { "deleted": { "content": "$1" }, "folders": { "content": "$2" }, "moved": { "content": "$3" } }
+  },
+  "cleanupIntro": {
+    "message": "These cleanups need no model and make no network requests."
+  },
+  "cleanupSectionDuplicates": {
+    "message": "Duplicate bookmarks"
+  },
+  "cleanupSectionEmpty": {
+    "message": "Empty folders"
+  },
+  "cleanupGroupExact": {
+    "message": "Identical"
+  },
+  "cleanupGroupNormalized": {
+    "message": "Possibly identical"
+  },
+  "cleanupGroupNormalizedHint": {
+    "message": "Identical only after ignoring fragments, trailing slashes, and tracking parameters. Unchecked by default — please look."
+  },
+  "cleanupKeepLabel": {
+    "message": "Keep this one"
+  },
+  "cleanupWillBecomeEmpty": {
+    "message": "Will become empty"
+  },
+  "cleanupNothingFound": {
+    "message": "Nothing to clean up."
+  },
+  "cleanupOverwriteUndoWarning": {
+    "message": "Running this will make the last AI organize impossible to undo."
+  },
+  "cleanupRunOne": {
+    "message": "Clean up $count$ item",
+    "placeholders": { "count": { "content": "$1" } }
+  },
+  "cleanupRunOther": {
+    "message": "Clean up $count$ items",
+    "placeholders": { "count": { "content": "$1" } }
+  },
+  "cleanupDoneOne": {
+    "message": "Done: deleted $deleted$ bookmark and $folders$ folders.",
+    "placeholders": { "deleted": { "content": "$1" }, "folders": { "content": "$2" } }
+  },
+  "cleanupDoneOther": {
+    "message": "Done: deleted $deleted$ bookmarks and $folders$ folders.",
+    "placeholders": { "deleted": { "content": "$1" }, "folders": { "content": "$2" } }
+  },
+  "cleanupSkippedItem": {
+    "message": "Skipped $id$: $reason$",
+    "placeholders": { "id": { "content": "$1" }, "reason": { "content": "$2" } }
   },
   "progressCancel": {
     "message": "Cancel"
@@ -385,6 +441,9 @@
   },
   "settingsModelAdd": {
     "message": "Add a model"
+  },
+  "settingsModelListing": {
+    "message": "Listing models…"
   },
   "settingsModelRemove": {
     "message": "Remove"

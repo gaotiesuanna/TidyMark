@@ -5,10 +5,11 @@ import { PreferencesStep } from './steps/PreferencesStep'
 import { StructureStep } from './steps/StructureStep'
 import { ReviewStep } from './steps/ReviewStep'
 import { ResultStep } from './steps/ResultStep'
+import { CleanupStep } from './steps/CleanupStep'
 import { useStore } from './store'
 
 export default function App() {
-  const { step, init, locale } = useStore()
+  const { step, mode, init, locale } = useStore()
   useEffect(() => { void init() }, [init])
 
   /**
@@ -19,11 +20,15 @@ export default function App() {
    */
   return (
     <Shell key={locale}>
-      {step === 'scope' && <ScopeStep />}
-      {step === 'preferences' && <PreferencesStep />}
-      {step === 'structure' && <StructureStep />}
-      {step === 'review' && <ReviewStep />}
-      {step === 'result' && <ResultStep />}
+      {mode === 'cleanup' ? <CleanupStep /> : (
+        <>
+          {step === 'scope' && <ScopeStep />}
+          {step === 'preferences' && <PreferencesStep />}
+          {step === 'structure' && <StructureStep />}
+          {step === 'review' && <ReviewStep />}
+          {step === 'result' && <ResultStep />}
+        </>
+      )}
     </Shell>
   )
 }

@@ -721,3 +721,31 @@ describe('测试连接按对记结果', () => {
       .toBe(false)
   })
 })
+
+describe('清理模式的勾选', () => {
+  it('切换保留哪条时，原保留项进待删、新保留项出待删', () => {
+    const store = useStore.getState()
+    store.setMode('cleanup')
+    useStore.setState({
+      cleanupScan: {
+        duplicates: [{
+          kind: 'exact', key: 'https://a', keepId: '1',
+          items: [
+            { id: '1', title: 'a', url: 'https://a', parentId: 'p', index: 0, currentPath: [] },
+            { id: '2', title: 'a', url: 'https://a', parentId: 'p', index: 1, currentPath: [] },
+          ],
+        }],
+        emptyFolders: [], items: [], folders: [], scopeRootIds: ['1'],
+      },
+      cleanupKeep: { 'https://a': '1' },
+      cleanupChecked: new Set(['2']),
+    })
+
+    useStore.getState().setCleanupKeep('https://a', '2')
+
+    const state = useStore.getState()
+    expect(state.cleanupKeep['https://a']).toBe('2')
+    expect(state.cleanupChecked.has('2')).toBe(false)
+    expect(state.cleanupChecked.has('1')).toBe(true)
+  })
+})

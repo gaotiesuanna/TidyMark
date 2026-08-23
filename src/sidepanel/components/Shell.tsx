@@ -15,6 +15,8 @@ const STEPS = [
 export function Shell({ children }: { children: ReactNode }) {
   const {
     step,
+    mode,
+    setMode,
     busy,
     busyKind,
     error,
@@ -34,6 +36,29 @@ export function Shell({ children }: { children: ReactNode }) {
             但那个标题栏属于浏览器界面、不在本文档里，读屏用户在文档中导航时找不到它，
             所以只是视觉隐藏而非删除——保证这个页面至少还有一个 h1。 */}
         <h1 className="sr-only">TidyMark</h1>
+        {/* 两条平行的路，不是一条路上的两步——所以是并列按钮，不是步骤条里的第五格。
+            塞进步骤条会让前四格点不动、第五格能点，用户第一次点错就学会「这条随便点」。
+            忙的时候禁用：busy 是单槽，切过去也什么都干不了，还会让人以为切换失灵。 */}
+        {!settingsOpen && (
+          <div className="mb-2 flex gap-1 text-xs" role="tablist">
+            {(['organize', 'cleanup'] as const).map((each) => (
+              <button
+                key={each}
+                role="tab"
+                aria-selected={mode === each}
+                disabled={busy !== null}
+                className={
+                  mode === each
+                    ? 'rounded-md bg-neutral-800 px-2.5 py-1 font-medium text-white disabled:opacity-40'
+                    : 'rounded-md border border-neutral-200 px-2.5 py-1 text-neutral-600 hover:border-neutral-400 disabled:opacity-40'
+                }
+                onClick={() => setMode(each)}
+              >
+                {t(each === 'organize' ? 'shellModeOrganize' : 'shellModeCleanup')}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex items-start justify-between gap-2">
           {/* 设置页里步骤条不该出现：设置不是第几步，显示出来会误导。这个位置改放返回，
               省得下面正文再占一行，也和右边的齿轮凑成同一行的一进一出。
@@ -50,7 +75,7 @@ export function Shell({ children }: { children: ReactNode }) {
             >
               {t('settingsBack')}
             </button>
-          ) : (
+          ) : mode === 'organize' ? (
             <ol className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
               {STEPS.map((each, i) => (
                 <li key={each.key} className="flex items-center gap-x-2 whitespace-nowrap">
@@ -70,7 +95,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 </li>
               ))}
             </ol>
-          )}
+          ) : null}
           <button
             className="shrink-0 rounded p-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800"
             aria-label={t('settingsGearLabel')}

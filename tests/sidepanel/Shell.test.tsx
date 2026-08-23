@@ -6,7 +6,7 @@ import { useStore } from '@/sidepanel/store'
 
 beforeEach(() => {
   useStore.setState({
-    step: 'scope', settingsOpen: false, busy: null, busyKind: null,
+    step: 'scope', mode: 'organize', settingsOpen: false, busy: null, busyKind: null,
     error: null, progress: null, logs: [],
   })
 })
@@ -85,5 +85,47 @@ describe('Shell 的错误条', () => {
     useStore.setState({ error: '请先填 API Key', retryable: null, busy: null })
     render(<Shell>{null}</Shell>)
     expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
+  })
+})
+
+/**
+ * 两条平行的路，不是一条路上的两步——所以模式切换是并列的 tab 按钮，
+ * 不是塞进步骤条里的第五格（那会让前四格点不动、第五格能点，参见 Shell.tsx 的注释）。
+ */
+describe('Shell 模式切换', () => {
+  it('默认停在 AI 整理，两个按钮都在', () => {
+    render(<Shell><div>步骤内容</div></Shell>)
+    const organize = screen.getByRole('tab', { name: 'AI 整理' })
+    const cleanup = screen.getByRole('tab', { name: '本地清理' })
+    expect(organize.getAttribute('aria-selected')).toBe('true')
+    expect(cleanup.getAttribute('aria-selected')).toBe('false')
+  })
+
+  it('点本地清理切到清理模式，步骤条随之让位', async () => {
+    render(<Shell><div>步骤内容</div></Shell>)
+    await userEvent.click(screen.getByRole('tab', { name: '本地清理' }))
+    expect(useStore.getState().mode).toBe('cleanup')
+    expect(screen.queryByText('1. 选范围')).toBeNull()
+  })
+
+  it('清理模式下不展示步骤条，但正文照常渲染', () => {
+    useStore.setState({ mode: 'cleanup' })
+    render(<Shell><div>步骤内容</div></Shell>)
+    expect(screen.queryByText('1. 选范围')).toBeNull()
+    expect(screen.getByText('步骤内容')).toBeDefined()
+  })
+
+  // busy 是单槽，切过去也什么都干不了，还会让人以为切换失灵，所以忙的时候禁用
+  it('忙的时候两个模式按钮都禁用', () => {
+    useStore.setState({ busy: '正在分析…', busyKind: 'analyze' })
+    render(<Shell><div>步骤内容</div></Shell>)
+    expect((screen.getByRole('tab', { name: 'AI 整理' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('tab', { name: '本地清理' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('设置页打开时模式按钮不显示——那时整个正文是设置', async () => {
+    render(<Shell><div>步骤内容</div></Shell>)
+    await userEvent.click(screen.getByRole('button', { name: '设置' }))
+    expect(screen.queryByRole('tab', { name: 'AI 整理' })).toBeNull()
   })
 })

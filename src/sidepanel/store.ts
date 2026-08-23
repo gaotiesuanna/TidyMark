@@ -11,7 +11,10 @@ import {
   buildImportPreview, parseImportFile,
   type BlockedLink, type ImportError, type ImportPreview,
 } from '@/core/import'
+import type { CleanupSelection } from '@/core/cleanup'
+import type { DuplicateGroup } from '@/core/duplicates'
 import type { ApplyResult } from '@/engine/apply'
+import type { CleanupResult, CleanupScan } from '@/engine/cleanup'
 import type { ImportResult } from '@/engine/importTree'
 import type { UndoResult } from '@/engine/undo'
 import type { Settings } from '@/storage/settings'
@@ -202,8 +205,31 @@ export function toggleChecked(
   return next
 }
 
+/**
+ * 默认勾选：exact 组里除保留项之外的全勾上，normalized 组一条都不勾。
+ * 分档的全部意义就在这个默认值上——低置信那档误判的代价是永久删掉用户的书签。
+ */
+function defaultChecked(groups: DuplicateGroup[]): Set<string> {
+  const checked = new Set<string>()
+  for (const group of groups) {
+    if (group.kind !== 'exact') continue
+    for (const item of group.items) {
+      if (item.id !== group.keepId) checked.add(item.id)
+    }
+  }
+  return checked
+}
+
 interface State {
   step: Step
+  /**
+   * 顶层模式。清理与 AI 整理是两条平行的路，不是一条路上的两步——所以它不叫 step，
+   * 也不进 Shell 的步骤条（那条是只读的进度指示，见 Shell.tsx 的注释）。
+   *
+   * 切模式**不清空另一侧的状态**：用户可以跑到一半去清理再切回来看他的计划。
+   * busy 是单槽，忙的时候界面禁用切换按钮。
+   */
+  mode: 'organize' | 'cleanup'
   tree: BookmarkNode[]
   checkedIds: Set<string>
   scan: ScanResult | null
@@ -224,7 +250,7 @@ interface State {
   undoAvailable: boolean
   busy: string | null
   /** 当前在跑哪一步，决定能不能取消。 */
-  busyKind: 'init' | 'scan' | 'analyze' | 'apply' | 'undo' | null
+  busyKind: 'init' | 'scan' | 'analyze' | 'apply' | 'undo' | 'cleanup' | 'checkLinks' | null
   /**
    * 上一次失败的是哪一步，`null` 表示没有可重试的东西。
    *
@@ -284,6 +310,17 @@ interface State {
   /** 当前界面语言。App 拿它当 key 强制重挂载，切语言后所有 t() 才会重新求值。 */
   locale: Locale
 
+  /** 清理模式的扫描结果。`null` 表示还没扫描过或已经过期，界面据此不重复画一个转圈。 */
+  cleanupScan: CleanupScan | null
+  /** 清理执行的结果，非 null 时清理页切到结果视图。 */
+  cleanupResult: CleanupResult | null
+  /** 每组重复项当前选中保留哪条，键是 DuplicateGroup.key。缺省时回落到 group.keepId。 */
+  cleanupKeep: Record<string, string>
+  /** 被勾中待删的书签 id，跨重复项的所有组共用一个集合。 */
+  cleanupChecked: Set<string>
+  /** 被勾中待删的空目录 id。 */
+  cleanupFolders: Set<string>
+
   init(): Promise<void>
   refreshTree(): Promise<void>
   pushEvent(event: ProgressEvent): void
@@ -331,6 +368,17 @@ interface State {
    * 发一个最小 schema 的请求，失败时说清是哪一类。
    */
   testModel(baseUrl: string, model: string): Promise<void>
+  /**
+   * 向这个端点要一份能选的模型名单。失败回 null，空数组表示端点答了但没模型。
+   * 调用方用 null 决定要不要退回手打。
+   */
+  listModels(baseUrl: string, apiKey: string): Promise<string[] | null>
+  setMode(mode: 'organize' | 'cleanup'): void
+  runCleanupScan(): Promise<void>
+  runCleanup(): Promise<void>
+  toggleCleanupItem(id: string): void
+  setCleanupKeep(groupKey: string, id: string): void
+  toggleCleanupFolder(id: string): void
   reset(): void
 }
 
@@ -349,6 +397,7 @@ function syncLocale(settings: Settings): Locale {
 
 export const useStore = create<State>((set, get) => ({
   step: 'scope',
+  mode: 'organize',
   tree: [],
   checkedIds: new Set(),
   scan: null,
@@ -377,6 +426,11 @@ export const useStore = create<State>((set, get) => ({
   // 这行在模块求值期执行，那时 main.tsx 还没 setLocale，取到的必然是 i18n 的初值。
   // 真正的对齐由 main.tsx 在 render 之前补一次 setState 完成。
   locale: currentLocale(),
+  cleanupScan: null,
+  cleanupResult: null,
+  cleanupKeep: {},
+  cleanupChecked: new Set(),
+  cleanupFolders: new Set(),
 
   /** 整理或撤销之后重新读一次书签树，结果页据此展示真实结构。 */
   async refreshTree() {
@@ -702,6 +756,102 @@ export const useStore = create<State>((set, get) => ({
       await hasHostPermission(baseUrl) ? res.reason : 'permission'
     settle({ state: 'fail', reason, error: res.error })
   },
+
+  setMode(mode) {
+    set({ mode })
+  },
+
+  async runCleanupScan() {
+    const run = get().runSeq
+    set({ busy: t('busyScanning'), busyKind: 'cleanup', error: null, progress: null, logs: [] })
+    const res = await send({ kind: 'cleanup_scan' })
+    if (isStale(get, set, run)) return
+    // 不给可重试入口：retryable 只认 scan/analyze（见 State.retryable），
+    // 清理扫描随便重跑没有风险，但没有专门的重试按钮基础设施，用户切回来再点一次就是重试
+    if (!res.ok) return fail(set, res.error, null)
+    if (res.kind !== 'cleanup_scan') return set({ busy: null, busyKind: null })
+    set({
+      cleanupScan: res.scan,
+      cleanupKeep: {},
+      cleanupChecked: defaultChecked(res.scan.duplicates),
+      cleanupFolders: new Set(),
+      cleanupResult: null,
+      busy: null,
+      busyKind: null,
+    })
+  },
+
+  async runCleanup() {
+    const scan = get().cleanupScan
+    if (scan === null) return
+    // 书签栏是 tree 里第一个顶层节点的第一个子节点：那个顶层节点是根，浏览器从不让它显形
+    const barId = get().tree[0]?.children?.[0]?.id ?? ''
+    const selection: CleanupSelection = {
+      deleteBookmarkIds: [...get().cleanupChecked],
+      // 移走那条路是 Task 8 的事，这里恒传空数组
+      moveBookmarkIds: [],
+      deleteFolderIds: [...get().cleanupFolders],
+    }
+    set({ busy: t('busyApplying'), busyKind: 'cleanup', error: null, progress: null, logs: [] })
+    const stopKeepalive = startKeepalive(connection)
+    const res = await send({
+      kind: 'apply_cleanup',
+      input: {
+        planId: `cleanup-${Date.now()}`,
+        scopeRootIds: scan.scopeRootIds,
+        selection,
+        deadFolderTitle: t('cleanupDeadFolderTitle'),
+        barId,
+        items: scan.items,
+        folders: scan.folders,
+      },
+    }).finally(stopKeepalive)
+    // 不给重试入口：可能已经删掉一半，重跑有二次删除的风险（同 apply/undo）
+    if (!res.ok) return fail(set, res.error, null)
+    if (res.kind !== 'apply_cleanup') return set({ busy: null, busyKind: null })
+    set({ cleanupResult: res.result, busy: null, busyKind: null })
+    const undoRes = await send({ kind: 'get_undo_state' })
+    set({
+      undoAvailable: undoRes.ok && undoRes.kind === 'get_undo_state' ? undoRes.available : get().undoAvailable,
+    })
+  },
+
+  toggleCleanupItem(id) {
+    const checked = new Set(get().cleanupChecked)
+    if (checked.has(id)) checked.delete(id)
+    else checked.add(id)
+    set({ cleanupChecked: checked })
+  },
+
+  setCleanupKeep(groupKey, id) {
+    const group = get().cleanupScan?.duplicates.find((g) => g.key === groupKey)
+    if (group === undefined) return
+    const oldKeep = get().cleanupKeep[groupKey] ?? group.keepId
+    if (oldKeep === id) return
+    const checked = new Set(get().cleanupChecked)
+    // 只在新保留项本来就被勾着待删时才联动：那才说明这一组是「勾选待删」的状态——
+    // normalized 组默认整组不勾，这时候换保留项不该把旧保留项凭空勾上
+    if (checked.has(id)) {
+      checked.delete(id)
+      checked.add(oldKeep)
+    }
+    set({ cleanupKeep: { ...get().cleanupKeep, [groupKey]: id }, cleanupChecked: checked })
+  },
+
+  toggleCleanupFolder(id) {
+    const folders = new Set(get().cleanupFolders)
+    if (folders.has(id)) folders.delete(id)
+    else folders.add(id)
+    set({ cleanupFolders: folders })
+  },
+
+  async listModels(baseUrl, apiKey) {
+    if (!await ensureHostPermission(baseUrl)) return null
+    const res = await send({ kind: 'list_models', baseUrl, apiKey })
+    if (res.ok && res.kind === 'list_models') return res.models
+    return null
+  },
+
 
   reset() {
     set({
