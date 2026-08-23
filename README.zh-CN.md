@@ -23,7 +23,7 @@ TidyMark 没有服务器。你把它指向你自己的接口：
 - 任何兼容 OpenAI 的服务（DeepSeek、Moonshot、自建代理……）
 - 本机上的 Ollama 或 LM Studio——数据不会离开你的电脑
 
-你的 API Key 保存在本地的 `chrome.storage` 里，并且只会发往你配置的那个接口。
+你填的每一把 API Key 都保存在本地的 `chrome.storage` 里，各自只会发往它对应的那个接口；在设置页删掉一个端点，那把 Key 一并消失。
 
 ## 隐私，说具体的
 

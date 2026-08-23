@@ -31,8 +31,8 @@ TidyMark has no server. You point it at your own endpoint:
 - Any OpenAI-compatible service (DeepSeek, Moonshot, a self-hosted proxy, …)
 - Ollama or LM Studio on your own machine — data never leaves your computer
 
-Your API key is stored locally in `chrome.storage` and is only ever sent to the endpoint
-you configured.
+Every API key you enter is stored locally in `chrome.storage`, and each is only ever sent
+to the endpoint it belongs to. Deleting an endpoint in Settings deletes its key with it.
 
 ## Privacy, specifically
 
