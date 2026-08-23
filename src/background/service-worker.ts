@@ -42,8 +42,8 @@ function emit(event: ProgressEvent): void {
   }
 }
 
-// 取消标记由 worker 持有：analyze 开始时清零，收到 cancel 时置位，
-// 分析在批次之间读取它。
+// 取消标记由 worker 持有：analyze 或 check_links 开始时清零，收到 cancel 时置位，
+// 分析／链接检查在批次之间读取它。
 let cancelled = false
 
 /**
@@ -51,8 +51,8 @@ let cancelled = false
  *
  * 只有标记位是不够的：那只挡得住「还没发出去的下一批」，已经飞出去的最多
  * concurrency 个请求会一直跑到自己结束，用户点完取消得干等着（见 llm/client.ts
- * 的 runSignal）。每次 analyze 换一个新的——上一轮取消过的那个已经 aborted，
- * 沿用它会让新一轮第一个请求当场断掉。
+ * 的 runSignal）。每次 analyze 或 check_links 开始都换一个新的——上一轮取消过的
+ * 那个已经 aborted，沿用它会让新一轮第一个请求当场断掉。
  */
 let controller: AbortController | null = null
 
@@ -64,14 +64,19 @@ chrome.runtime.onMessage.addListener((request: Request, _sender, sendResponse) =
     sendResponse({ ok: true, kind: 'cancel' })
     return false
   }
-  if (request.kind === 'analyze') {
+  // analyze 与 check_links 都可能跑好几十秒到几分钟、都是分批的批量网络请求，
+  // 取消要能掐断在飞的那几个——所以都换新 controller、都吃这个 signal。
+  // test_model、导入导出是一来一回的短请求，不归取消管，沿用上一轮的
+  // controller 会让它们当场断在起跑线上。
+  if (request.kind === 'analyze' || request.kind === 'check_links') {
     cancelled = false
     controller = new AbortController()
   }
 
-  // 只有 analyze 吃这个信号：别的请求（test_model、导入导出）不归取消管，
-  // 把上一轮取消过的 signal 递给它们会让它们当场断在起跑线上。
-  const signal = request.kind === 'analyze' ? controller?.signal : undefined
+  // cancelled 这个标记位两种请求共用没问题：侧栏的 busy 是单槽，analyze 与
+  // check_links 不可能同时在跑，不存在一个把另一个的取消标记冲掉的场景。
+  const signal =
+    request.kind === 'analyze' || request.kind === 'check_links' ? controller?.signal : undefined
 
   handle(createChromePorts(), request, {
     onEvent: emit,
