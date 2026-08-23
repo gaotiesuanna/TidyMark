@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { collapseSameNameFolders } from '@/core/audit'
+import { collapseSameNameFolders, findOversizedFolders } from '@/core/audit'
 import type { CollapseInput } from '@/core/audit'
 import type { NewFolderSpec } from '@/core/plan'
 import type { CategoryCandidate, Classification } from '@/core/types'
@@ -120,5 +120,90 @@ describe('collapseSameNameFolders', () => {
       newFolders: [top('tmp:1', '01 GitHub'), child('tmp:2', 'tmp:1', '01 软件工程')],
     })
     expect(result.candidates[0]?.domainGroup).toBe('github')
+  })
+})
+
+describe('findOversizedFolders', () => {
+  const base = { locale: 'zh_CN' as const }
+
+  it('装超过 20 条的新建目录进清单，没超的不进', () => {
+    const result = findOversizedFolders({
+      ...base,
+      candidates: [cand('tmp:1', ['01 软件工程']), cand('tmp:2', ['02 大模型'])],
+      newFolders: [top('tmp:1', '01 软件工程'), top('tmp:2', '02 大模型')],
+      classifications: [...into('tmp:1', 63), ...into('tmp:2', 20)],
+    })
+    expect(result).toEqual([{ id: 'tmp:1', title: '软件工程', count: 63, level: 1 }])
+  })
+
+  it('清单按占用从大到小排，同一轮里先切最撑的那个', () => {
+    const result = findOversizedFolders({
+      ...base,
+      candidates: [cand('tmp:1', ['01 甲']), cand('tmp:2', ['02 乙'])],
+      newFolders: [top('tmp:1', '01 甲'), top('tmp:2', '02 乙')],
+      classifications: [...into('tmp:1', 25), ...into('tmp:2', 40)],
+    })
+    expect(result.map((f) => f.id)).toEqual(['tmp:2', 'tmp:1'])
+  })
+
+  it('已经在第 3 层的目录不再进清单——3 层封顶', () => {
+    const result = findOversizedFolders({
+      ...base,
+      candidates: [cand('tmp:3', ['01 甲', '01 乙', '01 丙'])],
+      newFolders: [child('tmp:3', 'tmp:2', '01 丙')],
+      classifications: into('tmp:3', 63),
+    })
+    expect(result).toEqual([])
+  })
+
+  it('第 2 层的目录仍可下切', () => {
+    const result = findOversizedFolders({
+      ...base,
+      candidates: [cand('tmp:2', ['01 甲', '01 乙'])],
+      newFolders: [child('tmp:2', 'tmp:1', '01 乙')],
+      classifications: into('tmp:2', 63),
+    })
+    expect(result.map((f) => f.level)).toEqual([2])
+  })
+
+  it('兜底目录「其他」豁免——它是收容所，切它没有意义', () => {
+    const result = findOversizedFolders({
+      ...base,
+      candidates: [cand('tmp:1', ['09 其他'])],
+      newFolders: [top('tmp:1', '09 其他')],
+      classifications: into('tmp:1', 63),
+    })
+    expect(result).toEqual([])
+  })
+
+  it('scope 默认只看新建目录，用户已有的目录不进清单', () => {
+    const result = findOversizedFolders({
+      ...base,
+      candidates: [cand('real-1', ['我的收藏'])],
+      newFolders: [],
+      classifications: into('real-1', 63),
+    })
+    expect(result).toEqual([])
+  })
+
+  it("scope 为 'all' 时用户已有目录也算——additive 模式出警告用", () => {
+    const result = findOversizedFolders({
+      ...base,
+      scope: 'all',
+      candidates: [cand('real-1', ['我的收藏'])],
+      newFolders: [],
+      classifications: into('real-1', 63),
+    })
+    expect(result).toEqual([{ id: 'real-1', title: '我的收藏', count: 63, level: 1 }])
+  })
+
+  it('英文兜底目录名 Other 同样豁免', () => {
+    const result = findOversizedFolders({
+      candidates: [cand('tmp:1', ['09 Other'])],
+      newFolders: [top('tmp:1', '09 Other')],
+      classifications: into('tmp:1', 63),
+      locale: 'en',
+    })
+    expect(result).toEqual([])
   })
 })

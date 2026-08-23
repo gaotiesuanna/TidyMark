@@ -1,5 +1,8 @@
+import type { Locale } from './locale'
 import { normalizeName, stripNumberPrefix } from './map'
 import type { NewFolderSpec } from './plan'
+import { MAX_LEAF } from './shape'
+import { FALLBACK_TITLE } from './tree'
 import type { CategoryCandidate, Classification } from './types'
 
 /** 读父目录名字只需要这两个字段，FolderItem 可以直接传入。 */
@@ -143,4 +146,78 @@ export function collapseSameNameFolders(input: CollapseInput): CollapseResult {
   }
 
   return { candidates, newFolders, classifications, collapsedTitles }
+}
+
+/**
+ * 目录树最深切到第几层（范围根下第一级算 1）。
+ *
+ * 为什么是 3：Chrome 的书签菜单每多一层就多一次悬停，三次已经是体验上限。
+ * 深过它，「技术上更均衡的树」换来的是用户根本点不到底。
+ */
+export const MAX_AUDIT_LEVEL = 3
+
+export interface OversizedFolder {
+  id: string
+  /** 目录名，已剥掉编号——讲给用户听时不必带上。 */
+  title: string
+  count: number
+  /** 相对范围根的层级，范围根下第一级是 1。 */
+  level: number
+}
+
+export interface OversizedInput {
+  candidates: CategoryCandidate[]
+  newFolders: NewFolderSpec[]
+  classifications: Classification[]
+  locale: Locale
+  /** 'new'（默认）只看本批新建的目录；'all' 连用户已有目录一起看，用于出警告。 */
+  scope?: 'new' | 'all'
+  /** 层级 >= 这个值的目录不再进清单。默认 MAX_AUDIT_LEVEL。 */
+  maxLevel?: number
+  /** 叶子容量上限。默认 MAX_LEAF。 */
+  maxLeaf?: number
+}
+
+/**
+ * 找出装得过满、值得再切一层的目录。
+ *
+ * 这是 MAX_LEAF 这条判准第一次对**实际落成的目录**验算。在此之前它只在
+ * core/shape.ts 的 deriveShape 里对**书签总数 N** 用过一次，用来推导该分几层——
+ * 形状是开工前一次性预测的，预测完没有人回头看。模型完全可以把一个主题设计成
+ * 一个装 60 条的目录，而 core/tree.ts 的组内聚簇分完桶之后根本不数每桶多大。
+ *
+ * 占用按 classifications 数，聚合组钉死的那批（pinned）在 handlers.ts 里已经并进
+ * classifications，不必另算。
+ *
+ * 已知偏差：数的是**计划**里的归属，不是应用之后书签栏的真实占用。用户在复核页
+ * 取消掉一部分移动后，实际落地的目录会比这里量到的小。这个偏差不修——复核页的
+ * 取消是用户的决定，不该反过来推翻结构。
+ */
+export function findOversizedFolders(input: OversizedInput): OversizedFolder[] {
+  const maxLevel = input.maxLevel ?? MAX_AUDIT_LEVEL
+  const maxLeaf = input.maxLeaf ?? MAX_LEAF
+  const newIds = new Set(input.newFolders.map((f) => f.temporaryId))
+  const fallbackKey = normalizeName(FALLBACK_TITLE[input.locale])
+
+  const counts = new Map<string, number>()
+  for (const classification of input.classifications) {
+    const id = classification.targetCategoryId
+    if (id === null) continue
+    counts.set(id, (counts.get(id) ?? 0) + 1)
+  }
+
+  const found: OversizedFolder[] = []
+  for (const candidate of input.candidates) {
+    if ((input.scope ?? 'new') === 'new' && !newIds.has(candidate.id)) continue
+    if (candidate.path.length >= maxLevel) continue
+    const title = stripNumberPrefix(candidate.path.at(-1) ?? '')
+    // 「其他」是收容所，没有主题可言，再切一层只是把杂物摊成几堆杂物
+    if (candidate.path.length === 1 && normalizeName(title) === fallbackKey) continue
+    const count = counts.get(candidate.id) ?? 0
+    if (count <= maxLeaf) continue
+    found.push({ id: candidate.id, title, count, level: candidate.path.length })
+  }
+
+  // 占用大的排前面：一轮里先切最撑的那个，止损判据（最大占用有没有下降）才有意义
+  return found.sort((a, b) => b.count - a.count || a.id.localeCompare(b.id))
 }
