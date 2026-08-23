@@ -134,21 +134,6 @@
   "cleanupDeadFolderTitle": {
     "message": "Dead links"
   },
-  "msgCleanupBookmarkGone": {
-    "message": "Bookmark no longer exists, skipped: $detail$",
-    "placeholders": { "detail": { "content": "$1" } }
-  },
-  "msgCleanupDeleteFailed": {
-    "message": "Delete failed: $detail$",
-    "placeholders": { "detail": { "content": "$1" } }
-  },
-  "msgCleanupMoveFailed": {
-    "message": "Move failed: $detail$",
-    "placeholders": { "detail": { "content": "$1" } }
-  },
-  "msgCleanupFolderNotEmpty": {
-    "message": "Folder still contains bookmarks, not deleted"
-  },
   "logCleanupScanDone": {
     "message": "Scan done: $groups$ duplicate groups, $folders$ empty folders",
     "placeholders": { "groups": { "content": "$1" }, "folders": { "content": "$2" } }

@@ -134,21 +134,6 @@
   "cleanupDeadFolderTitle": {
     "message": "失效链接"
   },
-  "msgCleanupBookmarkGone": {
-    "message": "书签已不存在，跳过：$detail$",
-    "placeholders": { "detail": { "content": "$1" } }
-  },
-  "msgCleanupDeleteFailed": {
-    "message": "删除失败：$detail$",
-    "placeholders": { "detail": { "content": "$1" } }
-  },
-  "msgCleanupMoveFailed": {
-    "message": "移动失败：$detail$",
-    "placeholders": { "detail": { "content": "$1" } }
-  },
-  "msgCleanupFolderNotEmpty": {
-    "message": "目录里还有书签，未删除"
-  },
   "logCleanupScanDone": {
     "message": "扫描完成：$groups$ 组重复、$folders$ 个空文件夹",
     "placeholders": { "groups": { "content": "$1" }, "folders": { "content": "$2" } }
