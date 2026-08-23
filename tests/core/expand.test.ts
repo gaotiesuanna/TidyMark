@@ -42,7 +42,10 @@ describe('expandFolder', () => {
   })
 
   it('书签改指子目录，理由说明的是「原来那个目录太撑」', () => {
-    const result = expand([tag('a', '构建工具')], [classified('a', 'tmp:7')])
+    const result = expand(
+      [tag('a', '构建工具'), tag('b', '测试框架')],
+      [classified('a', 'tmp:7'), classified('b', 'tmp:7')],
+    )
     const moved = result.classifications.find((c) => c.bookmarkId === 'a')!
     expect(moved.targetCategoryId).toBe(result.newFolders[0]?.temporaryId)
     expect(moved.reason).toBe('「软件工程」装了 63 个书签，超过单目录 20 个的上限，按主题再分一层')
@@ -50,21 +53,30 @@ describe('expandFolder', () => {
 
   it('没被映射到的书签留在父目录里', () => {
     const result = expand(
-      [tag('a', '构建工具'), tag('b', '')],
-      [classified('a', 'tmp:7'), classified('b', 'tmp:7')],
+      [tag('a', '构建工具'), tag('b', '测试框架'), tag('c', '')],
+      [classified('a', 'tmp:7'), classified('b', 'tmp:7'), classified('c', 'tmp:7')],
     )
-    expect(result.classifications.find((c) => c.bookmarkId === 'b')?.targetCategoryId).toBe('tmp:7')
+    expect(result.createdCount).toBe(2)
+    expect(result.classifications.find((c) => c.bookmarkId === 'c')?.targetCategoryId).toBe('tmp:7')
   })
 
   it('不属于这个父目录的书签一个字都不改', () => {
     const other = classified('z', 'tmp:9')
-    const result = expand([tag('a', '构建工具')], [classified('a', 'tmp:7'), other])
+    const result = expand(
+      [tag('a', '构建工具'), tag('b', '测试框架')],
+      [classified('a', 'tmp:7'), classified('b', 'tmp:7'), other],
+    )
+    expect(result.createdCount).toBe(2)
     expect(result.classifications.find((c) => c.bookmarkId === 'z')).toEqual(other)
   })
 
   it('domainGroup 标记由子目录继承', () => {
-    const result = expand([tag('a', '构建工具')], [classified('a', 'tmp:7')])
-    expect(result.candidates[0]?.domainGroup).toBe('github')
+    const result = expand(
+      [tag('a', '构建工具'), tag('b', '测试框架')],
+      [classified('a', 'tmp:7'), classified('b', 'tmp:7')],
+    )
+    expect(result.candidates).toHaveLength(2)
+    expect(result.candidates.every((c) => c.domainGroup === 'github')).toBe(true)
   })
 
   it('只切得出一个子目录时不切——那一层不承载任何区分度', () => {
