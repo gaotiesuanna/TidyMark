@@ -8,6 +8,7 @@ import { withLlm } from '../fakes/settings'
 import type { OrganizeMode } from '@/core/mode'
 import type { BookmarkItem, FolderItem, ScanResult } from '@/core/types'
 import type { BookmarkNode } from '@/core/ports'
+import type { Endpoint } from '@/storage/settings'
 
 function folder(id: string, title: string, parentId: string | null, depth: number): FolderItem {
   return { id, title, parentId, index: 0, path: [], depth, level: depth }
@@ -378,5 +379,85 @@ describe('PreferencesStep 显示当前选择的文件夹', () => {
     render(<PreferencesStep />)
     expect(screen.getByText('/书签栏/')).toBeTruthy()
     expect(screen.queryByText('/书签栏/react/')).toBeNull()
+  })
+})
+
+describe('偏好页的模型下拉', () => {
+  const opencode: Endpoint = {
+    baseUrl: 'https://opencode.ai/zen/go/v1',
+    apiKey: 'sk-x',
+    models: ['glm-5.2', 'deepseek-v4-flash'],
+  }
+  const ollama: Endpoint = { baseUrl: 'http://localhost:11434/v1', apiKey: '', models: ['qwen2.5'] }
+  const unconfigured: Endpoint = {
+    baseUrl: 'https://api.openai.com/v1', apiKey: '', models: ['gpt-4o-mini'],
+  }
+  const value = (baseUrl: string, model: string): string => `${baseUrl}\u0000${model}`
+
+  function arrange(endpoints: Endpoint[], active: { baseUrl: string; model: string }) {
+    setup(messyScan)
+    const openSettings = vi.fn()
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS, endpoints, active }, openSettings })
+    return { openSettings }
+  }
+
+  const picker = () => screen.getByRole('combobox', { name: '将使用' }) as HTMLSelectElement
+
+  it('列出所有可用的「端点 × 模型」，当前那一对是选中项', () => {
+    arrange([opencode, ollama], { baseUrl: opencode.baseUrl, model: 'glm-5.2' })
+    render(<PreferencesStep />)
+
+    expect([...picker().options].map((o) => o.textContent)).toEqual([
+      'glm-5.2 · opencode.ai',
+      'deepseek-v4-flash · opencode.ai',
+      'qwen2.5 · localhost:11434',
+      '在设置页填别的…',
+    ])
+    expect(picker().value).toBe(value(opencode.baseUrl, 'glm-5.2'))
+  })
+
+  // 列出一个用不了的组合是陷阱：选中它这一页立刻翻成「还没配置模型」，
+  // 用户得自己想明白刚才那一下干了什么
+  it('还没填 Key 的远程端点不进名单', () => {
+    arrange([opencode, unconfigured], { baseUrl: opencode.baseUrl, model: 'glm-5.2' })
+    render(<PreferencesStep />)
+
+    expect([...picker().options].map((o) => o.textContent))
+      .not.toContain('gpt-4o-mini · api.openai.com')
+  })
+
+  // 本机端点空 Key 是正常的，那条路 README 明确支持
+  it('本机端点空 Key 照样进名单', () => {
+    arrange([ollama], { baseUrl: ollama.baseUrl, model: 'qwen2.5' })
+    render(<PreferencesStep />)
+
+    expect([...picker().options].map((o) => o.textContent)).toContain('qwen2.5 · localhost:11434')
+  })
+
+  it('切到另一个端点的模型，active 连端点一起换过去', async () => {
+    arrange([opencode, ollama], { baseUrl: opencode.baseUrl, model: 'glm-5.2' })
+    render(<PreferencesStep />)
+
+    await userEvent.selectOptions(picker(), value(ollama.baseUrl, 'qwen2.5'))
+    expect(useStore.getState().settings.active)
+      .toEqual({ baseUrl: ollama.baseUrl, model: 'qwen2.5' })
+  })
+
+  it('选「在设置页填别的…」时开设置页，active 一个字都不改', async () => {
+    const { openSettings } = arrange([opencode], { baseUrl: opencode.baseUrl, model: 'glm-5.2' })
+    render(<PreferencesStep />)
+
+    await userEvent.selectOptions(picker(), '::open-settings')
+    expect(openSettings).toHaveBeenCalledTimes(1)
+    expect(useStore.getState().settings.active.model).toBe('glm-5.2')
+  })
+
+  it('一个可用的都没有时不摆下拉，整页走「还没配置模型」', () => {
+    arrange([unconfigured], { baseUrl: unconfigured.baseUrl, model: 'gpt-4o-mini' })
+    render(<PreferencesStep />)
+    // 空断言防身：先证明这一页确实渲染在「还没配」那个分支上
+    expect(screen.getByRole('button', { name: '先去配置模型' })).toBeTruthy()
+
+    expect(screen.queryByRole('combobox', { name: '将使用' })).toBeNull()
   })
 })
