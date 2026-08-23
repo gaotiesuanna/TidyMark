@@ -4,6 +4,7 @@ import { DOMAIN_GROUPS, groupFolderTitle } from '@/core/domainGroups'
 import { detectMode } from '@/core/mode'
 import { currentLocale, t } from '@/i18n'
 import { isModelConfigured } from '@/llm/config'
+import { activeLlm } from '@/storage/settings'
 import { useStore } from '../store'
 
 export function PreferencesStep() {
@@ -32,7 +33,8 @@ export function PreferencesStep() {
   // 为什么，也不给出路；换成一个能点、点了直接落到设置页的按钮永远更好。
   // 判断走共用谓词——只认 apiKey 的话，本机 Ollama 用户永远拿不到「开始 AI 分析」，
   // 点「先去配置模型」又回到他刚配完的设置页，来回打转（见 llm/config.ts）。
-  const needModel = !isModelConfigured(settings.llm)
+  const llm = activeLlm(settings)
+  const needModel = !isModelConfigured(llm)
 
   return (
     <div className="space-y-4">
@@ -145,7 +147,7 @@ export function PreferencesStep() {
         {/* 模型状态放在按钮上方：设置藏在齿轮后面，点开始前得看见即将用哪一个；
             没配时也不只靠按钮上那几个字。权限预告仍在两种状态下都摆着。 */}
         <p className="text-xs leading-relaxed text-neutral-600">
-          {needModel ? t('prefsModelMissing') : t('prefsModelCurrent', settings.llm.model)}
+          {needModel ? t('prefsModelMissing') : t('prefsModelCurrent', llm.model)}
         </p>
         {/* 权限预告放在按钮上方：申请只发生在点下去的那一刻（chrome.permissions.request()
             要用户手势，设置页是 onChange 即存，放不了），提前说清楚它只要一个域名。

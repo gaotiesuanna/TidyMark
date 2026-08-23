@@ -40,8 +40,24 @@ export function endpointKey(baseUrl: string): string {
   return baseUrl.trim().replace(/\/+$/, '')
 }
 
+/** 一个模型端点：一把 Key 后面可以挂多个模型（OpenCode Go 这类网关正是如此）。 */
+export interface Endpoint {
+  /** 端点地址，同时是这条记录的主键。比对一律走 endpointKey()。 */
+  baseUrl: string
+  apiKey: string
+  /** 这个端点下存着的模型名，用户在设置页手工维护，顺序即显示顺序。 */
+  models: string[]
+}
+
 export interface Settings {
-  llm: LlmConfig
+  endpoints: Endpoint[]
+  /**
+   * 当前在用的那一对。
+   *
+   * 一个端点都没有时是 `{ baseUrl: '', model: '' }`——不用 null，免得六个消费方
+   * 各写一遍空判断；空串走的是 activeLlm 的兜底那条路。
+   */
+  active: { baseUrl: string; model: string }
   /** 整理完成后清理范围内不含任何书签的目录。 */
   removeEmptyFolders: boolean
   /** 勾选的域名聚合组 key，见 core/domainGroups.ts。为空表示不聚合。 */
@@ -52,12 +68,43 @@ export interface Settings {
   uiLocale: UiLocale
 }
 
+const DEFAULT_BASE_URL = 'https://api.openai.com/v1'
+const DEFAULT_MODEL = 'gpt-4o-mini'
+
 export const DEFAULT_SETTINGS: Settings = {
-  llm: { baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-4o-mini' },
+  endpoints: [{ baseUrl: DEFAULT_BASE_URL, apiKey: '', models: [DEFAULT_MODEL] }],
+  active: { baseUrl: DEFAULT_BASE_URL, model: DEFAULT_MODEL },
   removeEmptyFolders: true,
   domainGroups: [],
   rewriteGithubTitles: false,
   uiLocale: 'auto',
+}
+
+/** 按主键找端点，找不到返回 null。 */
+export function findEndpoint(settings: Settings, baseUrl: string): Endpoint | null {
+  const key = endpointKey(baseUrl)
+  return settings.endpoints.find((e) => endpointKey(e.baseUrl) === key) ?? null
+}
+
+/**
+ * 把「当前在用的那一对」拼成 llm/client.ts 要的 LlmConfig。
+ *
+ * **任何不一致都返回一个空 Key 的默认配置**：端点被删了、模型被移除了、
+ * 一个端点都没有。于是 isModelConfigured 判 false，界面自然落到已经存在、
+ * 已经有用例的「还没配置模型」分支——六个消费方一行防御都不用写，
+ * 也不必新造一种错误态。
+ *
+ * 兜底的 baseUrl 必须是**远程**默认值。isModelConfigured 对 localhost /
+ * 127.0.0.1 是放行空 Key 的（README 明确支持本机 Ollama 那条路），
+ * 兜底成本机地址会把「端点被删了」判成「配好了的本机 Ollama」，
+ * 用户会拿到一个开始按钮，点下去必然失败。
+ */
+export function activeLlm(settings: Settings): LlmConfig {
+  const fallback: LlmConfig = { baseUrl: DEFAULT_BASE_URL, apiKey: '', model: DEFAULT_MODEL }
+  const endpoint = findEndpoint(settings, settings.active.baseUrl)
+  if (endpoint === null) return fallback
+  if (!endpoint.models.includes(settings.active.model)) return fallback
+  return { baseUrl: endpoint.baseUrl, apiKey: endpoint.apiKey, model: settings.active.model }
 }
 
 /**
@@ -104,15 +151,48 @@ export const PRESETS: Array<{ label: Record<Locale, string>; baseUrl: string; mo
  * 判例：**删掉一个旋钮时，存量值一律读取时忽略，而不是继续在后台生效。**
  * 代价是「上周关掉过二级目录」的人下次整理会看到行为变化——这是有意接受的：
  * 那件事现在由书签量说了算，把旧值留着只会让两套逻辑打架。
+ *
+ * - `llm`：当年是唯一那套模型配置。现在由 endpoints + active 取代，**只在迁移时读一次**
+ *   （见 migrateEndpoints），存储里已经有 endpoints 之后就再也不看它。
+ * - `modelHistory`：短命的一代，「按 baseUrl 记住用过的模型名」。端点表把模型名单交给
+ *   用户手工维护之后，自动攒的那份历史就是第二个真相源——名单里躺着一条用户已经删掉的
+ *   模型，是「双份真相」的教科书样子。读都不读。
  */
 export async function loadSettings(ports: Ports): Promise<Settings> {
-  const stored = await ports.storage.get<Partial<Settings>>(SETTINGS_KEY)
+  const stored = await ports.storage.get<Partial<Settings> & { llm?: LlmConfig }>(SETTINGS_KEY)
+  // ports.storage.get 的返回类型是 T | null（见 core/ports.ts），migrateEndpoints
+  // 的参数按存量代码的既有习惯写的是 T | undefined——这里只做一次 null → undefined
+  // 的规整，migrateEndpoints 自身的签名不用为了这一处调用改
+  const migrated = migrateEndpoints(stored ?? undefined)
   return {
-    llm: { ...DEFAULT_SETTINGS.llm, ...(stored?.llm ?? {}) },
+    endpoints: migrated.endpoints,
+    active: migrated.active,
     removeEmptyFolders: stored?.removeEmptyFolders ?? DEFAULT_SETTINGS.removeEmptyFolders,
     domainGroups: stored?.domainGroups ?? DEFAULT_SETTINGS.domainGroups,
     rewriteGithubTitles: stored?.rewriteGithubTitles ?? DEFAULT_SETTINGS.rewriteGithubTitles,
     uiLocale: stored?.uiLocale ?? DEFAULT_SETTINGS.uiLocale,
+  }
+}
+
+/**
+ * 单套配置 → 端点表。
+ *
+ * 只在存储里**还没有** endpoints 时才看那个上一代的 llm：迁移过一次之后
+ * 它就是残留，再读它会把用户后来在端点表里做的修改盖回去。
+ */
+function migrateEndpoints(
+  stored: (Partial<Settings> & { llm?: LlmConfig }) | undefined,
+): Pick<Settings, 'endpoints' | 'active'> {
+  if (stored?.endpoints !== undefined) {
+    return { endpoints: stored.endpoints, active: stored.active ?? DEFAULT_SETTINGS.active }
+  }
+  const llm = stored?.llm
+  if (llm === undefined) {
+    return { endpoints: DEFAULT_SETTINGS.endpoints, active: DEFAULT_SETTINGS.active }
+  }
+  return {
+    endpoints: [{ baseUrl: llm.baseUrl, apiKey: llm.apiKey, models: [llm.model] }],
+    active: { baseUrl: llm.baseUrl, model: llm.model },
   }
 }
 

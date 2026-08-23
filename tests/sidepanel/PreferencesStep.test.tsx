@@ -3,7 +3,8 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { PreferencesStep } from '@/sidepanel/steps/PreferencesStep'
 import { useStore } from '@/sidepanel/store'
-import { DEFAULT_SETTINGS } from '@/storage/settings'
+import { DEFAULT_SETTINGS, activeLlm } from '@/storage/settings'
+import { withLlm } from '../fakes/settings'
 import type { OrganizeMode } from '@/core/mode'
 import type { BookmarkItem, FolderItem, ScanResult } from '@/core/types'
 import type { BookmarkNode } from '@/core/ports'
@@ -216,13 +217,13 @@ describe('PreferencesStep 不再摆配一次就不动的设置', () => {
 describe('PreferencesStep 没配模型时的出路', () => {
   function arrange(
     apiKey: string,
-    baseUrl: string = DEFAULT_SETTINGS.llm.baseUrl,
+    baseUrl: string = activeLlm(DEFAULT_SETTINGS).baseUrl,
   ): { analyze: ReturnType<typeof vi.fn>; openSettings: ReturnType<typeof vi.fn> } {
     setup(messyScan)
     const analyze = vi.fn(async () => {})
     const openSettings = vi.fn()
     useStore.setState({
-      settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey, baseUrl } },
+      settings: { ...DEFAULT_SETTINGS, ...withLlm({ ...activeLlm(DEFAULT_SETTINGS), apiKey, baseUrl }) },
       analyze, openSettings,
     })
     return { analyze, openSettings }
@@ -297,7 +298,7 @@ describe('PreferencesStep 没配模型时的出路', () => {
     useStore.setState({
       settings: {
         ...useStore.getState().settings,
-        llm: { ...useStore.getState().settings.llm, model: 'deepseek-chat' },
+        ...withLlm({ ...activeLlm(useStore.getState().settings), model: 'deepseek-chat' }),
       },
     })
     render(<PreferencesStep />)
@@ -337,7 +338,7 @@ describe('PreferencesStep 的权限预告', () => {
   it('已经配好模型时照样摆着——真会撞上那个权限弹窗的恰恰是他', () => {
     setup(messyScan)
     useStore.setState({
-      settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey: 'sk-already-configured' } },
+      settings: { ...DEFAULT_SETTINGS, ...withLlm({ ...activeLlm(DEFAULT_SETTINGS), apiKey: 'sk-already-configured' }) },
     })
     render(<PreferencesStep />)
     // 前提：这一条守的是「已经配好」那个分支，按钮得真是「开始 AI 分析」

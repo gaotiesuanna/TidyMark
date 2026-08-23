@@ -14,7 +14,8 @@ import { ProgressPanel } from '@/sidepanel/components/ProgressPanel'
 import { SettingsPanel } from '@/sidepanel/components/SettingsPanel'
 import { useStore, type ModelTest } from '@/sidepanel/store'
 import { EMPTY_EDITS } from '@/core/structure'
-import { DEFAULT_SETTINGS } from '@/storage/settings'
+import { DEFAULT_SETTINGS, activeLlm } from '@/storage/settings'
+import { withLlm } from '../fakes/settings'
 import type { BookmarkNode } from '@/core/ports'
 import type { BookmarkItem, FolderItem, OrganizePlan, ScanResult } from '@/core/types'
 import type { ApplyResult } from '@/engine/apply'
@@ -94,7 +95,7 @@ describe('英文界面渲染守卫：步骤组件', () => {
     }
     useStore.setState({
       scan,
-      settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey: 'sk-configured' } },
+      settings: { ...DEFAULT_SETTINGS, ...withLlm({ ...activeLlm(DEFAULT_SETTINGS), apiKey: 'sk-configured' }) },
       modeOverride: null, busy: null,
       tree, checkedIds: new Set(['10']),
     })

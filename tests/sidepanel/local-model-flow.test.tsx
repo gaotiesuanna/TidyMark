@@ -5,7 +5,7 @@ import { SettingsPanel } from '@/sidepanel/components/SettingsPanel'
 import { PreferencesStep } from '@/sidepanel/steps/PreferencesStep'
 import { ScopeStep } from '@/sidepanel/steps/ScopeStep'
 import { useStore } from '@/sidepanel/store'
-import { DEFAULT_SETTINGS } from '@/storage/settings'
+import { DEFAULT_SETTINGS, activeLlm } from '@/storage/settings'
 import type { BookmarkNode } from '@/core/ports'
 import type { BookmarkItem, ScanResult } from '@/core/types'
 
@@ -72,7 +72,7 @@ describe('本机 Ollama 动线', () => {
     settings.unmount()
 
     // 预设写下的确实是「本机地址 + 空 Key」——后面两页的表现全挂在这件事上
-    const llm = useStore.getState().settings.llm
+    const llm = activeLlm(useStore.getState().settings)
     expect(llm.baseUrl).toBe('http://localhost:11434/v1')
     expect(llm.apiKey).toBe('')
 

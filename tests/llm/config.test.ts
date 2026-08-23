@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { isLocalBaseUrl, isModelConfigured } from '@/llm/config'
-import { DEFAULT_SETTINGS, PRESETS } from '@/storage/settings'
+import { DEFAULT_SETTINGS, PRESETS, activeLlm } from '@/storage/settings'
 
 describe('isLocalBaseUrl', () => {
   it('认 localhost 与 127.0.0.1，端口随便填', () => {
@@ -38,12 +38,12 @@ describe('isModelConfigured', () => {
   it('本机服务器不要 Key：点完「本地 Ollama」预设、一个字都不再填，就算配好了', () => {
     // 直接拿 PRESETS 里那一项，不抄一份 URL——预设改了这条用例要跟着红
     const ollama = PRESETS.find((preset) => preset.baseUrl.includes('localhost'))!
-    const llm = { ...DEFAULT_SETTINGS.llm, baseUrl: ollama.baseUrl, model: ollama.model }
+    const llm = { ...activeLlm(DEFAULT_SETTINGS), baseUrl: ollama.baseUrl, model: ollama.model }
     expect(llm.apiKey).toBe('')
     expect(isModelConfigured(llm)).toBe(true)
   })
 
   it('默认设置（全新安装）不算配好——否则第一次进来就没人提示他去配', () => {
-    expect(isModelConfigured(DEFAULT_SETTINGS.llm)).toBe(false)
+    expect(isModelConfigured(activeLlm(DEFAULT_SETTINGS))).toBe(false)
   })
 })

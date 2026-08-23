@@ -5,9 +5,10 @@ import {
 } from '@/sidepanel/store'
 import { send } from '@/sidepanel/lib/send'
 import { currentLocale, setLocale, t } from '@/i18n'
-import { DEFAULT_SETTINGS } from '@/storage/settings'
+import { DEFAULT_SETTINGS, activeLlm } from '@/storage/settings'
 import { EMPTY_EDITS } from '@/core/structure'
 import { makePlan } from '../fakes/plan'
+import { withLlm } from '../fakes/settings'
 import type { ProgressEvent } from '@/background/events'
 import type { BookmarkNode } from '@/core/ports'
 
@@ -361,7 +362,7 @@ describe('放弃这一轮之后，在途结果不再落地', () => {
     vi.mocked(send).mockReset()
     useStore.setState({
       step: 'preferences', scan, plan: null, checkedIds: new Set(['1']),
-      settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey: 'sk-x' } },
+      settings: { ...DEFAULT_SETTINGS, ...withLlm({ ...activeLlm(DEFAULT_SETTINGS), apiKey: 'sk-x' }) },
       busy: null, busyKind: null, error: null, logs: [],
     })
   })
@@ -506,7 +507,7 @@ describe('失败之后的重试', () => {
   })
 
   it('analyze 失败时记下可重试的是哪一步', async () => {
-    useStore.setState({ settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey: 'sk-x' } } })
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS, ...withLlm({ ...activeLlm(DEFAULT_SETTINGS), apiKey: 'sk-x' }) } })
     vi.mocked(send).mockImplementation((req: { kind: string }) =>
       req.kind === 'analyze'
         ? (Promise.resolve({ ok: false, error: '后台被中断' }) as never)
@@ -524,7 +525,7 @@ describe('失败之后的重试', () => {
   })
 
   it('用户主动取消不算失败，不给重试', async () => {
-    useStore.setState({ settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey: 'sk-x' } } })
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS, ...withLlm({ ...activeLlm(DEFAULT_SETTINGS), apiKey: 'sk-x' }) } })
     vi.mocked(send).mockImplementation((req: { kind: string }) =>
       req.kind === 'analyze'
         ? (Promise.resolve({ ok: false, error: '已取消', cancelled: true }) as never)
@@ -537,7 +538,7 @@ describe('失败之后的重试', () => {
   it('retry() 重跑失败的那一步', async () => {
     useStore.setState({
       retryable: 'analyze', error: '后台被中断',
-      settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey: 'sk-x' } },
+      settings: { ...DEFAULT_SETTINGS, ...withLlm({ ...activeLlm(DEFAULT_SETTINGS), apiKey: 'sk-x' }) },
     })
     vi.mocked(send).mockImplementation((req: { kind: string }) =>
       req.kind === 'analyze'
@@ -571,7 +572,7 @@ describe('失败之后的重试', () => {
       contains: () => Promise.resolve(false),
       request: () => Promise.resolve(false),
     }
-    useStore.setState({ settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey: 'sk-x' } } })
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS, ...withLlm({ ...activeLlm(DEFAULT_SETTINGS), apiKey: 'sk-x' }) } })
 
     await useStore.getState().analyze()
     expect(useStore.getState().error).toBe(t('errHostPermission'))

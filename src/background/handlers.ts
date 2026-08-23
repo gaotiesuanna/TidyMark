@@ -26,7 +26,7 @@ import {
   applyDesign, collectTopics, designFolders, designTagFolders, nameMergedFolder, nameNewTopics,
 } from '@/llm/folders'
 import { extractTags, refineGroupTags } from '@/llm/tags'
-import { DEFAULT_SETTINGS, loadCache, loadSettings, saveCache, saveSettings } from '@/storage/settings'
+import { DEFAULT_SETTINGS, activeLlm, loadCache, loadSettings, saveCache, saveSettings } from '@/storage/settings'
 import { findBookmarksBar } from '@/core/import'
 import { importTree } from '@/engine/importTree'
 import type { EmitProgress, ProgressPhase } from './events'
@@ -102,7 +102,8 @@ export async function handle(
         // 本机模型服务器不校验 Key，所以这里问的是「模型配好了没有」而不是「有没有 Key」，
         // 与选范围页、偏好页共用同一个谓词——三处各判各的时，本地 Ollama 用户会被卡在
         // 一个界面已经放行、后台仍然拒收的缝里
-        if (!isModelConfigured(settings.llm)) {
+        const llm = activeLlm(settings)
+        if (!isModelConfigured(llm)) {
           return { ok: false, error: t('errNoApiKey') }
         }
         const tree = await ports.bookmarks.getTree()
@@ -123,7 +124,7 @@ export async function handle(
           ? t(rebuild ? 'logModeOverriddenRebuild' : 'logModeOverriddenAdditive', decision.reason)
           : t(decision.mode === 'rebuild' ? 'logModeRebuild' : 'logModeAdditive', decision.reason))
 
-        const client = createClient(settings.llm, locale)
+        const client = createClient(llm, locale)
         // 候选目录要排除的是「范围根自己」，不是勾选界面级联勾上的整个 id 集合——
         // 勾书签栏会把它所有子目录的 id 也塞进 scopeRootIds，照单排除就是排除了一切，
         // 非推翻模式的候选表永远是空的（见 issues review C2）。roots 已经用
@@ -392,7 +393,7 @@ export async function handle(
           onLog: (message, level) => log('classify', message, level),
           isCancelled,
           locale,
-          model: settings.llm.model,
+          model: llm.model,
           includeTopicRule: !rebuild,
         })
         let classifications = [...pinned, ...llmResults]
@@ -521,7 +522,7 @@ export async function handle(
               onLog: (message, level) => log('classify', message, level),
               isCancelled,
               locale,
-              model: settings.llm.model,
+              model: llm.model,
               includeTopicRule: false,
             })
             await saveCache(ports, cache)
@@ -775,10 +776,11 @@ export async function handle(
         // 用真的客户端发一个最小 schema 的请求。不在这里挡「模型没配好」：设置页的
         // 按钮已经用 isModelConfigured 禁着，而真按下去时，一份空 Key 的配置得到的
         // 401 → 'auth' 本身就是准确答案，多一道门只会把它换成一句更笼统的话。
+        const testLlm = activeLlm(settings)
         const result = await probeModel(
-          () => createClient(settings.llm, locale),
+          () => createClient(testLlm, locale),
           locale,
-          settings.llm.apiKey,
+          testLlm.apiKey,
           now,
         )
         if (!result.ok) return { ok: false, error: result.error, reason: result.reason }

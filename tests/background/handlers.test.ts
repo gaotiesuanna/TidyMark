@@ -2,8 +2,9 @@ import { afterEach, describe, it, expect, vi } from 'vitest'
 import { handle } from '@/background/handlers'
 import { createFakeBookmarks, type TreeSpec } from '../fakes/fake-bookmarks'
 import { createFakeStorage } from '../fakes/fake-storage'
-import { DEFAULT_SETTINGS, SETTINGS_KEY, loadCache, saveSettings, type Settings } from '@/storage/settings'
+import { DEFAULT_SETTINGS, SETTINGS_KEY, activeLlm, loadCache, saveSettings, type Settings } from '@/storage/settings'
 import { currentLocale, setLocale } from '@/i18n'
+import { withLlm } from '../fakes/settings'
 import { LlmError, type LlmClient } from '@/llm/client'
 import type { OrganizePlan } from '@/core/types'
 import type { ProgressEvent } from '@/background/events'
@@ -75,7 +76,7 @@ describe('handle', () => {
     const { ports, deps } = setup()
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'qwen2.5' },
+      ...withLlm({ baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'qwen2.5' }),
     })
     const res = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
     // 不断言 ok:true——那要整条分析链路都跑通，跟这道守卫是两件事。要守住的是
@@ -86,7 +87,7 @@ describe('handle', () => {
     // 证明上面那条不是因为压根没走到这道门才绿的
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-4o-mini' },
+      ...withLlm({ baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-4o-mini' }),
     })
     const remote = await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, deps)
     expect((remote as { error: string }).error).toContain('API Key')
@@ -100,7 +101,7 @@ describe('handle', () => {
     })
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -139,7 +140,7 @@ describe('handle', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     })
     const events: ProgressEvent[] = []
     await handle(
@@ -166,7 +167,7 @@ describe('handle', () => {
     })
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -189,7 +190,7 @@ describe('handle', () => {
     })
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: true,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -218,14 +219,14 @@ describe('handle', () => {
     const { ports, deps } = setup()
     const settings: Settings = {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-d', model: 'deepseek-chat' },
+      ...withLlm({ baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-d', model: 'deepseek-chat' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
     }
     await handle(ports, { kind: 'save_settings', settings }, deps)
     const res = await handle(ports, { kind: 'get_settings' }, deps) as { settings: typeof settings }
-    expect(res.settings.llm.model).toBe('deepseek-chat')
+    expect(activeLlm(res.settings).model).toBe('deepseek-chat')
   })
 
   it('处理器内部抛错时转成 ok:false 而不是崩溃', async () => {
@@ -246,7 +247,7 @@ describe('handle', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -275,7 +276,7 @@ describe('handle', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -313,7 +314,7 @@ describe('handle', () => {
     const { ports } = setup()
     const settings: Settings = {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     }
     await saveSettings(ports, settings)
     // maxFolderDepth 已不是设置字段，只能从存储那一侧模拟老用户的存量值
@@ -341,7 +342,7 @@ describe('handle', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -402,7 +403,7 @@ describe('handle', () => {
     const deps = { createClient: () => ({ complete }), now: () => 1 }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -426,7 +427,7 @@ describe('handle', () => {
     const { ports, deps } = setup({ complete })
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -451,7 +452,7 @@ describe('handle', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -482,7 +483,7 @@ describe('handle', () => {
     const { ports } = setup()
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -516,7 +517,7 @@ describe('handle', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -540,7 +541,7 @@ describe('handle', () => {
     const { ports } = setup()
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -563,7 +564,7 @@ describe('handle', () => {
     void fake
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -598,7 +599,7 @@ describe('handle', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -645,7 +646,7 @@ describe('handle', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -691,7 +692,7 @@ describe('handle', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -830,7 +831,7 @@ describe('analyze 的域名聚合', () => {
     })
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       domainGroups: ['github'],
     })
     await analyzePlan(ports, deps, 'rebuild')
@@ -847,7 +848,7 @@ describe('analyze 的域名聚合', () => {
     const { ports, deps } = setupAnalyze(githubUrls)
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       domainGroups: ['github'],
     })
     const plan = await analyzePlan(ports, deps, 'rebuild')
@@ -860,7 +861,7 @@ describe('analyze 的域名聚合', () => {
     const { ports, deps } = setupAnalyze({ n0: 'https://a.com/0', n1: 'https://b.com/1' })
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     })
     const plan = await analyzePlan(ports, deps, 'rebuild')
     expect(plan.tags.map((t) => t.bookmarkId).sort()).toEqual(['n0', 'n1'])
@@ -870,7 +871,7 @@ describe('analyze 的域名聚合', () => {
     const { ports, deps } = setupAnalyze({ n0: 'https://a.com/0' })
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     })
     const plan = await analyzePlan(ports, deps, 'additive')
     expect(plan.tags).toEqual([])
@@ -887,7 +888,7 @@ describe('analyze 对聚合组做细分抽取', () => {
     const { ports, deps } = setupAnalyze(urls)
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       domainGroups: ['github'],
     })
     await analyzePlan(ports, deps, 'rebuild')
@@ -900,7 +901,7 @@ describe('analyze 对聚合组做细分抽取', () => {
     const { ports, deps } = setupAnalyze({ n0: 'https://example.com/0' })
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     })
     await analyzePlan(ports, deps, 'rebuild')
     const prompts = (deps.createClient().complete as ReturnType<typeof vi.fn>).mock.calls
@@ -960,7 +961,7 @@ describe('analyze 的聚合组预算', () => {
     })
     const settings = {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       domainGroups,
     }
     await saveSettings(ports, settings)
@@ -1053,7 +1054,7 @@ describe('analyze 统一 GitHub 书签标题', () => {
     const { ports, deps } = setupAnalyze({ g0: 'https://github.com/sst/opencode' })
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     })
     const plan = await analyzePlan(ports, deps, 'additive')
     expect(plan.operations.some((o) => o.type === 'rename_bookmark')).toBe(false)
@@ -1066,7 +1067,7 @@ describe('analyze 统一 GitHub 书签标题', () => {
     })
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       rewriteGithubTitles: true,
     })
     const plan = await analyzePlan(ports, deps, 'additive')
@@ -1142,7 +1143,7 @@ async function analyzeMerge(
   const ports = { bookmarks: fake.api, storage: createFakeStorage() }
   await saveSettings(ports, {
     ...DEFAULT_SETTINGS,
-    llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+    ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     removeEmptyFolders: false, domainGroups: [], rewriteGithubTitles: false,
   })
   const deps = { createClient: () => ({ complete: mergeClient(nameResponse) }), now: () => 1 }
@@ -1259,7 +1260,7 @@ describe('推翻模式按绝对层级告知模型', () => {
     const ports = twoRoots()
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       ...settings,
     })
     const complete = vi.fn()
@@ -1341,7 +1342,7 @@ describe('handle analyze 目录下限', () => {
 
   const rebuild = (overrides: Partial<Settings> = {}): Settings => ({
     ...DEFAULT_SETTINGS,
-    llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+    ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     ...overrides,
   })
 
@@ -1533,7 +1534,7 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
   async function saveNonRebuild(ports: ReturnType<typeof setupHomeless>['ports']): Promise<void> {
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -1707,7 +1708,7 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
     const deps = { createClient: () => ({ complete }), now: () => 1 }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: true,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -1785,7 +1786,7 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
     const deps = { createClient: () => ({ complete }), now: () => 1 }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -1827,7 +1828,7 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     })
     const res = await handle(
       ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' },
@@ -1853,7 +1854,7 @@ describe('analyze 非推翻模式：级联勾选（review C2）', () => {
     })
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -1911,7 +1912,7 @@ describe('analyze 非推翻模式：多个范围根（review I2）', () => {
     const { ports, deps } = setupMultiRoot(complete)
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -1937,7 +1938,7 @@ describe('analyze 非推翻模式：多个范围根（review I2）', () => {
     const { ports, deps } = setupMultiRoot(complete)
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -1986,7 +1987,7 @@ describe('analyze 非推翻模式：多个范围根（review I2）', () => {
     const deps = { createClient: () => ({ complete }), now: () => 1 }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       removeEmptyFolders: false,
       domainGroups: [],
       rewriteGithubTitles: false,
@@ -2023,7 +2024,7 @@ async function analyzeWith(tree: TreeSpec[], modeOverride?: OrganizeMode): Promi
   const ports = { bookmarks: fake.api, storage: createFakeStorage() }
   await saveSettings(ports, {
     ...DEFAULT_SETTINGS,
-    llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+    ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     removeEmptyFolders: false,
   })
   const deps = { createClient: () => ({ complete: modeClient() }), now: () => 1 }
@@ -2088,7 +2089,7 @@ describe('analyze 自己判断走哪条路', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     })
     const events: ProgressEvent[] = []
     await handle(ports, { kind: 'analyze', scopeRootIds: ['1'] }, {
@@ -2110,7 +2111,7 @@ describe('analyze 自己判断走哪条路', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     })
     const events: ProgressEvent[] = []
     await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, {
@@ -2130,7 +2131,7 @@ describe('analyze 自己判断走哪条路', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     })
     const events: ProgressEvent[] = []
     await handle(ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, {
@@ -2228,7 +2229,7 @@ describe('analyze 的 prune 二次判定', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     })
     const res = await handle(
       ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
@@ -2265,7 +2266,7 @@ describe('analyze 的 prune 二次判定', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     const settings = {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     }
     await saveSettings(ports, settings)
     await ports.storage.set(SETTINGS_KEY, { ...settings, enforceMinFolderSize: false })
@@ -2317,7 +2318,7 @@ describe('analyze 的 prune 二次判定', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     })
     const res = await handle(
       ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
@@ -2394,7 +2395,7 @@ describe('analyze 的 prune 二次判定', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     })
     const res = await handle(
       ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
@@ -2474,7 +2475,7 @@ describe('analyze 的 prune 二次判定', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       domainGroups: ['github'],
     })
     await handle(
@@ -2529,7 +2530,7 @@ describe('analyze 的目录形状由书签数推导', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     const settings: Settings = {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     }
     await saveSettings(ports, settings)
     if (Object.keys(legacyKeys).length > 0) {
@@ -2626,7 +2627,7 @@ describe('analyze 的目录形状由书签数推导', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     })
     const res = await handle(
       ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
@@ -2683,7 +2684,7 @@ describe('analyze 的目录形状由书签数推导', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     })
     const events: ProgressEvent[] = []
     await handle(
@@ -2733,7 +2734,7 @@ describe('analyze 的目录形状由书签数推导', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     })
     const events: ProgressEvent[] = []
     await handle(
@@ -2882,7 +2883,7 @@ describe('test_model 当场验一次模型配置', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://api.deepseek.com/v1', apiKey: CANARY, model: 'deepseek-chat' },
+      ...withLlm({ baseUrl: 'https://api.deepseek.com/v1', apiKey: CANARY, model: 'deepseek-chat' }),
     })
     const res = await handle(ports, { kind: 'test_model' }, { createClient: () => client, now: () => 1 })
 
@@ -2903,7 +2904,7 @@ describe('test_model 当场验一次模型配置', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'qwen2.5' },
+      ...withLlm({ baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'qwen2.5' }),
     })
     const client = throwing('网络请求失败（耗时 3ms）: TypeError: Failed to fetch')
     const res = await handle(ports, { kind: 'test_model' }, { createClient: () => client, now: () => 1 })
@@ -2952,7 +2953,7 @@ describe('结构自检：同名穿透层', () => {
     const { ports, deps } = setupSameName()
     await saveSettings(ports, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
       domainGroups: ['github'],
     })
     const plan = await analyzePlan(ports, deps, 'rebuild', ['20'])
@@ -3017,7 +3018,7 @@ describe('结构自检：撑爆的叶子再切一层', () => {
 
   const settings = {
     ...DEFAULT_SETTINGS,
-    llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+    ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
     domainGroups: [],
     removeEmptyFolders: false,
     rewriteGithubTitles: false,

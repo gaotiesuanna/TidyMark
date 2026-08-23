@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { SETTINGS_KEY, loadSettings, saveSettings, loadCache, saveCache, DEFAULT_SETTINGS, MAX_CACHE_ENTRIES, PRESETS, endpointKey } from '@/storage/settings'
+import {
+  SETTINGS_KEY, loadSettings, saveSettings, loadCache, saveCache, DEFAULT_SETTINGS,
+  MAX_CACHE_ENTRIES, PRESETS, endpointKey, activeLlm, type Endpoint, type Settings,
+} from '@/storage/settings'
+import { isLocalBaseUrl, isModelConfigured } from '@/llm/config'
 import { createFakeStorage } from '../fakes/fake-storage'
 import { createFakeBookmarks } from '../fakes/fake-bookmarks'
 import type { CachedClassification } from '@/core/types'
@@ -12,7 +16,7 @@ describe('设置存取', () => {
   it('无设置时返回默认值', async () => {
     const settings = await loadSettings(ports())
     expect(settings).toEqual(DEFAULT_SETTINGS)
-    expect(settings.llm.apiKey).toBe('')
+    expect(settings.endpoints[0]!.apiKey).toBe('')
   })
 
   // 存量存储里可能躺着几代旧旋钮：maxTopFolders / maxFolderDepth 是被「按书签数推导形状」
@@ -132,20 +136,13 @@ describe('设置存取', () => {
     const p = ports()
     await saveSettings(p, {
       ...DEFAULT_SETTINGS,
-      llm: { baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-x', model: 'deepseek-chat' },
+      endpoints: [{ baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-x', models: ['deepseek-chat'] }],
+      active: { baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
       removeEmptyFolders: false,
     })
     const settings = await loadSettings(p)
-    expect(settings.llm.model).toBe('deepseek-chat')
+    expect(settings.active.model).toBe('deepseek-chat')
     expect(settings.removeEmptyFolders).toBe(false)
-  })
-
-  it('部分字段缺失时用默认值补齐', async () => {
-    const p = ports()
-    await p.storage.set('tidymark:settings', { llm: { apiKey: 'sk-y' } })
-    const settings = await loadSettings(p)
-    expect(settings.llm.apiKey).toBe('sk-y')
-    expect(settings.llm.baseUrl).toBe(DEFAULT_SETTINGS.llm.baseUrl)
   })
 
   // rebuildStructure 这个旧开关被自动判断（core/mode.ts）取代了：走哪条路现判，
@@ -350,5 +347,106 @@ describe('endpointKey', () => {
 
   it('前后空白不算另一个端点', () => {
     expect(endpointKey('  https://x/v1  ')).toBe('https://x/v1')
+  })
+})
+
+describe('activeLlm', () => {
+  const base = {
+    removeEmptyFolders: true, domainGroups: [], rewriteGithubTitles: false,
+    uiLocale: 'auto' as const,
+  }
+  const withEndpoints = (
+    endpoints: Endpoint[], active: { baseUrl: string; model: string },
+  ): Settings => ({ ...base, endpoints, active })
+
+  it('取出当前那一对，拼成 LlmConfig', () => {
+    const settings = withEndpoints(
+      [{ baseUrl: 'https://x/v1', apiKey: 'sk-x', models: ['a', 'b'] }],
+      { baseUrl: 'https://x/v1', model: 'b' },
+    )
+    expect(activeLlm(settings)).toEqual({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'b' })
+  })
+
+  it('末尾斜杠不影响命中', () => {
+    const settings = withEndpoints(
+      [{ baseUrl: 'https://x/v1/', apiKey: 'sk-x', models: ['a'] }],
+      { baseUrl: 'https://x/v1', model: 'a' },
+    )
+    expect(activeLlm(settings).apiKey).toBe('sk-x')
+  })
+
+  // 坏状态一律收敛成「还没配」：isModelConfigured 会判 false，界面落到已经存在、
+  // 已经有用例的那个分支，六个消费方一行防御都不用写
+  it('端点被删了时退回空 Key 的默认配置', () => {
+    const settings = withEndpoints(
+      [{ baseUrl: 'https://x/v1', apiKey: 'sk-x', models: ['a'] }],
+      { baseUrl: 'https://gone/v1', model: 'a' },
+    )
+    expect(activeLlm(settings).apiKey).toBe('')
+    expect(isModelConfigured(activeLlm(settings))).toBe(false)
+  })
+
+  it('模型不在这条端点的 models 里时同样退回', () => {
+    const settings = withEndpoints(
+      [{ baseUrl: 'https://x/v1', apiKey: 'sk-x', models: ['a'] }],
+      { baseUrl: 'https://x/v1', model: 'gone' },
+    )
+    expect(activeLlm(settings).apiKey).toBe('')
+  })
+
+  it('一个端点都没有时退回', () => {
+    expect(activeLlm(withEndpoints([], { baseUrl: '', model: '' })).apiKey).toBe('')
+  })
+
+  // 兜底的 baseUrl 若是本机地址，isModelConfigured 会放行空 Key，
+  // 于是「端点被删了」会被判成「配好了的本机 Ollama」——那才是真的坏
+  it('兜底的 baseUrl 不是本机地址', () => {
+    const llm = activeLlm(withEndpoints([], { baseUrl: '', model: '' }))
+    expect(isLocalBaseUrl(llm.baseUrl)).toBe(false)
+  })
+})
+
+describe('从单套配置迁移', () => {
+  it('存量的 llm 变成第一个端点、第一个模型，并且就是当前在用的那对', async () => {
+    const p = ports()
+    await p.storage.set(SETTINGS_KEY, {
+      llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'glm-5.2' },
+      removeEmptyFolders: false,
+    })
+    const settings = await loadSettings(p)
+    expect(settings.endpoints).toEqual([
+      { baseUrl: 'https://x/v1', apiKey: 'sk-x', models: ['glm-5.2'] },
+    ])
+    expect(settings.active).toEqual({ baseUrl: 'https://x/v1', model: 'glm-5.2' })
+    // 同一份存储里别的设置不受影响
+    expect(settings.removeEmptyFolders).toBe(false)
+  })
+
+  it('全新安装拿到默认端点', async () => {
+    const settings = await loadSettings(ports())
+    expect(settings).toEqual(DEFAULT_SETTINGS)
+    expect(settings.endpoints[0]!.apiKey).toBe('')
+  })
+
+  // 迁移过一次之后存储里那个 llm 就是上一代的残留，
+  // 再读它会把用户后来在端点表里做的修改盖回去
+  it('已经有 endpoints 时不再看存量的 llm', async () => {
+    const p = ports()
+    await p.storage.set(SETTINGS_KEY, {
+      llm: { baseUrl: 'https://old/v1', apiKey: 'old', model: 'old' },
+      endpoints: [{ baseUrl: 'https://new/v1', apiKey: 'new', models: ['new'] }],
+      active: { baseUrl: 'https://new/v1', model: 'new' },
+    })
+    const settings = await loadSettings(p)
+    expect(settings.endpoints).toHaveLength(1)
+    expect(settings.endpoints[0]!.baseUrl).toBe('https://new/v1')
+  })
+
+  it('存量的 modelHistory 读都不读', async () => {
+    const p = ports()
+    await p.storage.set(SETTINGS_KEY, {
+      modelHistory: [{ baseUrl: 'https://x/v1', model: 'a' }],
+    })
+    expect(await loadSettings(p)).toEqual(DEFAULT_SETTINGS)
   })
 })

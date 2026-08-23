@@ -5,6 +5,7 @@ import { ReviewStep } from '@/sidepanel/steps/ReviewStep'
 import { useStore } from '@/sidepanel/store'
 import { downloadJson } from '@/sidepanel/lib/download'
 import { DEFAULT_SETTINGS } from '@/storage/settings'
+import type { Settings } from '@/storage/settings'
 import type { CategoryCandidate, OrganizePlan, PlanRow, UnchangedRow } from '@/core/types'
 
 vi.mock('@/sidepanel/lib/download', () => ({ downloadJson: vi.fn(), downloadText: vi.fn() }))
@@ -71,20 +72,28 @@ describe('ReviewStep', () => {
 
   it('导出方案带上勾选状态与设置，且不含 apiKey', async () => {
     useStore.setState({
-      settings: { ...DEFAULT_SETTINGS, llm: { baseUrl: 'https://api.x.com/v1', apiKey: 'sk-secret', model: 'gpt-4o-mini' } },
+      settings: {
+        ...DEFAULT_SETTINGS,
+        // 两条端点：这一步要验的是「每一条端点的 Key 都被剥掉」，不是只剥当前在用的那条
+        endpoints: [
+          { baseUrl: 'https://api.x.com/v1', apiKey: 'sk-secret', models: ['gpt-4o-mini'] },
+          { baseUrl: 'https://api.y.com/v1', apiKey: 'sk-secret-2', models: ['other-model'] },
+        ],
+        active: { baseUrl: 'https://api.x.com/v1', model: 'gpt-4o-mini' },
+      },
     })
     render(<ReviewStep />)
     await userEvent.click(screen.getByText('导出方案'))
 
     const [filename, payload] = vi.mocked(downloadJson).mock.calls.at(-1)!
     expect(filename).toMatch(/^tidymark-plan-\d{4}-\d{2}-\d{2}\.json$/)
-    const body = payload as { settings: { llm: Record<string, unknown> }; accepted: string[]; plan: OrganizePlan }
+    const body = payload as { settings: Settings; accepted: string[]; plan: OrganizePlan }
     expect(body.accepted).toEqual(['100'])
     expect(body.plan.rows).toHaveLength(2)
-    expect(body.settings.llm.model).toBe('gpt-4o-mini')
-    // 这个文件是要发出去给人看的，密钥一个字符都不能跟着走
+    expect(body.settings.active.model).toBe('gpt-4o-mini')
+    // 这个文件是要发出去给人看的，密钥一个字符都不能跟着走——多条端点也不例外
     expect(JSON.stringify(payload)).not.toContain('sk-secret')
-    expect('apiKey' in body.settings.llm).toBe(false)
+    expect(body.settings.endpoints.every((e) => !('apiKey' in e))).toBe(true)
   })
 })
 

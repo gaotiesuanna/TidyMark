@@ -4,7 +4,8 @@ import { setLocale, t } from '@/i18n'
 import { SettingsPanel } from '@/sidepanel/components/SettingsPanel'
 import { useStore } from '@/sidepanel/store'
 import { send } from '@/sidepanel/lib/send'
-import { DEFAULT_SETTINGS, PRESETS } from '@/storage/settings'
+import { DEFAULT_SETTINGS, PRESETS, activeLlm } from '@/storage/settings'
+import { withLlm } from '../fakes/settings'
 import type { TestFailure } from '@/background/messages'
 
 vi.mock('@/sidepanel/lib/send', () => ({ send: vi.fn() }))
@@ -33,7 +34,7 @@ afterEach(() => {
 /** 一份「配好了」的模型：非本机域名，走得到申请权限那一步。 */
 const CONFIGURED = {
   ...DEFAULT_SETTINGS,
-  llm: { baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-real', model: 'deepseek-chat' },
+  ...withLlm({ baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-real', model: 'deepseek-chat' }),
 }
 
 /**
@@ -129,10 +130,10 @@ describe('SettingsPanel 模型配置', () => {
     expect(screen.getByPlaceholderText('API Key')).toHaveProperty('type', 'password')
   })
 
-  it('改 API Key 写进 settings.llm', () => {
+  it('改 API Key 写进当前端点', () => {
     render(<SettingsPanel />)
     fireEvent.change(screen.getByPlaceholderText('API Key'), { target: { value: 'sk-x' } })
-    expect(useStore.getState().settings.llm.apiKey).toBe('sk-x')
+    expect(activeLlm(useStore.getState().settings).apiKey).toBe('sk-x')
   })
 
   it('列出全部供应商预设，点一下同时写 baseUrl 与 model', () => {
@@ -141,7 +142,7 @@ describe('SettingsPanel 模型配置', () => {
       expect(screen.getByRole('button', { name: preset.label.zh_CN })).toBeTruthy()
     }
     fireEvent.click(screen.getByRole('button', { name: 'DeepSeek' }))
-    const llm = useStore.getState().settings.llm
+    const llm = activeLlm(useStore.getState().settings)
     expect(llm.baseUrl).toBe('https://api.deepseek.com/v1')
     expect(llm.model).toBe('deepseek-chat')
   })
@@ -326,7 +327,7 @@ describe('SettingsPanel 测试连接', () => {
       error: '模型接口返回 401: invalid_api_key',
       reason: 'auth',
     })
-    useStore.setState({ settings: { ...CONFIGURED, llm: { ...CONFIGURED.llm, apiKey: canary } } })
+    useStore.setState({ settings: { ...CONFIGURED, ...withLlm({ ...activeLlm(CONFIGURED), apiKey: canary }) } })
     const { container } = render(<SettingsPanel />)
 
     clickTest()

@@ -139,14 +139,15 @@ export function ReviewStep() {
    * 拿它去对照结果树时编号才对得上。
    *
    * apiKey 必须剥掉：这个文件是要发给别人看的，而 baseUrl 与 model 留着有用，
-   * 一份方案好不好，很大程度取决于它是哪个模型产出的。
+   * 一份方案好不好，很大程度取决于它是哪个模型产出的。端点表里不止一条端点、
+   * 每条都有自己的 Key，剥的时候不能只顾当前在用的那条——每一条都要剥。
    */
   function exportPlan(): void {
     const at = new Date()
-    const { apiKey: _apiKey, ...llm } = settings.llm
+    const endpoints = settings.endpoints.map(({ apiKey: _apiKey, ...rest }) => rest)
     downloadJson(`tidymark-plan-${localDate(at)}.json`, {
       exportedAt: at.toISOString(),
-      settings: { ...settings, llm },
+      settings: { ...settings, endpoints },
       accepted: [...accepted],
       plan,
     })

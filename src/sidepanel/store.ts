@@ -15,7 +15,7 @@ import type { ApplyResult } from '@/engine/apply'
 import type { ImportResult } from '@/engine/importTree'
 import type { UndoResult } from '@/engine/undo'
 import type { Settings } from '@/storage/settings'
-import { DEFAULT_SETTINGS } from '@/storage/settings'
+import { DEFAULT_SETTINGS, activeLlm } from '@/storage/settings'
 import { send } from './lib/send'
 import type { TestFailure } from '@/background/messages'
 import { ensureHostPermission, hasHostPermission } from './lib/permissions'
@@ -448,7 +448,7 @@ export const useStore = create<State>((set, get) => ({
 
   async analyze() {
     const run = get().runSeq
-    const granted = await ensureHostPermission(get().settings.llm.baseUrl)
+    const granted = await ensureHostPermission(activeLlm(get().settings).baseUrl)
     if (isStale(get, set, run)) return
     if (!granted) {
       // 重试有意义：ensureHostPermission 会重新弹一次权限请求，不是配置类错误
@@ -658,7 +658,7 @@ export const useStore = create<State>((set, get) => ({
 
   async testModel() {
     const seq = get().modelTestSeq
-    const baseUrl = get().settings.llm.baseUrl
+    const baseUrl = activeLlm(get().settings).baseUrl
     /** 结论过期就丢掉：设置页已经重新开过一次，那时的配置未必还是这一次测的那份。 */
     const settle = (modelTest: ModelTest): void => {
       if (get().modelTestSeq !== seq) return

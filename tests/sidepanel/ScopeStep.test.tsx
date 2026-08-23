@@ -3,7 +3,8 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ScopeStep } from '@/sidepanel/steps/ScopeStep'
 import { useStore } from '@/sidepanel/store'
-import { DEFAULT_SETTINGS } from '@/storage/settings'
+import { DEFAULT_SETTINGS, activeLlm } from '@/storage/settings'
+import { withLlm } from '../fakes/settings'
 import type { BookmarkNode } from '@/core/ports'
 
 const tree: BookmarkNode[] = [
@@ -95,7 +96,7 @@ describe('ScopeStep 还没配模型时的提示', () => {
    */
   function setKey(apiKey: string, openSettings = vi.fn()): ReturnType<typeof vi.fn> {
     useStore.setState({
-      settings: { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKey } },
+      settings: { ...DEFAULT_SETTINGS, ...withLlm({ ...activeLlm(DEFAULT_SETTINGS), apiKey }) },
       openSettings,
     })
     return openSettings
@@ -128,7 +129,7 @@ describe('ScopeStep 还没配模型时的提示', () => {
       settings: {
         ...DEFAULT_SETTINGS,
         // 设置页点一下「本地 Ollama」预设写进来的就是这两个字段，apiKey 一个字都没动
-        llm: { ...DEFAULT_SETTINGS.llm, baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5' },
+        ...withLlm({ ...activeLlm(DEFAULT_SETTINGS), baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5' }),
       },
       openSettings: vi.fn(),
     })
@@ -137,7 +138,7 @@ describe('ScopeStep 还没配模型时的提示', () => {
     expect(screen.getByText(/勾选你想让 TidyMark 重构的文件夹/)).toBeTruthy()
     expect(screen.getByRole('button', { name: '全部展开' })).toBeTruthy()
     // 前提：apiKey 确实还是空的——真填了 Key 的话这条用例守的就不是本机那条路了
-    expect(useStore.getState().settings.llm.apiKey).toBe('')
+    expect(activeLlm(useStore.getState().settings).apiKey).toBe('')
 
     expect(screen.queryByText(/挑一个预设/)).toBeNull()
     expect(screen.queryByRole('button', { name: '去配置模型' })).toBeNull()

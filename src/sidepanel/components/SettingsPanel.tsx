@@ -31,6 +31,18 @@ export function SettingsPanel() {
   // 中间可能已经换过 Key、换过模型（见 issues/37-test-model-button.md）。
   useEffect(() => resetModelTest(), [resetModelTest])
 
+  // 过渡期写法：Task 5 会把这一节整个换成端点列表。这里只让它按老样子读写第一条端点，
+  // 保证类型改完之后这一屏的行为一个字都没变。
+  const first = settings.endpoints[0] ?? { baseUrl: '', apiKey: '', models: [] }
+  const llm = { baseUrl: first.baseUrl, apiKey: first.apiKey, model: first.models[0] ?? '' }
+  const setLlm = (next: { baseUrl: string; apiKey: string; model: string }): void => {
+    void setSettings({
+      ...settings,
+      endpoints: [{ baseUrl: next.baseUrl, apiKey: next.apiKey, models: [next.model] }],
+      active: { baseUrl: next.baseUrl, model: next.model },
+    })
+  }
+
   return (
     <div className="space-y-4">
       {/* 返回按钮在 Shell 的头部那一行，和齿轮同排 */}
@@ -44,10 +56,7 @@ export function SettingsPanel() {
             <button
               key={preset.baseUrl}
               className="rounded border px-2 py-0.5 text-xs hover:bg-neutral-50"
-              onClick={() => void setSettings({
-                ...settings,
-                llm: { ...settings.llm, baseUrl: preset.baseUrl, model: preset.model },
-              })}
+              onClick={() => setLlm({ ...llm, baseUrl: preset.baseUrl, model: preset.model })}
             >
               {preset.label[locale]}
             </button>
@@ -56,21 +65,21 @@ export function SettingsPanel() {
         <input
           className="w-full rounded border px-2 py-1 text-xs"
           placeholder="Base URL"
-          value={settings.llm.baseUrl}
-          onChange={(e) => void setSettings({ ...settings, llm: { ...settings.llm, baseUrl: e.target.value } })}
+          value={llm.baseUrl}
+          onChange={(e) => setLlm({ ...llm, baseUrl: e.target.value })}
         />
         <input
           className="w-full rounded border px-2 py-1 text-xs"
           placeholder="API Key"
           type="password"
-          value={settings.llm.apiKey}
-          onChange={(e) => void setSettings({ ...settings, llm: { ...settings.llm, apiKey: e.target.value } })}
+          value={llm.apiKey}
+          onChange={(e) => setLlm({ ...llm, apiKey: e.target.value })}
         />
         <input
           className="w-full rounded border px-2 py-1 text-xs"
           placeholder="Model"
-          value={settings.llm.model}
-          onChange={(e) => void setSettings({ ...settings, llm: { ...settings.llm, model: e.target.value } })}
+          value={llm.model}
+          onChange={(e) => setLlm({ ...llm, model: e.target.value })}
         />
         {/* 配置的正确性在配置的地方验证，而不是等到流程深处才暴露：
             按钮紧跟着那三个输入框，填完就能当场按一下 */}
@@ -78,7 +87,7 @@ export function SettingsPanel() {
           <button
             className="rounded border px-2 py-0.5 text-xs hover:bg-neutral-50 disabled:opacity-40"
             // 没配好就没有东西可测；正在测时禁着，别让人连点出好几发请求
-            disabled={!isModelConfigured(settings.llm) || modelTest.state === 'running'}
+            disabled={!isModelConfigured(llm) || modelTest.state === 'running'}
             onClick={() => void testModel()}
           >
             {t('settingsTestModel')}
