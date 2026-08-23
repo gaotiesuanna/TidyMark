@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import {
   appendLog, collectDescendantFolderIds, nextStepAfterAnalyze, toggleChecked, useStore,
   MAX_LOGS, MAX_LOG_LENGTH, type LogLine,
@@ -430,6 +430,42 @@ describe('放弃这一轮之后，在途结果不再落地', () => {
     expect(useStore.getState().plan).not.toBeNull()
   })
 
+  // 下拉里的名单只收「确实答过一次」的模型，所以记录点在分析真的跑起来之后
+  it('分析成功后把这次用的模型记进历史', async () => {
+    vi.mocked(send).mockImplementation((req: { kind: string }) =>
+      req.kind === 'analyze'
+        ? (Promise.resolve({ ok: true, kind: 'analyze', plan: makePlan() }) as never)
+        : (Promise.resolve({ ok: true }) as never))
+    useStore.setState({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        llm: { baseUrl: 'https://x/v1', apiKey: 'k', model: 'glm-5.2' },
+        modelHistory: [],
+      },
+    })
+
+    await useStore.getState().analyze()
+    expect(useStore.getState().settings.modelHistory)
+      .toEqual([{ baseUrl: 'https://x/v1', model: 'glm-5.2' }])
+  })
+
+  it('分析失败时不记——那不是一次能用的配置', async () => {
+    vi.mocked(send).mockImplementation((req: { kind: string }) =>
+      req.kind === 'analyze'
+        ? (Promise.resolve({ ok: false, error: '炸了' }) as never)
+        : (Promise.resolve({ ok: true }) as never))
+    useStore.setState({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        llm: { baseUrl: 'https://x/v1', apiKey: 'k', model: 'glm-5.2' },
+        modelHistory: [],
+      },
+    })
+
+    await useStore.getState().analyze()
+    expect(useStore.getState().settings.modelHistory).toEqual([])
+  })
+
   it('分析完成后默认全部勾选——放错比不放更可接受', async () => {
     vi.mocked(send).mockImplementation((req: { kind: string }) =>
       req.kind === 'analyze'
@@ -465,7 +501,13 @@ describe('放弃这一轮之后，在途结果不再落地', () => {
       ([req]) => (req as { kind: string; modeOverride?: string }).kind === 'analyze'
         && (req as { modeOverride?: string }).modeOverride === 'rebuild',
     )).toBe(true)
-    expect(vi.mocked(send).mock.calls.some(([req]) => (req as { kind: string }).kind === 'save_settings')).toBe(false)
+    // 断言的是「modeOverride 没被持久化」，不是「分析期间一次设置都不许存」——
+    // 分析成功后会存一次，把这次用过的模型记进下拉名单（见 rememberCurrentModel）。
+    // 原先那条宽断言是在还没有任何这类写入时写下的，它拦得住的东西这条一样拦得住
+    const saved = vi.mocked(send).mock.calls
+      .map(([req]) => req as { kind: string; settings?: Record<string, unknown> })
+      .filter((req) => req.kind === 'save_settings')
+    expect(saved.every((req) => !('modeOverride' in (req.settings ?? {})))).toBe(true)
   })
 
   it('没推翻时请求里不带 modeOverride，后台自己判', async () => {
@@ -652,5 +694,51 @@ describe('长连接断开时按 busyKind 派生 retryable（I2）', () => {
 
     expect(useStore.getState().error).toBe(t('errBackgroundRecycled'))
     expect(useStore.getState().retryable).toBeNull()
+  })
+})
+
+describe('测试连接通过后记下模型', () => {
+  const chromeGlobal = globalThis as unknown as { chrome: { permissions: unknown } }
+  const originalPermissions = chromeGlobal.chrome.permissions
+  beforeEach(() => {
+    chromeGlobal.chrome.permissions = { contains: () => Promise.resolve(true) }
+    vi.mocked(send).mockReset()
+  })
+  afterEach(() => {
+    chromeGlobal.chrome.permissions = originalPermissions
+  })
+
+  function withModel(model: string): void {
+    useStore.setState({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        llm: { baseUrl: 'https://x/v1', apiKey: 'k', model },
+        modelHistory: [],
+      },
+    })
+  }
+
+  // 测试按钮比跑一整轮分析便宜得多：用户配完就点一下，名单在开始整理之前就攒起来了
+  it('通过时记进历史', async () => {
+    vi.mocked(send).mockImplementation((req: { kind: string }) =>
+      req.kind === 'test_model'
+        ? (Promise.resolve({ ok: true, kind: 'test_model', ms: 12 }) as never)
+        : (Promise.resolve({ ok: true }) as never))
+    withModel('glm-5.2')
+
+    await useStore.getState().testModel()
+    expect(useStore.getState().settings.modelHistory)
+      .toEqual([{ baseUrl: 'https://x/v1', model: 'glm-5.2' }])
+  })
+
+  it('没通过时不记', async () => {
+    vi.mocked(send).mockImplementation((req: { kind: string }) =>
+      req.kind === 'test_model'
+        ? (Promise.resolve({ ok: false, error: '401', reason: 'auth' }) as never)
+        : (Promise.resolve({ ok: true }) as never))
+    withModel('glm-5.2')
+
+    await useStore.getState().testModel()
+    expect(useStore.getState().settings.modelHistory).toEqual([])
   })
 })

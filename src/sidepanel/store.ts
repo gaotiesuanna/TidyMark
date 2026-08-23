@@ -15,7 +15,7 @@ import type { ApplyResult } from '@/engine/apply'
 import type { ImportResult } from '@/engine/importTree'
 import type { UndoResult } from '@/engine/undo'
 import type { Settings } from '@/storage/settings'
-import { DEFAULT_SETTINGS } from '@/storage/settings'
+import { DEFAULT_SETTINGS, rememberModel } from '@/storage/settings'
 import { send } from './lib/send'
 import type { TestFailure } from '@/background/messages'
 import { ensureHostPermission, hasHostPermission } from './lib/permissions'
@@ -59,6 +59,25 @@ export function nextStepAfterAnalyze(rebuildStructure: boolean): Step {
  */
 function fail(set: (partial: Partial<State>) => void, error: string, retryable: State['retryable']): void {
   set({ busy: null, busyKind: null, retryable, error })
+}
+
+/**
+ * 把当前配置的模型记进「用过的」名单——偏好页的模型下拉从那份名单取值。
+ *
+ * 只在模型**确实答过一次**之后调用（分析真的跑起来、或者设置页的测试按钮返回 ok）：
+ * 手打错的模型名一次都跑不成，因此进不来，下拉里不会攒一堆错字。
+ *
+ * 名单没变化时 rememberModel 返回同一个数组引用，这里据此跳过写盘——分析每成功
+ * 一次就调用一次，而绝大多数时候模型跟上一次是同一个。
+ */
+async function rememberCurrentModel(get: () => State): Promise<void> {
+  const { settings } = get()
+  const modelHistory = rememberModel(settings.modelHistory, {
+    baseUrl: settings.llm.baseUrl,
+    model: settings.llm.model,
+  })
+  if (modelHistory === settings.modelHistory) return
+  await get().setSettings({ ...settings, modelHistory })
 }
 
 /**
@@ -470,6 +489,9 @@ export const useStore = create<State>((set, get) => ({
     }
     if (!res.ok) return fail(set, res.error, 'analyze')
     if (res.kind !== 'analyze') return set({ busy: null, busyKind: null })
+    // 分析真的跑起来了，这个模型就算「确实答过一次」，可以进偏好页的下拉名单。
+    // 记在 res.ok 之后是这条的全部意思：手打错的模型名一次都跑不成，进不来
+    await rememberCurrentModel(get)
     set({
       plan: res.plan,
       // 默认全选：不勾 = 书签留在原来那个散落的位置 = 彻底找不到；进了一个不太准的主题目录，
@@ -675,7 +697,12 @@ export const useStore = create<State>((set, get) => ({
     }
 
     const res = await send({ kind: 'test_model' })
-    if (res.ok && res.kind === 'test_model') return settle({ state: 'ok', ms: res.ms })
+    if (res.ok && res.kind === 'test_model') {
+      // 测试按钮通过同样算「确实答过一次」，而且它比跑一整轮分析便宜得多——
+      // 用户配完就点一下，下拉名单在真正开始整理之前就攒起来了
+      await rememberCurrentModel(get)
+      return settle({ state: 'ok', ms: res.ms })
+    }
     // 回来的是别的 kind：说不出所以然，只能走兜底那条文案
     if (res.ok) return settle({ state: 'fail' })
 
