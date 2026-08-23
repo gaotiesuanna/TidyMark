@@ -159,7 +159,7 @@ export const PRESETS: Array<{ label: Record<Locale, string>; baseUrl: string; mo
  *   模型，是「双份真相」的教科书样子。读都不读。
  */
 export async function loadSettings(ports: Ports): Promise<Settings> {
-  const stored = await ports.storage.get<Partial<Settings> & { llm?: LlmConfig }>(SETTINGS_KEY)
+  const stored = await ports.storage.get<Partial<Settings> & { llm?: Partial<LlmConfig> }>(SETTINGS_KEY)
   // ports.storage.get 的返回类型是 T | null（见 core/ports.ts），migrateEndpoints
   // 的参数按存量代码的既有习惯写的是 T | undefined——这里只做一次 null → undefined
   // 的规整，migrateEndpoints 自身的签名不用为了这一处调用改
@@ -181,7 +181,7 @@ export async function loadSettings(ports: Ports): Promise<Settings> {
  * 它就是残留，再读它会把用户后来在端点表里做的修改盖回去。
  */
 function migrateEndpoints(
-  stored: (Partial<Settings> & { llm?: LlmConfig }) | undefined,
+  stored: (Partial<Settings> & { llm?: Partial<LlmConfig> }) | undefined,
 ): Pick<Settings, 'endpoints' | 'active'> {
   if (stored?.endpoints !== undefined) {
     return { endpoints: stored.endpoints, active: stored.active ?? DEFAULT_SETTINGS.active }
@@ -190,9 +190,14 @@ function migrateEndpoints(
   if (llm === undefined) {
     return { endpoints: DEFAULT_SETTINGS.endpoints, active: DEFAULT_SETTINGS.active }
   }
+  // 上一代那份 llm 可能是残缺的（存量存储里手改过的、更早版本写下的）。逐字段补默认值：
+  // 少补一个，endpointKey 就会在 undefined.trim() 上抛异常，用户连设置页都打不开。
+  const baseUrl = llm.baseUrl ?? DEFAULT_BASE_URL
+  const apiKey = llm.apiKey ?? ''
+  const model = llm.model ?? DEFAULT_MODEL
   return {
-    endpoints: [{ baseUrl: llm.baseUrl, apiKey: llm.apiKey, models: [llm.model] }],
-    active: { baseUrl: llm.baseUrl, model: llm.model },
+    endpoints: [{ baseUrl, apiKey, models: [model] }],
+    active: { baseUrl, model },
   }
 }
 

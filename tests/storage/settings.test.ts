@@ -442,6 +442,22 @@ describe('从单套配置迁移', () => {
     expect(settings.endpoints[0]!.baseUrl).toBe('https://new/v1')
   })
 
+  // 这条守的是一条崩溃路径，不是一个默认值：baseUrl 漏补的话，紧接着的
+  // endpointKey(undefined) 会在 undefined.trim() 上抛异常，设置页直接打不开
+  it('上一代那份 llm 残缺时逐字段补默认值', async () => {
+    const p = ports()
+    await p.storage.set(SETTINGS_KEY, { llm: { apiKey: 'sk-y' } })
+    const settings = await loadSettings(p)
+
+    expect(settings.endpoints).toEqual([{
+      baseUrl: DEFAULT_SETTINGS.endpoints[0]!.baseUrl,
+      apiKey: 'sk-y',
+      models: [DEFAULT_SETTINGS.active.model],
+    }])
+    expect(() => activeLlm(settings)).not.toThrow()
+    expect(activeLlm(settings).apiKey).toBe('sk-y')
+  })
+
   it('存量的 modelHistory 读都不读', async () => {
     const p = ports()
     await p.storage.set(SETTINGS_KEY, {
