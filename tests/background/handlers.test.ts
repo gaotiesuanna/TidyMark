@@ -2145,7 +2145,7 @@ describe('analyze 自己判断走哪条路', () => {
 
 describe('analyze 的 prune 二次判定', () => {
   /**
-   * 25 条书签（a* 19 条、c0-c2、d0-d2 各 3 条），标签阶段「前端」「冷门」都攒够
+   * 23 条书签（a* 17 条、c0-c2、d0-d2 各 3 条），标签阶段「前端」「冷门」都攒够
    * minFolderSize=3 条标签，建树时都活下来；但真实分类另有安排：a* 全进「前端」，
    * c0 进「冷门」、c1/c2 被模型直接分去「前端」，于是「冷门」只剩 1 条会被 prune 撤掉；
    * d* 三条模型直接分进「其他」，让「其他」在合并 c0 之前就已经够数、活了下来——
@@ -2155,17 +2155,21 @@ describe('analyze 的 prune 二次判定', () => {
    * pending 里的 fromTitle 会是「其他」而不是「冷门」——那是模型直接选了「其他」，不是
    * 被小目录挤出来的，测不到票面真正要盖的那条路（见 final-review.md I1）。
    *
-   * a* 从 4 条撑到 19 条（原来只有 9 条书签、总数 10）：一级目录数现在由总数推导，
+   * a* 从 4 条撑到 17 条（原来只有 9 条书签、总数 10）：一级目录数现在由总数推导，
    * 9~10 条只推导得出 1 个一级目录，减去给「其他」留的位子后连「前端」「冷门」都设计
-   * 不出来。凑够 25 条让推导给出 3 个一级目录，「前端」「冷门」「其他」三个都有位子；
-   * 25 也是分类批次大小（classifyBookmarks 默认 batchSize=25）的上限——再多一条
-   * 第一轮分类就会被拆成两批，`prompts`/`classifyCalls` 数的就不再是「问了几轮」了。
+   * 不出来。凑够 23 条让推导给出 3 个一级目录，「前端」「冷门」「其他」三个都有位子；
+   * 25 是分类批次大小（classifyBookmarks 默认 batchSize=25）的上限——不能超过它，
+   * 否则第一轮分类会被拆成两批，`prompts`/`classifyCalls` 数的就不再是「问了几轮」了。
+   * 17（而不是原来的 19）是 Task 6 之后新加的一条上限：a* 全进「前端」、c1/c2 也被
+   * 模型直接分去「前端」、二次判定又把 c0 从「冷门」捞进「前端」，17+2+1=20 卡在
+   * MAX_LEAF（20）上不越界——一旦越界，「结构自检其二」会把「前端」再切一层，
+   * 这副夹具要测的是二次判定本身，不该被那条无关的自检路径改写产出的目录形状。
    */
   const rehomeTree = [
     { id: '0', title: '', children: [
       { id: '1', title: '书签栏', children: [
         { id: '10', title: '收件箱', children: [
-          ...Array.from({ length: 19 }, (_, i) => ({ id: `a${i}`, title: `书签 a${i}`, url: `https://a${i}.dev` })),
+          ...Array.from({ length: 17 }, (_, i) => ({ id: `a${i}`, title: `书签 a${i}`, url: `https://a${i}.dev` })),
           { id: 'c0', title: '书签 c0', url: 'https://c0.dev' },
           { id: 'c1', title: '书签 c1', url: 'https://c1.dev' },
           { id: 'c2', title: '书签 c2', url: 'https://c2.dev' },
@@ -2330,19 +2334,23 @@ describe('analyze 的 prune 二次判定', () => {
   })
 
   it('二次判定改判之后，「其他」若被抽薄会被再撤一遍，不会建出一个不足下限的目录（钉住 C1）', async () => {
-    // 更贴近票面复现场景的最小夹具：min=3，a0..a21（22 条）→ 前端、
+    // 更贴近票面复现场景的最小夹具：min=3，a0..a15（16 条）→ 前端、
     // b0 → 冷门、b1/b2 → 其他；prune 把 b0 并进「其他」使其达标（3 条），
     // 二次判定又把 b0 改判去「前端」，「其他」只剩 b1/b2 两条——
     // 如果没有人在这之后再数一遍，计划里就会凭空出现一个装 2 条、
     // 低于 minFolderSize=3 的「其他」目录。
-    // a 组从 3 条撑到 22 条（凑够 25 条总数）：一级目录数现在由总数推导，
+    // a 组从 3 条撑到 16 条（凑够 19 条总数）：一级目录数现在由总数推导，
     // 6 条只推导得出 1 个一级目录，减去给「其他」留的位子后连「前端」都设计不出来；
-    // 25 也是分类批次大小上限——再多就会被拆成两批，打乱 classifyCalls 计数
+    // 25 是分类批次大小上限——不能超过它，否则会被拆成两批，打乱 classifyCalls 计数。
+    // 16（而不是原来的 22）是 Task 6 之后新加的一条上限：a* 全进「前端」、二次判定
+    // 又把 b0 从「冷门」捞进「前端」，16+1=17 留在 MAX_LEAF（20）以下——一旦越界，
+    // 「结构自检其二」会把「前端」再切一层，与这条用例要钉住的 C1（「其他」的二次
+    // 撤销）是两件事，不能让前者改写后者要验的目录形状
     const minTree = [
       { id: '0', title: '', children: [
         { id: '1', title: '书签栏', children: [
           { id: '10', title: '收件箱', children: [
-            ...Array.from({ length: 22 }, (_, i) => ({ id: `a${i}`, title: `书签 a${i}`, url: `https://a${i}.dev` })),
+            ...Array.from({ length: 16 }, (_, i) => ({ id: `a${i}`, title: `书签 a${i}`, url: `https://a${i}.dev` })),
             { id: 'b0', title: '书签 b0', url: 'https://b0.dev' },
             { id: 'b1', title: '书签 b1', url: 'https://b1.dev' },
             { id: 'b2', title: '书签 b2', url: 'https://b2.dev' },
@@ -2951,5 +2959,110 @@ describe('结构自检：同名穿透层', () => {
     const created = plan.operations.flatMap((o) =>
       o.type === 'create_folder' ? [stripNumberPrefix(o.title)] : [])
     expect(created).not.toContain('GitHub')
+  })
+})
+
+describe('结构自检：撑爆的叶子再切一层', () => {
+  const COUNT = 25
+
+  /**
+   * @param deepenFolders 第二次（下切那次）目录设计的返回值。
+   *   传两个目录 = 切得开；传一个目录 = 模型切不动，验止损与警告那条路。
+   */
+  function setupOversized(deepenFolders: Array<{ title: string; topics: string[]; children: [] }>) {
+    const fake = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '11', title: '收件箱', children: Array.from({ length: COUNT }, (_, i) => ({
+            id: `b${i}`, title: `书签 ${i}`, url: `https://example.com/${i}`,
+          })) },
+        ]},
+      ]},
+    ])
+    const designPrompts: string[] = []
+    const complete = vi.fn(async (prompt: string) => {
+      // 「标签清单：」是 llm/folders.ts 的 buildDesignPrompt 唯一固定拼进提示词的标记，
+      // 两种目录设计调用（全局那次用「请据此设计目录结构」、下切 oneLevel 那次改用
+      // 「需要为它们设计子目录」）共用它，「设计目录结构」这个字面串只在前者出现，
+      // 拿它当判据会漏判下切那一次
+      if (prompt.includes('标签清单：')) {
+        designPrompts.push(prompt)
+        // 下切那一轮的提示词会带上父目录名；全局那一轮只有主题清单，不会出现「前端工具」
+        return prompt.includes('前端工具')
+          ? { folders: deepenFolders }
+          : { folders: [{ title: '前端工具', topics: ['构建工具', '测试框架'], children: [] }] }
+      }
+      if (!prompt.includes('候选目录')) {
+        // 上一代标签：两种主题，前 13 条构建工具、后 12 条测试框架
+        return { results: Array.from({ length: COUNT }, (_, i) => ({
+          bookmark_id: `b${i}`,
+          primary_topic: i < 13 ? '构建工具' : '测试框架',
+          secondary_topic: null,
+        })) }
+      }
+      // 分类：全部塞进「前端工具」那个候选，制造一个装 25 条的目录
+      const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)]
+      const target = ids.find((m) => m[2]!.includes('前端工具'))?.[1] ?? ids[0]?.[1] ?? null
+      const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+      return { results: bookmarkIds.map((id) => (
+        { bookmark_id: id, target_category_id: target, confidence: 0.9, reason: 'r' }
+      )) }
+    })
+    return {
+      ports: { bookmarks: fake.api, storage: createFakeStorage() },
+      deps: { createClient: () => ({ complete } as unknown as LlmClient), now: () => 1 },
+      designPrompts,
+    }
+  }
+
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    llm: { baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' },
+    domainGroups: [],
+    removeEmptyFolders: false,
+    rewriteGithubTitles: false,
+  }
+
+  it('装 25 条的目录被切成子目录，只多花一次目录设计调用', async () => {
+    const { ports, deps, designPrompts } = setupOversized([
+      { title: '构建', topics: ['构建工具'], children: [] },
+      { title: '测试', topics: ['测试框架'], children: [] },
+    ])
+    await saveSettings(ports, settings)
+    const plan = await analyzePlan(ports, deps, 'rebuild')
+
+    const created = plan.operations.flatMap((o) =>
+      o.type === 'create_folder' ? [stripNumberPrefix(o.title)] : [])
+    expect(created).toContain('构建')
+    expect(created).toContain('测试')
+    // 子目录挂在「前端工具」下面，是第 2 层
+    expect(plan.candidates.some((c) => c.path.length === 2 && c.path[1]!.endsWith('构建'))).toBe(true)
+    // 下切只发起了一次设计请求（全局那次不带父目录名，认得出来）
+    expect(designPrompts.filter((p) => p.includes('前端工具'))).toHaveLength(1)
+  })
+
+  it('模型切不动时不空转，改为在 warnings 里点名', async () => {
+    const { ports, deps, designPrompts } = setupOversized([
+      { title: '全部', topics: ['构建工具', '测试框架'], children: [] },
+    ])
+    await saveSettings(ports, settings)
+    const plan = await analyzePlan(ports, deps, 'rebuild')
+
+    // 两种标签被并进同一个子目录 = 只切得出一个，那一层不承载区分度，整个放弃
+    const created = plan.operations.flatMap((o) =>
+      o.type === 'create_folder' ? [stripNumberPrefix(o.title)] : [])
+    expect(created).not.toContain('全部')
+    // 不重复问同一个问题
+    expect(designPrompts.filter((p) => p.includes('前端工具'))).toHaveLength(1)
+    expect(plan.warnings.some((w) => w.includes('超过建议上限'))).toBe(true)
+  })
+
+  it('归入现有模式下一次都不切，只出警告', async () => {
+    const { ports, deps, designPrompts } = setupOversized([])
+    await saveSettings(ports, settings)
+    const plan = await analyzePlan(ports, deps, 'additive')
+
+    expect(designPrompts).toHaveLength(0)
+    expect(plan.warnings.some((w) => w.includes('超过建议上限'))).toBe(true)
   })
 })

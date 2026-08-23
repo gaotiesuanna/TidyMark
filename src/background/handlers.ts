@@ -1,6 +1,8 @@
 import { currentLocale, resolveLocale, setLocale, t } from '@/i18n'
 import { buildCandidatesFromFolders, stripNumberPrefix } from '@/core/map'
-import { collapseSameNameFolders } from '@/core/audit'
+import {
+  collapseSameNameFolders, createTemporaryIdFactory, expandFolder, findOversizedFolders,
+} from '@/core/audit'
 import type { Locale } from '@/core/locale'
 import { buildPlan, type NewFolderSpec, type RenameFolderSpec } from '@/core/plan'
 import { MIN_FOLDER_BOOKMARKS, pruneReason, pruneSmallFolders } from '@/core/prune'
@@ -20,13 +22,23 @@ import { createLlmClient, type LlmClient, type LlmConfig } from '@/llm/client'
 import { isModelConfigured } from '@/llm/config'
 import { probeModel } from '@/llm/probe'
 import { classifyBookmarks } from '@/llm/classify'
-import { collectTopics, designTagFolders, nameMergedFolder, nameNewTopics } from '@/llm/folders'
+import {
+  applyDesign, collectTopics, designFolders, designTagFolders, nameMergedFolder, nameNewTopics,
+} from '@/llm/folders'
 import { extractTags, refineGroupTags } from '@/llm/tags'
 import { DEFAULT_SETTINGS, loadCache, loadSettings, saveCache, saveSettings } from '@/storage/settings'
 import { findBookmarksBar } from '@/core/import'
 import { importTree } from '@/engine/importTree'
 import type { EmitProgress, ProgressPhase } from './events'
 import type { Request, Response } from './messages'
+
+/**
+ * 一次分析里最多为「切开撑爆的目录」多花几次模型调用。
+ *
+ * 够 4 轮 × 5 个超载目录。这是防病态库把钱烧穿的兜底，不是调优旋钮——
+ * 正常库根本摸不到它，摸到了说明标签质量已经差到再切也没用。
+ */
+const MAX_DEEPEN_CALLS = 20
 
 export interface HandlerDeps {
   createClient?: (config: LlmConfig, locale: Locale) => LlmClient
@@ -127,6 +139,17 @@ export async function handle(
         let pinned: Classification[] = []
         let tags: TagResult[] = []
         let planMergeRoot: NonNullable<OrganizePlan['mergeRoot']> | undefined
+        /** 范围根的绝对层级（见 core/level.ts）。下切时算子目录的 startLevel 要用。 */
+        let rootLevel = 0
+        /**
+         * designTagFolders 覆盖之前的那一代标签。
+         *
+         * 那一代是逐条的真实主题（组内书签是 llm/tags.ts 的 refineGroupTags 抽的
+         * 「GitHub 功能域」，非组书签是 extractTags 的原始主题），必然比设计出来的
+         * 目录名细——「01 软件工程」这个名字本身就是 design 阶段把若干个功能域聚成
+         * 一簇的产物。留住它，下切就不必再花一次逐条抽取调用。
+         */
+        let preDesignTags: TagResult[] = []
 
         if (rebuild) {
           const rootId = roots[0]?.id
@@ -141,7 +164,7 @@ export async function handle(
           // roots[0] 原来那一层，主题目录进容器后仍是 rootLevel + 1。
           // rootId 来自 roots[0]，而 scanTree 会把每个 root 自己也放进 folders，必然找得到；
           // 万一没有，?? 0 让它退回改造前的行为，而不是把整次分析弄崩
-          const rootLevel = scan.folders.find((f) => f.id === rootId)?.level ?? 0
+          rootLevel = scan.folders.find((f) => f.id === rootId)?.level ?? 0
           const startLevel = rootLevel + 1
           // 规则命中是确定性的，在跑模型之前就数得出来——不花任何调用（票 10 补账第 3 条）
           const hitsByGroup = new Map<string, number>()
@@ -230,6 +253,7 @@ export async function handle(
           }
           // 分批抽标签的模型看不到全局，同义碎片只能在这里归并
           log('tree', t('logTreeStart', String(scan.bookmarks.length)))
+          preDesignTags = tags
           tags = await designTagFolders(tags, scan.bookmarks, survivingGroups, client, locale, {
             onLog: (message, level) => log('tree', message, level),
             isCancelled,
@@ -562,6 +586,105 @@ export async function handle(
           if (collapsed.collapsedTitles.length > 0) {
             log('classify', t('logReviewCollapsed', String(collapsed.collapsedTitles.length)))
           }
+        }
+
+        // ---- 结构自检其二：撑爆的叶子再切一层 ----
+        // MAX_LEAF 这条判准此前只在 core/shape.ts 里对**书签总数**用过一次，用来推导
+        // 该分几层——形状是开工前一次性预测的，从来没有对实际落成的目录验算过。
+        // 这里是第一次验算，也是唯一一处会因为「产出不达标」再花钱的地方。
+        //
+        // 只在推翻重建模式下跑：非推翻模式的承诺是「不重新设计结构」，往用户自己的
+        // 目录里塞新子目录会破这条承诺，改为只出警告（见本块末尾）。
+        if (rebuild) {
+          const nextTemporaryId = createTemporaryIdFactory(newFolders)
+          let deepenCalls = 0
+          let previousMax = Number.MAX_SAFE_INTEGER
+          for (;;) {
+            const oversized = findOversizedFolders({ candidates, newFolders, classifications, locale })
+            if (oversized.length === 0) break
+            // 止损：这一轮最大占用没比上一轮小，说明模型切不动了，再问也是同一个答案。
+            // 前面几道（清单空了、撞封顶、调用数上限）都可能被一个「每次返回同一个划分」
+            // 的模型绕过，只有「产出没有变好就停」拦得住。
+            if (oversized[0]!.count >= previousMax) break
+            previousMax = oversized[0]!.count
+
+            let expandedAny = false
+            for (const folder of oversized) {
+              if (deepenCalls >= MAX_DEEPEN_CALLS) break
+              const mine = new Set(
+                classifications.filter((c) => c.targetCategoryId === folder.id).map((c) => c.bookmarkId),
+              )
+              const subTags = preDesignTags.filter((tag) => mine.has(tag.bookmarkId))
+              const topics = collectTopics(subTags)
+              // 标签本身就只有一种主题时切不出第二个目录，不为此再花一次抽取调用
+              if (topics.length < 2) {
+                log('classify', t('logDeepenSkipped', folder.title), 'warn')
+                continue
+              }
+              // 这一步要发起新的付费请求，取消必须挡在它前面检查——与全文件另外
+              // 九处「先查取消再往下走」保持一致
+              if (isCancelled()) return CANCELLED
+              log('classify', t('logDeepenStart', folder.title, String(folder.count), String(MAX_LEAF)))
+              deepenCalls += 1
+              const design = await designFolders(topics, client, locale, {
+                oneLevel: true,
+                parentTitle: folder.title,
+                minFolderSize: MIN_FOLDER_BOOKMARKS,
+                // 子目录的**绝对**层级。不传 maxTopFolders：oneLevel 摊按 llm/folders.ts
+                // 的既有约定固定用 SHAPE_MAX_SIBLINGS，与 core/tree.ts 的组内截断对齐
+                startLevel: rootLevel + folder.level + 1,
+                onLog: (message, level) => log('classify', message, level),
+                isCancelled,
+              })
+              if (isCancelled()) return CANCELLED
+              // 设计失败保留原样：一个偏大的目录也好过整摊书签失去归属
+              if (design === null) continue
+              const parent = candidates.find((c) => c.id === folder.id)
+              if (parent === undefined) continue
+              const expanded = expandFolder({
+                parent,
+                tags: applyDesign(subTags, design),
+                classifications,
+                nextTemporaryId,
+                count: folder.count,
+                maxLeaf: MAX_LEAF,
+                locale,
+              })
+              if (expanded.createdCount === 0) {
+                log('classify', t('logDeepenSkipped', folder.title), 'warn')
+                continue
+              }
+              newFolders = [...newFolders, ...expanded.newFolders]
+              candidates = [...candidates, ...expanded.candidates]
+              classifications = expanded.classifications
+              expandedAny = true
+              log('classify', t('logDeepenDone', folder.title, String(expanded.createdCount)))
+            }
+            if (!expandedAny || deepenCalls >= MAX_DEEPEN_CALLS) break
+
+            // 切出来装不满的子目录交给现成的剪枝收掉：幂等、纯函数、不花钱
+            const pruned = pruneSmallFolders({
+              candidates, newFolders, classifications, locale,
+              minFolderSize: MIN_FOLDER_BOOKMARKS,
+              mergeRootTemporaryId: planMergeRoot?.temporaryId ?? null,
+            })
+            candidates = pruned.candidates
+            newFolders = pruned.newFolders
+            classifications = pruned.classifications
+            if (pruned.prunedTitles.length > 0) {
+              log('classify', t('logPrunedSmall', String(pruned.prunedTitles.length), String(MIN_FOLDER_BOOKMARKS)))
+            }
+          }
+        }
+
+        // 封顶之后仍然偏大的目录只点名、不动手：给用户一条看得见的信息，
+        // 好过在四层菜单里给他一个「技术上正确」的树。非推翻模式下这是唯一的动作。
+        for (const folder of findOversizedFolders({
+          candidates, newFolders, classifications, locale,
+          scope: rebuild ? 'new' : 'all',
+          maxLevel: Number.MAX_SAFE_INTEGER,
+        })) {
+          warnings.push(t('warnOversizedFolder', folder.title, String(folder.count)))
         }
 
         // 标题统一与目录整理相互独立：它由自己的开关决定，不受移动建议的勾选影响
