@@ -365,9 +365,10 @@ interface State {
   resetModelTest(): void
   /**
    * 当场验一次模型配置：先申请权限（按钮点击是干净的用户手势），再让后台用真的客户端
-   * 发一个最小 schema 的请求，失败时说清是哪一类。
+   * 发一个最小 schema 的请求，失败时说清是哪一类。apiKey 由调用方传入眼前这份。
    */
-  testModel(baseUrl: string, model: string): Promise<void>
+  testModel(baseUrl: string, apiKey: string, model: string): Promise<void>
+
   /**
    * 向这个端点要一份能选的模型名单。失败回 null，空数组表示端点答了但没模型。
    * 调用方用 null 决定要不要退回手打。
@@ -726,7 +727,7 @@ export const useStore = create<State>((set, get) => ({
     set({ modelTests: {}, modelTestSeq: get().modelTestSeq + 1 })
   },
 
-  async testModel(baseUrl, model) {
+  async testModel(baseUrl, apiKey, model) {
     const seq = get().modelTestSeq
     const key = modelTestKey(baseUrl, model)
     /** 结论过期就丢掉：设置页已经重新开过一次，那时的配置未必还是这一次测的那份。 */
@@ -744,7 +745,8 @@ export const useStore = create<State>((set, get) => ({
       return settle({ state: 'fail', reason: 'permission' })
     }
 
-    const res = await send({ kind: 'test_model', baseUrl, model })
+    const res = await send({ kind: 'test_model', baseUrl, apiKey, model })
+
     if (res.ok && res.kind === 'test_model') return settle({ state: 'ok', ms: res.ms })
     // 回来的是别的 kind：说不出所以然，只能走兜底那条文案
     if (res.ok) return settle({ state: 'fail' })

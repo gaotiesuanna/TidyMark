@@ -39,8 +39,15 @@ export type Request =
   /**
    * 当场验一次模型配置。必须走后台：这个功能对着的那次故障，形状是「浏览器普通标签页
    * 能打开那个域名、而扩展的请求失败」——从侧栏直接 fetch 去测会给出假绿灯。
+   * apiKey 跟眼前这份走：编辑态下 Key 还没落盘，去 settings 里找会测成上一份。
    */
-  | { kind: 'test_model'; baseUrl: string; model: string }
+  | { kind: 'test_model'; baseUrl: string; apiKey: string; model: string }
+
+  /**
+   * 列出这个端点上能选的模型。apiKey 跟草稿走：编辑态下 Key 还没落盘，
+   * 去 settings 里找会拿到上一份，名单就是错的。
+   */
+  | { kind: 'list_models'; baseUrl: string; apiKey: string }
   /**
    * 清理模式的全库扫描。不带 scopeRootIds：重复项的常态是跨文件夹，限定范围
    * 反而把最该抓的那批漏掉（见设计文档第四节）。
@@ -61,6 +68,7 @@ export type Response =
   | { ok: true; kind: 'cancel' }
   /** ms 是这一次请求真实的往返耗时，给用户一个「快不快」的直观印象。 */
   | { ok: true; kind: 'test_model'; ms: number }
+  | { ok: true; kind: 'list_models'; models: string[] }
   | { ok: true; kind: 'cleanup_scan'; scan: CleanupScan }
   | { ok: true; kind: 'apply_cleanup'; result: CleanupResult }
   /**

@@ -415,7 +415,11 @@
   "settingsEndpointAdd": {
     "message": "+ Add an endpoint"
   },
+  "settingsEndpointCustom": {
+    "message": "Custom"
+  },
   "settingsPresetHint": {
+
     "message": "Or add from a preset"
   },
   "settingsEndpointDelete": {
@@ -440,8 +444,9 @@
     "message": "Local, no key needed"
   },
   "settingsModelAdd": {
-    "message": "Add a model"
+    "message": "+ Add a model"
   },
+
   "settingsModelListing": {
     "message": "Listing models…"
   },

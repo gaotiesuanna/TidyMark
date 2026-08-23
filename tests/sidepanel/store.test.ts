@@ -678,7 +678,7 @@ describe('测试连接按对记结果', () => {
   it('结果落在被测的那一对上，另一对不受影响', async () => {
     vi.mocked(send).mockResolvedValue({ ok: true, kind: 'test_model', ms: 12 } as never)
 
-    await useStore.getState().testModel('https://x/v1', 'a')
+    await useStore.getState().testModel('https://x/v1', 'sk', 'a')
     const tests = useStore.getState().modelTests
     expect(tests[modelTestKey('https://x/v1', 'a')]?.state).toBe('ok')
     expect(tests[modelTestKey('https://x/v1', 'b')]).toBeUndefined()
@@ -687,10 +687,11 @@ describe('测试连接按对记结果', () => {
   // 设置页一个模型一行一个测试按钮，后测的那行不该盖掉前一行的结论
   it('测第二对时第一对的结论还在', async () => {
     vi.mocked(send).mockResolvedValue({ ok: true, kind: 'test_model', ms: 12 } as never)
-    await useStore.getState().testModel('https://x/v1', 'a')
+    await useStore.getState().testModel('https://x/v1', 'sk', 'a')
 
     vi.mocked(send).mockResolvedValue({ ok: false, error: '401', reason: 'auth' } as never)
-    await useStore.getState().testModel('https://x/v1', 'b')
+    await useStore.getState().testModel('https://x/v1', 'sk', 'b')
+
 
     const tests = useStore.getState().modelTests
     expect(tests[modelTestKey('https://x/v1', 'a')]?.state).toBe('ok')
@@ -703,7 +704,7 @@ describe('测试连接按对记结果', () => {
 
   it('resetModelTest 清空整张表——上次那些结论摆着会撒谎', async () => {
     vi.mocked(send).mockResolvedValue({ ok: true, kind: 'test_model', ms: 12 } as never)
-    await useStore.getState().testModel('https://x/v1', 'a')
+    await useStore.getState().testModel('https://x/v1', 'sk', 'a')
 
     useStore.getState().resetModelTest()
     expect(useStore.getState().modelTests).toEqual({})
@@ -713,7 +714,7 @@ describe('测试连接按对记结果', () => {
     chromeGlobal.chrome.permissions = {
       contains: () => Promise.resolve(false), request: () => Promise.resolve(false),
     }
-    await useStore.getState().testModel('https://x/v1', 'a')
+    await useStore.getState().testModel('https://x/v1', 'sk', 'a')
 
     expect(useStore.getState().modelTests[modelTestKey('https://x/v1', 'a')]?.reason)
       .toBe('permission')

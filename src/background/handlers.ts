@@ -20,6 +20,7 @@ import { loadSnapshot } from '@/engine/snapshot'
 import { undoLast } from '@/engine/undo'
 import { createLlmClient, type LlmClient, type LlmConfig } from '@/llm/client'
 import { isModelConfigured } from '@/llm/config'
+import { listRemoteModels } from '@/llm/models'
 import { probeModel } from '@/llm/probe'
 import { classifyBookmarks } from '@/llm/classify'
 import {
@@ -80,6 +81,8 @@ export interface HandlerDeps {
    * 取消要等当前批次自己跑完（见 llm/client.ts 的 runSignal）。
    */
   signal?: AbortSignal
+  /** 列出端点上的模型。测试注入，生产走 GET /models。 */
+  listModels?: (baseUrl: string, apiKey: string) => Promise<string[]>
 }
 
 export async function handle(
@@ -767,11 +770,10 @@ export async function handle(
         // 按钮已经用 isModelConfigured 禁着，而真按下去时，一份空 Key 的配置得到的
         // 401 → 'auth' 本身就是准确答案，多一道门只会把它换成一句更笼统的话。
         //
-        // 测的是用户点的那一行，不是当前在用的那一对——设置页现在一行一个测试按钮
-        const endpoint = findEndpoint(settings, request.baseUrl)
-        const llm: LlmConfig = endpoint === null
-          ? activeLlm(settings)
-          : { baseUrl: endpoint.baseUrl, apiKey: endpoint.apiKey, model: request.model }
+        // 测的是用户点的那一行眼前这份（含还没保存的草稿），不是当前在用的那一对。
+        const llm: LlmConfig = {
+          baseUrl: request.baseUrl, apiKey: request.apiKey, model: request.model,
+        }
         const result = await probeModel(
           () => createClient(llm, locale),
           locale,
@@ -781,6 +783,19 @@ export async function handle(
         if (!result.ok) return { ok: false, error: result.error, reason: result.reason }
         return { ok: true, kind: 'test_model', ms: result.ms }
       }
+
+
+      case 'list_models': {
+        // Key 跟请求走，不从 settings 里找：编辑态下那把还没落盘。
+        const list = deps.listModels ?? listRemoteModels
+        try {
+          const models = await list(request.baseUrl, request.apiKey)
+          return { ok: true, kind: 'list_models', models }
+        } catch (error) {
+          return { ok: false, error: error instanceof Error ? error.message : String(error) }
+        }
+      }
+
 
       case 'get_undo_state': {
         const snapshot = await loadSnapshot(ports)

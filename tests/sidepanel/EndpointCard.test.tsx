@@ -29,8 +29,13 @@ function arrange(over: Partial<EndpointCardProps> = {}) {
 }
 
 beforeEach(() => {
-  useStore.setState({ modelTests: {}, testModel: vi.fn(async () => {}) })
+  useStore.setState({
+    modelTests: {},
+    testModel: vi.fn(async () => {}),
+    listModels: vi.fn(async () => ['glm-4-flash', 'qwen2.5']),
+  })
 })
+
 
 describe('折叠态', () => {
   it('显示域名而不是完整地址——域名才是区分端点的那个东西', () => {
@@ -74,6 +79,37 @@ describe('折叠态', () => {
       expect((radio as HTMLInputElement).checked).toBe(false)
     }
   })
+
+  it('测试连接和移除跟模型名同一行，按钮是图标', () => {
+    arrange()
+    const radio = screen.getByRole('radio', { name: 'glm-5.2' })
+    const test = screen.getAllByRole('button', { name: '测试连接' })[0]!
+    const remove = screen.getAllByRole('button', { name: '移除' })[0]!
+    const row = test.parentElement!
+    expect(row.contains(radio)).toBe(true)
+    expect(row.contains(remove)).toBe(true)
+    expect(test.querySelector('svg')).toBeTruthy()
+    expect(test).toHaveProperty('title', '测试连接')
+  })
+
+  it('编辑和删除端点是标题行的图标，可访问名仍是原来的文案', () => {
+    arrange()
+    const edit = screen.getByRole('button', { name: '编辑' })
+    const del = screen.getByRole('button', { name: '删除端点' })
+    expect(edit.querySelector('svg')).toBeTruthy()
+    expect(del.querySelector('svg')).toBeTruthy()
+    expect(edit).toHaveProperty('title', '编辑')
+    expect(del).toHaveProperty('title', '删除端点')
+  })
+
+  it('折叠态不显示添加模型——那是编辑里的事', () => {
+    arrange()
+    expect(screen.queryByRole('button', { name: '＋ 添加模型' })).toBeNull()
+    expect(screen.queryByRole('combobox', { name: '＋ 添加模型' })).toBeNull()
+  })
+
+
+
 })
 
 describe('草稿态', () => {
@@ -85,6 +121,20 @@ describe('草稿态', () => {
     expect(screen.getByDisplayValue('https://opencode.ai/zen/go/v1')).toBeTruthy()
     expect(screen.getByDisplayValue('sk-x')).toBeTruthy()
   })
+
+  it('点编辑后原编辑位置变成保存图标，并露出添加模型按钮', async () => {
+    arrange()
+    expect(screen.queryByRole('button', { name: '保存' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: '编辑' }))
+    expect(screen.queryByRole('button', { name: '编辑' })).toBeNull()
+    const save = screen.getByRole('button', { name: '保存' })
+    expect(save.querySelector('svg')).toBeTruthy()
+    expect(save).toHaveProperty('title', '保存')
+    expect(screen.getByRole('button', { name: '＋ 添加模型' })).toBeTruthy()
+    expect(screen.queryByRole('combobox')).toBeNull()
+  })
+
+
 
   // 每敲一个字符就往 chrome.storage 写一次明文 Key，是这次要消灭的东西
   it('打字期间不往上报，保存才报', async () => {
@@ -119,13 +169,20 @@ describe('草稿态', () => {
     expect(screen.getByText(/自己会接上/)).toBeTruthy()
   })
 
-  it('草稿态下测试按钮禁着——那时候测的不是眼前这份', async () => {
+  it('草稿态下也能测，测的是框里这份地址和 Key', async () => {
+    const testModel = vi.fn(async () => {})
+    useStore.setState({ testModel })
     arrange()
     await userEvent.click(screen.getByRole('button', { name: '编辑' }))
-    for (const button of screen.getAllByRole('button', { name: '测试连接' })) {
-      expect((button as HTMLButtonElement).disabled).toBe(true)
-    }
+    const url = screen.getByDisplayValue('https://opencode.ai/zen/go/v1')
+    await userEvent.clear(url)
+    await userEvent.type(url, 'https://api.deepseek.com/v1')
+    const test = screen.getAllByRole('button', { name: '测试连接' })[0] as HTMLButtonElement
+    expect(test.disabled).toBe(false)
+    await userEvent.click(test)
+    expect(testModel).toHaveBeenCalledWith('https://api.deepseek.com/v1', 'sk-x', 'glm-5.2')
   })
+
 
   it('新建的端点一进来就是草稿态', () => {
     arrange({
@@ -138,19 +195,28 @@ describe('草稿态', () => {
 })
 
 describe('模型的增删', () => {
-  it('加一个模型即时生效，不经过保存', async () => {
+  it('点添加模型才出现下拉，选一项就加进去，不经过保存', async () => {
     const { onChange } = arrange()
-    await userEvent.type(screen.getByPlaceholderText('加一个模型'), 'glm-4-flash{enter}')
+    await userEvent.click(screen.getByRole('button', { name: '编辑' }))
+    await userEvent.click(screen.getByRole('button', { name: '＋ 添加模型' }))
+    await screen.findByRole('option', { name: 'glm-4-flash' })
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: '＋ 添加模型' }), 'glm-4-flash')
     expect(onChange).toHaveBeenCalledWith({
       ...endpoint, models: [...endpoint.models, 'glm-4-flash'],
     })
   })
 
-  it('重复的模型名不再加一遍', async () => {
-    const { onChange } = arrange()
-    await userEvent.type(screen.getByPlaceholderText('加一个模型'), 'glm-5.2{enter}')
-    expect(onChange).not.toHaveBeenCalled()
+  it('已经有的模型不出现在下拉里', async () => {
+    arrange()
+    await userEvent.click(screen.getByRole('button', { name: '编辑' }))
+    await userEvent.click(screen.getByRole('button', { name: '＋ 添加模型' }))
+    await screen.findByRole('option', { name: 'glm-4-flash' })
+    expect(screen.queryByRole('option', { name: 'glm-5.2' })).toBeNull()
   })
+
+
+
+
 
   it('移除一个模型', async () => {
     const { onChange } = arrange()

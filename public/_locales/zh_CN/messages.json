@@ -415,7 +415,11 @@
   "settingsEndpointAdd": {
     "message": "＋ 加一个端点"
   },
+  "settingsEndpointCustom": {
+    "message": "自定义"
+  },
   "settingsPresetHint": {
+
     "message": "或从预设添加"
   },
   "settingsEndpointDelete": {
@@ -440,8 +444,9 @@
     "message": "本机，无需 Key"
   },
   "settingsModelAdd": {
-    "message": "加一个模型"
+    "message": "＋ 添加模型"
   },
+
   "settingsModelListing": {
     "message": "正在列出模型…"
   },

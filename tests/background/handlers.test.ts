@@ -2469,7 +2469,7 @@ describe('analyze 的目录形状由书签数推导', () => {
 describe('test_model 当场验一次模型配置', () => {
   /** 没调用 saveSettings 时 loadSettings 落回 DEFAULT_SETTINGS，测的这一对跟着它走。 */
   const { baseUrl: defaultBaseUrl, model: defaultModel } = activeLlm(DEFAULT_SETTINGS)
-  const DEFAULT_TEST_REQ = { kind: 'test_model' as const, baseUrl: defaultBaseUrl, model: defaultModel }
+  const DEFAULT_TEST_REQ = { kind: 'test_model' as const, baseUrl: defaultBaseUrl, apiKey: '', model: defaultModel }
 
   function setupTest(client: LlmClient, now: () => number = () => 1) {
     const fake = createFakeBookmarks(tree)
@@ -2598,7 +2598,7 @@ describe('test_model 当场验一次模型配置', () => {
     })
     const res = await handle(
       ports,
-      { kind: 'test_model', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
+      { kind: 'test_model', baseUrl: 'https://api.deepseek.com/v1', apiKey: CANARY, model: 'deepseek-chat' },
       { createClient: () => client, now: () => 1 },
     )
 
@@ -2624,7 +2624,7 @@ describe('test_model 当场验一次模型配置', () => {
     const client = throwing('网络请求失败（耗时 3ms）: TypeError: Failed to fetch')
     const res = await handle(
       ports,
-      { kind: 'test_model', baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5' },
+      { kind: 'test_model', baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'qwen2.5' },
       { createClient: () => client, now: () => 1 },
     )
     expect(res).toMatchObject({ ok: false, reason: 'network' })
@@ -2642,6 +2642,35 @@ describe('test_model 当场验一次模型配置', () => {
     setLocale('zh_CN')
   })
 })
+
+describe('list_models 列出端点上的模型', () => {
+  it('把名单原样带回，Key 跟请求走不从 settings 里找', async () => {
+    const listModels = vi.fn(async () => ['glm-5.2', 'deepseek-chat'])
+    const fake = createFakeBookmarks(tree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    const res = await handle(
+      ports,
+      { kind: 'list_models', baseUrl: 'https://opencode.ai/zen/go/v1', apiKey: 'sk-draft' },
+      { listModels },
+    )
+    expect(res).toEqual({
+      ok: true, kind: 'list_models', models: ['glm-5.2', 'deepseek-chat'],
+    })
+    expect(listModels).toHaveBeenCalledWith('https://opencode.ai/zen/go/v1', 'sk-draft')
+  })
+
+  it('列出失败就报错，不装成空名单', async () => {
+    const fake = createFakeBookmarks(tree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    const res = await handle(
+      ports,
+      { kind: 'list_models', baseUrl: 'https://x/v1', apiKey: 'sk' },
+      { listModels: async () => { throw new Error('模型列表接口返回 401: ***') } },
+    )
+    expect(res).toMatchObject({ ok: false, error: '模型列表接口返回 401: ***' })
+  })
+})
+
 
 describe('下切预算跟着库规模走', () => {
   // 这个数曾经写死 20。判准 A1 的上限从 20 收到 12 之后（issues/38 的 D2），

@@ -70,11 +70,14 @@ describe('本机 Ollama 动线', () => {
     expect(screen.queryByRole('button', { name: '开始 AI 分析' })).toBeNull()
     beforePrefs.unmount()
 
-    // 第二步：设置页点一下预设——预设只新增一个端点，不会自动把它设成当前在用的
-    // 那一对（覆盖语义在能存多条的世界里没有意义），所以还要点一下那个模型的圆点
+    // 第二步：设置页先点「加一个端点」展开预设，再点「本地 Ollama」——
+    // 预设只新增一个端点，不会自动把它设成当前在用的那一对
+    // （覆盖语义在能存多条的世界里没有意义），所以还要点一下那个模型的圆点
     const settings = render(<SettingsPanel />)
+    await userEvent.click(screen.getByRole('button', { name: '＋ 加一个端点' }))
     await userEvent.click(screen.getByRole('button', { name: '本地 Ollama' }))
     await userEvent.click(screen.getByRole('radio', { name: 'qwen2.5' }))
+
     settings.unmount()
 
     // 预设写下的确实是「本机地址 + 空 Key」——后面两页的表现全挂在这件事上

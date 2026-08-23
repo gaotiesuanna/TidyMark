@@ -96,3 +96,51 @@ export function SettingsIcon({ className }: { className?: string }) {
     </Icon>
   )
 }
+
+export function ActivityIcon({ className }: { className?: string }) {
+  return (
+    <Icon {...(className === undefined ? {} : { className })}>
+      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+    </Icon>
+  )
+}
+
+export function PencilIcon({ className }: { className?: string }) {
+  return (
+    <Icon {...(className === undefined ? {} : { className })}>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </Icon>
+  )
+}
+
+export function TrashIcon({ className }: { className?: string }) {
+  return (
+    <Icon {...(className === undefined ? {} : { className })}>
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M19 6l-1 14H6L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </Icon>
+  )
+}
+
+export function SaveIcon({ className }: { className?: string }) {
+  return (
+    <Icon {...(className === undefined ? {} : { className })}>
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+      <path d="M17 21v-8H7v8" />
+      <path d="M7 3v5h8" />
+    </Icon>
+  )
+}
+
+export function CloseIcon({ className }: { className?: string }) {
+  return (
+    <Icon {...(className === undefined ? {} : { className })}>
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </Icon>
+  )
+}

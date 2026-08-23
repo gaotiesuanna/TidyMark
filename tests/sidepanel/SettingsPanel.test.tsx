@@ -74,11 +74,9 @@ describe('SettingsPanel 分类参数', () => {
   // 原来验的是「分类偏好那几项一直可编辑」。那几项没了，但它守的规矩没变——设置页里
   // 摆出来的东西就得能改。写成整页扫一遍，比逐个点名更难失效。
   //
-  // 用一份配好的模型来扫，而不是 DEFAULT_SETTINGS：端点卡片处在编辑草稿态时，
-  // 「测试连接」按钮会被禁着（测的不是眼前这份草稿），那是它本来的样子，不是一个
-  // 拨不动的旋钮。断言本身一个字没松——整页仍然一个 disabled 都不许有，只是把那唯一
-  // 一个「有理由禁用」的前提（正在编辑）排除掉；那个前提自己由 EndpointCard.test.tsx
-  // 的「草稿态下测试按钮禁着」正面盯着。
+  // 用一份配好的模型来扫，而不是 DEFAULT_SETTINGS：默认端点一进来就是空 Key 的折叠卡，
+  // 这里要的是「配好了、没在编辑」时整页一个 disabled 都没有。
+
   it('设置页里没有任何被禁用的控件——摆出来的旋钮就得能拨', () => {
     useStore.setState({ settings: CONFIGURED })
     const { container } = render(<SettingsPanel />)
@@ -146,8 +144,9 @@ describe('SettingsPanel 模型配置', () => {
 
   // 覆盖语义在能存多条的世界里没有意义（见「端点列表」那组用例）：这里只守
   // 「全部预设都摆出来了」，新增语义已经在那边守住，不重复断言。
-  it('列出全部供应商预设，点一下会新增一个端点', () => {
+  it('列出全部供应商预设，点一下会新增一个端点', async () => {
     render(<SettingsPanel />)
+    await userEvent.click(screen.getByRole('button', { name: t('settingsEndpointAdd') }))
     for (const preset of PRESETS) {
       expect(screen.getByRole('button', { name: preset.label.zh_CN })).toBeTruthy()
     }
@@ -156,6 +155,7 @@ describe('SettingsPanel 模型配置', () => {
     expect(endpoints).toHaveLength(2)
     expect(endpoints[1]).toEqual({ baseUrl: 'https://api.deepseek.com/v1', apiKey: '', models: ['deepseek-chat'] })
   })
+
 
   it('隐私说明跟着模型配置一起来——填 Key 的地方才是该讲这件事的地方', () => {
     render(<SettingsPanel />)
@@ -193,17 +193,17 @@ describe('SettingsPanel 测试连接', () => {
   }
 
   // 按钮不再因为「Key 没填」而禁用——它现在挂在端点里已经存在的每一个模型上，
-  // Key 配没配对由测试本身给出结果，不用界面提前猜。真正会挡住它的只有草稿态：
-  // 那时候测的不是眼前这份还没保存的东西。
-  it('测试连接按钮平时能点，编辑草稿态时禁着——那时候测的不是眼前这份', async () => {
+  // Key 配没配对由测试本身给出结果，不用界面提前猜。编辑态同样能点：测的是框里
+  // 还没保存的那份地址和 Key。
+  it('测试连接按钮平时能点，编辑草稿态时也能点', async () => {
     useStore.setState({ settings: { ...DEFAULT_SETTINGS } })
     render(<SettingsPanel />)
     expect(screen.getByRole('button', { name: t('settingsTestModel') })).toHaveProperty('disabled', false)
 
-    // 同一条里做对照：禁用不是恒不成立的，编辑态下必须真的禁住
     await userEvent.click(screen.getByRole('button', { name: t('settingsEndpointEdit') }))
-    expect(screen.getByRole('button', { name: t('settingsTestModel') })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: t('settingsTestModel') })).toHaveProperty('disabled', false)
   })
+
 
   it('刚打开时什么结论都不显示——一上来就摆着结果等于凭空断言', () => {
     useStore.setState({ settings: CONFIGURED })
@@ -392,15 +392,33 @@ describe('端点列表', () => {
     expect(screen.getByText('localhost:11434')).toBeTruthy()
   })
 
-  it('加一个端点，新的那块一进来就是草稿态', async () => {
+  it('加一个端点在模型配置标题右侧，预设平时不出现', () => {
+    arrange(two, { baseUrl: two[0]!.baseUrl, model: 'glm-5.2' })
+    const heading = screen.getByRole('heading', { name: '模型配置' })
+    const add = screen.getByRole('button', { name: '＋ 加一个端点' })
+    expect(heading.nextElementSibling).toBe(add)
+    expect(screen.queryByRole('button', { name: 'DeepSeek' })).toBeNull()
+  })
+
+  it('点加一个端点才出现预设，选完就收起', async () => {
     arrange(two, { baseUrl: two[0]!.baseUrl, model: 'glm-5.2' })
     await userEvent.click(screen.getByRole('button', { name: '＋ 加一个端点' }))
+    expect(screen.getByRole('button', { name: 'DeepSeek' })).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: 'DeepSeek' }))
+    expect(screen.queryByRole('button', { name: 'DeepSeek' })).toBeNull()
+  })
+
+  it('加一个端点后点自定义，新的那块一进来就是草稿态', async () => {
+    arrange(two, { baseUrl: two[0]!.baseUrl, model: 'glm-5.2' })
+    await userEvent.click(screen.getByRole('button', { name: '＋ 加一个端点' }))
+    await userEvent.click(screen.getByRole('button', { name: '自定义' }))
     expect(screen.getByRole('button', { name: '保存' })).toBeTruthy()
   })
 
   // 覆盖语义在能存多条的世界里没有意义
   it('点预设是新增一个端点，不是覆盖当前这个', async () => {
     const { setSettings } = arrange([two[0]!], { baseUrl: two[0]!.baseUrl, model: 'glm-5.2' })
+    await userEvent.click(screen.getByRole('button', { name: '＋ 加一个端点' }))
     await userEvent.click(screen.getByRole('button', { name: 'DeepSeek' }))
 
     const saved = lastSaved(setSettings)
@@ -414,6 +432,7 @@ describe('端点列表', () => {
       baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-mine', models: ['deepseek-reasoner'],
     }
     const { setSettings } = arrange([existing], { baseUrl: existing.baseUrl, model: 'deepseek-reasoner' })
+    await userEvent.click(screen.getByRole('button', { name: '＋ 加一个端点' }))
     await userEvent.click(screen.getByRole('button', { name: 'DeepSeek' }))
 
     const saved = lastSaved(setSettings)
@@ -421,6 +440,7 @@ describe('端点列表', () => {
     expect(saved.endpoints[0]!.apiKey).toBe('sk-mine')
     expect(saved.endpoints[0]!.models).toEqual(['deepseek-reasoner', 'deepseek-chat'])
   })
+
 
   it('删掉当前在用的那个端点后，active 落到剩下第一条的第一个模型', async () => {
     const { setSettings } = arrange(two, { baseUrl: two[0]!.baseUrl, model: 'glm-5.2' })

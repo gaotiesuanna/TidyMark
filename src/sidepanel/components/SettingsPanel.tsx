@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+
 import { currentLocale, t } from '@/i18n'
 import { useStore } from '../store'
 import { EndpointCard } from './EndpointCard'
@@ -62,10 +63,24 @@ function applyPreset(settings: Settings, preset: { baseUrl: string; model: strin
 export function SettingsPanel() {
   const { settings, setSettings, resetModelTest } = useStore()
   const locale = currentLocale()
+  const [picking, setPicking] = useState(false)
 
   // 每次挂载都清回空白：测试结果是一次即时探针，不是状态。上次那个结论摆在这里会撒谎——
   // 中间可能已经换过 Key、换过模型（见 issues/37-test-model-button.md）。
   useEffect(() => resetModelTest(), [resetModelTest])
+
+  const addBlank = (): void => {
+    void setSettings({
+      ...settings,
+      endpoints: [...settings.endpoints, { baseUrl: '', apiKey: '', models: [] }],
+    })
+    setPicking(false)
+  }
+
+  const pickPreset = (preset: (typeof PRESETS)[number]): void => {
+    void setSettings(applyPreset(settings, preset))
+    setPicking(false)
+  }
 
   return (
     <div className="space-y-4">
@@ -73,8 +88,16 @@ export function SettingsPanel() {
       <h2 className="text-sm font-medium">{t('settingsTitle')}</h2>
 
       {/* 模型配置摆最前：新用户来设置页就是为了它 */}
-      <section className="space-y-2 rounded border p-3">
-        <h3 className="text-sm font-medium">{t('settingsModelTitle')}</h3>
+      <section className="space-y-3 rounded-lg border border-neutral-200 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-sm font-medium">{t('settingsModelTitle')}</h3>
+          <button
+            className="inline-flex min-h-8 shrink-0 cursor-pointer items-center whitespace-nowrap rounded border border-neutral-200 bg-white px-2.5 text-xs text-neutral-700 transition-colors duration-150 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1"
+            onClick={() => setPicking((open) => !open)}
+          >
+            {t('settingsEndpointAdd')}
+          </button>
+        </div>
 
         {settings.endpoints.map((endpoint, index) => (
           <EndpointCard
@@ -94,39 +117,44 @@ export function SettingsPanel() {
           />
         ))}
 
-        <div className="flex flex-wrap items-center gap-1">
-          <button
-            className="rounded border px-2 py-0.5 text-xs hover:bg-neutral-50"
-            onClick={() => void setSettings({
-              ...settings,
-              endpoints: [...settings.endpoints, { baseUrl: '', apiKey: '', models: [] }],
-            })}
-          >
-            {t('settingsEndpointAdd')}
-          </button>
-          {PRESETS.map((preset) => (
-            <button
-              key={preset.baseUrl}
-              className="rounded border px-2 py-0.5 text-xs hover:bg-neutral-50"
-              onClick={() => void setSettings(applyPreset(settings, preset))}
-            >
-              {preset.label[locale]}
-            </button>
-          ))}
-        </div>
+        {picking && (
+          <div className="space-y-1.5">
+            <p className="text-[11px] text-neutral-600">{t('settingsPresetHint')}</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="inline-flex min-h-8 cursor-pointer items-center whitespace-nowrap rounded border border-neutral-200 bg-white px-2.5 text-xs text-neutral-700 transition-colors duration-150 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1"
+                onClick={addBlank}
+              >
+                {t('settingsEndpointCustom')}
+              </button>
+              {PRESETS.map((preset) => (
+                <button
+                  key={preset.baseUrl}
+                  type="button"
+                  className="inline-flex min-h-8 cursor-pointer items-center whitespace-nowrap rounded border border-neutral-200 bg-white px-2.5 text-xs text-neutral-700 transition-colors duration-150 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1"
+                  onClick={() => pickPreset(preset)}
+                >
+                  {preset.label[locale]}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
-        <p className="text-[11px] leading-relaxed text-neutral-400">
+
+        <p className="text-[11px] leading-relaxed text-neutral-500">
           {t('settingsPrivacyKey')}
           {' '}
           {t('settingsPrivacyPayload')}
         </p>
       </section>
 
-      <section className="space-y-2 rounded border p-3">
+      <section className="space-y-2 rounded-lg border border-neutral-200 p-3">
         <h3 className="text-sm font-medium">{t('settingsLangTitle')}</h3>
         <label className="block text-sm">
           <select
-            className="w-full rounded border px-2 py-1 text-xs"
+            className="w-full min-h-8 cursor-pointer rounded border border-neutral-200 bg-white px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
             aria-label={t('settingsLangTitle')}
             value={settings.uiLocale}
             onChange={(e) =>
@@ -140,11 +168,11 @@ export function SettingsPanel() {
             <option value="en">English</option>
           </select>
         </label>
-        <p className="text-[11px] leading-relaxed text-neutral-400">{t('settingsLangBody')}</p>
+        <p className="text-[11px] leading-relaxed text-neutral-500">{t('settingsLangBody')}</p>
       </section>
 
       {/* 统一 GitHub 标题改的是书签自己的名字，不是「这一轮怎么整理」，所以不在偏好页 */}
-      <section className="rounded border p-3">
+      <section className="rounded-lg border border-neutral-200 p-3">
         <label className="flex items-start gap-2 text-sm">
           <input
             type="checkbox"
@@ -154,7 +182,7 @@ export function SettingsPanel() {
           />
           <span>
             {t('settingsGithubTitle')}
-            <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-400">
+            <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-500">
               {t('settingsGithubBody')}
             </span>
           </span>
