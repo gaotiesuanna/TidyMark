@@ -28,7 +28,7 @@ import {
 } from '@/llm/folders'
 import { extractTags } from '@/llm/tags'
 import {
-  DEFAULT_SETTINGS, activeLlm, findEndpoint, loadCache, loadSettings, saveCache, saveSettings,
+  DEFAULT_SETTINGS, activeLlm, loadCache, loadSettings, saveCache, saveSettings,
 } from '@/storage/settings'
 import { findBookmarksBar } from '@/core/import'
 import { importTree } from '@/engine/importTree'
