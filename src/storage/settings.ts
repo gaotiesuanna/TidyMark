@@ -30,6 +30,16 @@ export const CACHE_KEY = 'tidymark:classify-cache'
  */
 export const MAX_CACHE_ENTRIES = 10_000
 
+/**
+ * 端点比对用的归一化 key：末尾斜杠不算另一个端点。
+ *
+ * 端点表拿 baseUrl 当主键，「是不是同一个端点」这个问题在存储、设置页、偏好页
+ * 三处都要问，必须是同一把尺子——两把尺子会造出两条本该是同一个的端点。
+ */
+export function endpointKey(baseUrl: string): string {
+  return baseUrl.trim().replace(/\/+$/, '')
+}
+
 export interface Settings {
   llm: LlmConfig
   /** 整理完成后清理范围内不含任何书签的目录。 */

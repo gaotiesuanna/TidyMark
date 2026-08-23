@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SETTINGS_KEY, loadSettings, saveSettings, loadCache, saveCache, DEFAULT_SETTINGS, MAX_CACHE_ENTRIES, PRESETS } from '@/storage/settings'
+import { SETTINGS_KEY, loadSettings, saveSettings, loadCache, saveCache, DEFAULT_SETTINGS, MAX_CACHE_ENTRIES, PRESETS, endpointKey } from '@/storage/settings'
 import { createFakeStorage } from '../fakes/fake-storage'
 import { createFakeBookmarks } from '../fakes/fake-bookmarks'
 import type { CachedClassification } from '@/core/types'
@@ -340,5 +340,15 @@ describe('供应商预设', () => {
       expect(preset.label.zh_CN.trim()).not.toBe('')
       expect(preset.label.en.trim()).not.toBe('')
     }
+  })
+})
+
+describe('endpointKey', () => {
+  it('末尾斜杠不算另一个端点', () => {
+    expect(endpointKey('https://x/v1/')).toBe(endpointKey('https://x/v1'))
+  })
+
+  it('前后空白不算另一个端点', () => {
+    expect(endpointKey('  https://x/v1  ')).toBe('https://x/v1')
   })
 })
