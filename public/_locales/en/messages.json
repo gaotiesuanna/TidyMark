@@ -342,6 +342,42 @@
   "settingsModelTitle": {
     "message": "Model settings"
   },
+  "settingsEndpointAdd": {
+    "message": "+ Add an endpoint"
+  },
+  "settingsEndpointDelete": {
+    "message": "Delete endpoint"
+  },
+  "settingsEndpointEdit": {
+    "message": "Edit"
+  },
+  "settingsEndpointSave": {
+    "message": "Save"
+  },
+  "settingsEndpointCancel": {
+    "message": "Cancel"
+  },
+  "settingsKeySet": {
+    "message": "Key set"
+  },
+  "settingsKeyEmpty": {
+    "message": "No key"
+  },
+  "settingsKeyLocal": {
+    "message": "Local, no key needed"
+  },
+  "settingsModelAdd": {
+    "message": "Add a model"
+  },
+  "settingsModelRemove": {
+    "message": "Remove"
+  },
+  "settingsBaseUrlFull": {
+    "message": "The address only needs to end at /v1 — TidyMark appends /chat/completions itself, so pasting the full endpoint from the docs doubles it up."
+  },
+  "settingsBaseUrlEmpty": {
+    "message": "The address cannot be empty."
+  },
   "settingsPrivacyKey": {
     "message": "Your API key is stored in plain text in local browser storage and is never uploaded anywhere."
   },
