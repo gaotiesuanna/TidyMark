@@ -947,6 +947,26 @@
       }
     }
   },
+  "logReviewCollapsed": {
+    "message": "撤掉 $count$ 个与上层同名的目录，里面的内容并进上一层",
+    "placeholders": { "count": { "content": "$1" } }
+  },
+  "logDeepenStart": {
+    "message": "「$title$」装了 $count$ 个书签，超过单目录 $max$ 个的上限，正在按主题再分一层",
+    "placeholders": { "title": { "content": "$1" }, "count": { "content": "$2" }, "max": { "content": "$3" } }
+  },
+  "logDeepenDone": {
+    "message": "「$title$」切成 $count$ 个子目录",
+    "placeholders": { "title": { "content": "$1" }, "count": { "content": "$2" } }
+  },
+  "logDeepenSkipped": {
+    "message": "「$title$」偏大，但标签不足以再分，保持原样",
+    "placeholders": { "title": { "content": "$1" } }
+  },
+  "warnOversizedFolder": {
+    "message": "「$title$」装了 $count$ 个书签，超过建议上限，逐条浏览会比较费劲",
+    "placeholders": { "title": { "content": "$1" }, "count": { "content": "$2" } }
+  },
   "logRehomeStart": {
     "message": "$count$ 本书签的目录被撤，正在为它们找存活目录里最合适的去处",
     "placeholders": {

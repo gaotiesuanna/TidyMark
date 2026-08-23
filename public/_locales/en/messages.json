@@ -947,6 +947,26 @@
       }
     }
   },
+  "logReviewCollapsed": {
+    "message": "Removed $count$ folder(s) sharing a name with the folder above them; their contents moved up one level",
+    "placeholders": { "count": { "content": "$1" } }
+  },
+  "logDeepenStart": {
+    "message": "\"$title$\" holds $count$ bookmarks, over the per-folder limit of $max$; splitting it by topic",
+    "placeholders": { "title": { "content": "$1" }, "count": { "content": "$2" }, "max": { "content": "$3" } }
+  },
+  "logDeepenDone": {
+    "message": "\"$title$\" was split into $count$ subfolders",
+    "placeholders": { "title": { "content": "$1" }, "count": { "content": "$2" } }
+  },
+  "logDeepenSkipped": {
+    "message": "\"$title$\" is large, but its tags are not distinct enough to split; left as is",
+    "placeholders": { "title": { "content": "$1" } }
+  },
+  "warnOversizedFolder": {
+    "message": "\"$title$\" holds $count$ bookmarks, over the recommended limit; browsing it one by one will be tedious",
+    "placeholders": { "title": { "content": "$1" }, "count": { "content": "$2" } }
+  },
   "logRehomeStart": {
     "message": "$count$ bookmarks lost their folder; looking for the best home among the folders that survived",
     "placeholders": {
