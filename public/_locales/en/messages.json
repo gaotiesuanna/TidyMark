@@ -379,7 +379,7 @@
     "message": "The address cannot be empty."
   },
   "settingsPrivacyKey": {
-    "message": "Your API key is stored in plain text in local browser storage and is never uploaded anywhere."
+    "message": "Every API key you enter is stored in plain text in local browser storage and never uploaded anywhere; deleting an endpoint deletes its key with it."
   },
   "settingsPrivacyPayload": {
     "message": "Only bookmark titles, domains, paths, and current folder names are sent to the model — never URL parameters or page contents."

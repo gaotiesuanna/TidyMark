@@ -1,48 +1,71 @@
 import { useEffect } from 'react'
 import { currentLocale, t } from '@/i18n'
-import { modelTestKey, useStore, type ModelTestReason } from '../store'
-import { isModelConfigured } from '@/llm/config'
-import { PRESETS } from '@/storage/settings'
-import type { Settings } from '@/storage/settings'
+import { useStore } from '../store'
+import { EndpointCard } from './EndpointCard'
+import { PRESETS, endpointKey } from '@/storage/settings'
+import type { Endpoint, Settings } from '@/storage/settings'
+
+function replaceEndpoint(settings: Settings, index: number, next: Endpoint): Settings {
+  const endpoints = settings.endpoints.map((e, i) => (i === index ? next : e))
+  const old = settings.endpoints[index]!
+  // 改地址时把 active 一起跟过去，否则改完地址当前那一对就指空了
+  const active = endpointKey(old.baseUrl) === endpointKey(settings.active.baseUrl)
+    ? { baseUrl: next.baseUrl, model: settings.active.model }
+    : settings.active
+  return { ...settings, endpoints, active }
+}
 
 /**
- * 一类失败说一句话，每一句都带着「下一步能做什么」——只报「失败了」等于没做，
- * 这个按钮的全部价值就在这张表上（见 issues/37-test-model-button.md）。
- *
- * undefined 走兜底：后台不是每一次失败都给得出 reason（service worker 被回收、
- * 外层 catch 兜底），把 reason 当必填读会在那些情况下显示一片空白。
+ * 删端点连 Key 一起从数组里真删掉，不做标记——留着标记等于 Key 还躺在存储里。
+ * 删掉的正好是在用的那条时，active 落到剩下第一条的第一个模型；一条不剩就清空，
+ * 于是 activeLlm 走兜底、界面回到「还没配置模型」。
  */
-function describeFailure(reason: ModelTestReason | undefined): string {
-  switch (reason) {
-    case 'permission': return t('settingsTestFailPermission')
-    case 'auth': return t('settingsTestFailAuth')
-    case 'model': return t('settingsTestFailModel')
-    case 'format': return t('settingsTestFailFormat')
-    case 'network': return t('settingsTestFailNetwork')
-    default: return t('settingsTestFailUnknown')
+function removeEndpoint(settings: Settings, index: number): Settings {
+  const endpoints = settings.endpoints.filter((_, i) => i !== index)
+  const removed = settings.endpoints[index]!
+  if (endpointKey(removed.baseUrl) !== endpointKey(settings.active.baseUrl)) {
+    return { ...settings, endpoints }
   }
+  const first = endpoints[0]
+  const model = first?.models[0]
+  const active = first === undefined || model === undefined
+    ? { baseUrl: '', model: '' }
+    : { baseUrl: first.baseUrl, model }
+  return { ...settings, endpoints, active }
+}
+
+/**
+ * 点预设 = 新增一个端点，不是覆盖当前这个——覆盖语义在能存多条的世界里没有意义。
+ * 已有同 baseUrl 时只把模型名并进去，**Key 一个字都不动**：预设本来就不带 Key，
+ * 拿它去盖用户已经填好的那把是纯粹的破坏。
+ */
+function applyPreset(settings: Settings, preset: { baseUrl: string; model: string }): Settings {
+  const key = endpointKey(preset.baseUrl)
+  const hit = settings.endpoints.findIndex((e) => endpointKey(e.baseUrl) === key)
+  if (hit === -1) {
+    return {
+      ...settings,
+      endpoints: [
+        ...settings.endpoints,
+        { baseUrl: preset.baseUrl, apiKey: '', models: [preset.model] },
+      ],
+    }
+  }
+  const endpoints = settings.endpoints.map((e, i) => (
+    i !== hit || e.models.includes(preset.model)
+      ? e
+      : { ...e, models: [...e.models, preset.model] }
+  ))
+  return { ...settings, endpoints }
 }
 
 export function SettingsPanel() {
-  const { settings, setSettings, modelTests, resetModelTest, testModel } = useStore()
+  const { settings, setSettings, resetModelTest } = useStore()
   const locale = currentLocale()
 
   // 每次挂载都清回空白：测试结果是一次即时探针，不是状态。上次那个结论摆在这里会撒谎——
   // 中间可能已经换过 Key、换过模型（见 issues/37-test-model-button.md）。
   useEffect(() => resetModelTest(), [resetModelTest])
-
-  // 过渡期写法：Task 5 会把这一节整个换成端点列表。这里只让它按老样子读写第一条端点，
-  // 保证类型改完之后这一屏的行为一个字都没变。
-  const first = settings.endpoints[0] ?? { baseUrl: '', apiKey: '', models: [] }
-  const llm = { baseUrl: first.baseUrl, apiKey: first.apiKey, model: first.models[0] ?? '' }
-  const modelTest = modelTests[modelTestKey(llm.baseUrl, llm.model)] ?? { state: 'idle' as const }
-  const setLlm = (next: { baseUrl: string; apiKey: string; model: string }): void => {
-    void setSettings({
-      ...settings,
-      endpoints: [{ baseUrl: next.baseUrl, apiKey: next.apiKey, models: [next.model] }],
-      active: { baseUrl: next.baseUrl, model: next.model },
-    })
-  }
 
   return (
     <div className="space-y-4">
@@ -52,67 +75,46 @@ export function SettingsPanel() {
       {/* 模型配置摆最前：新用户来设置页就是为了它 */}
       <section className="space-y-2 rounded border p-3">
         <h3 className="text-sm font-medium">{t('settingsModelTitle')}</h3>
-        <div className="flex flex-wrap gap-1">
+
+        {settings.endpoints.map((endpoint, index) => (
+          <EndpointCard
+            key={endpointKey(endpoint.baseUrl) === '' ? `new-${index}` : endpointKey(endpoint.baseUrl)}
+            endpoint={endpoint}
+            activeModel={
+              endpointKey(endpoint.baseUrl) === endpointKey(settings.active.baseUrl)
+                ? settings.active.model
+                : null
+            }
+            initialEditing={endpoint.baseUrl === ''}
+            onChange={(next) => void setSettings(replaceEndpoint(settings, index, next))}
+            onDelete={() => void setSettings(removeEndpoint(settings, index))}
+            onPick={(model) => void setSettings({
+              ...settings, active: { baseUrl: endpoint.baseUrl, model },
+            })}
+          />
+        ))}
+
+        <div className="flex flex-wrap items-center gap-1">
+          <button
+            className="rounded border px-2 py-0.5 text-xs hover:bg-neutral-50"
+            onClick={() => void setSettings({
+              ...settings,
+              endpoints: [...settings.endpoints, { baseUrl: '', apiKey: '', models: [] }],
+            })}
+          >
+            {t('settingsEndpointAdd')}
+          </button>
           {PRESETS.map((preset) => (
             <button
               key={preset.baseUrl}
               className="rounded border px-2 py-0.5 text-xs hover:bg-neutral-50"
-              onClick={() => setLlm({ ...llm, baseUrl: preset.baseUrl, model: preset.model })}
+              onClick={() => void setSettings(applyPreset(settings, preset))}
             >
               {preset.label[locale]}
             </button>
           ))}
         </div>
-        <input
-          className="w-full rounded border px-2 py-1 text-xs"
-          placeholder="Base URL"
-          value={llm.baseUrl}
-          onChange={(e) => setLlm({ ...llm, baseUrl: e.target.value })}
-        />
-        <input
-          className="w-full rounded border px-2 py-1 text-xs"
-          placeholder="API Key"
-          type="password"
-          value={llm.apiKey}
-          onChange={(e) => setLlm({ ...llm, apiKey: e.target.value })}
-        />
-        <input
-          className="w-full rounded border px-2 py-1 text-xs"
-          placeholder="Model"
-          value={llm.model}
-          onChange={(e) => setLlm({ ...llm, model: e.target.value })}
-        />
-        {/* 配置的正确性在配置的地方验证，而不是等到流程深处才暴露：
-            按钮紧跟着那三个输入框，填完就能当场按一下 */}
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            className="rounded border px-2 py-0.5 text-xs hover:bg-neutral-50 disabled:opacity-40"
-            // 没配好就没有东西可测；正在测时禁着，别让人连点出好几发请求
-            disabled={!isModelConfigured(llm) || modelTest.state === 'running'}
-            onClick={() => void testModel(llm.baseUrl, llm.model)}
-          >
-            {t('settingsTestModel')}
-          </button>
-          {modelTest.state === 'running' && (
-            <span className="text-[11px] text-neutral-400">{t('settingsTestRunning')}</span>
-          )}
-          {/* 成功也用这一页通用的次要文字层级，不上绿色勾：整个界面全程没用过状态色 */}
-          {modelTest.state === 'ok' && (
-            <span className="text-[11px] text-neutral-500">
-              {t('settingsTestOk', String(modelTest.ms ?? 0))}
-            </span>
-          )}
-        </div>
-        {modelTest.state === 'fail' && (
-          <p className="text-[11px] leading-relaxed text-neutral-500">
-            {describeFailure(modelTest.reason)}
-            {/* 原始报错留着：分类给方向，状态码和响应体才是定位用得上的证据。
-                后台已经把 Key 从这段文本里剥掉了（见 llm/probe.ts 的 stripSecret） */}
-            {modelTest.error !== undefined && modelTest.error !== '' && (
-              <span className="mt-0.5 block break-all text-neutral-400">{modelTest.error}</span>
-            )}
-          </p>
-        )}
+
         <p className="text-[11px] leading-relaxed text-neutral-400">
           {t('settingsPrivacyKey')}
           {' '}

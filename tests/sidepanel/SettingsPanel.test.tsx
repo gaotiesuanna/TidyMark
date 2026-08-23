@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { setLocale, t } from '@/i18n'
 import { SettingsPanel } from '@/sidepanel/components/SettingsPanel'
 import { useStore } from '@/sidepanel/store'
 import { send } from '@/sidepanel/lib/send'
 import { DEFAULT_SETTINGS, PRESETS, activeLlm } from '@/storage/settings'
+import type { Endpoint, Settings } from '@/storage/settings'
 import { withLlm } from '../fakes/settings'
 import type { TestFailure } from '@/background/messages'
 
@@ -72,10 +74,11 @@ describe('SettingsPanel 分类参数', () => {
   // 原来验的是「分类偏好那几项一直可编辑」。那几项没了，但它守的规矩没变——设置页里
   // 摆出来的东西就得能改。写成整页扫一遍，比逐个点名更难失效。
   //
-  // 用一份配好的模型来扫，而不是 DEFAULT_SETTINGS：「测试连接」在模型没配好时是禁用的，
-  // 那是它本来的样子（没有东西可测），不是一个拨不动的旋钮。断言本身一个字没松——
-  // 整页仍然一个 disabled 都不许有，只是把那唯一一个「有理由禁用」的前提排除掉；
-  // 那个前提自己由下面「模型还没配好时按钮禁着」那条正面盯着。
+  // 用一份配好的模型来扫，而不是 DEFAULT_SETTINGS：端点卡片处在编辑草稿态时，
+  // 「测试连接」按钮会被禁着（测的不是眼前这份草稿），那是它本来的样子，不是一个
+  // 拨不动的旋钮。断言本身一个字没松——整页仍然一个 disabled 都不许有，只是把那唯一
+  // 一个「有理由禁用」的前提（正在编辑）排除掉；那个前提自己由 EndpointCard.test.tsx
+  // 的「草稿态下测试按钮禁着」正面盯着。
   it('设置页里没有任何被禁用的控件——摆出来的旋钮就得能拨', () => {
     useStore.setState({ settings: CONFIGURED })
     const { container } = render(<SettingsPanel />)
@@ -116,40 +119,47 @@ describe('SettingsPanel 语言', () => {
 /**
  * 模型配置从偏好页搬进设置页：它是「配一次就不动的」，不属于「这一轮怎么整理」。
  * 每条都查到具体控件并且真的动它一下——只查文案在不在，搬迁时把 onChange 漏掉也照样绿。
+ *
+ * 这一节原本测的是三个常开输入框，Task 5 把它换成了端点卡片（折叠态只看域名，
+ * 编辑才露出 Base URL / API Key）——折叠/编辑本身以及 Key 是不是密码框，
+ * EndpointCard.test.tsx 已经守住了；这里只留 SettingsPanel 独有的装配责任：
+ * 编辑-保存这条链路真的通到 store，以及预设列表、隐私说明还摆在这一节里。
  */
 describe('SettingsPanel 模型配置', () => {
-  it('摆出 Base URL / API Key / Model 三个输入框', () => {
+  it('默认端点折叠展示域名，点编辑才露出 Base URL / API Key 输入框', async () => {
     render(<SettingsPanel />)
-    expect(screen.getByPlaceholderText('Base URL')).toBeTruthy()
-    expect(screen.getByPlaceholderText('API Key')).toBeTruthy()
-    expect(screen.getByPlaceholderText('Model')).toBeTruthy()
-  })
+    expect(screen.getByText('api.openai.com')).toBeTruthy()
+    expect(screen.queryByPlaceholderText('Base URL')).toBeNull()
 
-  it('API Key 输入框是密码框——侧栏是常开的，明文摆着等于给旁边的人看', () => {
-    render(<SettingsPanel />)
+    await userEvent.click(screen.getByRole('button', { name: t('settingsEndpointEdit') }))
+    expect(screen.getByPlaceholderText('Base URL')).toBeTruthy()
     expect(screen.getByPlaceholderText('API Key')).toHaveProperty('type', 'password')
   })
 
-  it('改 API Key 写进当前端点', () => {
+  it('编辑态改 API Key 并保存，写进当前端点', async () => {
     render(<SettingsPanel />)
+    await userEvent.click(screen.getByRole('button', { name: t('settingsEndpointEdit') }))
     fireEvent.change(screen.getByPlaceholderText('API Key'), { target: { value: 'sk-x' } })
+    await userEvent.click(screen.getByRole('button', { name: t('settingsEndpointSave') }))
     expect(activeLlm(useStore.getState().settings).apiKey).toBe('sk-x')
   })
 
-  it('列出全部供应商预设，点一下同时写 baseUrl 与 model', () => {
+  // 覆盖语义在能存多条的世界里没有意义（见「端点列表」那组用例）：这里只守
+  // 「全部预设都摆出来了」，新增语义已经在那边守住，不重复断言。
+  it('列出全部供应商预设，点一下会新增一个端点', () => {
     render(<SettingsPanel />)
     for (const preset of PRESETS) {
       expect(screen.getByRole('button', { name: preset.label.zh_CN })).toBeTruthy()
     }
     fireEvent.click(screen.getByRole('button', { name: 'DeepSeek' }))
-    const llm = activeLlm(useStore.getState().settings)
-    expect(llm.baseUrl).toBe('https://api.deepseek.com/v1')
-    expect(llm.model).toBe('deepseek-chat')
+    const { endpoints } = useStore.getState().settings
+    expect(endpoints).toHaveLength(2)
+    expect(endpoints[1]).toEqual({ baseUrl: 'https://api.deepseek.com/v1', apiKey: '', models: ['deepseek-chat'] })
   })
 
   it('隐私说明跟着模型配置一起来——填 Key 的地方才是该讲这件事的地方', () => {
     render(<SettingsPanel />)
-    expect(screen.getByText(/API Key 明文保存在本地浏览器存储中/)).toBeTruthy()
+    expect(screen.getByText(/API Key 都明文保存在本地浏览器存储中/)).toBeTruthy()
     expect(screen.getByText(/不含 URL 参数与网页正文/)).toBeTruthy()
   })
 })
@@ -182,16 +192,17 @@ describe('SettingsPanel 测试连接', () => {
     fireEvent.click(screen.getByRole('button', { name: t('settingsTestModel') }))
   }
 
-  it('模型还没配好时按钮禁着，配好了就能点——没配的时候没有东西可测', () => {
+  // 按钮不再因为「Key 没填」而禁用——它现在挂在端点里已经存在的每一个模型上，
+  // Key 配没配对由测试本身给出结果，不用界面提前猜。真正会挡住它的只有草稿态：
+  // 那时候测的不是眼前这份还没保存的东西。
+  it('测试连接按钮平时能点，编辑草稿态时禁着——那时候测的不是眼前这份', async () => {
     useStore.setState({ settings: { ...DEFAULT_SETTINGS } })
-    const bare = render(<SettingsPanel />)
-    expect(screen.getByRole('button', { name: t('settingsTestModel') })).toHaveProperty('disabled', true)
-    bare.unmount()
-
-    // 同一条里做对照：禁用不是恒成立的，配好之后必须真的能点
-    useStore.setState({ settings: CONFIGURED })
     render(<SettingsPanel />)
     expect(screen.getByRole('button', { name: t('settingsTestModel') })).toHaveProperty('disabled', false)
+
+    // 同一条里做对照：禁用不是恒不成立的，编辑态下必须真的禁住
+    await userEvent.click(screen.getByRole('button', { name: t('settingsEndpointEdit') }))
+    expect(screen.getByRole('button', { name: t('settingsTestModel') })).toHaveProperty('disabled', true)
   })
 
   it('刚打开时什么结论都不显示——一上来就摆着结果等于凭空断言', () => {
@@ -353,5 +364,94 @@ describe('SettingsPanel 测试连接', () => {
     // 防身：这一页确实重新渲染出来了，不是在一个空 DOM 上扫出的 null
     expect(screen.getByRole('button', { name: t('settingsTestModel') })).toBeTruthy()
     expect(screen.queryByText(t('settingsTestOk', '640'))).toBeNull()
+  })
+})
+
+describe('端点列表', () => {
+  const two: Endpoint[] = [
+    { baseUrl: 'https://opencode.ai/zen/go/v1', apiKey: 'sk-x', models: ['glm-5.2'] },
+    { baseUrl: 'http://localhost:11434/v1', apiKey: '', models: ['qwen2.5'] },
+  ]
+
+  function arrange(endpoints: Endpoint[], active: { baseUrl: string; model: string }) {
+    const setSettings = vi.fn(async (settings: Settings) => { useStore.setState({ settings }) })
+    useStore.setState({
+      settings: { ...DEFAULT_SETTINGS, endpoints, active },
+      setSettings, modelTests: {}, testModel: vi.fn(async () => {}),
+    })
+    render(<SettingsPanel />)
+    return { setSettings }
+  }
+
+  const lastSaved = (setSettings: ReturnType<typeof vi.fn>): Settings =>
+    setSettings.mock.calls.at(-1)![0] as Settings
+
+  it('每个端点各一块', () => {
+    arrange(two, { baseUrl: two[0]!.baseUrl, model: 'glm-5.2' })
+    expect(screen.getByText('opencode.ai')).toBeTruthy()
+    expect(screen.getByText('localhost:11434')).toBeTruthy()
+  })
+
+  it('加一个端点，新的那块一进来就是草稿态', async () => {
+    arrange(two, { baseUrl: two[0]!.baseUrl, model: 'glm-5.2' })
+    await userEvent.click(screen.getByRole('button', { name: '＋ 加一个端点' }))
+    expect(screen.getByRole('button', { name: '保存' })).toBeTruthy()
+  })
+
+  // 覆盖语义在能存多条的世界里没有意义
+  it('点预设是新增一个端点，不是覆盖当前这个', async () => {
+    const { setSettings } = arrange([two[0]!], { baseUrl: two[0]!.baseUrl, model: 'glm-5.2' })
+    await userEvent.click(screen.getByRole('button', { name: 'DeepSeek' }))
+
+    const saved = lastSaved(setSettings)
+    expect(saved.endpoints).toHaveLength(2)
+    expect(saved.endpoints[0]!.apiKey).toBe('sk-x')
+  })
+
+  // 预设不带 Key，拿它覆盖用户已经填好的那把是纯粹的破坏
+  it('预设命中已有端点时只并模型名，Key 一个字都不动', async () => {
+    const existing: Endpoint = {
+      baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-mine', models: ['deepseek-reasoner'],
+    }
+    const { setSettings } = arrange([existing], { baseUrl: existing.baseUrl, model: 'deepseek-reasoner' })
+    await userEvent.click(screen.getByRole('button', { name: 'DeepSeek' }))
+
+    const saved = lastSaved(setSettings)
+    expect(saved.endpoints).toHaveLength(1)
+    expect(saved.endpoints[0]!.apiKey).toBe('sk-mine')
+    expect(saved.endpoints[0]!.models).toEqual(['deepseek-reasoner', 'deepseek-chat'])
+  })
+
+  it('删掉当前在用的那个端点后，active 落到剩下第一条的第一个模型', async () => {
+    const { setSettings } = arrange(two, { baseUrl: two[0]!.baseUrl, model: 'glm-5.2' })
+    await userEvent.click(screen.getAllByRole('button', { name: '删除端点' })[0]!)
+
+    const saved = lastSaved(setSettings)
+    expect(saved.endpoints).toHaveLength(1)
+    expect(saved.active).toEqual({ baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5' })
+  })
+
+  it('删光之后 active 清空，界面回到「还没配」那条路', async () => {
+    const { setSettings } = arrange([two[0]!], { baseUrl: two[0]!.baseUrl, model: 'glm-5.2' })
+    await userEvent.click(screen.getByRole('button', { name: '删除端点' }))
+
+    const saved = lastSaved(setSettings)
+    expect(saved.endpoints).toEqual([])
+    expect(saved.active).toEqual({ baseUrl: '', model: '' })
+  })
+
+  it('删掉的不是在用的那个时，active 不动', async () => {
+    const { setSettings } = arrange(two, { baseUrl: two[0]!.baseUrl, model: 'glm-5.2' })
+    await userEvent.click(screen.getAllByRole('button', { name: '删除端点' })[1]!)
+
+    expect(lastSaved(setSettings).active).toEqual({ baseUrl: two[0]!.baseUrl, model: 'glm-5.2' })
+  })
+
+  it('点另一个端点里的模型，active 连端点一起换过去', async () => {
+    const { setSettings } = arrange(two, { baseUrl: two[0]!.baseUrl, model: 'glm-5.2' })
+    await userEvent.click(screen.getByRole('radio', { name: 'qwen2.5' }))
+
+    expect(lastSaved(setSettings).active)
+      .toEqual({ baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5' })
   })
 })

@@ -10,8 +10,12 @@ import type { BookmarkNode } from '@/core/ports'
 import type { BookmarkItem, ScanResult } from '@/core/types'
 
 /**
- * 本机 Ollama 那条动线，从头走一遍：全新安装 → 设置页点「本地 Ollama」预设 → 一个字
- * 都不再填 → 回到选范围页与偏好页。
+ * 本机 Ollama 那条动线，从头走一遍：全新安装 → 设置页点「本地 Ollama」预设 → 点一下
+ * 新端点里那个模型的圆点选中它 → 一个字都不再填 → 回到选范围页与偏好页。
+ *
+ * 预设只新增端点、不会顺手把它设成当前在用的那一对（见 SettingsPanel.tsx 的
+ * applyPreset）——覆盖语义在能存多条的世界里没有意义，选哪一对是用户另外点一下
+ * 圆点的事，所以这里也照真实操作补上那一步。
  *
  * 单独成篇，是因为它要验的东西横跨三个组件：预设按钮写下的到底是什么（apiKey 空着），
  * 以及另外两页看到这份设置之后各自怎么表现。分开写在三个文件里，每个文件都得手抄一份
@@ -66,9 +70,11 @@ describe('本机 Ollama 动线', () => {
     expect(screen.queryByRole('button', { name: '开始 AI 分析' })).toBeNull()
     beforePrefs.unmount()
 
-    // 第二步：设置页点一下预设，此外一个字都不填
+    // 第二步：设置页点一下预设——预设只新增一个端点，不会自动把它设成当前在用的
+    // 那一对（覆盖语义在能存多条的世界里没有意义），所以还要点一下那个模型的圆点
     const settings = render(<SettingsPanel />)
     await userEvent.click(screen.getByRole('button', { name: '本地 Ollama' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'qwen2.5' }))
     settings.unmount()
 
     // 预设写下的确实是「本机地址 + 空 Key」——后面两页的表现全挂在这件事上
