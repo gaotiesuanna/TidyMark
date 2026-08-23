@@ -15,7 +15,7 @@ import type { ApplyResult } from '@/engine/apply'
 import type { ImportResult } from '@/engine/importTree'
 import type { UndoResult } from '@/engine/undo'
 import type { Settings } from '@/storage/settings'
-import { DEFAULT_SETTINGS, activeLlm } from '@/storage/settings'
+import { DEFAULT_SETTINGS, activeLlm, endpointKey } from '@/storage/settings'
 import { send } from './lib/send'
 import type { TestFailure } from '@/background/messages'
 import { ensureHostPermission, hasHostPermission } from './lib/permissions'
@@ -86,6 +86,17 @@ export interface ModelTest {
   reason?: ModelTestReason
   /** 失败的原始说明（后台已剥掉 Key）。分类文案给方向，它给证据（状态码、响应体）。 */
   error?: string
+}
+
+/**
+ * 一条测试结果的键。
+ *
+ * 用 `\u0000` 分隔而不是 `/`：baseUrl 里本来就带斜杠，拿它当分隔符会让
+ * `https://x/v1` + `a` 和 `https://x` + `v1/a` 撞成同一个键
+ * （llm/classify.ts:36 的 pathKey 早就为同一个坑改用了 `\u0000`）。
+ */
+export function modelTestKey(baseUrl: string, model: string): string {
+  return `${endpointKey(baseUrl)}\u0000${model}`
 }
 
 export interface LogLine {
@@ -255,8 +266,13 @@ interface State {
   /** 设置页是否盖在内容区上。不进 Step——设置不是流程的一步，
       混进 Step 会污染 nextStepAfterAnalyze 这类按步骤推进的判断。 */
   settingsOpen: boolean
-  /** 「测试连接」的即时结果，由设置页每次挂载时清回 idle。 */
-  modelTest: ModelTest
+  /**
+   * 每一对「端点 + 模型」各自的测试结果，键见 modelTestKey。
+   *
+   * 从单槽改成一张表：设置页现在一个模型一行、一行一个测试按钮，
+   * 单槽会让后测的那行把前一行的结论盖掉。
+   */
+  modelTests: Record<string, ModelTest>
   /**
    * 设置页挂载的次数，resetModelTest() 时 +1。
    *
@@ -314,7 +330,7 @@ interface State {
    * 当场验一次模型配置：先申请权限（按钮点击是干净的用户手势），再让后台用真的客户端
    * 发一个最小 schema 的请求，失败时说清是哪一类。
    */
-  testModel(): Promise<void>
+  testModel(baseUrl: string, model: string): Promise<void>
   reset(): void
 }
 
@@ -356,7 +372,7 @@ export const useStore = create<State>((set, get) => ({
   importError: null,
   importDone: null,
   settingsOpen: false,
-  modelTest: { state: 'idle' },
+  modelTests: {},
   modelTestSeq: 0,
   // 这行在模块求值期执行，那时 main.tsx 还没 setLocale，取到的必然是 i18n 的初值。
   // 真正的对齐由 main.tsx 在 render 之前补一次 setState 完成。
@@ -653,18 +669,18 @@ export const useStore = create<State>((set, get) => ({
   },
 
   resetModelTest() {
-    set({ modelTest: { state: 'idle' }, modelTestSeq: get().modelTestSeq + 1 })
+    set({ modelTests: {}, modelTestSeq: get().modelTestSeq + 1 })
   },
 
-  async testModel() {
+  async testModel(baseUrl, model) {
     const seq = get().modelTestSeq
-    const baseUrl = activeLlm(get().settings).baseUrl
+    const key = modelTestKey(baseUrl, model)
     /** 结论过期就丢掉：设置页已经重新开过一次，那时的配置未必还是这一次测的那份。 */
     const settle = (modelTest: ModelTest): void => {
       if (get().modelTestSeq !== seq) return
-      set({ modelTest })
+      set({ modelTests: { ...get().modelTests, [key]: modelTest } })
     }
-    set({ modelTest: { state: 'running' } })
+    settle({ state: 'running' })
 
     // 权限申请就放在这一刻：chrome.permissions.request() 要用户手势，而按钮点击是干净的
     // 手势。这顺带把授权从「点开始分析那一刻」前移到了配置时。
@@ -674,7 +690,7 @@ export const useStore = create<State>((set, get) => ({
       return settle({ state: 'fail', reason: 'permission' })
     }
 
-    const res = await send({ kind: 'test_model' })
+    const res = await send({ kind: 'test_model', baseUrl, model })
     if (res.ok && res.kind === 'test_model') return settle({ state: 'ok', ms: res.ms })
     // 回来的是别的 kind：说不出所以然，只能走兜底那条文案
     if (res.ok) return settle({ state: 'fail' })

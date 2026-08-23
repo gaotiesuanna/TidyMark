@@ -2760,6 +2760,10 @@ describe('analyze 的目录形状由书签数推导', () => {
  * 等于没做，所以每一类失败都单独有一条用例钉住。
  */
 describe('test_model 当场验一次模型配置', () => {
+  /** 没调用 saveSettings 时 loadSettings 落回 DEFAULT_SETTINGS，测的这一对跟着它走。 */
+  const { baseUrl: defaultBaseUrl, model: defaultModel } = activeLlm(DEFAULT_SETTINGS)
+  const DEFAULT_TEST_REQ = { kind: 'test_model' as const, baseUrl: defaultBaseUrl, model: defaultModel }
+
   function setupTest(client: LlmClient, now: () => number = () => 1) {
     const fake = createFakeBookmarks(tree)
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
@@ -2774,7 +2778,7 @@ describe('test_model 当场验一次模型配置', () => {
   it('客户端按 schema 作答时报成功，并带上耗时', async () => {
     const client: LlmClient = { complete: vi.fn().mockResolvedValue({ ok: true }) }
     const { ports, deps } = setupTest(client)
-    const res = await handle(ports, { kind: 'test_model' }, deps)
+    const res = await handle(ports, DEFAULT_TEST_REQ, deps)
     expect(res).toMatchObject({ ok: true, kind: 'test_model' })
     expect(typeof (res as { ms: number }).ms).toBe('number')
   })
@@ -2783,7 +2787,7 @@ describe('test_model 当场验一次模型配置', () => {
     let clock = 1000
     const client: LlmClient = { complete: vi.fn().mockResolvedValue({ ok: false }) }
     const { ports, deps } = setupTest(client, () => (clock += 40))
-    const res = await handle(ports, { kind: 'test_model' }, deps)
+    const res = await handle(ports, DEFAULT_TEST_REQ, deps)
     // 模型答 { ok: false } 也算通过：这一步验的是「会不会按格式答」，
     // 不是「它答了什么」
     expect(res).toMatchObject({ ok: true, kind: 'test_model', ms: 40 })
@@ -2792,7 +2796,7 @@ describe('test_model 当场验一次模型配置', () => {
   it('确实是用真客户端的 complete() 发了一个带 schema 的请求，不是只看 HTTP 200', async () => {
     const complete = vi.fn().mockResolvedValue({ ok: true })
     const { ports, deps } = setupTest({ complete })
-    await handle(ports, { kind: 'test_model' }, deps)
+    await handle(ports, DEFAULT_TEST_REQ, deps)
     expect(complete).toHaveBeenCalledTimes(1)
     const schema = complete.mock.calls[0]![1] as { type?: string; required?: string[] }
     expect(schema.type).toBe('object')
@@ -2801,25 +2805,25 @@ describe('test_model 当场验一次模型配置', () => {
 
   it('401 报 auth：Key 不对', async () => {
     const { ports, deps } = setupTest(throwing('模型接口返回 401: {"error":"Incorrect API key provided"}'))
-    const res = await handle(ports, { kind: 'test_model' }, deps)
+    const res = await handle(ports, DEFAULT_TEST_REQ, deps)
     expect(res).toMatchObject({ ok: false, reason: 'auth' })
   })
 
   it('403 报 auth：Key 有效但没权限用', async () => {
     const { ports, deps } = setupTest(throwing('模型接口返回 403: {"error":"Forbidden"}'))
-    const res = await handle(ports, { kind: 'test_model' }, deps)
+    const res = await handle(ports, DEFAULT_TEST_REQ, deps)
     expect(res).toMatchObject({ ok: false, reason: 'auth' })
   })
 
   it('404 报 model：模型名不对', async () => {
     const { ports, deps } = setupTest(throwing('模型接口返回 404: {"error":"The model `gpt-9` does not exist"}'))
-    const res = await handle(ports, { kind: 'test_model' }, deps)
+    const res = await handle(ports, DEFAULT_TEST_REQ, deps)
     expect(res).toMatchObject({ ok: false, reason: 'model' })
   })
 
   it('400 且响应体提到 model 时报 model', async () => {
     const { ports, deps } = setupTest(throwing('模型接口返回 400: {"error":{"param":"model","message":"invalid model name"}}'))
-    const res = await handle(ports, { kind: 'test_model' }, deps)
+    const res = await handle(ports, DEFAULT_TEST_REQ, deps)
     expect(res).toMatchObject({ ok: false, reason: 'model' })
   })
 
@@ -2828,7 +2832,7 @@ describe('test_model 当场验一次模型配置', () => {
     // 拿整条消息去匹配的实现会把每一个英文 400 都说成「模型名不对」，那是说错，
     // 不是说笼统。判定只能看冒号后面的响应体。
     const { ports, deps } = setupTest(throwing('Model API returned 400: {"error":"temperature must be a number"}'))
-    const res = await handle(ports, { kind: 'test_model' }, deps)
+    const res = await handle(ports, DEFAULT_TEST_REQ, deps)
     expect(res).toMatchObject({ ok: false, reason: 'network' })
     // 防身：确实走到了失败分支、拿到的是这条错误，不是因为压根没跑起来才绿
     expect((res as { error: string }).error).toContain('temperature')
@@ -2836,25 +2840,25 @@ describe('test_model 当场验一次模型配置', () => {
 
   it('英文语境下的 404 同样报 model', async () => {
     const { ports, deps } = setupTest(throwing('Model API returned 404: {"error":"model not found"}'))
-    const res = await handle(ports, { kind: 'test_model' }, deps)
+    const res = await handle(ports, DEFAULT_TEST_REQ, deps)
     expect(res).toMatchObject({ ok: false, reason: 'model' })
   })
 
   it('Failed to fetch 报 network：请求压根没发出去', async () => {
     const { ports, deps } = setupTest(throwing('网络请求失败（耗时 12ms）: TypeError: Failed to fetch'))
-    const res = await handle(ports, { kind: 'test_model' }, deps)
+    const res = await handle(ports, DEFAULT_TEST_REQ, deps)
     expect(res).toMatchObject({ ok: false, reason: 'network' })
   })
 
   it('500 报 network，不因为响应体里出现 unauthorized 就改口说 Key 不对', async () => {
     const { ports, deps } = setupTest(throwing('模型接口返回 500: {"error":"upstream unauthorized"}'))
-    const res = await handle(ports, { kind: 'test_model' }, deps)
+    const res = await handle(ports, DEFAULT_TEST_REQ, deps)
     expect(res).toMatchObject({ ok: false, reason: 'network' })
   })
 
   it('客户端抛「返回的不是合法 JSON」时报 format：接口通了但模型不会按格式答', async () => {
     const { ports, deps } = setupTest(throwing('模型返回的不是合法 JSON: 好的，我这就为你检查连接。'))
-    const res = await handle(ports, { kind: 'test_model' }, deps)
+    const res = await handle(ports, DEFAULT_TEST_REQ, deps)
     expect(res).toMatchObject({ ok: false, reason: 'format' })
   })
 
@@ -2862,7 +2866,7 @@ describe('test_model 当场验一次模型配置', () => {
     // 能回 200、能回合法 JSON，但答的不是我们要的 schema。这类厂商测试绿了、真跑照样废。
     const client: LlmClient = { complete: vi.fn().mockResolvedValue({ answer: '连接正常' }) }
     const { ports, deps } = setupTest(client)
-    const res = await handle(ports, { kind: 'test_model' }, deps)
+    const res = await handle(ports, DEFAULT_TEST_REQ, deps)
     expect(res).toMatchObject({ ok: false, reason: 'format' })
     expect((res as { error: string }).error).not.toBe('')
   })
@@ -2870,7 +2874,7 @@ describe('test_model 当场验一次模型配置', () => {
   it('客户端答出一个字符串时同样报 format', async () => {
     const client: LlmClient = { complete: vi.fn().mockResolvedValue('ok') }
     const { ports, deps } = setupTest(client)
-    const res = await handle(ports, { kind: 'test_model' }, deps)
+    const res = await handle(ports, DEFAULT_TEST_REQ, deps)
     expect(res).toMatchObject({ ok: false, reason: 'format' })
   })
 
@@ -2885,7 +2889,11 @@ describe('test_model 当场验一次模型配置', () => {
       ...DEFAULT_SETTINGS,
       ...withLlm({ baseUrl: 'https://api.deepseek.com/v1', apiKey: CANARY, model: 'deepseek-chat' }),
     })
-    const res = await handle(ports, { kind: 'test_model' }, { createClient: () => client, now: () => 1 })
+    const res = await handle(
+      ports,
+      { kind: 'test_model', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
+      { createClient: () => client, now: () => 1 },
+    )
 
     // 防身：先确认这次确实失败了、确实是那条 401 错误——否则一个「永远返回空字符串」
     // 的实现也会让下面那条断言绿
@@ -2907,7 +2915,11 @@ describe('test_model 当场验一次模型配置', () => {
       ...withLlm({ baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'qwen2.5' }),
     })
     const client = throwing('网络请求失败（耗时 3ms）: TypeError: Failed to fetch')
-    const res = await handle(ports, { kind: 'test_model' }, { createClient: () => client, now: () => 1 })
+    const res = await handle(
+      ports,
+      { kind: 'test_model', baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5' },
+      { createClient: () => client, now: () => 1 },
+    )
     expect(res).toMatchObject({ ok: false, reason: 'network' })
     expect((res as { error: string }).error).toBe('网络请求失败（耗时 3ms）: TypeError: Failed to fetch')
   })
@@ -2917,7 +2929,7 @@ describe('test_model 当场验一次模型配置', () => {
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await saveSettings(ports, { ...DEFAULT_SETTINGS, uiLocale: 'en' })
     const client: LlmClient = { complete: vi.fn().mockResolvedValue({ answer: 'fine' }) }
-    const res = await handle(ports, { kind: 'test_model' }, { createClient: () => client, now: () => 1 })
+    const res = await handle(ports, DEFAULT_TEST_REQ, { createClient: () => client, now: () => 1 })
     expect(res).toMatchObject({ ok: false, reason: 'format' })
     expect((res as { error: string }).error).not.toMatch(/[一-龥]/)
     setLocale('zh_CN')

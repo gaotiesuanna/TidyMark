@@ -23,7 +23,7 @@ beforeEach(() => {
   useStore.setState({
     settingsOpen: true,
     settings: { ...DEFAULT_SETTINGS },
-    modelTest: { state: 'idle' },
+    modelTests: {},
   })
 })
 

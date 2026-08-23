@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import {
-  appendLog, collectDescendantFolderIds, nextStepAfterAnalyze, toggleChecked, useStore,
-  MAX_LOGS, MAX_LOG_LENGTH, type LogLine,
+  appendLog, collectDescendantFolderIds, modelTestKey, nextStepAfterAnalyze, toggleChecked,
+  useStore, MAX_LOGS, MAX_LOG_LENGTH, type LogLine,
 } from '@/sidepanel/store'
 import { send } from '@/sidepanel/lib/send'
 import { currentLocale, setLocale, t } from '@/i18n'
@@ -653,5 +653,71 @@ describe('长连接断开时按 busyKind 派生 retryable（I2）', () => {
 
     expect(useStore.getState().error).toBe(t('errBackgroundRecycled'))
     expect(useStore.getState().retryable).toBeNull()
+  })
+})
+
+describe('测试连接按对记结果', () => {
+  const chromeGlobal = globalThis as unknown as { chrome: { permissions: unknown } }
+  const originalPermissions = chromeGlobal.chrome.permissions
+  beforeEach(() => {
+    chromeGlobal.chrome.permissions = { contains: () => Promise.resolve(true) }
+    vi.mocked(send).mockReset()
+    useStore.setState({
+      modelTests: {},
+      settings: {
+        ...DEFAULT_SETTINGS,
+        endpoints: [{ baseUrl: 'https://x/v1', apiKey: 'k', models: ['a', 'b'] }],
+        active: { baseUrl: 'https://x/v1', model: 'a' },
+      },
+    })
+  })
+  afterEach(() => {
+    chromeGlobal.chrome.permissions = originalPermissions
+  })
+
+  it('结果落在被测的那一对上，另一对不受影响', async () => {
+    vi.mocked(send).mockResolvedValue({ ok: true, kind: 'test_model', ms: 12 } as never)
+
+    await useStore.getState().testModel('https://x/v1', 'a')
+    const tests = useStore.getState().modelTests
+    expect(tests[modelTestKey('https://x/v1', 'a')]?.state).toBe('ok')
+    expect(tests[modelTestKey('https://x/v1', 'b')]).toBeUndefined()
+  })
+
+  // 设置页一个模型一行一个测试按钮，后测的那行不该盖掉前一行的结论
+  it('测第二对时第一对的结论还在', async () => {
+    vi.mocked(send).mockResolvedValue({ ok: true, kind: 'test_model', ms: 12 } as never)
+    await useStore.getState().testModel('https://x/v1', 'a')
+
+    vi.mocked(send).mockResolvedValue({ ok: false, error: '401', reason: 'auth' } as never)
+    await useStore.getState().testModel('https://x/v1', 'b')
+
+    const tests = useStore.getState().modelTests
+    expect(tests[modelTestKey('https://x/v1', 'a')]?.state).toBe('ok')
+    expect(tests[modelTestKey('https://x/v1', 'b')]?.state).toBe('fail')
+  })
+
+  it('末尾斜杠不算另一对', () => {
+    expect(modelTestKey('https://x/v1/', 'a')).toBe(modelTestKey('https://x/v1', 'a'))
+  })
+
+  it('resetModelTest 清空整张表——上次那些结论摆着会撒谎', async () => {
+    vi.mocked(send).mockResolvedValue({ ok: true, kind: 'test_model', ms: 12 } as never)
+    await useStore.getState().testModel('https://x/v1', 'a')
+
+    useStore.getState().resetModelTest()
+    expect(useStore.getState().modelTests).toEqual({})
+  })
+
+  it('权限被拒时那一对记成 permission，一个请求都不发', async () => {
+    chromeGlobal.chrome.permissions = {
+      contains: () => Promise.resolve(false), request: () => Promise.resolve(false),
+    }
+    await useStore.getState().testModel('https://x/v1', 'a')
+
+    expect(useStore.getState().modelTests[modelTestKey('https://x/v1', 'a')]?.reason)
+      .toBe('permission')
+    expect(vi.mocked(send).mock.calls.some(([r]) => (r as { kind: string }).kind === 'test_model'))
+      .toBe(false)
   })
 })

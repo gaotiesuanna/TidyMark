@@ -26,7 +26,9 @@ import {
   applyDesign, collectTopics, designFolders, designTagFolders, nameMergedFolder, nameNewTopics,
 } from '@/llm/folders'
 import { extractTags, refineGroupTags } from '@/llm/tags'
-import { DEFAULT_SETTINGS, activeLlm, loadCache, loadSettings, saveCache, saveSettings } from '@/storage/settings'
+import {
+  DEFAULT_SETTINGS, activeLlm, findEndpoint, loadCache, loadSettings, saveCache, saveSettings,
+} from '@/storage/settings'
 import { findBookmarksBar } from '@/core/import'
 import { importTree } from '@/engine/importTree'
 import type { EmitProgress, ProgressPhase } from './events'
@@ -776,11 +778,16 @@ export async function handle(
         // 用真的客户端发一个最小 schema 的请求。不在这里挡「模型没配好」：设置页的
         // 按钮已经用 isModelConfigured 禁着，而真按下去时，一份空 Key 的配置得到的
         // 401 → 'auth' 本身就是准确答案，多一道门只会把它换成一句更笼统的话。
-        const testLlm = activeLlm(settings)
+        //
+        // 测的是用户点的那一行，不是当前在用的那一对——设置页现在一行一个测试按钮
+        const endpoint = findEndpoint(settings, request.baseUrl)
+        const llm: LlmConfig = endpoint === null
+          ? activeLlm(settings)
+          : { baseUrl: endpoint.baseUrl, apiKey: endpoint.apiKey, model: request.model }
         const result = await probeModel(
-          () => createClient(testLlm, locale),
+          () => createClient(llm, locale),
           locale,
-          testLlm.apiKey,
+          llm.apiKey,
           now,
         )
         if (!result.ok) return { ok: false, error: result.error, reason: result.reason }

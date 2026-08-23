@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { currentLocale, t } from '@/i18n'
-import { useStore, type ModelTestReason } from '../store'
+import { modelTestKey, useStore, type ModelTestReason } from '../store'
 import { isModelConfigured } from '@/llm/config'
 import { PRESETS } from '@/storage/settings'
 import type { Settings } from '@/storage/settings'
@@ -24,7 +24,7 @@ function describeFailure(reason: ModelTestReason | undefined): string {
 }
 
 export function SettingsPanel() {
-  const { settings, setSettings, modelTest, resetModelTest, testModel } = useStore()
+  const { settings, setSettings, modelTests, resetModelTest, testModel } = useStore()
   const locale = currentLocale()
 
   // 每次挂载都清回空白：测试结果是一次即时探针，不是状态。上次那个结论摆在这里会撒谎——
@@ -35,6 +35,7 @@ export function SettingsPanel() {
   // 保证类型改完之后这一屏的行为一个字都没变。
   const first = settings.endpoints[0] ?? { baseUrl: '', apiKey: '', models: [] }
   const llm = { baseUrl: first.baseUrl, apiKey: first.apiKey, model: first.models[0] ?? '' }
+  const modelTest = modelTests[modelTestKey(llm.baseUrl, llm.model)] ?? { state: 'idle' as const }
   const setLlm = (next: { baseUrl: string; apiKey: string; model: string }): void => {
     void setSettings({
       ...settings,
@@ -88,7 +89,7 @@ export function SettingsPanel() {
             className="rounded border px-2 py-0.5 text-xs hover:bg-neutral-50 disabled:opacity-40"
             // 没配好就没有东西可测；正在测时禁着，别让人连点出好几发请求
             disabled={!isModelConfigured(llm) || modelTest.state === 'running'}
-            onClick={() => void testModel()}
+            onClick={() => void testModel(llm.baseUrl, llm.model)}
           >
             {t('settingsTestModel')}
           </button>

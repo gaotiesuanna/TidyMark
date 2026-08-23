@@ -39,7 +39,7 @@ export type Request =
    * 当场验一次模型配置。必须走后台：这个功能对着的那次故障，形状是「浏览器普通标签页
    * 能打开那个域名、而扩展的请求失败」——从侧栏直接 fetch 去测会给出假绿灯。
    */
-  | { kind: 'test_model' }
+  | { kind: 'test_model'; baseUrl: string; model: string }
 
 export type Response =
   | { ok: true; kind: 'get_tree'; tree: BookmarkNode[] }

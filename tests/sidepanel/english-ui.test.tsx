@@ -12,7 +12,7 @@ import { ExportPanel } from '@/sidepanel/components/ExportPanel'
 import { ImportPanel } from '@/sidepanel/components/ImportPanel'
 import { ProgressPanel } from '@/sidepanel/components/ProgressPanel'
 import { SettingsPanel } from '@/sidepanel/components/SettingsPanel'
-import { useStore, type ModelTest } from '@/sidepanel/store'
+import { modelTestKey, useStore, type ModelTest } from '@/sidepanel/store'
 import { EMPTY_EDITS } from '@/core/structure'
 import { DEFAULT_SETTINGS, activeLlm } from '@/storage/settings'
 import { withLlm } from '../fakes/settings'
@@ -361,10 +361,12 @@ describe('英文界面渲染守卫：设置页', () => {
       { state: 'fail', reason: 'permission' },
       { state: 'fail', error: 'The browser suspended the background.' },
     ]
+    const llm = activeLlm(DEFAULT_SETTINGS)
+    const key = modelTestKey(llm.baseUrl, llm.model)
     for (const modelTest of conclusions) {
       const { container, unmount } = render(<SettingsPanel />)
       const idleText = container.textContent
-      act(() => useStore.setState({ modelTest }))
+      act(() => useStore.setState({ modelTests: { [key]: modelTest } }))
       const label = `${modelTest.state}/${modelTest.reason ?? 'fallback'}`
       // 防身：这一条结论确实渲染出来了。少了它，塞进 store 的东西被挂载时那次
       // resetModelTest 清掉、页面还停在 idle，这一整个循环也会照样绿
