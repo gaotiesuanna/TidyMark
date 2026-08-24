@@ -12,6 +12,40 @@ function okResponse(payload: unknown) {
 }
 
 describe('createLlmClient', () => {
+
+  // 端点接了连接却不吐数据时，fetch 既不 resolve 也不 reject，整个 worker 永久堵死——
+  // 而重试等的正是一个 reject，所以 MAX_RETRIES 永远轮不到。真实一遍里 8 个标签批次
+  // 有 2 个这样挂住，整轮作废、已付的钱全丢，产品自己毫无察觉。
+  it('请求超时后抛可重试的错误，不再无限挂起', async () => {
+    // 永不 settle 的 fetch，但要respect signal——真实 fetch 就是这样
+    const fetchImpl = vi.fn((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+    }))
+    const client = createLlmClient(config, 'zh_CN', fetchImpl as unknown as typeof fetch, undefined, 20)
+
+    await expect(client.complete('hi', schema)).rejects.toThrow(LlmError)
+    await expect(client.complete('hi', schema)).rejects.toMatchObject({ retryable: true })
+  })
+
+  it('超时的文案与「用户取消」分得开——两者的收场方式正相反', async () => {
+    const fetchImpl = vi.fn((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+    }))
+    const client = createLlmClient(config, 'zh_CN', fetchImpl as unknown as typeof fetch, undefined, 20)
+    await expect(client.complete('hi', schema)).rejects.toThrow(/超时/)
+  })
+
+  it('用户取消仍然标成不可重试，没有被超时那条路顶掉', async () => {
+    const controller = new AbortController()
+    const fetchImpl = vi.fn((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+      controller.abort()
+    }))
+    const client = createLlmClient(
+      config, 'zh_CN', fetchImpl as unknown as typeof fetch, controller.signal, 60_000,
+    )
+    await expect(client.complete('hi', schema)).rejects.toMatchObject({ retryable: false })
+  })
   it('向 {baseUrl}/chat/completions 发起带 Bearer 的 POST', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(okResponse({ ok: true }))
     const client = createLlmClient(config, 'zh_CN', fetchImpl as unknown as typeof fetch)
@@ -304,19 +338,34 @@ describe('整轮取消信号', () => {
     return createLlmClient(config, 'zh_CN', fetchImpl as typeof fetch, signal)
   }
 
+  // 断言的是行为不是对象同一性：signal 现在是「取消 + 超时闹钟」合成出来的，
+  // 拿 toBe 比对象会把「加了超时」这件事误报成回归
   it('整轮的信号会交给 fetch，调用方不必每次都传', async () => {
     const controller = new AbortController()
-    const fetchImpl = vi.fn().mockResolvedValue(okResponse({ ok: true }))
-    await clientWith(controller.signal, fetchImpl).complete('p', schema)
-    expect(fetchImpl.mock.calls[0]![1].signal).toBe(controller.signal)
+    const fetchImpl = vi.fn((_url: string, init: RequestInit) => {
+      controller.abort()
+      return init.signal?.aborted === true
+        ? Promise.reject(new DOMException('Aborted', 'AbortError'))
+        : Promise.resolve(okResponse({ ok: true }))
+    })
+    await expect(clientWith(controller.signal, fetchImpl as unknown as typeof fetch).complete('p', schema))
+      .rejects.toMatchObject({ retryable: false })
   })
 
   it('单次调用传的 signal 优先于整轮的', async () => {
     const run = new AbortController()
     const one = new AbortController()
-    const fetchImpl = vi.fn().mockResolvedValue(okResponse({ ok: true }))
-    await clientWith(run.signal, fetchImpl).complete('p', schema, one.signal)
-    expect(fetchImpl.mock.calls[0]![1].signal).toBe(one.signal)
+    const fetchImpl = vi.fn((_url: string, init: RequestInit) => {
+      // 只 abort 单次那个：整轮那个不动，能断掉就说明生效的是单次的
+      one.abort()
+      return init.signal?.aborted === true
+        ? Promise.reject(new DOMException('Aborted', 'AbortError'))
+        : Promise.resolve(okResponse({ ok: true }))
+    })
+    await expect(
+      clientWith(run.signal, fetchImpl as unknown as typeof fetch).complete('p', schema, one.signal),
+    ).rejects.toMatchObject({ retryable: false })
+    expect(run.signal.aborted).toBe(false)
   })
 
   it('取消导致的中断标成不可重试——否则调用方还要各自再问两次', async () => {

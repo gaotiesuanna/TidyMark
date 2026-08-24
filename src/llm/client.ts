@@ -117,6 +117,18 @@ function withSchemaInPrompt(prompt: string, schema: object, locale: Locale): str
   ].join('\n')
 }
 
+/**
+ * 单次请求最多等多久。
+ *
+ * 取 120 秒是两头夹出来的：往下，正常一批（25 条书签）在慢模型上也就几十秒，
+ * 收得太紧只会把还在路上的请求误杀、白白多花一次重试的钱；往上，一个 120 秒
+ * 还没吐出第一个字节的请求基本已经死了，再等只是让 worker 继续堵着。
+ *
+ * 配合 MAX_RETRIES=2 与指数退避，最坏情形一批约 6 分钟后彻底失败——有界，
+ * 而在此之前是**无界**：真实一遍里 8 个标签批次有 2 个永久挂起，整轮作废。
+ */
+const REQUEST_TIMEOUT_MS = 120_000
+
 function isUnsupportedResponseFormat(status: number, body: string): boolean {
   return status === 400 && /response_format/i.test(body)
 }
@@ -133,6 +145,7 @@ export function createLlmClient(
   locale: Locale,
   fetchImpl: typeof fetch = fetch,
   runSignal?: AbortSignal,
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): LlmClient {
   const endpoint = `${config.baseUrl.replace(/\/+$/, '')}/chat/completions`
   // 一旦探明厂商不支持 json_schema 就记住，后续请求不再浪费一次 400。
@@ -163,10 +176,22 @@ export function createLlmClient(
   ): Promise<Response> {
     const startedAt = Date.now()
     const effective = signal ?? runSignal
+    // 取消信号与超时闹钟并到一个 controller 上，两者谁先响都掐断这次请求。
+    // 不用 AbortSignal.any：这里要的信息不只是「断了」，还有「因为什么断的」——
+    // 两者的收场方式正相反（取消不重试、超时要重试），得自己记一个标记。
+    const controller = new AbortController()
+    const onCancel = (): void => controller.abort()
+    if (effective?.aborted === true) controller.abort()
+    else effective?.addEventListener('abort', onCancel)
+    let timedOut = false
+    const timer = setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, timeoutMs)
     try {
       return await fetchImpl(endpoint, {
         method: 'POST',
-        signal: effective,
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${config.apiKey}`,
@@ -177,8 +202,20 @@ export function createLlmClient(
       const elapsed = Date.now() - startedAt
       // 用户取消导致的中断不是网络故障：标成不可重试，否则三个调用方会各自把
       // 一个已经断掉的请求再问两次，「正在取消」就要多等好几秒（见 llm/tags.ts 的 ask）。
+      // 判在超时前面：两者同时发生时，用户点过的那一下才是他要的结果。
       if (effective?.aborted === true) {
         throw new LlmError(locale === 'zh_CN' ? '请求已取消' : 'The request was cancelled', false)
+      }
+      // 超时**必须可重试**。端点接了连接却不吐数据时，fetch 既不 resolve 也不 reject，
+      // 而调用方的重试等的正是一个 reject——没有这道闹钟，MAX_RETRIES 永远轮不到，
+      // worker 永久堵死，整轮分析作废且已付的钱全丢，产品自己毫无察觉。
+      if (timedOut) {
+        throw new LlmError(
+          locale === 'zh_CN'
+            ? `请求超时：${Math.round(timeoutMs / 1000)} 秒内没有收到响应`
+            : `Request timed out: no response within ${Math.round(timeoutMs / 1000)}s`,
+          true,
+        )
       }
       // 只进开发者控制台，不必双语。
       console.error(`[TidyMark] fetch 失败（耗时 ${elapsed}ms）：`, error)
@@ -190,6 +227,9 @@ export function createLlmClient(
           : `Network request failed (${elapsed}ms): ${String(error)}`,
         true,
       )
+    } finally {
+      clearTimeout(timer)
+      effective?.removeEventListener('abort', onCancel)
     }
   }
 
