@@ -33,5 +33,29 @@ export const filePickerButton = [
   'hover:enabled:border-neutral-400 hover:enabled:bg-neutral-50 hover:enabled:text-neutral-900',
 ].join(' ')
 
-/** 分组小标题：图标 + 文字一行，字色比正文深一档以保证对比度。 */
-export const groupLabel = 'flex items-center gap-1.5 text-xs font-medium text-neutral-600'
+/** 导出/导入切换槽：一段灰底，选中那格抬成白片。 */
+export const segmentTrack = 'flex rounded-lg bg-neutral-200/80 p-0.5'
+
+export const segmentButton = [
+  'inline-flex h-8 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md px-3',
+  'text-xs font-medium text-neutral-500',
+  'transition-colors duration-150 motion-reduce:transition-none',
+  'hover:text-neutral-800',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 focus-visible:ring-offset-neutral-200',
+].join(' ')
+
+export const segmentActive = 'bg-white text-neutral-900 shadow-sm hover:text-neutral-900'
+
+/** 导出格式一行一项，左对齐图标+文字，叠成一组。不复用 base：justify-center 会和这里抢。 */
+export const choiceRow = [
+  'inline-flex h-9 w-full cursor-pointer items-center justify-start gap-2 px-3',
+  'text-xs font-medium text-neutral-700',
+  'transition-colors duration-150 motion-reduce:transition-none',
+  'hover:enabled:bg-neutral-50 hover:enabled:text-neutral-900',
+  'active:enabled:bg-neutral-100',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-400',
+  'disabled:cursor-not-allowed disabled:opacity-40',
+].join(' ')
+
+export const choiceList = 'overflow-hidden rounded-lg border border-neutral-200 divide-y divide-neutral-100'
+

@@ -27,6 +27,7 @@ import { connectProgress, startKeepalive, type ProgressConnection } from './lib/
 import { applyDocumentLang } from './lib/documentLang'
 
 export type Step = 'scope' | 'preferences' | 'structure' | 'review' | 'result'
+export type AppMode = 'organize' | 'cleanup' | 'transfer'
 
 /**
  * 这次异步请求发出后，用户有没有把这一轮整理放弃掉（见 State.runSeq）。
@@ -224,13 +225,13 @@ function defaultChecked(groups: DuplicateGroup[]): Set<string> {
 interface State {
   step: Step
   /**
-   * 顶层模式。清理与 AI 整理是两条平行的路，不是一条路上的两步——所以它不叫 step，
+   * 顶层模式。整理、清理、导入导出是三条平行的路，不是一条路上的几步——所以它不叫 step，
    * 也不进 Shell 的步骤条（那条是只读的进度指示，见 Shell.tsx 的注释）。
    *
    * 切模式**不清空另一侧的状态**：用户可以跑到一半去清理再切回来看他的计划。
    * busy 是单槽，忙的时候界面禁用切换按钮。
    */
-  mode: 'organize' | 'cleanup'
+  mode: AppMode
   tree: BookmarkNode[]
   checkedIds: Set<string>
   scan: ScanResult | null
@@ -385,7 +386,7 @@ interface State {
    * 调用方用 null 决定要不要退回手打。
    */
   listModels(baseUrl: string, apiKey: string): Promise<string[] | null>
-  setMode(mode: 'organize' | 'cleanup'): void
+  setMode(mode: AppMode): void
   runCleanupScan(): Promise<void>
   runCleanup(): Promise<void>
   toggleCleanupItem(id: string): void

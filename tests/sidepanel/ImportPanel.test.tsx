@@ -53,11 +53,6 @@ describe('ImportPanel 待选态', () => {
     render(<ImportPanel />)
     expect(screen.getByRole('button', { name: '选择文件…' })).toHaveProperty('disabled', true)
   })
-
-  it('带分组标题，与上方的导出组区分开', () => {
-    render(<ImportPanel />)
-    expect(screen.getByText(/导入别人分享的书签/)).toBeDefined()
-  })
 })
 
 describe('ImportPanel 出错态', () => {

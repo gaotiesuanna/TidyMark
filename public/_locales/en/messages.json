@@ -11,6 +11,12 @@
   "shellModeCleanup": {
     "message": "Local cleanup"
   },
+  "shellModeTransfer": {
+    "message": "Import/Export"
+  },
+  "transferIntro": {
+    "message": "Select folders to export, or import bookmarks someone shared. This does not change your existing folder structure."
+  },
   "shellStepScope": {
     "message": "Scope"
   },
@@ -306,8 +312,11 @@
   "exportHtmlBusy": {
     "message": "Fetching icons…"
   },
-  "importGroup": {
-    "message": "Import shared bookmarks"
+  "exportToggle": {
+    "message": "Export"
+  },
+  "importToggle": {
+    "message": "Import"
   },
   "importPickFile": {
     "message": "Choose a file…"

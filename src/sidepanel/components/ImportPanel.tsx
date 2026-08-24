@@ -2,7 +2,7 @@ import { useRef, type ChangeEvent } from 'react'
 import type { ExportNode } from '@/core/export'
 import { plural, t } from '@/i18n'
 import { useStore } from '../store'
-import { filePickerButton, groupLabel, primaryButton, secondaryButton } from './buttonStyles'
+import { filePickerButton, primaryButton, secondaryButton } from './buttonStyles'
 import { AlertIcon, CheckCircleIcon, FileIcon, FolderIcon, LinkIcon, UploadIcon } from './icons'
 
 /** 直接用 'url' in node 分支返回，不要抬成布尔别名——JSX 的 && 里收窄不住 node.children。 */
@@ -160,18 +160,14 @@ export function ImportPanel() {
   }
 
   return (
-    <div className="space-y-2 text-xs">
+    <div className="text-xs">
       {picker}
-      {/* 标题带上行箭头图标，与上方导出组区分开；否则三个按钮长得一样，导入会被当成第三个导出选项 */}
-      <p className={groupLabel}>
-        <UploadIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
-        {t('importGroup')}
-      </p>
       <button
         className={filePickerButton}
         disabled={busy !== null}
         onClick={() => inputRef.current?.click()}
       >
+        <UploadIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
         {t('importPickFile')}
       </button>
     </div>

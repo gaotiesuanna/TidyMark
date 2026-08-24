@@ -11,6 +11,12 @@
   "shellModeCleanup": {
     "message": "本地清理"
   },
+  "shellModeTransfer": {
+    "message": "导入导出"
+  },
+  "transferIntro": {
+    "message": "勾选要导出的文件夹，或导入别人分享的书签。这里不会改你现有的目录结构。"
+  },
   "shellStepScope": {
     "message": "选范围"
   },
@@ -306,8 +312,11 @@
   "exportHtmlBusy": {
     "message": "正在取图标…"
   },
-  "importGroup": {
-    "message": "导入别人分享的书签"
+  "exportToggle": {
+    "message": "导出"
+  },
+  "importToggle": {
+    "message": "导入"
   },
   "importPickFile": {
     "message": "选择文件…"

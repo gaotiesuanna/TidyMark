@@ -11,8 +11,8 @@ import { plural, t } from '@/i18n'
 import { downloadJson, downloadText } from '../lib/download'
 import { loadFavicons } from '../lib/favicons'
 import { useStore } from '../store'
-import { groupLabel, secondaryButton } from './buttonStyles'
-import { DownloadIcon } from './icons'
+import { choiceList, choiceRow } from './buttonStyles'
+import { FileIcon, FolderIcon, LinkIcon } from './icons'
 
 export function ExportPanel() {
   const { tree, checkedIds, busy } = useStore()
@@ -53,23 +53,23 @@ export function ExportPanel() {
 
   return (
     <div className="space-y-2">
-      {/* 下行箭头标出数据流向，让导出组与下方的导入组一眼分得开 */}
-      <p className={groupLabel}>
-        <DownloadIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+      <p className="px-0.5 text-xs tabular-nums text-neutral-500">
         {plural(count, 'exportGroupOne', 'exportGroupOther', String(count))}
       </p>
-      <div className="flex gap-2">
-        <button className={`${secondaryButton} flex-1`} disabled={disabled} onClick={exportTree}>
+      <div className={choiceList}>
+        <button className={choiceRow} disabled={disabled} onClick={exportTree}>
+          <FolderIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
           {t('exportTree')}
         </button>
-        <button className={`${secondaryButton} flex-1`} disabled={disabled} onClick={exportLinks}>
+        <button className={choiceRow} disabled={disabled} onClick={exportLinks}>
+          <LinkIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
           {t('exportLinks')}
         </button>
+        <button className={choiceRow} disabled={disabled} onClick={() => void exportHtml()}>
+          <FileIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+          {fetchingIcons ? t('exportHtmlBusy') : t('exportHtml')}
+        </button>
       </div>
-      {/* 单独一行：这条是给别的浏览器导入用的，与上面两个 TidyMark 自有格式不是一类 */}
-      <button className={`${secondaryButton} w-full`} disabled={disabled} onClick={exportHtml}>
-        {fetchingIcons ? t('exportHtmlBusy') : t('exportHtml')}
-      </button>
     </div>
   )
 }

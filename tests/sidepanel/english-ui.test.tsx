@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { setLocale } from '@/i18n'
 import { makePlan } from '../fakes/plan'
 import { ScopeStep } from '@/sidepanel/steps/ScopeStep'
+import { TransferStep } from '@/sidepanel/steps/TransferStep'
 import { PreferencesStep } from '@/sidepanel/steps/PreferencesStep'
 import { StructureStep } from '@/sidepanel/steps/StructureStep'
 import { ReviewStep } from '@/sidepanel/steps/ReviewStep'
@@ -73,6 +74,15 @@ describe('英文界面渲染守卫：步骤组件', () => {
     })
     const { container } = render(<ScopeStep />)
     assertNoChinese(container, 'ScopeStep')
+  })
+
+  it('TransferStep', () => {
+    useStore.setState({
+      tree, checkedIds: new Set(['10']), busy: null, error: null,
+      importFile: null, importError: null, importDone: null,
+    })
+    const { container } = render(<TransferStep />)
+    assertNoChinese(container, 'TransferStep')
   })
 
   it('PreferencesStep', () => {

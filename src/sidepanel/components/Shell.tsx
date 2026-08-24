@@ -12,8 +12,13 @@ const STEPS = [
   { key: 'result', labelKey: 'shellStepResult' },
 ] as const
 
+const MODES = [
+  { key: 'organize', labelKey: 'shellModeOrganize' },
+  { key: 'cleanup', labelKey: 'shellModeCleanup' },
+  { key: 'transfer', labelKey: 'shellModeTransfer' },
+] as const
 /** 分段控件的外壳：浅灰槽 + 内嵌白片，白片浮起来的那一格就是当前模式。 */
-const tabGroup = 'inline-flex shrink-0 rounded-lg bg-neutral-100 p-0.5 text-xs'
+const tabGroup = 'inline-flex min-w-0 flex-wrap rounded-lg bg-neutral-100 p-0.5 text-xs'
 const tabBase = [
   'inline-flex h-7 cursor-pointer items-center justify-center rounded-md px-3 font-medium',
   'transition-colors duration-150 motion-reduce:transition-none',
@@ -52,7 +57,7 @@ export function Shell({ children }: { children: ReactNode }) {
             以前齿轮单独占第二行，清理模式下那行只剩它一个，孤零零地贴在左边缘——
             一整条横杠只为一个 16px 的图标而存在。合成一行后头部少一行高度，正文多一行。 */}
         <div className="flex items-center justify-between gap-2">
-          {/* 两条平行的路，不是一条路上的两步——所以是并列的分段控件，不是步骤条里的第五格。
+          {/* 三条平行的路，不是一条路上的几步——所以是并列的分段控件，不是步骤条里的第五格。
               塞进步骤条会让前四格点不动、第五格能点，用户第一次点错就学会「这条随便点」。
               忙的时候禁用：busy 是单槽，切过去也什么都干不了，还会让人以为切换失灵。 */}
           {settingsOpen ? (
@@ -67,16 +72,16 @@ export function Shell({ children }: { children: ReactNode }) {
             </button>
           ) : (
             <div className={tabGroup} role="tablist">
-              {(['organize', 'cleanup'] as const).map((each) => (
+              {MODES.map((each) => (
                 <button
-                  key={each}
+                  key={each.key}
                   role="tab"
-                  aria-selected={mode === each}
+                  aria-selected={mode === each.key}
                   disabled={busy !== null}
-                  className={mode === each ? tabOn : tabOff}
-                  onClick={() => setMode(each)}
+                  className={mode === each.key ? tabOn : tabOff}
+                  onClick={() => setMode(each.key)}
                 >
-                  {t(each === 'organize' ? 'shellModeOrganize' : 'shellModeCleanup')}
+                  {t(each.labelKey)}
                 </button>
               ))}
             </div>

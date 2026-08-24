@@ -70,20 +70,7 @@ describe('ScopeStep 目录展开', () => {
   })
 })
 
-describe('ScopeStep 导出入口', () => {
-  it('选范围页上挂着导出面板', () => {
-    render(<ScopeStep />)
-    expect(screen.getByRole('button', { name: '带文件夹结构' })).toBeDefined()
-    expect(screen.getByRole('button', { name: '纯链接清单' })).toBeDefined()
-  })
-})
 
-describe('ScopeStep 导入入口', () => {
-  it('选范围页上挂着导入面板', () => {
-    render(<ScopeStep />)
-    expect(screen.getByText('选择文件…')).toBeDefined()
-  })
-})
 
 /**
  * 没配模型时的提前告知。模型配置搬进设置页之后，新用户在这一页没有任何线索，
@@ -144,7 +131,7 @@ describe('ScopeStep 还没配模型时的提示', () => {
     expect(screen.queryByRole('button', { name: '去配置模型' })).toBeNull()
   })
 
-  it('提示在场也不挡路：目录树照常勾得动，扫描照常开得了，导出导入也照常在', async () => {
+  it('提示在场也不挡路：目录树照常勾得动，扫描照常开得了', async () => {
     setKey('')
     render(<ScopeStep />)
     // 前提：这条用例要验的是「提示在场时」，提示不在场就什么也没证明
@@ -155,22 +142,14 @@ describe('ScopeStep 还没配模型时的提示', () => {
 
     const scan = screen.getByRole('button', { name: /扫描选中的/ }) as HTMLButtonElement
     expect(scan.disabled).toBe(false)
-
-    // 导出与导入这两条支线跟模型无关，提示在场时同样得在。上面「导出入口」「导入入口」
-    // 两个 describe 不设 settings，靠 store 初值恰好让提示在场，那是用例顺序说了算的；
-    // 这里显式钉死了 apiKey，「不挡路」的三件事在同一条用例里一起守住
-    expect(screen.getByRole('button', { name: '带文件夹结构' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '纯链接清单' })).toBeTruthy()
-    expect(screen.getByText('选择文件…')).toBeTruthy()
   })
 })
 
 /**
- * 扫描按钮此前只报勾中的文件夹数，而下面紧挨着的导出行报的是书签数，两个数字口径不同。
- * 一个「01 GitHub」里有 10 个子目录、另外 123 条链接直接散在它底下时，按钮说
- * 「扫描选中的 11 个文件夹」，看着像是那 123 条散链不在范围里——它们其实一直都在
- * （core/scan.ts 与 core/export.ts 走的是同一个 findScopeRoots + 整棵子树遍历）。
- * 按钮要报的是这次真正要处理的东西：书签数。
+ * 扫描按钮此前只报勾中的文件夹数。一个「01 GitHub」里有 10 个子目录、另外 123 条
+ * 链接直接散在它底下时，按钮说「扫描选中的 11 个文件夹」，看着像是那 123 条散链
+ * 不在范围里——它们其实一直都在（core/scan.ts 与 core/export.ts 走的是同一个
+ * findScopeRoots + 整棵子树遍历）。按钮要报的是这次真正要处理的东西：书签数。
  */
 describe('ScopeStep 扫描按钮报的数', () => {
   const withLoose: BookmarkNode[] = [
