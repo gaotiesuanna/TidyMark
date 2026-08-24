@@ -10,7 +10,7 @@ import {
 describe('llm 日志文案双语', () => {
   it('每种语言下每条日志都非空且带上关键数字', () => {
     for (const locale of LOCALES) {
-      expect(logBatch(locale, 'x', 0, 3, 20)).toContain('1/3')
+      expect(logBatch(locale, 'x', 0, 3, 20, { done: 1, inflight: [] })).toContain('1/3')
       expect(logBatchDone(locale, 0, 3, 20, 18, 500)).toContain('18')
       expect(logBatchFailed(locale, 'x', 0, 3, 'boom', 3)).toContain('boom')
       expect(logFoldersDone(locale, 6, 40)).toContain('6')
@@ -20,8 +20,10 @@ describe('llm 日志文案双语', () => {
   })
 
   it('批次序号从 1 开始展示，不是从 0', () => {
-    expect(logBatch('zh_CN', '分类批次', 0, 3, 20)).toContain('1/3')
-    expect(logBatch('en', 'Classify', 2, 3, 20)).toContain('3/3')
+    expect(logBatch('zh_CN', '分类批次', 0, 3, 20, { done: 1, inflight: [] })).toContain('第 1 批')
+    expect(logBatch('en', 'Classify', 2, 3, 20, { done: 3, inflight: [] })).toContain('Classify 3')
+    // 「还在跑」里的序号同样从 1 起
+    expect(logBatch('zh_CN', '分类批次', 0, 3, 20, { done: 1, inflight: [1, 2] })).toContain('第 2、3 批')
   })
 
   it('两种语言的文案确实不同，不是同一份', () => {
@@ -147,5 +149,28 @@ describe('同族碎目录的两条日志', () => {
 
   it('两条文案确实不同，不是同一句', () => {
     expect(logFragmentedFamilies('zh_CN', 'x')).not.toBe(logFamiliesRemain('zh_CN', 'x'))
+  })
+})
+
+describe('logBatch 报出还没回来的批次', () => {
+  // 并发跑批时，只说「谁完成了」的日志逼用户自己拿完成集去减总集，才推得出卡的是哪几个。
+  // 真实一遍里 8 批有 2 批永久挂起，用户看到的就是一串乱序的完成行，全靠肉眼做减法。
+  it('点名仍在跑的批次', () => {
+    const line = logBatch('zh_CN', '标签批次', 7, 8, 24, { done: 6, inflight: [4, 6] })
+    expect(line).toContain('24')
+    expect(line).toContain('6/8')
+    expect(line).toContain('第 5、7 批还在跑')
+  })
+
+  it('没有在跑的批次时不缀那半句', () => {
+    const line = logBatch('zh_CN', '标签批次', 7, 8, 24, { done: 8, inflight: [] })
+    expect(line).toContain('8/8')
+    expect(line).not.toContain('还在跑')
+  })
+
+  it('英文同源', () => {
+    const line = logBatch('en', 'Tag batch', 7, 8, 24, { done: 6, inflight: [4, 6] })
+    expect(line).toContain('6/8')
+    expect(line).toContain('batches 5, 7 still running')
   })
 })

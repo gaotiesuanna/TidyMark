@@ -6,10 +6,36 @@ import type { Locale } from '@/core/locale'
  * 不走 _locales：llm/ 要保持零浏览器依赖、能在 node 环境测试，
  * 因此和 core/rules.ts 一样自带双语表，语言由调用方传入。
  */
-export function logBatch(locale: Locale, label: string, index: number, total: number, size: number): string {
-  return locale === 'zh_CN'
-    ? `${label} ${index + 1}/${total}：${size} 条`
-    : `${label} ${index + 1}/${total}: ${size} items`
+/**
+ * 一批跑完了。
+ *
+ * `progress` 里的 `inflight` 是**已派发但还没回来**的批次序号（0 起）。
+ * 报它是因为批次并发跑、乱序完成，只说「谁完成了」的日志逼用户自己拿完成集
+ * 去减总集才推得出卡在哪——真实一遍里 8 批有 2 批永久挂起，用户看到的就是
+ * 一串乱序的完成行，全靠肉眼做减法。
+ *
+ * 也不再写成 `8/8`：那个形状与「已完成几批」撞脸，在只完成 6 批时读起来像
+ * 「8 个全完了」，跟同屏的进度数字自相矛盾。序号一律带 `#`。
+ */
+export function logBatch(
+  locale: Locale,
+  label: string,
+  index: number,
+  total: number,
+  size: number,
+  progress: { done: number; inflight: number[] },
+): string {
+  const names = progress.inflight.map((i) => i + 1).join(locale === 'zh_CN' ? '、' : ', ')
+  if (locale === 'zh_CN') {
+    const tail = names === '' ? '' : `，第 ${names} 批还在跑`
+    // label 自带「批次」二字（「标签批次」），这里再写一次「第 N 批」就把「批」说了两遍。
+    // 剥掉尾巴上的「批次」，让它退回成纯粹的限定词：「标签 第 1 批完成」。
+    const what = label.replace(/批次$/, '')
+    return `${what} 第 ${index + 1} 批完成：${size} 条（已完成 ${progress.done}/${total}${tail}）`
+  }
+  const plural = progress.inflight.length > 1 ? 'batches' : 'batch'
+  const tail = names === '' ? '' : `, ${plural} ${names} still running`
+  return `${label} ${index + 1} done: ${size} items (${progress.done}/${total} complete${tail})`
 }
 
 /**

@@ -98,6 +98,10 @@ async function runExtraction(
   const resolved = new Map<string, TagResult>()
   let done = 0
   let cursor = 0
+  /** 已派发但还没回来的批次序号。日志靠它点名「仍在跑」的是哪几批。 */
+  const inflight = new Set<number>()
+  /** 已收场（成功或失败）的批次数，与按书签条数算的 done 是两个口径。 */
+  let completedBatches = 0
 
   /**
    * 问一批，返回 bookmark_id → primary_topic；这一批彻底没救时抛出最后一个错误。
@@ -178,6 +182,7 @@ async function runExtraction(
       if (options.isCancelled?.() === true) return
       const index = cursor++
       const batch = batches[index]!
+      inflight.add(index)
       // 这一批一共问出去多少次——含重试，也含拆批后每一半各自的尝试。
       const tally = { attempts: 0 }
       try {
@@ -189,8 +194,19 @@ async function runExtraction(
             secondaryTopic: null,
           })
         }
-        options.onLog?.(logBatch(locale, label, index, batches.length, batch.length), 'info')
+        // 先从在跑集合里摘掉自己，再打日志——否则这一行会把刚完成的这批也算进「仍在跑」
+        inflight.delete(index)
+        completedBatches += 1
+        options.onLog?.(
+          logBatch(locale, label, index, batches.length, batch.length, {
+            done: completedBatches,
+            inflight: [...inflight].sort((a, b) => a - b),
+          }),
+          'info',
+        )
       } catch (error) {
+        inflight.delete(index)
+        completedBatches += 1
         for (const item of batch) {
           resolved.set(item.id, { bookmarkId: item.id, primaryTopic: NO_TOPIC, secondaryTopic: null })
         }
