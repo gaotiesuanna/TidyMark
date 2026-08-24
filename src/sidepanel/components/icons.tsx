@@ -144,3 +144,20 @@ export function CloseIcon({ className }: { className?: string }) {
     </Icon>
   )
 }
+
+export function PlusIcon({ className }: { className?: string }) {
+  return (
+    <Icon {...(className === undefined ? {} : { className })}>
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </Icon>
+  )
+}
+
+export function ChevronLeftIcon({ className }: { className?: string }) {
+  return (
+    <Icon {...(className === undefined ? {} : { className })}>
+      <path d="m15 18-6-6 6-6" />
+    </Icon>
+  )
+}

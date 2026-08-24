@@ -67,11 +67,18 @@ export interface Settings {
 }
 
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1'
-const DEFAULT_MODEL = 'gpt-4o-mini'
+/** 迁移上一代那份残缺 llm 时用来补 model 字段；全新安装不带模型名，见 DEFAULT_SETTINGS。 */
+export const DEFAULT_MODEL = 'gpt-4o-mini'
 
+/**
+ * 全新安装那条端点**不带模型名**：Key 是空的，摆一个 gpt-4o-mini 出来只是个幻觉——
+ * 它看着像「已经配好了一个模型」，点下去必然 401。空列表如实说明这条端点还没配完，
+ * 设置页那句提示会告诉用户下一步（填 Key，再从服务商的清单里挑）。
+ * 同理 active 也是空的，activeLlm 走它原本就有的兜底，界面停在「还没配置模型」。
+ */
 export const DEFAULT_SETTINGS: Settings = {
-  endpoints: [{ baseUrl: DEFAULT_BASE_URL, apiKey: '', models: [DEFAULT_MODEL] }],
-  active: { baseUrl: DEFAULT_BASE_URL, model: DEFAULT_MODEL },
+  endpoints: [{ baseUrl: DEFAULT_BASE_URL, apiKey: '', models: [] }],
+  active: { baseUrl: '', model: '' },
   removeEmptyFolders: true,
   rewriteGithubTitles: false,
   uiLocale: 'auto',

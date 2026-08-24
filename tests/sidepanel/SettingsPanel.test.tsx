@@ -139,7 +139,7 @@ describe('SettingsPanel 模型配置', () => {
     await userEvent.click(screen.getByRole('button', { name: t('settingsEndpointEdit') }))
     fireEvent.change(screen.getByPlaceholderText('API Key'), { target: { value: 'sk-x' } })
     await userEvent.click(screen.getByRole('button', { name: t('settingsEndpointSave') }))
-    expect(activeLlm(useStore.getState().settings).apiKey).toBe('sk-x')
+    expect(useStore.getState().settings.endpoints[0]!.apiKey).toBe('sk-x')
   })
 
   // 覆盖语义在能存多条的世界里没有意义（见「端点列表」那组用例）：这里只守
@@ -148,12 +148,38 @@ describe('SettingsPanel 模型配置', () => {
     render(<SettingsPanel />)
     await userEvent.click(screen.getByRole('button', { name: t('settingsEndpointAdd') }))
     for (const preset of PRESETS) {
-      expect(screen.getByRole('button', { name: preset.label.zh_CN })).toBeTruthy()
+      expect(screen.getByRole('button', { name: new RegExp(`^${preset.label.zh_CN}`) })).toBeTruthy()
     }
-    fireEvent.click(screen.getByRole('button', { name: 'DeepSeek' }))
+    fireEvent.click(screen.getByRole('button', { name: /^DeepSeek/ }))
     const { endpoints } = useStore.getState().settings
     expect(endpoints).toHaveLength(2)
-    expect(endpoints[1]).toEqual({ baseUrl: 'https://api.deepseek.com/v1', apiKey: '', models: ['deepseek-chat'] })
+    // 模型列表是空的：Key 还没填，摆一个模型名等于摆一个点了必然 401 的选项
+    expect(endpoints[1]).toEqual({ baseUrl: 'https://api.deepseek.com/v1', apiKey: '', models: [] })
+  })
+
+  // 本机端点不要 Key，它一加进来就是能用的——这条路上预设自带的模型名照旧写进去，
+  // 否则 README 明确支持的「点一下本地 Ollama 就能开跑」会断在这里
+  it('本机预设不要 Key，模型名照旧带进来', async () => {
+    render(<SettingsPanel />)
+    await userEvent.click(screen.getByRole('button', { name: '加一个端点' }))
+    fireEvent.click(screen.getByRole('button', { name: /^本地 Ollama/ }))
+    const added = useStore.getState().settings.endpoints.at(-1)!
+    expect(added.baseUrl).toBe('http://localhost:11434/v1')
+    expect(added.models).toEqual(['qwen2.5'])
+  })
+
+  // Key 已经填好的端点上再点一次同一个预设，模型名该并进去——那条端点当下就能用
+  it('Key 填好的端点上点预设，模型名照并不误', async () => {
+    const filled: Endpoint = {
+      baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-mine', models: [],
+    }
+    useStore.setState({
+      settings: { ...DEFAULT_SETTINGS, endpoints: [filled], active: { baseUrl: filled.baseUrl, model: '' } },
+    })
+    render(<SettingsPanel />)
+    await userEvent.click(screen.getByRole('button', { name: '加一个端点' }))
+    fireEvent.click(screen.getByRole('button', { name: /^DeepSeek/ }))
+    expect(useStore.getState().settings.endpoints[0]!.models).toEqual(['deepseek-chat'])
   })
 
 
@@ -196,7 +222,11 @@ describe('SettingsPanel 测试连接', () => {
   // Key 配没配对由测试本身给出结果，不用界面提前猜。编辑态同样能点：测的是框里
   // 还没保存的那份地址和 Key。
   it('测试连接按钮平时能点，编辑草稿态时也能点', async () => {
-    useStore.setState({ settings: { ...DEFAULT_SETTINGS } })
+    // 空 Key + 一个已经存在的模型：正是「Key 没填也该能点」要守的那个形态
+    useStore.setState({ settings: {
+      ...DEFAULT_SETTINGS,
+      endpoints: [{ baseUrl: 'https://api.deepseek.com/v1', apiKey: '', models: ['deepseek-chat'] }],
+    } })
     render(<SettingsPanel />)
     expect(screen.getByRole('button', { name: t('settingsTestModel') })).toHaveProperty('disabled', false)
 
@@ -392,34 +422,76 @@ describe('端点列表', () => {
     expect(screen.getByText('localhost:11434')).toBeTruthy()
   })
 
-  it('加一个端点在模型配置标题右侧，预设平时不出现', () => {
+  // 加端点是「再来一张卡」，位置就该在端点队尾；预设平时不占地方
+  it('加一个端点排在最后一个端点之后，预设平时不出现', () => {
     arrange(two, { baseUrl: two[0]!.baseUrl, model: 'glm-5.2' })
-    const heading = screen.getByRole('heading', { name: '模型配置' })
-    const add = screen.getByRole('button', { name: '＋ 加一个端点' })
-    expect(heading.nextElementSibling).toBe(add)
-    expect(screen.queryByRole('button', { name: 'DeepSeek' })).toBeNull()
+    const cards = document.querySelectorAll('article')
+    const add = screen.getByRole('button', { name: '加一个端点' })
+    expect(cards).toHaveLength(2)
+    expect(cards[1]!.nextElementSibling).toBe(add)
+    expect(screen.queryByRole('button', { name: /^DeepSeek/ })).toBeNull()
   })
 
   it('点加一个端点才出现预设，选完就收起', async () => {
     arrange(two, { baseUrl: two[0]!.baseUrl, model: 'glm-5.2' })
-    await userEvent.click(screen.getByRole('button', { name: '＋ 加一个端点' }))
-    expect(screen.getByRole('button', { name: 'DeepSeek' })).toBeTruthy()
-    await userEvent.click(screen.getByRole('button', { name: 'DeepSeek' }))
-    expect(screen.queryByRole('button', { name: 'DeepSeek' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: '加一个端点' }))
+    expect(screen.getByRole('button', { name: /^DeepSeek/ })).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: /^DeepSeek/ }))
+    expect(screen.queryByRole('button', { name: /^DeepSeek/ })).toBeNull()
+  })
+
+  // 挑选面板是原地展开的，关掉就该原地变回那张「加一个端点」的卡，不是留一片空白
+  it('关掉挑选面板，加一个端点的卡片回来', async () => {
+    arrange(two, { baseUrl: two[0]!.baseUrl, model: 'glm-5.2' })
+    await userEvent.click(screen.getByRole('button', { name: '加一个端点' }))
+    expect(screen.queryByRole('button', { name: '加一个端点' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: '取消' }))
+    expect(screen.getByRole('button', { name: '加一个端点' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^DeepSeek/ })).toBeNull()
+  })
+
+  /**
+   * 预设给得出地址和模型名，唯独给不出 Key——那是这条端点唯一还缺、又非填不可的东西。
+   * 点完预设把卡片收起来，等于把「还差一步」藏进一个看不出还差一步的界面。
+   */
+  it('点预设后那张卡直接是草稿态，光标就落在 Key 上', async () => {
+    arrange([two[0]!], { baseUrl: two[0]!.baseUrl, model: 'glm-5.2' })
+    await userEvent.click(screen.getByRole('button', { name: '加一个端点' }))
+    await userEvent.click(screen.getByRole('button', { name: /^DeepSeek/ }))
+
+    const keyInput = screen.getByPlaceholderText('API Key')
+    expect(keyInput).toBeTruthy()
+    expect(document.activeElement).toBe(keyInput)
+    // 地址预设已经填好了，不该再让人从头打一遍
+    expect((screen.getByPlaceholderText('Base URL') as HTMLInputElement).value)
+      .toBe('https://api.deepseek.com/v1')
+  })
+
+  // 命中已有端点时卡片不会换 key，光记 key 的话第二次点同一个预设就没反应了
+  it('同一个预设连点两次，第二次照样展开成草稿态', async () => {
+    arrange([two[0]!], { baseUrl: two[0]!.baseUrl, model: 'glm-5.2' })
+    await userEvent.click(screen.getByRole('button', { name: '加一个端点' }))
+    await userEvent.click(screen.getByRole('button', { name: /^DeepSeek/ }))
+    await userEvent.click(screen.getByRole('button', { name: '取消' }))
+    expect(screen.queryByPlaceholderText('API Key')).toBeNull()
+
+    await userEvent.click(screen.getByRole('button', { name: '加一个端点' }))
+    await userEvent.click(screen.getByRole('button', { name: /^DeepSeek/ }))
+    expect(screen.getByPlaceholderText('API Key')).toBeTruthy()
   })
 
   it('加一个端点后点自定义，新的那块一进来就是草稿态', async () => {
     arrange(two, { baseUrl: two[0]!.baseUrl, model: 'glm-5.2' })
-    await userEvent.click(screen.getByRole('button', { name: '＋ 加一个端点' }))
-    await userEvent.click(screen.getByRole('button', { name: '自定义' }))
+    await userEvent.click(screen.getByRole('button', { name: '加一个端点' }))
+    await userEvent.click(screen.getByRole('button', { name: /^自定义/ }))
     expect(screen.getByRole('button', { name: '保存' })).toBeTruthy()
   })
 
   // 覆盖语义在能存多条的世界里没有意义
   it('点预设是新增一个端点，不是覆盖当前这个', async () => {
     const { setSettings } = arrange([two[0]!], { baseUrl: two[0]!.baseUrl, model: 'glm-5.2' })
-    await userEvent.click(screen.getByRole('button', { name: '＋ 加一个端点' }))
-    await userEvent.click(screen.getByRole('button', { name: 'DeepSeek' }))
+    await userEvent.click(screen.getByRole('button', { name: '加一个端点' }))
+    await userEvent.click(screen.getByRole('button', { name: /^DeepSeek/ }))
 
     const saved = lastSaved(setSettings)
     expect(saved.endpoints).toHaveLength(2)
@@ -432,8 +504,8 @@ describe('端点列表', () => {
       baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-mine', models: ['deepseek-reasoner'],
     }
     const { setSettings } = arrange([existing], { baseUrl: existing.baseUrl, model: 'deepseek-reasoner' })
-    await userEvent.click(screen.getByRole('button', { name: '＋ 加一个端点' }))
-    await userEvent.click(screen.getByRole('button', { name: 'DeepSeek' }))
+    await userEvent.click(screen.getByRole('button', { name: '加一个端点' }))
+    await userEvent.click(screen.getByRole('button', { name: /^DeepSeek/ }))
 
     const saved = lastSaved(setSettings)
     expect(saved.endpoints).toHaveLength(1)

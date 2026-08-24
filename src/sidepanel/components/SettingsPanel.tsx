@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 
 import { currentLocale, t } from '@/i18n'
+import { isModelConfigured } from '@/llm/config'
 import { useStore } from '../store'
-import { EndpointCard } from './EndpointCard'
+import { EndpointCard, domainOf } from './EndpointCard'
+import { CloseIcon, PlusIcon } from './icons'
 import { PRESETS, endpointKey } from '@/storage/settings'
 import type { Endpoint, Settings } from '@/storage/settings'
 
@@ -36,6 +38,18 @@ function removeEndpoint(settings: Settings, index: number): Settings {
 }
 
 /**
+ * 预设自带的那个模型名，只在这条端点当下就能用的时候才写进去——Key 填了，
+ * 或者本机端点压根不要 Key（isModelConfigured 问的正是这件事）。
+ *
+ * Key 还空着就先摆一个模型名，屏幕上会多出一个圆点：它看着是「已经有一个模型可选」，
+ * 点下去却必然 401。列表里一个模型都没有，反而如实说明了「这条端点还没配完」。
+ * 等 Key 填好，「添加模型」拉的是这个服务商真实的模型清单，比预设里写死的一个名字新。
+ */
+function presetModels(baseUrl: string, apiKey: string, model: string): string[] {
+  return isModelConfigured({ baseUrl, apiKey, model }) ? [model] : []
+}
+
+/**
  * 点预设 = 新增一个端点，不是覆盖当前这个——覆盖语义在能存多条的世界里没有意义。
  * 已有同 baseUrl 时只把模型名并进去，**Key 一个字都不动**：预设本来就不带 Key，
  * 拿它去盖用户已经填好的那把是纯粹的破坏。
@@ -48,22 +62,34 @@ function applyPreset(settings: Settings, preset: { baseUrl: string; model: strin
       ...settings,
       endpoints: [
         ...settings.endpoints,
-        { baseUrl: preset.baseUrl, apiKey: '', models: [preset.model] },
+        { baseUrl: preset.baseUrl, apiKey: '', models: presetModels(preset.baseUrl, '', preset.model) },
       ],
     }
   }
   const endpoints = settings.endpoints.map((e, i) => (
     i !== hit || e.models.includes(preset.model)
       ? e
-      : { ...e, models: [...e.models, preset.model] }
+      : { ...e, models: [...e.models, ...presetModels(e.baseUrl, e.apiKey, preset.model)] }
   ))
   return { ...settings, endpoints }
 }
+
+/** 预设卡片：名字一行、域名一行，整块可点。左对齐是为了两列之间字头能对齐。 */
+const presetCard = [
+  'flex min-w-0 cursor-pointer flex-col items-start gap-0.5 rounded-lg',
+  'border border-neutral-200 bg-white px-2.5 py-2 text-left',
+  'transition-colors duration-150 motion-reduce:transition-none',
+  'hover:border-neutral-300 hover:bg-neutral-50',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1',
+].join(' ')
 
 export function SettingsPanel() {
   const { settings, setSettings, resetModelTest } = useStore()
   const locale = currentLocale()
   const [picking, setPicking] = useState(false)
+  // 刚加进来的那条端点：seq 只是个换 key 的由头，让那张卡重新挂载、于是一进来就是草稿态。
+  // 光记 key 不够——同一个预设连点两次时 key 没变，卡片不会重挂，第二次就没反应了。
+  const [justAdded, setJustAdded] = useState<{ key: string; seq: number } | null>(null)
 
   // 每次挂载都清回空白：测试结果是一次即时探针，不是状态。上次那个结论摆在这里会撒谎——
   // 中间可能已经换过 Key、换过模型（见 issues/37-test-model-button.md）。
@@ -77,8 +103,15 @@ export function SettingsPanel() {
     setPicking(false)
   }
 
+  /**
+   * 点预设后那张卡直接展开成草稿态，光标落在 Key 上（见 EndpointCard 里那段 focus）。
+   * 预设给的是地址和一个模型名，唯独 Key 给不了——它是这条端点唯一还缺的东西，
+   * 却又是不填就一步都走不动的那个。收起来等用户自己找到卡片再点一次铅笔，
+   * 等于把「还差一步」藏进了一个看不出还差一步的界面。
+   */
   const pickPreset = (preset: (typeof PRESETS)[number]): void => {
     void setSettings(applyPreset(settings, preset))
+    setJustAdded({ key: endpointKey(preset.baseUrl), seq: (justAdded?.seq ?? 0) + 1 })
     setPicking(false)
   }
 
@@ -89,57 +122,90 @@ export function SettingsPanel() {
 
       {/* 模型配置摆最前：新用户来设置页就是为了它 */}
       <section className="space-y-3 rounded-lg border border-neutral-200 p-3">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-medium">{t('settingsModelTitle')}</h3>
-          <button
-            className="inline-flex min-h-8 shrink-0 cursor-pointer items-center whitespace-nowrap rounded border border-neutral-200 bg-white px-2.5 text-xs text-neutral-700 transition-colors duration-150 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1"
-            onClick={() => setPicking((open) => !open)}
-          >
-            {t('settingsEndpointAdd')}
-          </button>
-        </div>
+        <h3 className="text-sm font-medium">{t('settingsModelTitle')}</h3>
 
-        {settings.endpoints.map((endpoint, index) => (
-          <EndpointCard
-            key={endpointKey(endpoint.baseUrl) === '' ? `new-${index}` : endpointKey(endpoint.baseUrl)}
-            endpoint={endpoint}
-            activeModel={
-              endpointKey(endpoint.baseUrl) === endpointKey(settings.active.baseUrl)
-                ? settings.active.model
-                : null
-            }
-            initialEditing={endpoint.baseUrl === ''}
-            onChange={(next) => void setSettings(replaceEndpoint(settings, index, next))}
-            onDelete={() => void setSettings(removeEndpoint(settings, index))}
-            onPick={(model) => void setSettings({
-              ...settings, active: { baseUrl: endpoint.baseUrl, model },
-            })}
-          />
-        ))}
+        {settings.endpoints.map((endpoint, index) => {
+          const key = endpointKey(endpoint.baseUrl) === '' ? `new-${index}` : endpointKey(endpoint.baseUrl)
+          const fresh = justAdded !== null && justAdded.key === key
+          return (
+            <EndpointCard
+              key={fresh ? `${key}#${justAdded.seq}` : key}
+              endpoint={endpoint}
+              activeModel={
+                endpointKey(endpoint.baseUrl) === endpointKey(settings.active.baseUrl)
+                  ? settings.active.model
+                  : null
+              }
+              initialEditing={endpoint.baseUrl === '' || fresh}
+              onChange={(next) => void setSettings(replaceEndpoint(settings, index, next))}
+              onDelete={() => void setSettings(removeEndpoint(settings, index))}
+              onPick={(model) => void setSettings({
+                ...settings, active: { baseUrl: endpoint.baseUrl, model },
+              })}
+            />
+          )
+        })}
 
-        {picking && (
-          <div className="space-y-1.5">
-            <p className="text-[11px] text-neutral-600">{t('settingsPresetHint')}</p>
-            <div className="flex flex-wrap gap-2">
+        {/* 加端点长成一张卡：它排在端点卡片队尾，是「再来一张」，不是标题栏角落里的一个小按钮。
+            虚线边框说明这一格现在还是空的、点了才会填上东西——和实线的已有端点卡分得开。
+            展开后原地换成挑选面板，不再跳到列表最下面：出现的位置就是刚点的位置。 */}
+        {picking ? (
+          <div className="space-y-2 rounded-lg border border-neutral-200 bg-neutral-50/50 p-3">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-[11px] leading-5 text-neutral-600">{t('settingsPresetHint')}</p>
               <button
                 type="button"
-                className="inline-flex min-h-8 cursor-pointer items-center whitespace-nowrap rounded border border-neutral-200 bg-white px-2.5 text-xs text-neutral-700 transition-colors duration-150 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1"
-                onClick={addBlank}
+                aria-label={t('settingsEndpointCancel')}
+                title={t('settingsEndpointCancel')}
+                className="-mr-1 -mt-1 shrink-0 cursor-pointer rounded-md p-1.5 text-neutral-500 transition-colors duration-150 hover:bg-white hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 motion-reduce:transition-none"
+                onClick={() => setPicking(false)}
               >
-                {t('settingsEndpointCustom')}
+                <CloseIcon />
               </button>
+            </div>
+            {/* 两列：预设名短，一列会拉出一条又高又窄的清单；三列在窄侧栏里域名全被截断 */}
+            <div className="grid grid-cols-2 gap-2">
               {PRESETS.map((preset) => (
                 <button
                   key={preset.baseUrl}
                   type="button"
-                  className="inline-flex min-h-8 cursor-pointer items-center whitespace-nowrap rounded border border-neutral-200 bg-white px-2.5 text-xs text-neutral-700 transition-colors duration-150 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1"
+                  className={presetCard}
                   onClick={() => pickPreset(preset)}
                 >
-                  {preset.label[locale]}
+                  <span className="w-full truncate text-xs font-medium text-neutral-800">
+                    {preset.label[locale]}
+                  </span>
+                  {/* 域名同时是给读屏的补充：光一个「智谱」听不出要连到哪台服务器 */}
+                  <span className="w-full truncate text-[11px] text-neutral-500">
+                    {domainOf(preset.baseUrl)}
+                  </span>
                 </button>
               ))}
+              {/* 自定义排在最后、占满一行：它是「以上都不是」的那条出口，不是并列的第八个供应商 */}
+              <button
+                type="button"
+                className={`${presetCard} col-span-2 border-dashed`}
+                onClick={addBlank}
+              >
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-800">
+                  <PlusIcon className="h-3.5 w-3.5" />
+                  {t('settingsEndpointCustom')}
+                </span>
+                <span className="w-full truncate text-[11px] text-neutral-500">
+                  {t('settingsEndpointCustomHint')}
+                </span>
+              </button>
             </div>
           </div>
+        ) : (
+          <button
+            type="button"
+            className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-neutral-300 bg-white px-3 py-3.5 text-xs font-medium text-neutral-600 transition-colors duration-150 hover:border-neutral-400 hover:bg-neutral-50 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 motion-reduce:transition-none"
+            onClick={() => setPicking(true)}
+          >
+            <PlusIcon className="h-4 w-4" />
+            {t('settingsEndpointAdd')}
+          </button>
         )}
 
 

@@ -220,6 +220,15 @@
     "message": "清理 $count$ 项",
     "placeholders": { "count": { "content": "$1" } }
   },
+  "cleanupUndoButton": {
+    "message": "撤销本次清理"
+  },
+  "cleanupAgain": {
+    "message": "再清一轮"
+  },
+  "cleanupFinish": {
+    "message": "结束清理"
+  },
   "cleanupDoneOne": {
     "message": "清理完成：删除 $deleted$ 条书签、$folders$ 个文件夹。",
     "placeholders": { "deleted": { "content": "$1" }, "folders": { "content": "$2" } }
@@ -447,14 +456,16 @@
     "message": "模型配置"
   },
   "settingsEndpointAdd": {
-    "message": "＋ 加一个端点"
+    "message": "加一个端点"
   },
   "settingsEndpointCustom": {
     "message": "自定义"
   },
   "settingsPresetHint": {
-
-    "message": "或从预设添加"
+    "message": "挑一个服务商，或者自己填"
+  },
+  "settingsEndpointCustomHint": {
+    "message": "自己填地址和 Key"
   },
   "settingsEndpointDelete": {
     "message": "删除端点"
@@ -477,8 +488,11 @@
   "settingsKeyLocal": {
     "message": "本机，无需 Key"
   },
+  "settingsModelNone": {
+    "message": "还没有模型。填好 Key 保存后，「添加模型」会列出这个服务商能用的模型。"
+  },
   "settingsModelAdd": {
-    "message": "＋ 添加模型"
+    "message": "添加模型"
   },
 
   "settingsModelListing": {

@@ -59,6 +59,15 @@ function DuplicateGroupCard({ group }: { group: DuplicateGroup }) {
   )
 }
 
+/** 结果页那两个并排的次要按钮：同宽、同高，谁也不比谁更像主操作。 */
+const secondaryAction = [
+  'cursor-pointer rounded-md border border-neutral-300 py-2 text-sm text-neutral-700',
+  'transition-colors duration-150 motion-reduce:transition-none',
+  'hover:enabled:border-neutral-400 hover:enabled:bg-neutral-50',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1',
+  'disabled:cursor-not-allowed disabled:opacity-40',
+].join(' ')
+
 export function CleanupStep() {
   const {
     tree, cleanupScan, cleanupResult, cleanupChecked, cleanupFolders,
@@ -111,13 +120,35 @@ export function CleanupStep() {
             ))}
           </ul>
         )}
-        <button
-          className="rounded-md border border-neutral-300 px-2.5 py-1 hover:border-neutral-400 disabled:opacity-40"
-          disabled={!undoAvailable || busy !== null}
-          onClick={() => void undo()}
-        >
-          {t('resultUndoButton')}
-        </button>
+        {/* 一句「清理完成」加一个撤销，是个只能后退的死胡同：想接着清、想收工，
+            界面上都没有对应的那一下。三个出口按 AI 整理结果页同一套排法——
+            两个次要的并排，主操作独占一行：结束清理才是绝大多数人这时候要点的东西。 */}
+        <div className="space-y-2 pt-1">
+          <div className="flex gap-2">
+            <button
+              className={`flex-1 ${secondaryAction}`}
+              disabled={!undoAvailable || busy !== null}
+              onClick={() => void undo()}
+            >
+              {t('cleanupUndoButton')}
+            </button>
+            {/* 再扫一遍而不是把刚才那份结果留着：书签已经变了，旧的预览连自己都不认得 */}
+            <button
+              className={`flex-1 ${secondaryAction}`}
+              disabled={busy !== null}
+              onClick={() => void runCleanupScan()}
+            >
+              {t('cleanupAgain')}
+            </button>
+          </div>
+          {/* 侧栏本身是一个独立文档，关掉它就结束了本次清理（同 ResultStep 的「结束整理」） */}
+          <button
+            className="w-full cursor-pointer rounded-md bg-neutral-800 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 motion-reduce:transition-none"
+            onClick={() => window.close()}
+          >
+            {t('cleanupFinish')}
+          </button>
+        </div>
       </div>
     )
   }

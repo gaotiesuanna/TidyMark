@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   SETTINGS_KEY, loadSettings, saveSettings, loadCache, saveCache, DEFAULT_SETTINGS,
-  MAX_CACHE_ENTRIES, PRESETS, endpointKey, activeLlm, type Endpoint, type Settings,
+  MAX_CACHE_ENTRIES, PRESETS, DEFAULT_MODEL, endpointKey, activeLlm, type Endpoint, type Settings,
 } from '@/storage/settings'
 import { isLocalBaseUrl, isModelConfigured } from '@/llm/config'
 import { createFakeStorage } from '../fakes/fake-storage'
@@ -45,6 +45,20 @@ describe('设置存取', () => {
     expect(settings).not.toHaveProperty('minFolderSize')
     expect(settings).not.toHaveProperty('domainGroups')
     expect(Object.keys(settings).sort()).toEqual(Object.keys(DEFAULT_SETTINGS).sort())
+  })
+
+  /**
+   * 全新安装那条端点是空 Key，就不该带模型名——摆一个 gpt-4o-mini 出来，
+   * 设置页会显示一个可以点、点了必然 401 的选项，偏好页还会以为「已经配好了」。
+   * 空模型列表 + 空 active，让 isModelConfigured 如实答「还没配」。
+   */
+  it('全新安装的那条端点空 Key、不带模型名，也没有 active', async () => {
+    const settings = await loadSettings(ports())
+    expect(settings.endpoints).toHaveLength(1)
+    expect(settings.endpoints[0]!.apiKey).toBe('')
+    expect(settings.endpoints[0]!.models).toEqual([])
+    expect(settings.active).toEqual({ baseUrl: '', model: '' })
+    expect(isModelConfigured(activeLlm(settings))).toBe(false)
   })
 
   it('默认开启整理后清理空文件夹', async () => {
@@ -454,7 +468,7 @@ describe('从单套配置迁移', () => {
     expect(settings.endpoints).toEqual([{
       baseUrl: DEFAULT_SETTINGS.endpoints[0]!.baseUrl,
       apiKey: 'sk-y',
-      models: [DEFAULT_SETTINGS.active.model],
+      models: [DEFAULT_MODEL],
     }])
     expect(() => activeLlm(settings)).not.toThrow()
     expect(activeLlm(settings).apiKey).toBe('sk-y')

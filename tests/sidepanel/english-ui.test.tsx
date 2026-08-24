@@ -350,7 +350,14 @@ describe('英文界面渲染守卫：设置页', () => {
    * 结论只能在挂载**之后**塞进 store：设置页每次挂载都会把它清回 idle（结果不持久化）。
    */
   it('SettingsPanel（测试连接的每一种结论）', () => {
-    useStore.setState({ settingsOpen: true, settings: { ...DEFAULT_SETTINGS } })
+    // 结论挂在某个模型的那一行上，所以这里要一条**带模型**的端点：
+    // 全新安装那条端点是空 Key、空模型列表（见 DEFAULT_SETTINGS 的注释），一行都渲染不出来
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      endpoints: [{ baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-x', models: ['deepseek-chat'] }],
+      active: { baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
+    }
+    useStore.setState({ settingsOpen: true, settings })
     const conclusions: ModelTest[] = [
       { state: 'running' },
       { state: 'ok', ms: 640 },
@@ -361,7 +368,7 @@ describe('英文界面渲染守卫：设置页', () => {
       { state: 'fail', reason: 'permission' },
       { state: 'fail', error: 'The browser suspended the background.' },
     ]
-    const llm = activeLlm(DEFAULT_SETTINGS)
+    const llm = activeLlm(settings)
     const key = modelTestKey(llm.baseUrl, llm.model)
     for (const modelTest of conclusions) {
       const { container, unmount } = render(<SettingsPanel />)

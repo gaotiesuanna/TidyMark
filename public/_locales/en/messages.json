@@ -220,6 +220,15 @@
     "message": "Clean up $count$ items",
     "placeholders": { "count": { "content": "$1" } }
   },
+  "cleanupUndoButton": {
+    "message": "Undo this cleanup"
+  },
+  "cleanupAgain": {
+    "message": "Scan again"
+  },
+  "cleanupFinish": {
+    "message": "Finish"
+  },
   "cleanupDoneOne": {
     "message": "Done: deleted $deleted$ bookmark and $folders$ folders.",
     "placeholders": { "deleted": { "content": "$1" }, "folders": { "content": "$2" } }
@@ -447,14 +456,16 @@
     "message": "Model settings"
   },
   "settingsEndpointAdd": {
-    "message": "+ Add an endpoint"
+    "message": "Add an endpoint"
   },
   "settingsEndpointCustom": {
     "message": "Custom"
   },
   "settingsPresetHint": {
-
-    "message": "Or add from a preset"
+    "message": "Pick a provider, or fill it in yourself"
+  },
+  "settingsEndpointCustomHint": {
+    "message": "Fill in the base URL and key"
   },
   "settingsEndpointDelete": {
     "message": "Delete endpoint"
@@ -477,8 +488,11 @@
   "settingsKeyLocal": {
     "message": "Local, no key needed"
   },
+  "settingsModelNone": {
+    "message": "No models yet. Once the key is saved, \"Add a model\" lists what this provider offers."
+  },
   "settingsModelAdd": {
-    "message": "+ Add a model"
+    "message": "Add a model"
   },
 
   "settingsModelListing": {

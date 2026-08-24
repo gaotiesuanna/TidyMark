@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { EndpointCard, checkBaseUrl, type EndpointCardProps } from '@/sidepanel/components/EndpointCard'
-import { useStore } from '@/sidepanel/store'
+import { modelTestKey, useStore } from '@/sidepanel/store'
+import { t } from '@/i18n'
 import type { Endpoint } from '@/storage/settings'
 
 const endpoint: Endpoint = {
@@ -104,8 +105,8 @@ describe('折叠态', () => {
 
   it('折叠态不显示添加模型——那是编辑里的事', () => {
     arrange()
-    expect(screen.queryByRole('button', { name: '＋ 添加模型' })).toBeNull()
-    expect(screen.queryByRole('combobox', { name: '＋ 添加模型' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '添加模型' })).toBeNull()
+    expect(screen.queryByRole('combobox', { name: '添加模型' })).toBeNull()
   })
 
 
@@ -132,7 +133,7 @@ describe('草稿态', () => {
     expect(save.querySelector('svg')).toBeTruthy()
     expect(cancelBtn.querySelector('svg')).toBeTruthy()
     expect(cancelBtn.nextElementSibling).toBe(save)
-    expect(screen.getByRole('button', { name: '＋ 添加模型' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '添加模型' })).toBeTruthy()
     expect(screen.queryByRole('combobox')).toBeNull()
   })
 
@@ -197,13 +198,59 @@ describe('草稿态', () => {
   })
 })
 
+/**
+ * 模型名是个标识符，拆开就不成话了。真出过事：右边站着「连接正常，往返 4916 毫秒」，
+ * 把这一格挤到只剩一个字宽，break-all 于是把 glm-5.2 竖着码成了一列字母。
+ */
+describe('模型名不换行', () => {
+  it('放不下就截断，完整名字挂在 title 上', () => {
+    arrange()
+    const name = screen.getByText('glm-5.2')
+    expect(name.className).toContain('truncate')
+    expect(name.className).not.toContain('break-all')
+    expect(name.getAttribute('title')).toBe('glm-5.2')
+  })
+
+  it('测试结论落在下面一行，不跟模型名同处一行抢宽度', () => {
+    useStore.setState({
+      modelTests: { [modelTestKey(endpoint.baseUrl, 'glm-5.2')]: { state: 'ok', ms: 640 } },
+    })
+    arrange()
+    const note = screen.getByText(t('settingsTestOk', '640'))
+    // 同一行意味着同一个 label 里：那正是模型名被挤扁的那种排法
+    expect(note.closest('label')).toBeNull()
+  })
+})
+
+/**
+ * 进编辑态后光标落在哪一格。地址是预设填好的、Key 是空的（点预设加进来的端点正是这样），
+ * 光标就该直接停在 Key 上——否则用户看着一张展开的卡还得自己再点一下那个框。
+ */
+describe('进编辑态时的光标落点', () => {
+  it('Key 空着就落在 Key 上', () => {
+    arrange({ endpoint: { ...endpoint, apiKey: '' }, initialEditing: true })
+    expect(document.activeElement).toBe(screen.getByPlaceholderText('API Key'))
+  })
+
+  it('两格都填好了就回到地址那格，从头看起', async () => {
+    arrange()
+    await userEvent.click(screen.getByRole('button', { name: '编辑' }))
+    expect(document.activeElement).toBe(screen.getByPlaceholderText('Base URL'))
+  })
+
+  it('地址还空着（自定义新建）就落在地址上', () => {
+    arrange({ endpoint: { baseUrl: '', apiKey: '', models: [] }, initialEditing: true })
+    expect(document.activeElement).toBe(screen.getByPlaceholderText('Base URL'))
+  })
+})
+
 describe('模型的增删', () => {
   it('点添加模型才出现下拉，选一项就加进去，不经过保存', async () => {
     const { onChange } = arrange()
     await userEvent.click(screen.getByRole('button', { name: '编辑' }))
-    await userEvent.click(screen.getByRole('button', { name: '＋ 添加模型' }))
+    await userEvent.click(screen.getByRole('button', { name: '添加模型' }))
     await screen.findByRole('option', { name: 'glm-4-flash' })
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: '＋ 添加模型' }), 'glm-4-flash')
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: '添加模型' }), 'glm-4-flash')
     expect(onChange).toHaveBeenCalledWith({
       ...endpoint, models: [...endpoint.models, 'glm-4-flash'],
     })
@@ -212,7 +259,7 @@ describe('模型的增删', () => {
   it('已经有的模型不出现在下拉里', async () => {
     arrange()
     await userEvent.click(screen.getByRole('button', { name: '编辑' }))
-    await userEvent.click(screen.getByRole('button', { name: '＋ 添加模型' }))
+    await userEvent.click(screen.getByRole('button', { name: '添加模型' }))
     await screen.findByRole('option', { name: 'glm-4-flash' })
     expect(screen.queryByRole('option', { name: 'glm-5.2' })).toBeNull()
   })

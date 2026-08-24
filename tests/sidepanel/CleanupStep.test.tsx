@@ -5,6 +5,7 @@ import { CleanupStep } from '@/sidepanel/steps/CleanupStep'
 import { useStore } from '@/sidepanel/store'
 import type { BookmarkNode } from '@/core/ports'
 import type { BookmarkItem } from '@/core/types'
+import type { CleanupResult } from '@/engine/cleanup'
 
 /**
  * 目录丙只有一条书签，而那条是重复项——勾上它，目录丙就该在「空文件夹」一节
@@ -209,5 +210,55 @@ describe('CleanupStep 失效链接一节', () => {
     render(<CleanupStep />)
     // 目录丙只有 120 这一条，移走之后它就空了
     expect(screen.getByText('目录丙')).toBeDefined()
+  })
+})
+
+/**
+ * 清理跑完之后那一屏。原来只有一个「撤销」，是个只能后退的死胡同：
+ * 想接着清、想收工，界面上都没有对应的那一下。
+ */
+describe('CleanupStep 清理完成后的出口', () => {
+  const result: CleanupResult = {
+    status: 'completed', deleted: 2, moved: 0,
+    removedFolders: [{ id: '12', title: '目录丙', path: ['书签栏'] }],
+    deadFolderId: null, skipped: [], error: null,
+  }
+
+  beforeEach(() => {
+    useStore.setState({ cleanupResult: result, undoAvailable: true })
+  })
+
+  it('三个出口都在：撤销、再清一轮、结束清理', () => {
+    render(<CleanupStep />)
+    expect(screen.getByRole('button', { name: '撤销本次清理' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '再清一轮' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '结束清理' })).toBeTruthy()
+  })
+
+  // 书签已经变了，把刚才那份预览留着等于拿一份自己都不认得的旧数据接着清
+  it('点再清一轮重新扫一遍', async () => {
+    const runCleanupScan = vi.fn(async () => {})
+    useStore.setState({ runCleanupScan })
+    render(<CleanupStep />)
+    runCleanupScan.mockClear()
+    await userEvent.click(screen.getByRole('button', { name: '再清一轮' }))
+    expect(runCleanupScan).toHaveBeenCalled()
+  })
+
+  it('点结束清理关掉侧栏', async () => {
+    const close = vi.spyOn(window, 'close').mockImplementation(() => {})
+    render(<CleanupStep />)
+    await userEvent.click(screen.getByRole('button', { name: '结束清理' }))
+    expect(close).toHaveBeenCalledOnce()
+    close.mockRestore()
+  })
+
+  // 撤销槽是空的时候那个按钮点了也没用，但另外两个出口必须照旧可用
+  it('没有可撤销的东西时，只有撤销禁用', () => {
+    useStore.setState({ undoAvailable: false })
+    render(<CleanupStep />)
+    expect((screen.getByRole('button', { name: '撤销本次清理' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: '再清一轮' }) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByRole('button', { name: '结束清理' }) as HTMLButtonElement).disabled).toBe(false)
   })
 })

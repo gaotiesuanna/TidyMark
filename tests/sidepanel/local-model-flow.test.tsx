@@ -74,8 +74,8 @@ describe('本机 Ollama 动线', () => {
     // 预设只新增一个端点，不会自动把它设成当前在用的那一对
     // （覆盖语义在能存多条的世界里没有意义），所以还要点一下那个模型的圆点
     const settings = render(<SettingsPanel />)
-    await userEvent.click(screen.getByRole('button', { name: '＋ 加一个端点' }))
-    await userEvent.click(screen.getByRole('button', { name: '本地 Ollama' }))
+    await userEvent.click(screen.getByRole('button', { name: '加一个端点' }))
+    await userEvent.click(screen.getByRole('button', { name: /^本地 Ollama/ }))
     await userEvent.click(screen.getByRole('radio', { name: 'qwen2.5' }))
 
     settings.unmount()

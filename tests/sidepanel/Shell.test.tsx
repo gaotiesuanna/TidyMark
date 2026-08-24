@@ -81,6 +81,25 @@ describe('Shell 的错误条', () => {
     expect(retry).toHaveBeenCalled()
   })
 
+  /**
+   * 红条讲的是刚才那轮整理出了什么事，跟正在改的设置无关。跟到设置页来只会挡住正文，
+   * 「重试」还会在用户正配模型的时候把分析重新拉起来。但也不能顺手清掉：
+   * 点返回回到那一步，该看见的还得看见。
+   */
+  it('设置页里红条让位，返回后原样回来', async () => {
+    useStore.setState({ error: '后台被中断', retryable: 'analyze', busy: null })
+    render(<Shell>{null}</Shell>)
+    expect(screen.getByText('后台被中断')).toBeTruthy()
+
+    await userEvent.click(screen.getByRole('button', { name: '设置' }))
+    expect(screen.queryByText('后台被中断')).toBeNull()
+    expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
+
+    await userEvent.click(screen.getByRole('button', { name: '返回' }))
+    expect(screen.getByText('后台被中断')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '重试' })).toBeTruthy()
+  })
+
   it('不可重试的错误只显示文字，没有按钮', () => {
     useStore.setState({ error: '请先填 API Key', retryable: null, busy: null })
     render(<Shell>{null}</Shell>)
@@ -127,5 +146,13 @@ describe('Shell 模式切换', () => {
     render(<Shell><div>步骤内容</div></Shell>)
     await userEvent.click(screen.getByRole('button', { name: '设置' }))
     expect(screen.queryByRole('tab', { name: 'AI 整理' })).toBeNull()
+  })
+
+  // 齿轮和返回同占头部右/左两端，设置页里齿轮点了没反应——留着只会让人怀疑自己没点中
+  it('设置页里齿轮收起来，只剩返回', async () => {
+    render(<Shell><div>步骤内容</div></Shell>)
+    await userEvent.click(screen.getByRole('button', { name: '设置' }))
+    expect(screen.queryByRole('button', { name: '设置' })).toBeNull()
+    expect(screen.getByRole('button', { name: '返回' })).toBeTruthy()
   })
 })

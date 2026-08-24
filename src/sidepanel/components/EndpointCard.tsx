@@ -1,9 +1,9 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { t } from '@/i18n'
 import { isLocalBaseUrl } from '@/llm/config'
 import { endpointKey, type Endpoint } from '@/storage/settings'
 import { modelTestKey, useStore, type ModelTestReason } from '../store'
-import { ActivityIcon, CloseIcon, PencilIcon, SaveIcon, TrashIcon } from './icons'
+import { ActivityIcon, CloseIcon, PencilIcon, PlusIcon, SaveIcon, TrashIcon } from './icons'
 
 /**
  * 一类失败说一句话，每一句都带着「下一步能做什么」——只报「失败了」等于没做，
@@ -37,8 +37,11 @@ export function checkBaseUrl(baseUrl: string): 'full' | 'empty' | null {
   return null
 }
 
-/** 折叠态显示域名——它才是区分端点的那个东西，完整地址在编辑态里看。 */
-function domainOf(baseUrl: string): string {
+/**
+ * 折叠态显示域名——它才是区分端点的那个东西，完整地址在编辑态里看。
+ * 设置页的预设卡片也拿它当副标题，所以导出而不是各写一份。
+ */
+export function domainOf(baseUrl: string): string {
   try {
     return new URL(baseUrl).host
   } catch {
@@ -47,13 +50,18 @@ function domainOf(baseUrl: string): string {
 }
 
 const btn =
-  'inline-flex min-h-8 cursor-pointer items-center justify-center whitespace-nowrap rounded border border-neutral-200 bg-white px-2.5 text-xs text-neutral-700 transition-colors duration-150 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40'
+  'inline-flex min-h-8 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-neutral-200 bg-white px-2.5 text-xs text-neutral-700 transition-colors duration-150 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40'
 const iconBtn =
   'inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-neutral-200 bg-white text-neutral-600 transition-colors duration-150 hover:bg-neutral-50 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40'
+/**
+ * 删除保留红色，但只落在图标上、不上红边框：一整圈红把这张卡上最不该被误点的东西
+ * 变成了最抢眼的东西（原来的样子见 issues 里那两张截图）。红字 + 垃圾桶图标 + 中文
+ * aria-label，三重信号已经够，不需要再加一圈框来喊。
+ */
 const iconBtnDanger =
-  'inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-red-200 bg-white text-red-700 transition-colors duration-150 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1'
+  'ml-1 inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-neutral-200 bg-white text-red-600 transition-colors duration-150 hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1 motion-reduce:transition-none'
 const field =
-  'w-full rounded border border-neutral-200 px-2.5 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400'
+  'w-full rounded-md border border-neutral-200 px-2.5 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400'
 
 function IconAction({
   label, danger, disabled, onClick, children,
@@ -104,6 +112,8 @@ export function EndpointCard({
   const [catalog, setCatalog] = useState<
     { state: 'idle' } | { state: 'loading' } | { state: 'ok'; models: string[] } | { state: 'fail' }
   >({ state: 'idle' })
+  const urlRef = useRef<HTMLInputElement>(null)
+  const keyRef = useRef<HTMLInputElement>(null)
 
   const loadCatalog = (url: string, key: string): void => {
     if (checkBaseUrl(url) !== null) {
@@ -124,6 +134,11 @@ export function EndpointCard({
       return
     }
     loadCatalog(draftUrl, draftKey)
+    // 光标落在第一个还空着的框上。点预设加进来的端点地址是现成的、Key 是空的，
+    // 所以点完预设直接就能打 Key——不然用户得在一张刚冒出来的卡上再找一次输入框。
+    // 两个都填好了（点铅笔改已有端点）就回到地址那格，从头看起。
+    const target = draftUrl.trim() === '' || draftKey !== '' ? urlRef.current : keyRef.current
+    target?.focus()
     // 只在进入编辑时拉一次。改地址或 Key 后由输入框 blur 再拉。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing])
@@ -206,6 +221,7 @@ export function EndpointCard({
           <label className="block space-y-1">
             <span className="text-[11px] font-medium text-neutral-600">Base URL</span>
             <input
+              ref={urlRef}
               className={field}
               placeholder="Base URL"
               value={draftUrl}
@@ -216,6 +232,7 @@ export function EndpointCard({
           <label className="block space-y-1">
             <span className="text-[11px] font-medium text-neutral-600">API Key</span>
             <input
+              ref={keyRef}
               className={field}
               placeholder="API Key"
               type="password"
@@ -247,16 +264,11 @@ export function EndpointCard({
                     checked={activeModel === model}
                     onChange={() => onPick(model)}
                   />
-                  <span className="min-w-0 flex-1 break-all">{model}</span>
-                  {test?.state === 'running' && (
-                    <span className="shrink-0 text-[11px] text-neutral-500">{t('settingsTestRunning')}</span>
-                  )}
-                  {/* 成功也用这一页通用的次要文字层级，不上绿色勾：整个界面全程没用过状态色 */}
-                  {test?.state === 'ok' && (
-                    <span className="shrink-0 text-[11px] text-neutral-500">
-                      {t('settingsTestOk', String(test.ms ?? 0))}
-                    </span>
-                  )}
+                  {/* 模型名一行放不下就截断，不换行：它是个不该被拆开的标识符。
+                      break-all 会把 glm-5.2 竖着码成一列字母——尤其是右边还站着
+                      「连接正常，往返 4916 毫秒」把这一格挤到只剩一个字宽的时候。
+                      完整的名字给 title，鼠标停一下就能看全。 */}
+                  <span className="min-w-0 flex-1 truncate" title={model}>{model}</span>
                 </label>
                 <IconAction
                   label={t('settingsTestModel')}
@@ -278,6 +290,17 @@ export function EndpointCard({
                   <CloseIcon />
                 </IconAction>
               </div>
+              {/* 结论一律走模型名底下这一行，不挤在同一行里：往返毫秒数、失败原因长度都不定，
+                  同一行意味着它们要跟模型名抢宽度，而抢输的总是模型名 */}
+              {test?.state === 'running' && (
+                <p className="pl-6 text-[11px] text-neutral-500">{t('settingsTestRunning')}</p>
+              )}
+              {/* 成功也用这一页通用的次要文字层级，不上绿色勾：整个界面全程没用过状态色 */}
+              {test?.state === 'ok' && (
+                <p className="pl-6 text-[11px] text-neutral-500">
+                  {t('settingsTestOk', String(test.ms ?? 0))}
+                </p>
+              )}
               {test?.state === 'fail' && (
                 <p className="pl-6 text-[11px] leading-relaxed text-neutral-600">
                   {describeFailure(test.reason)}
@@ -293,8 +316,15 @@ export function EndpointCard({
         })}
       </ul>
 
+      {/* 一个模型都没有时说清楚下一步：空列表本身只是「什么都没有」，
+          它不会告诉人「先填 Key、再从服务商的清单里挑」 */}
+      {endpoint.models.length === 0 && (
+        <p className="text-[11px] leading-relaxed text-neutral-500">{t('settingsModelNone')}</p>
+      )}
+
       {editing && !adding && (
         <button type="button" className={btn} onClick={() => setAdding(true)}>
+          <PlusIcon className="h-3.5 w-3.5" />
           {t('settingsModelAdd')}
         </button>
       )}
