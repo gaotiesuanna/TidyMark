@@ -168,6 +168,31 @@ describe('designFolders', () => {
     expect(result!.folders).toHaveLength(4)
   })
 
+  // 丢弃是静默的话，用户的第 5 个主题连同它吸收的标签一起变成未映射、落进「其他」，
+  // 而链路上没有任何一处会告诉他这件事发生过（organize-audit-holes 06 票判准 C）
+  it('超出上限被丢弃的目录要出一条警告，不能静默', async () => {
+    const onLog = vi.fn()
+    const many = ['前端', '后端', '数据库', '运维', '测试', '设计', '产品', '安全', '监控'].map(
+      (title, i) => ({ title, topics: [`标签${i}`], children: [] }),
+    )
+    const complete = vi.fn().mockResolvedValue({ folders: many })
+    await designFolders(topics, { complete }, { maxTopFolders: 5, onLog })
+    const warnCalls = onLog.mock.calls.filter(([, level]) => level === 'warn')
+    expect(warnCalls).toHaveLength(1)
+    // 丢了 9 - 4 = 5 个，且要点名是哪几个，不能只说一个数字
+    expect(warnCalls[0]![0]).toContain('5')
+    expect(warnCalls[0]![0]).toContain('监控')
+  })
+
+  it('没有目录被丢弃时不产生警告', async () => {
+    const onLog = vi.fn()
+    const complete = vi.fn().mockResolvedValue({
+      folders: [{ title: '前端', topics: ['标签0'], children: [] }],
+    })
+    await designFolders(topics, { complete }, { maxTopFolders: 5, onLog })
+    expect(onLog.mock.calls.some(([, level]) => level === 'warn')).toBe(false)
+  })
+
   // 上限只写进 slice 不写进提示词的话，模型仍会按 12 个来设计，
   // 多出来的目录在这里被静默截掉，等于白花了 token
   it('maxTopFolders 写进提示词文本', async () => {

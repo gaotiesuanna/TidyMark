@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { collapseSameNameFolders, findOversizedFolders } from '@/core/audit'
+import { collapseSameNameFolders, findOversizedFolders, measureFallbackShare } from '@/core/audit'
 import type { CollapseInput } from '@/core/audit'
 import type { NewFolderSpec } from '@/core/plan'
 import { MAX_LEAF } from '@/core/shape'
@@ -117,6 +117,56 @@ describe('collapseSameNameFolders', () => {
 
 })
 
+describe('measureFallbackShare', () => {
+  const base = { locale: 'zh_CN' as const }
+
+  it('量的是「其他」整个子树，不是它直接装的那几条', () => {
+    // 切开之后直属只剩 4 条，但子树仍是 4+8+8=20 条——份额不该因为切开就凭空变小
+    const result = measureFallbackShare({
+      ...base,
+      candidates: [
+        cand('tmp:9', ['05 其他']),
+        cand('tmp:10', ['05 其他', '01 甲']),
+        cand('tmp:11', ['05 其他', '02 乙']),
+      ],
+      classifications: [...into('tmp:9', 4), ...into('tmp:10', 8), ...into('tmp:11', 8)],
+      total: 100,
+    })
+    expect(result).toEqual({ count: 20, total: 100, share: 0.2 })
+  })
+
+  it('没有一级的「其他」时返回 null', () => {
+    const result = measureFallbackShare({
+      ...base,
+      candidates: [cand('tmp:1', ['01 甲'])],
+      classifications: into('tmp:1', 10),
+      total: 100,
+    })
+    expect(result).toBeNull()
+  })
+
+  it('英文库认 Other', () => {
+    const result = measureFallbackShare({
+      locale: 'en',
+      candidates: [cand('tmp:9', ['05 Other'])],
+      classifications: into('tmp:9', 15),
+      total: 100,
+    })
+    expect(result?.count).toBe(15)
+  })
+
+  // 二级的「其他」不是 A5 要量的东西：A5 问的是「顶层设计有没有覆盖住这个库」
+  it('二级的「其他」不算——A5 量的是顶层的覆盖', () => {
+    const result = measureFallbackShare({
+      ...base,
+      candidates: [cand('tmp:1', ['01 甲']), cand('tmp:2', ['01 甲', '09 其他'])],
+      classifications: [...into('tmp:1', 5), ...into('tmp:2', 15)],
+      total: 100,
+    })
+    expect(result).toBeNull()
+  })
+})
+
 describe('findOversizedFolders', () => {
   const base = { locale: 'zh_CN' as const }
 
@@ -130,7 +180,7 @@ describe('findOversizedFolders', () => {
       classifications: [...into('tmp:1', MAX_LEAF + 1), ...into('tmp:2', MAX_LEAF)],
     })
     expect(result).toEqual([
-      { id: 'tmp:1', title: '软件工程', count: MAX_LEAF + 1, level: 1 },
+      { id: 'tmp:1', title: '软件工程', count: MAX_LEAF + 1, level: 1, kind: 'capacity' },
     ])
   })
 
@@ -176,14 +226,28 @@ describe('findOversizedFolders', () => {
     expect(result.map((f) => f.level)).toEqual([2])
   })
 
-  it('兜底目录「其他」豁免——它是收容所，切它没有意义', () => {
+  // 曾经这里豁免「其他」，理由是「收容所没有主题可言，切了只是把杂物摊成几堆杂物」。
+  // 真实一遍的证据推翻了那个前提：69 条里 74% 归得进 9 个成建制的族，最大一族 12 条
+  // 本身就够格单独成目录（organize-audit-holes 01 票 → 02 票定案）。
+  it('兜底目录「其他」不再豁免，跟普通目录一样按占用下切', () => {
     const result = findOversizedFolders({
       ...base,
       candidates: [cand('tmp:1', ['09 其他'])],
       newFolders: [top('tmp:1', '09 其他')],
       classifications: into('tmp:1', 63),
     })
-    expect(result).toEqual([])
+    expect(result.map((f) => f.id)).toEqual(['tmp:1'])
+  })
+
+  // 豁免摘得干净：不留「一级豁免、二级不豁免」这种按层级分档的残留（02 票判准 B）
+  it('二级的「其他」同样按占用下切', () => {
+    const result = findOversizedFolders({
+      ...base,
+      candidates: [cand('tmp:2', ['01 甲', '09 其他'])],
+      newFolders: [child('tmp:2', 'tmp:1', '09 其他')],
+      classifications: into('tmp:2', 63),
+    })
+    expect(result.map((f) => f.id)).toEqual(['tmp:2'])
   })
 
   it('scope 默认只看新建目录，用户已有的目录不进清单', () => {
@@ -204,16 +268,73 @@ describe('findOversizedFolders', () => {
       newFolders: [],
       classifications: into('real-1', 63),
     })
-    expect(result).toEqual([{ id: 'real-1', title: '我的收藏', count: 63, level: 1 }])
+    expect(result).toEqual([{ id: 'real-1', title: '我的收藏', count: 63, level: 1, kind: 'capacity' }])
   })
 
-  it('英文兜底目录名 Other 同样豁免', () => {
+  // 下切之后父目录还留着一摊比任何子目录都大的散书签时，这一层仍然「下不去手」（判准 B3）。
+  // 只看「留守有没有超过 MAX_LEAF」会放过它：04 Web工程 切完剩 15 条、子目录各 3 条，
+  // 15 ≤ 20 曾被判成合格（organize-audit-holes 04 票判准 A）。
+  it('留守比最大的子目录还多时仍进清单，哪怕没超过 MAX_LEAF', () => {
+    const result = findOversizedFolders({
+      ...base,
+      candidates: [
+        cand('tmp:1', ['01 甲']),
+        cand('tmp:2', ['01 甲', '01 乙']),
+        cand('tmp:3', ['01 甲', '02 丙']),
+      ],
+      newFolders: [top('tmp:1', '01 甲'), child('tmp:2', 'tmp:1', '01 乙'), child('tmp:3', 'tmp:1', '02 丙')],
+      classifications: [...into('tmp:1', 7), ...into('tmp:2', 3), ...into('tmp:3', 3)],
+    })
+    expect(result.map((f) => f.id)).toEqual(['tmp:1'])
+    // 触发原因要分得清：7 条并没有超过 MAX_LEAF，拿「超过上限」的文案去报它是说谎
+    expect(result[0]!.kind).toBe('leftovers')
+  })
+
+  it('超过 MAX_LEAF 触发的标成 capacity，与留守触发区分开', () => {
+    const result = findOversizedFolders({
+      ...base,
+      candidates: [cand('tmp:1', ['01 甲'])],
+      newFolders: [top('tmp:1', '01 甲')],
+      classifications: into('tmp:1', MAX_LEAF + 1),
+    })
+    expect(result.map((f) => f.kind)).toEqual(['capacity'])
+  })
+
+  it('留守不多于最大的子目录时不进清单', () => {
+    const result = findOversizedFolders({
+      ...base,
+      candidates: [
+        cand('tmp:1', ['01 甲']),
+        cand('tmp:2', ['01 甲', '01 乙']),
+      ],
+      newFolders: [top('tmp:1', '01 甲'), child('tmp:2', 'tmp:1', '01 乙')],
+      classifications: [...into('tmp:1', 6), ...into('tmp:2', 8)],
+    })
+    expect(result).toEqual([])
+  })
+
+  // 下限 = 2 × MIN_FOLDER_BOOKMARKS：再问一次模型至少要能切出两个站得住的子目录，
+  // 5 条切不出两个 ≥3 的桶，触发它只是白花一次调用
+  it('留守太少切不动时不进清单，不为它白花一次调用', () => {
+    const result = findOversizedFolders({
+      ...base,
+      candidates: [
+        cand('tmp:1', ['01 甲']),
+        cand('tmp:2', ['01 甲', '01 乙']),
+      ],
+      newFolders: [top('tmp:1', '01 甲'), child('tmp:2', 'tmp:1', '01 乙')],
+      classifications: [...into('tmp:1', 5), ...into('tmp:2', 3)],
+    })
+    expect(result).toEqual([])
+  })
+
+  it('英文兜底目录名 Other 同样不再豁免', () => {
     const result = findOversizedFolders({
       candidates: [cand('tmp:1', ['09 Other'])],
       newFolders: [top('tmp:1', '09 Other')],
       classifications: into('tmp:1', 63),
       locale: 'en',
     })
-    expect(result).toEqual([])
+    expect(result).toEqual([{ id: 'tmp:1', title: 'Other', count: 63, level: 1, kind: 'capacity' }])
   })
 })

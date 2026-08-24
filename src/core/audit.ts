@@ -1,8 +1,9 @@
 import type { Locale } from './locale'
 import { normalizeName, stripNumberPrefix } from './map'
 import type { NewFolderSpec } from './plan'
-import { MAX_LEAF } from './shape'
-import { FALLBACK_TITLE } from './tree'
+import { MIN_FOLDER_BOOKMARKS } from './prune'
+import { FALLBACK_TITLE, MAX_SIBLINGS as PRODUCT_MAX_SIBLINGS } from './tree'
+import { MAX_LEAF, SHAPE_MAX_SIBLINGS } from './shape'
 import type { CategoryCandidate, Classification, TagResult } from './types'
 
 /** 读父目录名字只需要这两个字段，FolderItem 可以直接传入。 */
@@ -152,6 +153,214 @@ export function collapseSameNameFolders(input: CollapseInput): CollapseResult {
  */
 export const MAX_AUDIT_LEVEL = 3
 
+/**
+ * 留守判据的下限：少于这么多条就别再问模型了。
+ *
+ * 取 2 × MIN_FOLDER_BOOKMARKS 不是拍的——再切一次要站得住，至少得切出两个不会被
+ * core/prune.ts 撤掉的子目录，而那需要 2 × MIN_FOLDER_BOOKMARKS 条。低于它触发
+ * 相对判据，只是白花一次付费调用（organize-audit-holes 04 票判准 A）。
+ */
+const MIN_LEFTOVER_TO_SPLIT = MIN_FOLDER_BOOKMARKS * 2
+
+export interface FallbackShare {
+  /** 「其他」整个子树装了多少条。 */
+  count: number
+  /** 范围内书签总数。 */
+  total: number
+  /** count / total，0–1。 */
+  share: number
+}
+
+export interface FallbackShareInput {
+  candidates: CategoryCandidate[]
+  classifications: Classification[]
+  locale: Locale
+  /** 范围内书签总数。A5 的分母是全库，不是「被分类到某处的书签数」。 */
+  total: number
+}
+
+/**
+ * 量判准 A5：「其他」整个子树占范围内书签总数的比例。
+ *
+ * **这不是 02 票摘掉的那条豁免又长回来了。** 那条豁免按名字决定「切不切」，已经删干净；
+ * 这里按名字决定「量哪个目录」——A5 这条判准本身就是拿「其他」定义的，不认名字就无从量起。
+ *
+ * 两个要点：
+ * - **算整个子树**，不是直属那几条。把「其他」切成 9 个子目录之后 A1 处处通过，
+ *   而 69/199 一条没少——A5 量的是覆盖不是形状，切开不该让这个数凭空变小。
+ * - **只认一级的「其他」**。A5 问的是「顶层设计有没有覆盖住这个库」，
+ *   某个主题目录下面自己带一个「其他」是那个主题内部的事，不在这条判准的射程里。
+ *
+ * 没有一级的「其他」时返回 null——不是 0，两者含义不同（没建出来 vs 建了但是空的）。
+ */
+export function measureFallbackShare(input: FallbackShareInput): FallbackShare | null {
+  const fallbackKey = normalizeName(FALLBACK_TITLE[input.locale])
+  const fallback = input.candidates.find(
+    (c) => c.path.length === 1 && normalizeName(stripNumberPrefix(c.path[0] ?? '')) === fallbackKey,
+  )
+  if (fallback === undefined) return null
+
+  const subtree = new Set(
+    input.candidates
+      .filter((c) => c.path.length >= 1 && fallback.path.every((segment, i) => c.path[i] === segment))
+      .map((c) => c.id),
+  )
+  let count = 0
+  for (const classification of input.classifications) {
+    if (classification.targetCategoryId === null) continue
+    if (subtree.has(classification.targetCategoryId)) count += 1
+  }
+
+  return { count, total: input.total, share: input.total === 0 ? 0 : count / input.total }
+}
+
+export interface TopSiblings {
+  count: number
+  /**
+   * 越了哪一档。两档性质不同，报给用户时不能含糊成一句「目录有点多」：
+   * - `judgment`：超过判准 A3 的 SHAPE_MAX_SIBLINGS(10)，但产品的建树闸放得过；
+   * - `product`：连 core/tree.ts 的 MAX_SIBLINGS(12) 都越了——那是建树阶段的最后兜底，
+   *   走到这一步说明这个形状是**验算阶段造出来的**，建树期的闸根本没看见它。
+   */
+  tier: 'judgment' | 'product'
+}
+
+/**
+ * 量判准 A3：一级目录有几个。
+ *
+ * A3 此前**只有设计/建树期的执行点**（core/tree.ts 的截断、core/newTopics.ts 的
+ * slice），落成之后没有任何人再数一遍。而 promoteFallbackChildren 恰恰是在验算阶段
+ * 改变一级目录数的——不补这一道，提升就是又造一个没人验算的状态，
+ * 而那正是 organize-audit-holes 这张图存在的理由（07 票判准 A 的挂钩条件）。
+ *
+ * 没越线返回 null。
+ */
+export function measureTopSiblings(candidates: CategoryCandidate[]): TopSiblings | null {
+  const count = candidates.filter((c) => c.path.length === 1).length
+  if (count > PRODUCT_MAX_SIBLINGS) return { count, tier: 'product' }
+  if (count > SHAPE_MAX_SIBLINGS) return { count, tier: 'judgment' }
+  return null
+}
+
+/** 提升上来的目录的理由，会原样显示在结果页，必须双语，且讲的是「它凭什么直接进一级」。 */
+export function promotedReason(locale: Locale, count: number): string {
+  return locale === 'zh_CN'
+    ? `本来要落进「其他」，但这一族有 ${count} 本书签、自成主题，直接提到一级`
+    : `Would have landed in "Other", but this family has ${count} bookmarks and stands on its own, so it was promoted to the top level`
+}
+
+export interface PromoteInput {
+  candidates: CategoryCandidate[]
+  newFolders: NewFolderSpec[]
+  classifications: Classification[]
+  locale: Locale
+}
+
+export interface PromoteResult {
+  candidates: CategoryCandidate[]
+  newFolders: NewFolderSpec[]
+  classifications: Classification[]
+  /** 提上来的族，按原顺序。A3 的警告与日志要靠它说数字。 */
+  promoted: Array<{ title: string; count: number }>
+}
+
+/**
+ * 把「其他」切出来的族提升到一级。
+ *
+ * 为什么需要它：[06 票] 判了**下切不是合并的逆运算**——合并是设计阶段的减法，
+ * 下切只能在落成后做嵌套，被挤掉的主题永远找不回一级。而 01 票量到「其他」里
+ * 74% 是成建制的主题（量化交易 12 条、AI 编程工具 10 条……），它们本来就该在一级。
+ * 提升是目前**唯一不花模型调用就能把主题捞回一级**的手段。
+ *
+ * 它**不是 A5 的解法**：把 69 条里的族提走之后「其他」仍剩约 10%，擦着红线（07 票判准 A）。
+ * A5 的真解法在上游（预算与落位）。这里买到的是**扁平度与主题覆盖**。
+ *
+ * 代价是一级目录数会涨，可能越过 A3 的两档上限——所以调用方必须同时把 A3
+ * 量出来报给用户，否则就是又造一个「产出了状态但没人验算」的洞。
+ *
+ * 三条约束：
+ * - **不合并**。并起来要起名字，起名字要花模型调用，而「零调用」是这条路唯一的卖点；
+ *   机械拼接还会撞上产品自己判为缺陷的复合标题（07 票判准 B）。
+ * - **装不满 MIN_FOLDER_BOOKMARKS 的族不提**——提上去也是个站不住的一级目录。
+ * - **提上来的插在「其他」前面**，让收容所留在最后一位（判准 C）。
+ *
+ * 必须在 buildPlan **之前**调用：一级编号由 core/plan.ts 的 renumberPlan 按
+ * candidates 顺序整体重算（`bareName` 内含 stripNumberPrefix，旧号会被剥掉重给），
+ * 放到 buildPlan 之后就会跟编号锚点打架。
+ */
+export function promoteFallbackChildren(input: PromoteInput): PromoteResult {
+  const fallbackKey = normalizeName(FALLBACK_TITLE[input.locale])
+  const fallback = input.candidates.find(
+    (c) => c.path.length === 1 && normalizeName(stripNumberPrefix(c.path[0] ?? '')) === fallbackKey,
+  )
+  const noop: PromoteResult = {
+    candidates: input.candidates, newFolders: input.newFolders,
+    classifications: input.classifications, promoted: [],
+  }
+  if (fallback === undefined) return noop
+
+  const fallbackSpec = input.newFolders.find((f) => f.temporaryId === fallback.id)
+  if (fallbackSpec === undefined) return noop
+
+  const counts = new Map<string, number>()
+  for (const classification of input.classifications) {
+    const id = classification.targetCategoryId
+    if (id === null) continue
+    counts.set(id, (counts.get(id) ?? 0) + 1)
+  }
+
+  const risers = input.candidates.filter(
+    (c) => c.path.length === 2
+      && c.path[0] === fallback.path[0]
+      && (counts.get(c.id) ?? 0) >= MIN_FOLDER_BOOKMARKS,
+  )
+  if (risers.length === 0) return noop
+
+  const riserIds = new Set(risers.map((c) => c.id))
+  // 孙目录（及更深）跟着它们的祖先上提同样的一层
+  const movedIds = new Set(riserIds)
+  const lifted = new Map<string, string[]>()
+  for (const candidate of input.candidates) {
+    if (candidate.path.length < 2 || candidate.path[0] !== fallback.path[0]) continue
+    const owner = risers.find((r) => r.path.every((segment, i) => candidate.path[i] === segment))
+    if (owner === undefined) continue
+    movedIds.add(candidate.id)
+    lifted.set(candidate.id, candidate.path.slice(1))
+  }
+
+  const candidates = input.candidates.map(
+    (c) => (lifted.has(c.id) ? { ...c, path: lifted.get(c.id)! } : c),
+  )
+  // 「其他」排到所有提上来的族后面：收容所在真实主题之后才读得通
+  const fallbackIndex = candidates.findIndex((c) => c.id === fallback.id)
+  const [fallbackEntry] = candidates.splice(fallbackIndex, 1)
+  const lastRiser = candidates.reduce(
+    (acc, c, i) => (riserIds.has(c.id) ? i : acc), -1,
+  )
+  candidates.splice(lastRiser + 1, 0, fallbackEntry!)
+
+  const newFolders = input.newFolders.map((f) => (
+    riserIds.has(f.temporaryId)
+      ? { ...f, parentId: fallbackSpec.parentId, parentTemporaryId: fallbackSpec.parentTemporaryId }
+      : f
+  ))
+
+  const reasonById = new Map(
+    risers.map((r) => [r.id, promotedReason(input.locale, counts.get(r.id) ?? 0)]),
+  )
+  const classifications = input.classifications.map((c) => {
+    const reason = c.targetCategoryId === null ? undefined : reasonById.get(c.targetCategoryId)
+    return reason === undefined ? c : { ...c, reason }
+  })
+
+  return {
+    candidates, newFolders, classifications,
+    promoted: risers.map((r) => ({
+      title: stripNumberPrefix(r.path.at(-1) ?? ''), count: counts.get(r.id) ?? 0,
+    })),
+  }
+}
+
 export interface OversizedFolder {
   id: string
   /** 目录名，已剥掉编号——讲给用户听时不必带上。 */
@@ -159,6 +368,13 @@ export interface OversizedFolder {
   count: number
   /** 相对范围根的层级，范围根下第一级是 1。 */
   level: number
+  /**
+   * 因为哪条判据进的清单。报给用户时两者的说法完全不同，不能共用一句文案：
+   * - `capacity`：装超过 maxLeaf 了；
+   * - `leftovers`：没超上限，但下面已经分了子目录、这一层还散着比任何子目录都多的书签。
+   *   拿「超过建议上限」去报它是说谎——那个数根本没越线。
+   */
+  kind: 'capacity' | 'leftovers'
 }
 
 export interface OversizedInput {
@@ -193,7 +409,6 @@ export function findOversizedFolders(input: OversizedInput): OversizedFolder[] {
   const maxLevel = input.maxLevel ?? MAX_AUDIT_LEVEL
   const maxLeaf = input.maxLeaf ?? MAX_LEAF
   const newIds = new Set(input.newFolders.map((f) => f.temporaryId))
-  const fallbackKey = normalizeName(FALLBACK_TITLE[input.locale])
 
   const counts = new Map<string, number>()
   for (const classification of input.classifications) {
@@ -202,16 +417,39 @@ export function findOversizedFolders(input: OversizedInput): OversizedFolder[] {
     counts.set(id, (counts.get(id) ?? 0) + 1)
   }
 
+  /** 直属子目录里最大的那个装了多少条；没有子目录时返回 0。 */
+  const largestChildCount = (candidate: CategoryCandidate): number => {
+    const depth = candidate.path.length
+    let max = 0
+    for (const other of input.candidates) {
+      if (other.path.length !== depth + 1) continue
+      if (!candidate.path.every((segment, i) => other.path[i] === segment)) continue
+      max = Math.max(max, counts.get(other.id) ?? 0)
+    }
+    return max
+  }
+
   const found: OversizedFolder[] = []
   for (const candidate of input.candidates) {
     if ((input.scope ?? 'new') === 'new' && !newIds.has(candidate.id)) continue
     if (candidate.path.length >= maxLevel) continue
     const title = stripNumberPrefix(candidate.path.at(-1) ?? '')
-    // 「其他」是收容所，没有主题可言，再切一层只是把杂物摊成几堆杂物
-    if (candidate.path.length === 1 && normalizeName(title) === fallbackKey) continue
     const count = counts.get(candidate.id) ?? 0
-    if (count <= maxLeaf) continue
-    found.push({ id: candidate.id, title, count, level: candidate.path.length })
+    // 两条判据取并集：
+    // - 绝对容量：装超过 maxLeaf 就该切，跟有没有子目录无关；
+    // - 相对留守：切过一轮之后父目录还留着一摊比任何子目录都大的散书签，那一层照样
+    //   「下不去手」（判准 B3）。只看绝对容量会放过它——04 Web工程 切完剩 15 条、
+    //   子目录各 3 条，15 曾被判成合格（organize-audit-holes 04 票判准 A）。
+    // 相对判据要有下限：再问一次模型至少得能切出两个站得住的子目录，
+    // 少于 2 × MIN_FOLDER_BOOKMARKS 条切不出来，触发它只是白花一次调用。
+    const largest = largestChildCount(candidate)
+    const strandedLeftovers =
+      largest > 0 && count > largest && count >= MIN_LEFTOVER_TO_SPLIT
+    if (count <= maxLeaf && !strandedLeftovers) continue
+    found.push({
+      id: candidate.id, title, count, level: candidate.path.length,
+      kind: count > maxLeaf ? 'capacity' : 'leftovers',
+    })
   }
 
   // 占用大的排前面：一轮里先切最撑的那个，止损判据（最大占用有没有下降）才有意义
@@ -241,7 +479,11 @@ export function createTemporaryIdFactory(existing: NewFolderSpec[]): () => strin
 }
 
 export interface ExpandInput {
-  /** 要下切的目录。必须是本批新建的——findOversizedFolders 默认只吐这一种。 */
+  /**
+   * 要下切的目录。可以是本批新建的（`tmp:` 开头），也可以是复用的已有目录
+   * （真实书签 id）——推翻模式下 findOversizedFolders 用 scope: 'all' 两种都吐
+   * （organize-audit-holes 03 票）。子目录该挂哪个字段由下面的 `tmp:` 前缀判定。
+   */
   parent: CategoryCandidate
   /**
    * parent 名下书签的标签，primaryTopic 已被 llm/folders.ts 的 applyDesign
@@ -292,7 +534,13 @@ export function expandFolder(input: ExpandInput): ExpandResult {
   }
 
   const buckets = [...byTopic.values()].sort((a, b) => b.bookmarkIds.length - a.bookmarkIds.length)
-  if (buckets.length < 2) {
+  // 判失败的只有「没切出东西」和「唯一那个桶把 mine 整个装走了」两种：后者建出来的子目录
+  // 与父目录一模一样，零区分度，只让用户多点一次。
+  //
+  // 而「一个桶 + 有留守」是**真划分**，从前跟着一起作废是把桶本可以收走的书签一起赔掉——
+  // 真实那一遍 04 Web工程 的 15 条留守正是这么来的（organize-audit-holes 04 票判准 B）。
+  const mapped = buckets.reduce((sum, b) => sum + b.bookmarkIds.length, 0)
+  if (buckets.length === 0 || (buckets.length === 1 && mapped === mine.size)) {
     return { newFolders: [], candidates: [], classifications: input.classifications, createdCount: 0 }
   }
 
@@ -305,7 +553,16 @@ export function expandFolder(input: ExpandInput): ExpandResult {
   buckets.forEach((bucket, index) => {
     const title = `${String(index + 1).padStart(2, '0')} ${bucket.title}`
     const temporaryId = input.nextTemporaryId()
-    newFolders.push({ temporaryId, parentId: null, parentTemporaryId: input.parent.id, title })
+    // 复用的已有目录 id 是真实书签 id，挂 parentTemporaryId 的话 engine/apply.ts
+    // 会拿它去 tempToReal 里查、查不到就整条计划报「父目录无法解析」。
+    // 用的是与 core/structure.ts 同一条 `tmp:` 前缀约定。
+    const parentIsNew = input.parent.id.startsWith('tmp:')
+    newFolders.push({
+      temporaryId,
+      parentId: parentIsNew ? null : input.parent.id,
+      parentTemporaryId: parentIsNew ? input.parent.id : null,
+      title,
+    })
     candidates.push({ id: temporaryId, path: [...input.parent.path, title] })
     for (const bookmarkId of bucket.bookmarkIds) targetByBookmark.set(bookmarkId, temporaryId)
   })

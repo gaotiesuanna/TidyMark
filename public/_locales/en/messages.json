@@ -503,7 +503,6 @@
   "settingsModelAdd": {
     "message": "Add a model"
   },
-
   "settingsModelListing": {
     "message": "Listing models…"
   },
@@ -1222,6 +1221,43 @@
         "content": "$2"
       }
     }
+  },
+  "warnStrandedLeftovers": {
+    "message": "\"$title$\" already has subfolders, yet $count$ bookmarks still sit loose at this level — more than any one subfolder holds, so this level is hard to work through",
+    "placeholders": {
+      "title": {
+        "content": "$1"
+      },
+      "count": {
+        "content": "$2"
+      }
+    }
+  },
+  "warnFallbackShare": {
+    "message": "\"Other\" holds $count$ bookmarks, $percent$% of the scope, past the $limit$% red line — the folder design did not cover this library, and whole topics were pushed in there",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "percent": {
+        "content": "$2"
+      },
+      "limit": {
+        "content": "$3"
+      }
+    }
+  },
+  "logPromotedFallback": {
+    "message": "$count$ families inside \"Other\" stand on their own and were promoted to the top level: $detail$",
+    "placeholders": { "count": { "content": "$1" }, "detail": { "content": "$2" } }
+  },
+  "warnTopSiblingsJudgment": {
+    "message": "$count$ top-level folders, over the recommended $limit$ — more than one screenful, so finding things degrades into scanning one by one",
+    "placeholders": { "count": { "content": "$1" }, "limit": { "content": "$2" } }
+  },
+  "warnTopSiblingsProduct": {
+    "message": "$count$ top-level folders, past even the hard limit of $limit$ — consider merging a few related topics",
+    "placeholders": { "count": { "content": "$1" }, "limit": { "content": "$2" } }
   },
   "logRehomeStart": {
     "message": "$count$ bookmarks lost their folder; looking for the best home among the folders that survived",

@@ -97,6 +97,19 @@ export function logDuplicateTopics(locale: Locale, detail: string): string {
     : `The model declared the same label in several folders; kept the last one: ${detail}`
 }
 
+/**
+ * 超出一级目录上限、整个被丢弃的那几个目录。
+ *
+ * 必须点名而不只报个数：被丢掉的目录吸收的标签会一并变成未映射、落进「其他」，
+ * 用户看到的是「其他」莫名其妙变大，而链路上此前没有任何一处告诉过他这件事
+ * 发生过（organize-audit-holes 06 票判准 C）。
+ */
+export function logFoldersDropped(locale: Locale, count: number, detail: string): string {
+  return locale === 'zh_CN'
+    ? `超出一级目录上限，丢弃了 ${count} 个目录，它们的书签会落进「其他」：${detail}`
+    : `Over the top-level folder limit; dropped ${count} folders, their bookmarks fall into "Other": ${detail}`
+}
+
 export function logCompoundNames(locale: Locale, detail: string): string {
   return locale === 'zh_CN'
     ? `目录名把两个概念捆在了一起，已要求模型重出一版：${detail}`

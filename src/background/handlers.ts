@@ -2,6 +2,7 @@ import { currentLocale, resolveLocale, setLocale, t } from '@/i18n'
 import { buildCandidatesFromFolders, stripNumberPrefix } from '@/core/map'
 import {
   collapseSameNameFolders, createTemporaryIdFactory, expandFolder, findOversizedFolders,
+  measureFallbackShare, measureTopSiblings, promoteFallbackChildren,
 } from '@/core/audit'
 import type { Locale } from '@/core/locale'
 import { buildPlan, type NewFolderSpec, type RenameFolderSpec } from '@/core/plan'
@@ -9,8 +10,8 @@ import { MIN_FOLDER_BOOKMARKS, pruneReason, pruneSmallFolders } from '@/core/pru
 import { findScopeRoots, scanTree } from '@/core/scan'
 import { detectMode } from '@/core/mode'
 import { planTitleRewrites } from '@/core/titles'
-import { buildCategoryTree } from '@/core/tree'
-import { deriveShape, MAX_LEAF, SHAPE_MAX_SIBLINGS } from '@/core/shape'
+import { buildCategoryTree, MAX_SIBLINGS as PRODUCT_MAX_SIBLINGS } from '@/core/tree'
+import { deriveShape, FALLBACK_SHARE_LIMIT, MAX_LEAF, SHAPE_MAX_SIBLINGS } from '@/core/shape'
 import { clusterHomeless, dropAlreadyGrouped, planNewFolders, MIN_NEW_FOLDER_SIZE } from '@/core/newTopics'
 import type { Ports } from '@/core/ports'
 import type { OrganizePlan, TagResult } from '@/core/types'
@@ -583,7 +584,14 @@ export async function handle(
           let deepenCalls = 0
           let previousMax = Number.MAX_SAFE_INTEGER
           for (;;) {
-            const oversized = findOversizedFolders({ candidates, newFolders, classifications, locale })
+            // scope: 'all' 而不是默认的 'new'——复用的已有目录（设计出的名字撞上旧名，
+            // 走 candidates 而不进 newFolders）本轮也是设计的一部分，书签正往里搬。
+            // 只看新建目录会造成一个没有依据的分裂：同一棵树、同一批书签、同一条判准，
+            // 新建的切、复用的不切（organize-audit-holes 03 票）。
+            // 没收到书签的用户目录 count 为 0，不会因为放宽 scope 就被卷进来。
+            const oversized = findOversizedFolders({
+              candidates, newFolders, classifications, locale, scope: 'all',
+            })
             if (oversized.length === 0) break
             // 止损：这一轮最大占用没比上一轮小，说明模型切不动了，再问也是同一个答案。
             // 前面几道（清单空了、撞封顶、调用数上限）都可能被一个「每次返回同一个划分」
@@ -660,14 +668,70 @@ export async function handle(
           }
         }
 
+        // ---- 结构自检其三：把「其他」切出来的族提到一级 ----
+        // 06 票判了「下切不是合并的逆运算」——合并是设计阶段的减法，下切只能在落成后
+        // 做嵌套，被挤掉的主题永远回不到一级。而 01 票量到「其他」里 74% 是成建制的
+        // 主题。提升是目前唯一不花模型调用就能把它们捞回一级的手段（07 票）。
+        //
+        // 只在推翻模式下做：非推翻模式的承诺是「不重新设计结构」，把用户目录下面的
+        // 东西搬到一级破的正是这条承诺。
+        if (rebuild) {
+          const promotion = promoteFallbackChildren({ candidates, newFolders, classifications, locale })
+          if (promotion.promoted.length > 0) {
+            candidates = promotion.candidates
+            newFolders = promotion.newFolders
+            classifications = promotion.classifications
+            const detail = promotion.promoted
+              .map((p) => (locale === 'zh_CN' ? `「${p.title}」${p.count} 条` : `"${p.title}" (${p.count})`))
+              .join(locale === 'zh_CN' ? '、' : ', ')
+            log('classify', t('logPromotedFallback', String(promotion.promoted.length), detail))
+          }
+        }
+
+        // 判准 A3：一级目录有几个。此前只有设计/建树期的执行点，落成之后没人再数——
+        // 而上面那步提升恰恰是在验算阶段改变一级目录数的。不补这一道，提升就是又造一个
+        // 「产出了状态但没人验算」的洞，而那正是本轮要治的病（07 票判准 A 的挂钩条件）。
+        // 两档要分开报：判准嫌多，和产品自己的闸都没拦住，性质不同（判准 B）。
+        const topSiblings = measureTopSiblings(candidates)
+        if (topSiblings !== null) {
+          warnings.push(topSiblings.tier === 'product'
+            ? t('warnTopSiblingsProduct', String(topSiblings.count), String(PRODUCT_MAX_SIBLINGS))
+            : t('warnTopSiblingsJudgment', String(topSiblings.count), String(SHAPE_MAX_SIBLINGS)))
+        }
+
         // 封顶之后仍然偏大的目录只点名、不动手：给用户一条看得见的信息，
         // 好过在四层菜单里给他一个「技术上正确」的树。非推翻模式下这是唯一的动作。
         for (const folder of findOversizedFolders({
           candidates, newFolders, classifications, locale,
-          scope: rebuild ? 'new' : 'all',
+          // 两种模式都用 'all'：推翻模式下切完之后仍然偏大的目录里也可能有复用的那种，
+          // 上面的下切循环既然已经看得见它们，这条收尾警告就不该再瞎一只眼（03 票）。
+          scope: 'all',
           maxLevel: Number.MAX_SAFE_INTEGER,
         })) {
-          warnings.push(t('warnOversizedFolder', folder.title, String(folder.count)))
+          // 两种触发原因的说法完全不同：留守那种没有越过任何上限，套「超过建议上限」
+          // 的文案会说出一句自相矛盾的话（04 票判准 C：这个状态要如实上报）
+          warnings.push(folder.kind === 'leftovers'
+            ? t('warnStrandedLeftovers', folder.title, String(folder.count))
+            : t('warnOversizedFolder', folder.title, String(folder.count)))
+        }
+
+        // 判准 A5：「其他」整个子树占了范围内多大比例。此前**全链路一个执行点都没有**——
+        // 真实那一遍的 34.8% 没有任何人算过，用户看到的是一棵没有任何警告的树。
+        //
+        // 动作是「量 + 如实告知」，不是阻断、也不是回头重设计（05 票判准 A/B）：钱已经花了、
+        // 树已经生成，把东西收走换不到任何他能行动的东西；而破线的树并非不可用，
+        // 只是顶层在说谎。真正的治法在上游（预算与落位），不在这一步。
+        // 文案必须带上具体数字——没有数字，这条警告只是句空话（05 票判准 C）。
+        const fallbackShare = measureFallbackShare({
+          candidates, classifications, locale, total: scan.bookmarks.length,
+        })
+        if (fallbackShare !== null && fallbackShare.share > FALLBACK_SHARE_LIMIT) {
+          warnings.push(t(
+            'warnFallbackShare',
+            String(fallbackShare.count),
+            (fallbackShare.share * 100).toFixed(1),
+            String(FALLBACK_SHARE_LIMIT * 100),
+          ))
         }
 
         // 标题统一与目录整理相互独立：它由自己的开关决定，不受移动建议的勾选影响

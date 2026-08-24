@@ -1937,8 +1937,9 @@ describe('analyze 的 prune 二次判定', () => {
    *
    * MAX_LEAF 从 20 收到 12（issues/38 的 D2）之后，a=17 就把第三条撑破了（17+3=20）。
    * 缺的量挪给 d*：a=9 让「前端」正好落在 12 上，d=11 把总数补回 23。
-   * 挪给 d* 而不是别处，是因为 d* 全进「其他」，而一级的「其他」是兜底目录、
-   * 本来就豁免下切（见 core/audit.ts 里 fallbackKey 那一行），涨到多大都不会触发自检。
+   * 挪给 d* 而不是别处，是因为 d* 全进「其他」，那一摊与「前端」的容量互不影响。
+   * 注意 d=11 必须留在 MAX_LEAF(12) 以内：「其他」曾经豁免下切、涨到多大都不触发自检，
+   * 那条豁免已经摘掉（organize-audit-holes 02 票），现在它跟普通目录一样按占用切。
    */
   const rehomeTree = [
     { id: '0', title: '', children: [
@@ -2026,6 +2027,30 @@ describe('analyze 的 prune 二次判定', () => {
     expect(row.toPath.at(-1)).toContain('前端')
     // confidence 用的是二次判定这一次的把握度，不是首次分类那次对「冷门」的把握度（见 I3）
     expect(row.confidence).toBeCloseTo(0.42)
+  })
+
+  // 判准 A5 此前全链路一个执行点都没有：真实那一遍「其他」占 34.8%，那个数没有任何人
+  // 算过，用户看到的是一棵没有任何警告的树（organize-audit-holes 05 票）。
+  // 这条夹具里 d0..d10 共 11 条全落进「其他」，总数 23 条 → 47.8%，远过 10% 红线。
+  it('「其他」占比过红线时，复核页警告里带上条数与百分比', async () => {
+    const complete = rehomeComplete([])
+    const fake = createFakeBookmarks(rehomeTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
+    })
+    const res = await handle(
+      ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' },
+      { createClient: () => ({ complete }), now: () => 1 },
+    ) as { plan: OrganizePlan }
+
+    const warning = res.plan.warnings.find((w) => w.includes('其他') && w.includes('%'))
+    expect(warning).toBeDefined()
+    // 光说「有点多」没用——用户要靠这两个数才判得出这次整理值不值得应用（判准 C）
+    expect(warning).toContain('11')
+    expect(warning).toContain('47.8')
+    expect(warning).toContain('10')
   })
 
   // 开关删掉之前，`rebuild && settings.enforceMinFolderSize` 这道闸把**整个二次判定**
@@ -2713,13 +2738,21 @@ describe('结构自检：撑爆的叶子再切一层', () => {
    * @param deepenFolders 第二次（下切那次）目录设计的返回值。
    *   传两个目录 = 切得开；传一个目录 = 模型切不动，验止损与警告那条路。
    */
-  function setupOversized(deepenFolders: Array<{ title: string; topics: string[]; children: [] }>) {
+  function setupOversized(
+    deepenFolders: Array<{ title: string; topics: string[]; children: [] }>,
+    // 在范围根下预置一个与设计出的目录同名的已有目录，逼 core/tree.ts 走「复用」那条路
+    // （findChild(rootId, title) 撞上就不新建）。留空则「前端工具」是本批新建的。
+    options: { reuseExisting?: boolean } = {},
+  ) {
     const fake = createFakeBookmarks([
       { id: '0', title: '', children: [
         { id: '1', title: '书签栏', children: [
           { id: '11', title: '收件箱', children: Array.from({ length: COUNT }, (_, i) => ({
             id: `b${i}`, title: `书签 ${i}`, url: `https://example.com/${i}`,
           })) },
+          ...(options.reuseExisting === true
+            ? [{ id: '12', title: '前端工具', children: [] }]
+            : []),
         ]},
       ]},
     ])
@@ -2781,6 +2814,26 @@ describe('结构自检：撑爆的叶子再切一层', () => {
     // 子目录挂在「前端工具」下面，是第 2 层
     expect(plan.candidates.some((c) => c.path.length === 2 && c.path[1]!.endsWith('构建'))).toBe(true)
     // 下切只发起了一次设计请求（全局那次不带父目录名，认得出来）
+    expect(designPrompts.filter((p) => p.includes('前端工具'))).toHaveLength(1)
+  })
+
+  // 复用的已有目录曾经整条验算链都看不见（findOversizedFolders 默认 scope: 'new'），
+  // 于是同一棵树、同一批书签、同一条判准，目录是新建的就切、是复用的就不切。
+  // 推翻重建的承诺本来就是重新设计整棵树，这个分裂没有依据（02/03 票定案）。
+  it('复用的已有目录撑爆了，推翻模式下同样要切', async () => {
+    const { ports, deps, designPrompts } = setupOversized([
+      { title: '构建', topics: ['构建工具'], children: [] },
+      { title: '测试', topics: ['测试框架'], children: [] },
+    ], { reuseExisting: true })
+    await saveSettings(ports, settings)
+    const plan = await analyzePlan(ports, deps, 'rebuild')
+
+    // 「前端工具」是复用的（id 12，不是本批新建），但它装了 25 条，照样该被切开
+    expect(plan.operations.some((o) => o.type === 'create_folder' && o.parentId === '12')).toBe(true)
+    const created = plan.operations.flatMap((o) =>
+      o.type === 'create_folder' ? [stripNumberPrefix(o.title)] : [])
+    expect(created).toContain('构建')
+    expect(created).toContain('测试')
     expect(designPrompts.filter((p) => p.includes('前端工具'))).toHaveLength(1)
   })
 

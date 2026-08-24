@@ -503,7 +503,6 @@
   "settingsModelAdd": {
     "message": "添加模型"
   },
-
   "settingsModelListing": {
     "message": "正在列出模型…"
   },
@@ -1222,6 +1221,43 @@
         "content": "$2"
       }
     }
+  },
+  "warnStrandedLeftovers": {
+    "message": "「$title$」下面已经分好了子目录，却还有 $count$ 本书签散在这一层，比任何一个子目录都多，站在这一层不好下手",
+    "placeholders": {
+      "title": {
+        "content": "$1"
+      },
+      "count": {
+        "content": "$2"
+      }
+    }
+  },
+  "warnFallbackShare": {
+    "message": "「其他」装了 $count$ 本书签，占范围内的 $percent$%，超过 $limit$% 的红线——说明目录设计没覆盖住这个库，有整片主题被挤了进去",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "percent": {
+        "content": "$2"
+      },
+      "limit": {
+        "content": "$3"
+      }
+    }
+  },
+  "logPromotedFallback": {
+    "message": "「其他」里有 $count$ 族自成主题，已提到一级：$detail$",
+    "placeholders": { "count": { "content": "$1" }, "detail": { "content": "$2" } }
+  },
+  "warnTopSiblingsJudgment": {
+    "message": "一级目录有 $count$ 个，超过建议的 $limit$ 个——一屏扫不完，找东西会退化成逐个看",
+    "placeholders": { "count": { "content": "$1" }, "limit": { "content": "$2" } }
+  },
+  "warnTopSiblingsProduct": {
+    "message": "一级目录有 $count$ 个，连 $limit$ 个的硬上限都越过了——建议回头合并几个相近的主题",
+    "placeholders": { "count": { "content": "$1" }, "limit": { "content": "$2" } }
   },
   "logRehomeStart": {
     "message": "$count$ 本书签的目录被撤，正在为它们找存活目录里最合适的去处",

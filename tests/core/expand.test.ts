@@ -70,7 +70,7 @@ describe('expandFolder', () => {
     expect(result.classifications.find((c) => c.bookmarkId === 'z')).toEqual(other)
   })
 
-  it('只切得出一个子目录时不切——那一层不承载任何区分度', () => {
+  it('唯一那个子目录装走了全部时不切——子目录与父目录一模一样，零区分度', () => {
     const result = expand(
       [tag('a', '构建工具'), tag('b', '构建工具')],
       [classified('a', 'tmp:7'), classified('b', 'tmp:7')],
@@ -78,6 +78,25 @@ describe('expandFolder', () => {
     expect(result.createdCount).toBe(0)
     expect(result.newFolders).toEqual([])
     expect(result.classifications.find((c) => c.bookmarkId === 'a')?.targetCategoryId).toBe('tmp:7')
+  })
+
+  // 曾经「只切得出一个桶」一律作废，连带把那个桶本可以收走的书签一起赔进去。
+  // 真实那一遍里 04 Web工程 的 15 条留守就是这么来的：模型只认出 8 条 FastAPI 是一族，
+  // 整个划分被丢弃，15 条原样摊回父目录（organize-audit-holes 04 票判准 B）。
+  it('只切出一个子目录、但留下了有意义的留守时，接受这次划分', () => {
+    const result = expand(
+      [tag('a', '构建工具'), tag('b', '构建工具'), tag('c', '构建工具'),
+        tag('d', ''), tag('e', ''), tag('f', '')],
+      [classified('a', 'tmp:7'), classified('b', 'tmp:7'), classified('c', 'tmp:7'),
+        classified('d', 'tmp:7'), classified('e', 'tmp:7'), classified('f', 'tmp:7')],
+    )
+    expect(result.createdCount).toBe(1)
+    expect(result.newFolders.map((f) => f.title)).toEqual(['01 构建工具'])
+    const target = (id: string) =>
+      result.classifications.find((c) => c.bookmarkId === id)?.targetCategoryId
+    expect(target('a')).toBe(result.newFolders[0]!.temporaryId)
+    // 没被映射上的三条仍留在父目录
+    expect(target('d')).toBe('tmp:7')
   })
 
   it('新临时 id 续在已有 tmp:N 之后，不与建树阶段撞号', () => {

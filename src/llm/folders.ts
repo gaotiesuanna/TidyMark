@@ -7,7 +7,7 @@ import { SHAPE_MAX_SIBLINGS } from '@/core/shape'
 import { NO_TOPIC } from './tags'
 import type { LlmClient } from './client'
 import {
-  logCompoundNames, logCompoundNamesRemain, logDuplicateTopics, logFamiliesRemain,
+  logCompoundNames, logCompoundNamesRemain, logDuplicateTopics, logFamiliesRemain, logFoldersDropped,
   logFoldersDone, logFoldersFailed, logFoldersRetryFailed, logFragmentedFamilies, logNoTopicMapped,
 } from './logs'
 import { foldersPrompt, mergeNamePrompt, newFolderNamesPrompt } from './prompts'
@@ -291,7 +291,7 @@ export function fragmentedFamilies(
  * 「这次是不是最终会被采用的那一版」（见 issues review I1）。
  */
 type DesignAttempt =
-  | { ok: true; design: FolderDesign; duplicateDetail: string | null }
+  | { ok: true; design: FolderDesign; duplicateDetail: string | null; droppedTitles: string[] }
   | { ok: false; detail: string }
 
 /** 发一次请求并把返回解析成 FolderDesign；失败时把原因带回去，不在这里打日志。 */
@@ -333,7 +333,12 @@ async function requestDesign(
       // 同一标签被多个目录声明时，保留最后一个（现有行为不变，见下方汇总警告）
       mapping.set(key, path)
     }
-    // 超出上限的目录整个丢弃，它吸收的标签一并视为未映射，落进「其他」
+    // 超出上限的目录整个丢弃，它吸收的标签一并视为未映射，落进「其他」。
+    // 丢了哪几个要带回给调用方——静默丢弃会让「其他」莫名变大而无人知晓（06 票判准 C）。
+    const droppedTitles = raw
+      .slice(limit)
+      .map((folder) => (typeof folder?.title === 'string' ? folder.title : ''))
+      .filter((title) => title !== '')
     for (const folder of raw.slice(0, limit)) {
       if (typeof folder !== 'object' || folder === null || typeof folder.title !== 'string') {
         throw new Error(locale === 'zh_CN' ? '模型返回的目录形状非法' : 'The model returned a malformed folder')
@@ -376,7 +381,7 @@ async function requestDesign(
       )
       .join(locale === 'zh_CN' ? '；' : '; ')
 
-    return { ok: true, design: { folders, mapping }, duplicateDetail }
+    return { ok: true, design: { folders, mapping }, duplicateDetail, droppedTitles }
   } catch (error) {
     // 只进开发者控制台，不必双语。
     console.error('[TidyMark] 目录设计失败：', error)
@@ -390,12 +395,18 @@ async function requestDesign(
  * 真正被返回给调用方的那一版（见 issues review I1）。
  */
 function logAdopted(
-  attempt: { design: FolderDesign; duplicateDetail: string | null },
+  attempt: { design: FolderDesign; duplicateDetail: string | null; droppedTitles: string[] },
   locale: Locale,
   options: DesignOptions,
 ): void {
   if (attempt.duplicateDetail !== null) {
     options.onLog?.(logDuplicateTopics(locale, attempt.duplicateDetail), 'warn')
+  }
+  if (attempt.droppedTitles.length > 0) {
+    const detail = attempt.droppedTitles
+      .map((title) => (locale === 'zh_CN' ? `「${title}」` : `"${title}"`))
+      .join(locale === 'zh_CN' ? '、' : ', ')
+    options.onLog?.(logFoldersDropped(locale, attempt.droppedTitles.length, detail), 'warn')
   }
   options.onLog?.(logFoldersDone(locale, attempt.design.folders.length, attempt.design.mapping.size), 'info')
 }
