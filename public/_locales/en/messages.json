@@ -1212,11 +1212,28 @@
       }
     }
   },
-  "logDeepenSkipped": {
-    "message": "\"$title$\" is large, but its tags are not distinct enough to split; left as is",
+  "logDeepenNoTopics": {
+    "message": "\"$title$\" holds $count$ bookmarks, but they map to only $topics$ topic(s), so a second subfolder cannot be cut; left as is",
     "placeholders": {
       "title": {
         "content": "$1"
+      },
+      "count": {
+        "content": "$2"
+      },
+      "topics": {
+        "content": "$3"
+      }
+    }
+  },
+  "logDeepenNoSplit": {
+    "message": "\"$title$\" holds $count$ bookmarks, but the designed subfolders did not separate them; left as is",
+    "placeholders": {
+      "title": {
+        "content": "$1"
+      },
+      "count": {
+        "content": "$2"
       }
     }
   },

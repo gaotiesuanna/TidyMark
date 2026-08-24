@@ -8,7 +8,8 @@ import { NO_TOPIC } from './tags'
 import type { LlmClient } from './client'
 import {
   logCompoundNames, logCompoundNamesRemain, logDuplicateTopics, logFamiliesRemain, logFoldersDropped,
-  logFoldersDone, logFoldersFailed, logFoldersRetryFailed, logFragmentedFamilies, logNoTopicMapped,
+  logDeepenDesignFailed, logFoldersDone, logFoldersFailed, logFoldersRetryFailed, logFragmentedFamilies,
+  logNoTopicMapped,
 } from './logs'
 import { foldersPrompt, mergeNamePrompt, newFolderNamesPrompt } from './prompts'
 
@@ -431,8 +432,15 @@ export async function designFolders(
   const prompt = buildDesignPrompt(topics, options, locale)
   const first = await requestDesign(prompt, client, locale, options)
   if (!first.ok) {
-    // 首轮真的失败：调用方会退回原始标签，这条文案说「保留原始标签」是对的
-    options.onLog?.(logFoldersFailed(locale, first.detail), 'error')
+    // 两个调用方的收场完全不同，文案不能共用（见 logs.ts 的 logDeepenDesignFailed）：
+    // - 全局那次（非 oneLevel）失败，调用方退回原始标签进建树，「保留原始标签」是对的；
+    // - 下切那次（oneLevel）发生在建树之后，没有标签可退，实际是这一个目录保持原样。
+    options.onLog?.(
+      options.oneLevel === true
+        ? logDeepenDesignFailed(locale, options.parentTitle ?? '', first.detail)
+        : logFoldersFailed(locale, first.detail),
+      'error',
+    )
     return null
   }
 

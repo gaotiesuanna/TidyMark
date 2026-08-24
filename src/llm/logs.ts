@@ -108,6 +108,21 @@ export function logFoldersFailed(locale: Locale, detail: string): string {
 }
 
 /**
+ * 下切（oneLevel）那条路上的设计失败。
+ *
+ * 不能沿用 logFoldersFailed：那条文案的尾巴是「保留原始标签进入建树」，而下切发生在
+ * 建树**之后**——没有任何标签被退回，实际发生的是这一个目录原封不动留了下来。
+ * 沿用它等于在日志里说一句假话，而这条路此前的表现更糟：整条分支静默 `continue`，
+ * 一个撑爆的目录没被切开，链路上没有任何一处说过为什么（与 logFoldersRetryFailed
+ * 分家的理由相同，见 issues review I1）。
+ */
+export function logDeepenDesignFailed(locale: Locale, parentTitle: string, detail: string): string {
+  return locale === 'zh_CN'
+    ? `为「${parentTitle}」设计子目录失败，这个目录保持原样：${detail}`
+    : `Designing subfolders for "${parentTitle}" failed; the folder is left as is: ${detail}`
+}
+
+/**
  * 只在「重问」那次请求失败时打——第一版设计还在，不是退回原始标签，
  * 因此不能沿用 logFoldersFailed 的文案（见 issues review I1：那条文案说反话）。
  */

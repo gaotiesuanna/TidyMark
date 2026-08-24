@@ -1212,11 +1212,28 @@
       }
     }
   },
-  "logDeepenSkipped": {
-    "message": "「$title$」偏大，但标签不足以再分，保持原样",
+  "logDeepenNoTopics": {
+    "message": "「$title$」装了 $count$ 个书签，但它们只归到 $topics$ 个主题，切不出第二个子目录，保持原样",
     "placeholders": {
       "title": {
         "content": "$1"
+      },
+      "count": {
+        "content": "$2"
+      },
+      "topics": {
+        "content": "$3"
+      }
+    }
+  },
+  "logDeepenNoSplit": {
+    "message": "「$title$」装了 $count$ 个书签，设计出的子目录没能把它们分开，保持原样",
+    "placeholders": {
+      "title": {
+        "content": "$1"
+      },
+      "count": {
+        "content": "$2"
       }
     }
   },

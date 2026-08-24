@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { collapseSameNameFolders, findOversizedFolders, measureFallbackShare } from '@/core/audit'
+import {
+  collapseSameNameFolders, dropFallbackFromCandidates, findOversizedFolders, measureFallbackShare,
+} from '@/core/audit'
 import type { CollapseInput } from '@/core/audit'
 import type { NewFolderSpec } from '@/core/plan'
 import { MAX_LEAF } from '@/core/shape'
@@ -336,5 +338,53 @@ describe('findOversizedFolders', () => {
       locale: 'en',
     })
     expect(result).toEqual([{ id: 'tmp:1', title: 'Other', count: 63, level: 1, kind: 'capacity' }])
+  })
+})
+
+describe('dropFallbackFromCandidates', () => {
+  const folders = [
+    { id: '1', parentId: '0', title: '书签栏' },
+    { id: '10', parentId: '1', title: '前端' },
+    { id: '11', parentId: '1', title: '02 其他' },
+    { id: '12', parentId: '10', title: '其他' },
+  ]
+  const candidates = [
+    cand('10', ['书签栏', '前端']),
+    cand('11', ['书签栏', '02 其他']),
+    cand('12', ['书签栏', '前端', '其他']),
+  ]
+
+  // 上一轮推翻重建留下的「其他」带着建树期给的编号。编号是 TidyMark 自己加的，
+  // 认名字时不剥它，这条修复在真实的第二轮上就一次都触发不了
+  it('剥掉编号再认名字：「02 其他」也是那个收容所', () => {
+    const kept = dropFallbackFromCandidates(candidates, folders, ['1'], 'zh_CN')
+    expect(kept.map((c) => c.id)).toEqual(['10', '12'])
+  })
+
+  it('英文库认的是 Other', () => {
+    const enFolders = [
+      { id: '10', parentId: '1', title: 'Frontend' },
+      { id: '11', parentId: '1', title: '02 Other' },
+    ]
+    const enCandidates = [cand('10', ['Bar', 'Frontend']), cand('11', ['Bar', '02 Other'])]
+    expect(dropFallbackFromCandidates(enCandidates, enFolders, ['1'], 'en').map((c) => c.id))
+      .toEqual(['10'])
+    // 中文语境下 Other 不是收容所的名字，不该被误剔
+    expect(dropFallbackFromCandidates(enCandidates, enFolders, ['1'], 'zh_CN').map((c) => c.id))
+      .toEqual(['10', '11'])
+  })
+
+  it('剔光了就原样返回——一个候选都没有的提示词只会换回一堆 null', () => {
+    const only = [cand('11', ['书签栏', '02 其他'])]
+    expect(dropFallbackFromCandidates(only, folders, ['1'], 'zh_CN')).toEqual(only)
+  })
+
+  // A5 只认一级的「其他」，这里跟着同一条线：某个主题目录下面自己带一个「其他」
+  // 是那个主题内部的事，不是收容所
+  it('只认范围根的直接子目录，更深一层的「其他」照旧当候选', () => {
+    const nested = [cand('10', ['书签栏', '前端']), cand('12', ['书签栏', '前端', '其他'])]
+    const noTopFallback = folders.filter((f) => f.id !== '11')
+    expect(dropFallbackFromCandidates(nested, noTopFallback, ['1'], 'zh_CN').map((c) => c.id))
+      .toEqual(['10', '12'])
   })
 })

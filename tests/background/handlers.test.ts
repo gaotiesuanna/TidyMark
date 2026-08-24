@@ -1612,6 +1612,148 @@ describe('analyze 非推翻模式：新主题无处可去', () => {
   })
 })
 
+/**
+ * 归入现有模式下，上一轮整理留下的「其他」会原样进候选表交给模型。
+ *
+ * 而这个模式的提示词带着第 5 条规则（无归属时带回 topic），后面接着
+ * clusterHomeless → nameNewTopics → planNewFolders 那条建新目录的链。
+ * 「其他」在候选表里就等于给了模型一个合法的出口：它可以答「放这儿」而不是答
+ * 「放不进去」，那条链于是永远等不到输入——真实那一遍 109 本书签就是这么进去的。
+ *
+ * 「顶层」按范围根的直接子目录算，不看 candidate.path 的长度：归入现有模式的候选
+ * 路径由 core/scan.ts 拼（含范围根名），一个直属书签栏的「其他」路径长度是 2 而不是 1。
+ */
+describe('analyze 归入现有模式不拿「其他」当分类候选', () => {
+  function setupFallbackCandidate(tree: TreeSpec[]) {
+    const fake = createFakeBookmarks(tree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    const classifyPrompts: string[] = []
+    const complete = vi.fn(async (prompt: string) => {
+      if (!prompt.includes('候选目录')) return { results: [] }
+      classifyPrompts.push(prompt)
+      const ids = [...prompt.matchAll(/^- id=(\S+) 目录=(.+)$/gm)]
+      const bookmarkIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+      return { results: bookmarkIds.map((id) => (
+        { bookmark_id: id, target_category_id: ids[0]?.[1] ?? null, confidence: 0.9, reason: 'r' }
+      )) }
+    })
+    return {
+      ports,
+      deps: { createClient: () => ({ complete } as unknown as LlmClient), now: () => 1 },
+      classifyPrompts,
+    }
+  }
+
+  /** 候选行 `- id=… 目录=A / B` 里的目录路径。 */
+  function catalogPaths(prompt: string): string[] {
+    return [...prompt.matchAll(/^- id=\S+ 目录=(.+)$/gm)].map((m) => m[1]!)
+  }
+
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
+    removeEmptyFolders: false,
+    rewriteGithubTitles: false,
+  }
+
+  const withFallback: TreeSpec[] = [
+    { id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '10', title: '前端', children: [] },
+        { id: '11', title: '其他', children: [
+          { id: 'b0', title: '书签 0', url: 'https://example.com/0' },
+        ]},
+        { id: '12', title: '收件箱', children: [
+          { id: 'b1', title: '书签 1', url: 'https://example.com/1' },
+          { id: 'b2', title: '书签 2', url: 'https://example.com/2' },
+        ]},
+      ]},
+    ]},
+  ]
+
+  it('分类提示词的候选目录里没有顶层「其他」', async () => {
+    const { ports, deps, classifyPrompts } = setupFallbackCandidate(withFallback)
+    await saveSettings(ports, settings)
+    await analyzePlan(ports, deps, 'additive')
+
+    expect(classifyPrompts).not.toHaveLength(0)
+    const paths = classifyPrompts.flatMap(catalogPaths)
+    expect(paths).toContain('书签栏 / 前端')
+    expect(paths).not.toContain('书签栏 / 其他')
+  })
+
+  it('「其他」不给模型选，但仍留在候选表里——它还要当结构页的回落点', async () => {
+    const { ports, deps } = setupFallbackCandidate(withFallback)
+    await saveSettings(ports, settings)
+    const plan = await analyzePlan(ports, deps, 'additive')
+
+    expect(plan.candidates.some((c) => c.path.at(-1) === '其他')).toBe(true)
+  })
+
+  it('只剔范围根下那一个，用户在自己目录里建的「其他」照旧当候选', async () => {
+    const { ports, deps, classifyPrompts } = setupFallbackCandidate([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: '前端', children: [
+            { id: '13', title: '其他', children: [] },
+          ]},
+          { id: '11', title: '其他', children: [] },
+          { id: '12', title: '收件箱', children: [
+            { id: 'b1', title: '书签 1', url: 'https://example.com/1' },
+          ]},
+        ]},
+      ]},
+    ])
+    await saveSettings(ports, settings)
+    await analyzePlan(ports, deps, 'additive')
+
+    const paths = classifyPrompts.flatMap(catalogPaths)
+    expect(paths).toContain('书签栏 / 前端 / 其他')
+    expect(paths).not.toContain('书签栏 / 其他')
+  })
+
+  // 剔光了模型无从作答：一个候选都没有的提示词只会换回一堆 null，
+  // 白花一轮钱，还不如让「其他」留着当唯一的去处
+  it('除了「其他」没有别的候选时不剔除', async () => {
+    const { ports, deps, classifyPrompts } = setupFallbackCandidate([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '11', title: '其他', children: [
+            { id: 'b0', title: '书签 0', url: 'https://example.com/0' },
+          ]},
+        ]},
+      ]},
+    ])
+    await saveSettings(ports, settings)
+    await analyzePlan(ports, deps, 'additive')
+
+    expect(classifyPrompts.flatMap(catalogPaths)).toContain('书签栏 / 其他')
+  })
+
+  it('推翻重建模式不受影响：那条路的「其他」是刚设计出来的收容所，必须能被选中', async () => {
+    const fake = createFakeBookmarks(rebuildTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    const classifyPrompts: string[] = []
+    const complete = vi.fn(async (prompt: string) => {
+      if (prompt.includes('抽取一个具体主题')) {
+        return { results: REBUILD_IDS.map((id) => ({ bookmark_id: id, primary_topic: 'React 生态' })) }
+      }
+      if (prompt.includes('标签清单：')) {
+        return { folders: [{ title: '前端框架', topics: ['React 生态'], children: [] }] }
+      }
+      classifyPrompts.push(prompt)
+      return { results: REBUILD_IDS.map((id) => (
+        { bookmark_id: id, target_category_id: 'tmp:1', confidence: 0.9, reason: 'r' }
+      )) }
+    })
+    await saveSettings(ports, settings)
+    await analyzePlan(ports, { createClient: () => ({ complete }), now: () => 1 }, 'rebuild')
+
+    // 推翻模式的候选路径不含范围根名，「其他」自己就是一整行（带建树期给的编号）
+    expect(classifyPrompts.flatMap(catalogPaths)).toContain('02 其他')
+  })
+})
+
 describe('analyze 非推翻模式：级联勾选（review C2）', () => {
   // 勾选界面会把选中目录的所有子目录 id 一并塞进 scopeRootIds（级联勾选），
   // 而不是只送选中的那一个根。非推翻模式的候选目录如果照单排除 scopeRootIds
@@ -2742,7 +2884,13 @@ describe('结构自检：撑爆的叶子再切一层', () => {
     deepenFolders: Array<{ title: string; topics: string[]; children: [] }>,
     // 在范围根下预置一个与设计出的目录同名的已有目录，逼 core/tree.ts 走「复用」那条路
     // （findChild(rootId, title) 撞上就不新建）。留空则「前端工具」是本批新建的。
-    options: { reuseExisting?: boolean } = {},
+    options: {
+      reuseExisting?: boolean
+      /** 下切那一次目录设计请求直接失败，验 designFolders 返回 null 那条路。 */
+      deepenFails?: boolean
+      /** 上一代标签全归到同一个主题，验 topics 不足两个那条路。 */
+      singleTopic?: boolean
+    } = {},
   ) {
     const fake = createFakeBookmarks([
       { id: '0', title: '', children: [
@@ -2765,15 +2913,17 @@ describe('结构自检：撑爆的叶子再切一层', () => {
       if (prompt.includes('标签清单：')) {
         designPrompts.push(prompt)
         // 下切那一轮的提示词会带上父目录名；全局那一轮只有主题清单，不会出现「前端工具」
-        return prompt.includes('前端工具')
-          ? { folders: deepenFolders }
-          : { folders: [{ title: '前端工具', topics: ['构建工具', '测试框架'], children: [] }] }
+        if (!prompt.includes('前端工具')) {
+          return { folders: [{ title: '前端工具', topics: ['构建工具', '测试框架'], children: [] }] }
+        }
+        if (options.deepenFails === true) throw Object.assign(new Error('boom'), { retryable: false })
+        return { folders: deepenFolders }
       }
       if (!prompt.includes('候选目录')) {
         // 上一代标签：两种主题，前 13 条构建工具、后 12 条测试框架
         return { results: Array.from({ length: COUNT }, (_, i) => ({
           bookmark_id: `b${i}`,
-          primary_topic: i < 13 ? '构建工具' : '测试框架',
+          primary_topic: options.singleTopic === true ? '构建工具' : (i < 13 ? '构建工具' : '测试框架'),
           secondary_topic: null,
         })) }
       }
@@ -2785,10 +2935,16 @@ describe('结构自检：撑爆的叶子再切一层', () => {
         { bookmark_id: id, target_category_id: target, confidence: 0.9, reason: 'r' }
       )) }
     })
+    const events: ProgressEvent[] = []
     return {
       ports: { bookmarks: fake.api, storage: createFakeStorage() },
-      deps: { createClient: () => ({ complete } as unknown as LlmClient), now: () => 1 },
+      deps: {
+        createClient: () => ({ complete } as unknown as LlmClient),
+        now: () => 1,
+        onEvent: (event: ProgressEvent) => events.push(event),
+      },
       designPrompts,
+      events,
     }
   }
 
@@ -2860,6 +3016,57 @@ describe('结构自检：撑爆的叶子再切一层', () => {
 
     expect(designPrompts).toHaveLength(0)
     expect(plan.warnings.some((w) => w.includes('超过建议上限'))).toBe(true)
+  })
+
+  // 下面四条治的是同一个病：下切放弃时说不清是为什么放弃的。
+  // 真实那一遍「其他」装了 109 条、一刀没切，日志里只有一句含糊的「标签不足以再分」
+  // ——而三条放弃路径（主题不够、设计失败、设计了但没分开）里只有一条真是标签的问题。
+  it('下切的目录设计失败时，日志点名是哪个目录、并说它保持原样', async () => {
+    const { ports, deps, events } = setupOversized([], { deepenFails: true })
+    await saveSettings(ports, settings)
+    await analyzePlan(ports, deps, 'rebuild')
+
+    const giveUp = events.filter((e) => e.message.includes('前端工具') && e.message.includes('保持原样'))
+    expect(giveUp).toHaveLength(1)
+    expect(giveUp[0]!.message).toContain('设计')
+  })
+
+  // logFoldersFailed 那条文案的尾巴是「保留原始标签进入建树」。下切发生在建树**之后**，
+  // 那句话在这条路上是假的：没有任何标签被退回，只是这一个目录没被切开。
+  it('下切的目录设计失败时不说「退回原始标签」——建树早就结束了', async () => {
+    const { ports, deps, events } = setupOversized([], { deepenFails: true })
+    await saveSettings(ports, settings)
+    await analyzePlan(ports, deps, 'rebuild')
+
+    expect(events.some((e) => e.message.includes('原始标签'))).toBe(false)
+  })
+
+  it('书签只归到一个主题时，日志报出主题数，而不是含糊说「标签不足」', async () => {
+    const { ports, deps, events, designPrompts } = setupOversized([], { singleTopic: true })
+    await saveSettings(ports, settings)
+    await analyzePlan(ports, deps, 'rebuild')
+
+    // 主题只有一个就不该再花一次设计调用
+    expect(designPrompts.filter((p) => p.includes('前端工具'))).toHaveLength(0)
+    const giveUp = events.filter((e) => e.message.includes('前端工具') && e.message.includes('保持原样'))
+    expect(giveUp).toHaveLength(1)
+    // 「1 个主题」这个数字是唯一能让用户判断该不该重试的东西
+    expect(giveUp[0]!.message).toContain('1')
+    expect(giveUp[0]!.message).toContain('主题')
+  })
+
+  it('设计出了子目录却没能把书签分开时，日志说的是没分开，不是标签不足', async () => {
+    const { ports, deps, events } = setupOversized([
+      { title: '全部', topics: ['构建工具', '测试框架'], children: [] },
+    ])
+    await saveSettings(ports, settings)
+    await analyzePlan(ports, deps, 'rebuild')
+
+    const giveUp = events.filter((e) => e.message.includes('前端工具') && e.message.includes('保持原样'))
+    expect(giveUp).toHaveLength(1)
+    // 这条路上标签是够的（两个主题），怪标签就是甩锅给了无辜的一方
+    expect(giveUp[0]!.message).not.toContain('主题')
+    expect(giveUp[0]!.message).toContain('分开')
   })
 })
 

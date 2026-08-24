@@ -162,6 +162,55 @@ export const MAX_AUDIT_LEVEL = 3
  */
 const MIN_LEFTOVER_TO_SPLIT = MIN_FOLDER_BOOKMARKS * 2
 
+/** 判「是不是范围根下那个『其他』」要的两个字段。 */
+export interface FallbackFolderRef {
+  id: string
+  parentId: string | null
+  title: string
+}
+
+/**
+ * 把范围根直属的「其他」从**交给模型的**候选表里剔掉（归入现有模式专用）。
+ *
+ * 为什么非剔不可：归入现有模式的分类提示词带着第 5 条规则——「没有任何目录合适就
+ * 返回 null，并带回一个 topic」，后面接着 clusterHomeless → nameNewTopics →
+ * planNewFolders 那条建新目录的链。上一轮整理留下的「其他」原样进候选表，就等于给了
+ * 模型一个合法的出口：它可以答「放这儿」而不是答「放不进去」，那条链于是永远等不到
+ * 输入。真实那一遍 109 本书签就是这么进去的——不是分类失败，是被合法地丢掉了。
+ *
+ * 剔的只是**分类候选**，不是 candidates 本身：「其他」还要留在计划里当结构页的回落点，
+ * 也还要被 A5 量到。
+ *
+ * 两条边界：
+ * - **只认范围根的直接子目录**。某个主题目录下面自己带一个「其他」是那个主题内部的事，
+ *   与 measureFallbackShare「只认一级」是同一条线。这里不能改判 candidate.path 的长度：
+ *   归入现有模式的候选路径由 core/scan.ts 拼、含范围根名，直属书签栏的「其他」路径
+ *   长度是 2 而不是 1。
+ * - **剔光了就不剔**。一个候选都不剩的提示词只会换回一堆 null，白花一轮钱，
+ *   还不如让「其他」留着当唯一的去处。
+ *
+ * 推翻重建模式不调用它：那条路的「其他」是 core/tree.ts 刚建出来的收容所，
+ * 模型必须选得中——它后面还有 prune 二次判定专门把掉进去的书签再捞一次。
+ */
+export function dropFallbackFromCandidates(
+  candidates: CategoryCandidate[],
+  folders: FallbackFolderRef[],
+  scopeRootIds: string[],
+  locale: Locale,
+): CategoryCandidate[] {
+  const fallbackKey = normalizeName(FALLBACK_TITLE[locale])
+  const rootSet = new Set(scopeRootIds)
+  const dropIds = new Set(
+    folders
+      .filter((f) => f.parentId !== null && rootSet.has(f.parentId)
+        && normalizeName(stripNumberPrefix(f.title)) === fallbackKey)
+      .map((f) => f.id),
+  )
+  if (dropIds.size === 0) return candidates
+  const kept = candidates.filter((c) => !dropIds.has(c.id))
+  return kept.length === 0 ? candidates : kept
+}
+
 export interface FallbackShare {
   /** 「其他」整个子树装了多少条。 */
   count: number

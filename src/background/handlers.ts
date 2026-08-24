@@ -1,8 +1,8 @@
 import { currentLocale, resolveLocale, setLocale, t } from '@/i18n'
 import { buildCandidatesFromFolders, stripNumberPrefix } from '@/core/map'
 import {
-  collapseSameNameFolders, createTemporaryIdFactory, expandFolder, findOversizedFolders,
-  measureFallbackShare, measureTopSiblings, promoteFallbackChildren,
+  collapseSameNameFolders, createTemporaryIdFactory, dropFallbackFromCandidates, expandFolder,
+  findOversizedFolders, measureFallbackShare, measureTopSiblings, promoteFallbackChildren,
 } from '@/core/audit'
 import type { Locale } from '@/core/locale'
 import { buildPlan, type NewFolderSpec, type RenameFolderSpec } from '@/core/plan'
@@ -357,7 +357,13 @@ export async function handle(
         const cache = await loadCache(ports)
         const toClassify = scan.bookmarks
         log('classify', t('logClassifyStart', String(toClassify.length), String(candidates.length)))
-        const classifyCandidates = candidates
+        // 归入现有模式下把范围根直属的「其他」挡在提示词外：它在候选表里就等于给了模型
+        // 一个合法的出口，「无合适目录 → 带回 topic → 建新目录」那条链于是永远等不到输入
+        // （见 core/audit.ts 的 dropFallbackFromCandidates）。剔的只是分类候选，
+        // candidates 本身不动——「其他」还要当结构页的回落点、还要被 A5 量到。
+        const classifyCandidates = rebuild
+          ? candidates
+          : dropFallbackFromCandidates(candidates, scan.folders, request.scopeRootIds, locale)
         // 推翻模式的候选是刚设计出来的，模型永远找得到归属，用不上「无合适目录时
         // 带回 topic」这条规则；让它的分类提示词继续保持这个工作流存在之前的样子，
         // 一个字节都不因为新增的非推翻建目录能力而改变（见 issues review M9）。
@@ -607,9 +613,12 @@ export async function handle(
               )
               const subTags = preDesignTags.filter((tag) => mine.has(tag.bookmarkId))
               const topics = collectTopics(subTags)
-              // 标签本身就只有一种主题时切不出第二个目录，不为此再花一次抽取调用
+              // 标签本身就只有一种主题时切不出第二个目录，不为此再花一次抽取调用。
+              // 主题数要报出来：三条放弃路径（主题不够、设计失败、设计了但没分开）里
+              // 只有这一条真是标签的问题，而它们此前共用一句「标签不足以再分」——
+              // 真实那一遍「其他」装了 109 条一刀没切，日志说不清是卡在哪一条。
               if (topics.length < 2) {
-                log('classify', t('logDeepenSkipped', folder.title), 'warn')
+                log('classify', t('logDeepenNoTopics', folder.title, String(folder.count), String(topics.length)), 'warn')
                 continue
               }
               // 这一步要发起新的付费请求，取消必须挡在它前面检查——与全文件另外
@@ -641,8 +650,10 @@ export async function handle(
                 maxLeaf: MAX_LEAF,
                 locale,
               })
+              // 标签是够的（上面已经确认至少两个主题），是设计出来的子目录没能真正
+              // 把书签分开——怪标签就是甩锅给了无辜的一方
               if (expanded.createdCount === 0) {
-                log('classify', t('logDeepenSkipped', folder.title), 'warn')
+                log('classify', t('logDeepenNoSplit', folder.title, String(folder.count)), 'warn')
                 continue
               }
               newFolders = [...newFolders, ...expanded.newFolders]
