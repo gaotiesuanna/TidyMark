@@ -5,6 +5,7 @@ import { currentLocale, t } from '@/i18n'
 import { isLocalBaseUrl, isModelConfigured } from '@/llm/config'
 import { activeLlm, type Endpoint } from '@/storage/settings'
 import { useStore } from '../store'
+import { Detail, detailLabel } from '../components/Detail'
 
 /**
  * 下拉里那一项「在设置页填别的…」的取值。用一个不可能撞上真实取值的样子：
@@ -96,9 +97,15 @@ export function PreferencesStep() {
       <section className="rounded border p-3">
         <div className="space-y-1 text-sm">
           <p>{rebuild ? t('prefsModeRebuild') : t('prefsModeAdditive')}</p>
+          {/* 摘要常驻、细节折叠：这一段讲的是「你现有的文件夹会被改名」，是对用户
+              自己数据的后果，藏起来就不是知情的选择了（issues/22 的原则）。
+              而编号规则的边角（名字本身以数字开头的怎么办）读一次就够。 */}
           <p className="text-[11px] leading-relaxed text-neutral-400">
-            {rebuild ? t('prefsModeRebuildBody') : t('prefsModeAdditiveBody')}
+            {rebuild ? t('prefsModeRebuildSummary') : t('prefsModeAdditiveBody')}
           </p>
+          {rebuild && (
+            <Detail label={detailLabel()}>{t('prefsModeRebuildBody')}</Detail>
+          )}
           {/* 推翻之后，那条理由讲的是已经被用户否掉的结论，再摆着只会跟上面那句打架 */}
           <p className="text-[11px] leading-relaxed text-neutral-400">
             {modeOverride === null ? decision.reason : t('prefsModeOverridden')}
@@ -137,7 +144,10 @@ export function PreferencesStep() {
           <span>
             {t('prefsCleanTitle')}
             <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-400">
-              {t('prefsCleanBody')}
+              {t('prefsCleanSummary')}
+            </span>
+            <span className="mt-0.5 block">
+              <Detail label={detailLabel()}>{t('prefsCleanBody')}</Detail>
             </span>
           </span>
         </label>
@@ -174,6 +184,9 @@ export function PreferencesStep() {
         {/* 权限预告放在按钮上方：申请只发生在点下去的那一刻（chrome.permissions.request()
             要用户手势，设置页是 onChange 即存，放不了），提前说清楚它只要一个域名。
             两种按钮状态下都摆着——它讲的是这条动线接下来会发生什么，不依赖当前是哪个按钮。 */}
+        {/* 试过折叠它，收回了：真会撞上浏览器那个权限弹窗的恰恰是已经配好模型的人
+            （见本文件同名用例），藏起来弹窗就成了突袭。改成删掉不属于这一屏的那半句
+            ——失效链接检查是本地清理里的功能、另一项权限，讲在这里只是把话拉长。 */}
         <p className="text-[11px] leading-relaxed text-neutral-400">{t('prefsPermissionNotice')}</p>
         <div className="flex gap-2">
           <button className="rounded border px-3 py-2 text-sm" onClick={reset}>{t('prefsBack')}</button>

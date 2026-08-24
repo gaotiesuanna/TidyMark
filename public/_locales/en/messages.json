@@ -563,7 +563,7 @@
     "message": "These bookmarks have no usable structure yet, so this run redesigns the whole folder tree."
   },
   "prefsModeRebuildBody": {
-    "message": "Redesigns the whole folder tree. Top-level folders that this run designs get a number prefix (01, 02…). Leftover folders it does not design keep their contents; most lose their old number and settle below the numbered ones. Folders whose own name starts with a number keep theirs, so your own naming is never trimmed. One level down, only the second-level folders this run designs get renumbered. The whole run can be undone."
+    "message": "Old folders left out of this design are no longer numbered: most lose their old prefix and sort after the numbered ones, with their contents untouched; the exception is a folder whose name genuinely starts with a digit, which keeps it so your own naming is not clipped. At the second level, only folders from this design are renumbered."
   },
   "prefsModeOverride": {
     "message": "Not right — redesign it"
@@ -574,11 +574,20 @@
   "prefsModeAuto": {
     "message": "Back to the automatic judgment"
   },
+  "prefsDetailToggle": {
+    "message": "Details"
+  },
+  "prefsModeRebuildSummary": {
+    "message": "The whole folder tree is redesigned, and your existing top-level folders are renamed with a number prefix. One click undoes everything."
+  },
+  "prefsCleanSummary": {
+    "message": "Deletes folders in scope that hold no bookmarks. Merging several folders is an exception: the source folders are always cleaned up regardless of this switch, and undo still restores them."
+  },
   "prefsCleanTitle": {
     "message": "Remove empty folders afterwards"
   },
   "prefsCleanBody": {
-    "message": "Deletes folders in scope that contain no bookmarks, including parents left empty after their children were cleared. Scope roots are never deleted, and undo restores the folders along with the bookmarks. One exception: when several folders are merged into one, the source folders and the empty folders inside them are always removed regardless of this switch, and undo restores those too."
+    "message": "This also covers parents that become empty once their subfolders are cleared. Scope roots are never deleted. Undo restores the folders too."
   },
   "settingsGithubTitle": {
     "message": "Normalize GitHub bookmark titles"
@@ -605,7 +614,7 @@
     "message": "No model configured yet"
   },
   "prefsPermissionNotice": {
-    "message": "TidyMark asks for no network access when installed. Only when analysis starts does it request access to the model domain you entered. (Local cleanup's \"dead link check\" is a separate permission that needs access to all websites — it is only requested when you press that button yourself.)"
+    "message": "TidyMark asked for no network permission at install time. Only when analysis starts does it ask the browser for access to the model domain you entered."
   },
   "structureIntroOne": {
     "message": "The AI designed $folders$ top-level folder to hold $bookmarks$ bookmarks.",
