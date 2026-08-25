@@ -261,8 +261,8 @@ describe('renumberPlan 未勾选的行仍显示目标目录编号', () => {
 
 /**
  * 多轮整理场景：上一轮留下的编号目录本轮没被设计到。
- * 不管它们就会和本轮的新号撞车（04 金融 与 04 其他并存），
- * 而重新编号又会让它们看起来像本轮设计的一部分——所以剥掉旧编号。
+ * 不管它们就会和本轮的新号撞车（04 金融 与 04 其他并存）。
+ * 剥成裸名会在书签栏里留下没编号的目录，所以接着设计目录的最大号往后编。
  */
 describe('renumberPlan 处理上一轮遗留的编号目录', () => {
   const scopeFolders = [
@@ -304,28 +304,26 @@ describe('renumberPlan 处理上一轮遗留的编号目录', () => {
   const titleOf = (ops: BookmarkOperation[], folderId: string): string | undefined =>
     ops.flatMap((o) => (o.type === 'rename_folder' && o.folderId === folderId ? [o.newTitle] : []))[0]
 
-  it('本轮没设计到但带编号的顶级目录被剥掉旧编号，不再撞号', () => {
+  it('本轮没设计到的顶级目录接着设计目录往后编号，不再撞号', () => {
     const ops = renumberPlan(multiRoundPlan(), new Set(['200', '201']), scopeFolders).operations
-    // 设计的三个占 01-03，遗留的金融剥掉旧号变成裸名字，由 planFolderOrder 沉到它们后面
-    expect(titleOf(ops, 'f-finance')).toBe('金融')
+    // 设计的三个占 01-03，遗留的金融变成 04
+    expect(titleOf(ops, 'f-finance')).toBe('04 金融')
   })
 
-  it('本轮没设计到但带编号的子目录同样只剥编号，设计好的子目录照常编号', () => {
+  it('本轮没设计到的子目录接着该层设计子目录往后编号', () => {
     const ops = renumberPlan(multiRoundPlan(), new Set(['200', '201']), scopeFolders).operations
-    // dify 是本轮设计的子目录占 01，遗留的数字人剥掉旧号，不再跟着占 02
     expect(titleOf(ops, 'f-dify')).toBe('01 dify')
-    expect(titleOf(ops, 'f-avatar')).toBe('数字人')
+    expect(titleOf(ops, 'f-avatar')).toBe('02 数字人')
   })
 
-  it('用户自建、本来就没编号的一级目录一动不动', () => {
+  it('用户自建、本来就没编号的一级目录也补上编号', () => {
     const ops = renumberPlan(multiRoundPlan(), new Set(['200', '201']), scopeFolders).operations
-    // fastapi 没进本轮设计，也没有旧编号可剥：既不编号，也不该平添一次改名
-    expect(titleOf(ops, 'f-fastapi')).toBeUndefined()
+    expect(titleOf(ops, 'f-fastapi')).toBe('05 fastapi')
   })
 
-  it('二级里用户自建的目录不编号，保持原样', () => {
+  it('二级里用户自建的目录也补上编号', () => {
     const ops = renumberPlan(multiRoundPlan(), new Set(['200', '201']), scopeFolders).operations
-    expect(titleOf(ops, 'f-notes')).toBeUndefined()
+    expect(titleOf(ops, 'f-notes')).toBe('03 我的笔记')
   })
 
   it('勾选是级联的，scopeRootIds 里装着全部子目录也不影响重排', () => {
@@ -333,9 +331,9 @@ describe('renumberPlan 处理上一轮遗留的编号目录', () => {
     // 于是 scopeRootIds 里几乎装着范围内的每个目录。层级只能靠 depth 判断。
     const cascaded = { ...multiRoundPlan(), scopeRootIds: scopeFolders.map((f) => f.id) }
     const ops = renumberPlan(cascaded, new Set(['200', '201']), scopeFolders).operations
-    expect(titleOf(ops, 'f-fastapi')).toBeUndefined()
-    expect(titleOf(ops, 'f-avatar')).toBe('数字人')
-    expect(titleOf(ops, 'f-finance')).toBe('金融')
+    expect(titleOf(ops, 'f-fastapi')).toBe('05 fastapi')
+    expect(titleOf(ops, 'f-avatar')).toBe('02 数字人')
+    expect(titleOf(ops, 'f-finance')).toBe('04 金融')
   })
 
   it('范围根本身不参与编号', () => {
@@ -359,11 +357,10 @@ describe('renumberPlan 处理上一轮遗留的编号目录', () => {
 })
 
 /**
- * 上一轮留下、这一轮没派上用场的目录：剥掉旧编号，而不是重新编号。
- * 那个号是 TidyMark 自己加的，给一个本轮没设计过的目录重新编号，
- * 会让残留看起来像本轮设计的一部分——比残留本身更误导。
+ * 上一轮留下、这一轮没派上用场的目录：接着本轮设计的号往后编，
+ * 而不是剥成裸名。剥掉会在书签栏里留下没编号的目录。
  */
-describe('renumberPlan 剥掉遗留目录的旧编号', () => {
+describe('renumberPlan 给遗留目录补号', () => {
   /** 本轮只设计了一个一级目录「前端」，一条书签 a 投进去。 */
   const designOneFolder = (): OrganizePlan =>
     buildPlan({
@@ -387,11 +384,11 @@ describe('renumberPlan 剥掉遗留目录的旧编号', () => {
 
   const accepted = new Set(['a'])
 
-  it('带编号的遗留目录被剥掉编号，而不是换一个号', () => {
+  it('带编号的遗留目录换新号，接着设计目录往后编', () => {
     const ops = renumberPlan(
       designOneFolder(), accepted, scopeWithStray('01 语音 Agent 与数字人'),
     ).operations
-    expect(newTitleOf(ops, '90')).toBe('语音 Agent 与数字人')
+    expect(newTitleOf(ops, '90')).toBe('02 语音 Agent 与数字人')
   })
 
   // 护栏，不是守卫：遗留目录从来没进过 topIds（它不是候选），编号只在候选之间分配，
@@ -402,9 +399,9 @@ describe('renumberPlan 剥掉遗留目录的旧编号', () => {
     expect(next.rows.find((r) => r.bookmarkId === 'a')!.toPath).toEqual(['01 前端'])
   })
 
-  it('遗留目录本来就没编号时不产生改名，不平添一次改动', () => {
+  it('遗留目录本来就没编号时也补上编号', () => {
     const ops = renumberPlan(designOneFolder(), accepted, scopeWithStray('手工目录')).operations
-    expect(newTitleOf(ops, '90')).toBeUndefined()
+    expect(newTitleOf(ops, '90')).toBe('02 手工目录')
   })
 
   it('合并模式的例外仍在：不碰即将被清空删除的源目录子树', () => {
@@ -436,28 +433,27 @@ describe('renumberPlan 剥掉遗留目录的旧编号', () => {
     expect(seen).toEqual(['01 12 月清单', '01 12 月清单', '01 12 月清单'])
   })
 
-  // strayIds 的层级卡在一、二级。放宽成 depth >= 1 时没有任何用例变红，这条补上：
-  // 更深处的目录本轮压根没被触及，不该因为顶着个号就被改名。
-  it('三级以下的遗留目录不剥号——本轮触及的范围只到二级', () => {
+  it('三级以下的遗留目录同样补号——落地后不应再出现没编号的目录', () => {
     const scope = [
       { id: '1', parentId: '0', title: '书签栏', depth: 0 },
-      { id: '90', parentId: '1', title: '01 工作', depth: 1 },
-      { id: '91', parentId: '90', title: '01 前端', depth: 2 },
-      { id: '92', parentId: '91', title: '01 深处', depth: 3 },
+      { id: '90', parentId: '1', title: '工作', depth: 1 },
+      { id: '91', parentId: '90', title: '前端', depth: 2 },
+      { id: '92', parentId: '91', title: '深处', depth: 3 },
     ]
     const ops = renumberPlan(designOneFolder(), accepted, scope).operations
-    expect(newTitleOf(ops, '91')).toBe('前端')
-    expect(newTitleOf(ops, '92')).toBeUndefined()
+    expect(newTitleOf(ops, '90')).toBe('02 工作')
+    expect(newTitleOf(ops, '91')).toBe('01 前端')
+    expect(newTitleOf(ops, '92')).toBe('01 深处')
   })
 
-  it('扫描根自己带编号也不剥——那个号属于它父层，不归本轮管', () => {
+  it('扫描根自己带编号也不改——那个号属于它父层，不归本轮管', () => {
     const scope = [
       { id: '1', parentId: '0', title: '01 AI', depth: 0 },
-      { id: '90', parentId: '1', title: '02 语音', depth: 1 },
+      { id: '90', parentId: '1', title: '03 语音', depth: 1 },
     ]
     const ops = renumberPlan(designOneFolder(), accepted, scope).operations
     expect(newTitleOf(ops, '1')).toBeUndefined()
-    expect(newTitleOf(ops, '90')).toBe('语音')
+    expect(newTitleOf(ops, '90')).toBe('02 语音')
   })
 })
 
@@ -518,11 +514,11 @@ describe('renumberPlan 合并模式', () => {
 
   it('非合并模式仍然给遗留目录改名', () => {
     const plan = makePlan()
-    // 遗留目录带编号才有改名可做——剥掉它，证明上面那条豁免只属于合并模式
+    // 遗留目录带编号才有改名可做——换新号，证明上面那条豁免只属于合并模式
     const scopeFolders = [{ id: '80', parentId: '1', title: '01 旧的子目录', depth: 1 }]
     const next = renumberPlan(plan, all(plan), scopeFolders)
     expect(next.operations).toContainEqual(
-      { type: 'rename_folder', folderId: '80', oldTitle: '01 旧的子目录', newTitle: '旧的子目录' },
+      { type: 'rename_folder', folderId: '80', oldTitle: '01 旧的子目录', newTitle: '04 旧的子目录' },
     )
   })
 })

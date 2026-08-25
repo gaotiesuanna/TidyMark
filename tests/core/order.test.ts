@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { folderNumber, planFolderOrder } from '@/core/order'
+import { folderNumber, planBareFolderRenames, planFolderOrder } from '@/core/order'
 import type { BookmarkNode } from '@/core/ports'
 
 describe('folderNumber', () => {
@@ -16,6 +16,44 @@ describe('folderNumber', () => {
     expect(folderNumber('fastapi')).toBeNull()
     expect(folderNumber('3D 建模')).toBeNull()
     expect(folderNumber('2026 年计划')).toBeNull()
+  })
+})
+
+describe('planBareFolderRenames', () => {
+  it('同层都没编号时从 01 起依次补号', () => {
+    expect(planBareFolderRenames([
+      { id: 'a', title: '语音交互' },
+      { id: 'b', title: 'Web工程' },
+    ])).toEqual([
+      { id: 'a', oldTitle: '语音交互', newTitle: '01 语音交互' },
+      { id: 'b', oldTitle: 'Web工程', newTitle: '02 Web工程' },
+    ])
+  })
+
+  it('接着本层已有最大号往后编，已带号的不动', () => {
+    expect(planBareFolderRenames([
+      { id: 'a', title: '01 FastAPI' },
+      { id: 'b', title: '语音交互' },
+      { id: 'c', title: '10 其他' },
+      { id: 'd', title: 'Web工程' },
+    ])).toEqual([
+      { id: 'b', oldTitle: '语音交互', newTitle: '11 语音交互' },
+      { id: 'd', oldTitle: 'Web工程', newTitle: '12 Web工程' },
+    ])
+  })
+
+  it('名字本身以数字开头的目录不补号，免得剪掉用户自己的名字', () => {
+    expect(planBareFolderRenames([
+      { id: 'a', title: '01 FastAPI' },
+      { id: 'b', title: '12 月清单' },
+    ])).toEqual([])
+  })
+
+  it('已经全带编号时不产生改名', () => {
+    expect(planBareFolderRenames([
+      { id: 'a', title: '01 FastAPI' },
+      { id: 'b', title: '02 量化交易' },
+    ])).toEqual([])
   })
 })
 

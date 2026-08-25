@@ -276,7 +276,7 @@ describe('applyPlan 按编号排列目录', () => {
     const fake = createFakeBookmarks(messy)
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     await applyPlan(ports, messyPlan(true), new Set(['100']), 'zh_CN')
-    expect(await childTitles(ports, '1')).toEqual(['01 GitHub', '02 AI', 'fastapi'])
+    expect(await childTitles(ports, '1')).toEqual(['01 GitHub', '02 AI', '03 fastapi'])
   })
 
   it('子目录同样按编号排列', async () => {
@@ -290,7 +290,7 @@ describe('applyPlan 按编号排列目录', () => {
     const fake = createFakeBookmarks(messy)
     const ports = { bookmarks: fake.api, storage: createFakeStorage() }
     const result = await applyPlan(ports, messyPlan(true), new Set(['100']), 'zh_CN')
-    expect(result.sortedFolders).toBe(4)
+    expect(result.sortedFolders).toBe(5)
   })
 
   it('非推翻模式不动用户自己的排列', async () => {
@@ -308,6 +308,75 @@ describe('applyPlan 按编号排列目录', () => {
     await undoLast(ports, 'zh_CN')
     expect(await childTitles(ports, '1')).toEqual(['fastapi', '02 AI', '01 GitHub'])
     expect(await childTitles(ports, 'f-ai')).toEqual(['02 RAG', '01 dify'])
+  })
+})
+
+describe('applyPlan 给还没编号的目录补号', () => {
+  // 截图场景：设计目录带号，遗留的「语音交互」「Web工程」及其子目录没号
+  const leftover = [
+    { id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: 'f-api', title: '01 FastAPI', children: [
+          { id: '100', title: 'docs', url: 'https://fastapi.dev' },
+        ]},
+        { id: 'f-voice', title: '语音交互', children: [
+          { id: 'f-asr', title: '语音识别', children: [] },
+          { id: 'f-chat', title: '语音对话', children: [] },
+          { id: 'f-avatar', title: '数字人', children: [] },
+        ]},
+        { id: 'f-web', title: 'Web工程', children: [] },
+      ]},
+    ]},
+  ]
+
+  function leftoverPlan(rebuildStructure: boolean) {
+    return buildPlan({
+      id: 'p-bare', createdAt: 1, scopeRootIds: ['1'], rebuildStructure,
+      items: [{
+        id: '100', title: 'docs', url: 'https://fastapi.dev',
+        parentId: 'f-api', index: 0, currentPath: ['书签栏', '01 FastAPI'],
+      }],
+      candidates: [{ id: 'f-api', path: ['01 FastAPI'] }],
+      classifications: [
+        { bookmarkId: '100', targetCategoryId: 'f-api', confidence: 1, reason: 'r', source: 'llm' },
+      ],
+      newFolders: [],
+    })
+  }
+
+  const childTitles = async (ports: { bookmarks: BookmarksApi }, id: string): Promise<string[]> => {
+    const stack = [...(await ports.bookmarks.getTree())]
+    while (stack.length > 0) {
+      const node = stack.pop()!
+      if (node.id === id) return (node.children ?? []).map((c) => c.title)
+      for (const child of node.children ?? []) stack.push(child)
+    }
+    throw new Error(`找不到目录 ${id}`)
+  }
+
+  it('推翻模式落地后，没编号的目录和子目录都补上号', async () => {
+    const fake = createFakeBookmarks(leftover)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await applyPlan(ports, leftoverPlan(true), new Set(['100']), 'zh_CN')
+    expect(await childTitles(ports, '1')).toEqual(['01 FastAPI', '02 语音交互', '03 Web工程'])
+    expect(await childTitles(ports, 'f-voice')).toEqual(['01 语音识别', '02 语音对话', '03 数字人'])
+  })
+
+  it('非推翻模式不给用户自己的目录补号', async () => {
+    const fake = createFakeBookmarks(leftover)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await applyPlan(ports, leftoverPlan(false), new Set(['100']), 'zh_CN')
+    expect(await childTitles(ports, '1')).toEqual(['01 FastAPI', '语音交互', 'Web工程'])
+    expect(await childTitles(ports, 'f-voice')).toEqual(['语音识别', '语音对话', '数字人'])
+  })
+
+  it('撤销后目录名还原', async () => {
+    const fake = createFakeBookmarks(leftover)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    await applyPlan(ports, leftoverPlan(true), new Set(['100']), 'zh_CN')
+    await undoLast(ports, 'zh_CN')
+    expect(await childTitles(ports, '1')).toEqual(['01 FastAPI', '语音交互', 'Web工程'])
+    expect(await childTitles(ports, 'f-voice')).toEqual(['语音识别', '语音对话', '数字人'])
   })
 })
 

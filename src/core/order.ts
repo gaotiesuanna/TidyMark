@@ -14,6 +14,37 @@ export function folderNumber(title: string): number | null {
   return match === null ? null : Number.parseFloat(match[1]!)
 }
 
+/** 给同层还没编号的目录补号。 */
+export interface FolderRename {
+  id: string
+  oldTitle: string
+  newTitle: string
+}
+
+/**
+ * 给同层还没编号的目录补号，接着本层已有最大整数编号往后编。
+ * 已带编号的不动；名字本身以数字开头的（`12 月清单`）也当作已带号，不剪不编。
+ */
+export function planBareFolderRenames(
+  siblings: readonly { id: string; title: string }[],
+): FolderRename[] {
+  const numbers = siblings
+    .map((sibling) => folderNumber(sibling.title))
+    .filter((n): n is number => n !== null)
+  let next = numbers.length === 0 ? 1 : Math.floor(Math.max(...numbers)) + 1
+  const renames: FolderRename[] = []
+  for (const sibling of siblings) {
+    if (folderNumber(sibling.title) !== null) continue
+    renames.push({
+      id: sibling.id,
+      oldTitle: sibling.title,
+      newTitle: `${String(next).padStart(2, '0')} ${sibling.title}`,
+    })
+    next++
+  }
+  return renames
+}
+
 /**
  * 让带编号的目录在书签栏里真的按编号先后排列。
  *

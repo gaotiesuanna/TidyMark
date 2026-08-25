@@ -190,10 +190,9 @@ function hasNumberPrefix(title: string): boolean {
  * 分类模型没往某个目录放书签、或用户没勾选那些建议时，这个目录不会出现，
  * 它占用的号码就会变成空号（01、02、04…）。这里在应用前重排一遍。
  *
- * 传入 scopeFolders 时，上一轮整理留下、本轮没被设计到的目录会被剥掉旧编号——
- * 剥掉而不是重新编号，这样既不会和本轮的新号撞车（04 金融 与 04 其他并存），
- * 也不会让一个本轮没设计过的残留目录看起来像本轮设计的一部分。
- * 判定只看目录名有没有编号前缀：本来就没编号的目录一律不动。
+ * 传入 scopeFolders 时，上一轮整理留下、本轮没被设计到的目录会接着本轮
+ * 设计目录的最大号往后编——剥成裸名会在书签栏里留下没编号的目录。
+ * 剥掉旧号再编，避免和本轮 01..N 撞车。名字本身以数字开头的不剥不编。
  *
  * 只对推翻模式生效——非推翻模式的目录名是用户自己的，不该改动。
  */
@@ -254,16 +253,16 @@ export function renumberPlan(
    * 二级只重排已经带编号的——用户在某个目录下自己整理的子目录保持原样。
    * 两级都排除本轮新建但没收到书签的目录，它们根本不会被创建，不该占号。
    *
-   * 只管候选目录：没进本轮设计的目录不参与编号，改由 strayIds 那一段剥掉旧编号。
+   * 只管候选目录：没进本轮设计的目录不占设计号段，改由 strayIds 那一段接着往后编。
    */
   const participates = (id: string, topLevel: boolean): boolean =>
     used.has(id) || (!newFolderIds.has(id) && (topLevel || hasNumberPrefix(currentTitle(id))))
 
   /**
-   * 上一轮留下、本轮没进候选的已有目录。它们不参与编号，只被剥掉旧编号（见下面的剥号段）。
+   * 上一轮留下、本轮没进候选的已有目录。它们不占设计号段，接着本层最大号往后编。
    *
-   * 层级卡在一、二级：与改动前触及的范围一致，不把更深处的目录卷进来；
-   * 扫描根（depth 0）也不碰——它头上的号属于它的父层，不归本轮管。
+   * 扫描根（depth 0）不碰——它头上的号属于它的父层，不归本轮管。
+   * 更深的目录也编：落地后不应再出现没编号的目录。
    *
    * 合并模式例外：范围内的旧目录正是即将被清空删除的源目录子树，
    * 给它们改名毫无意义，还会让 summary.renamedFolders 虚高。
@@ -272,7 +271,7 @@ export function renumberPlan(
     plan.mergeRoot !== null
       ? []
       : scopeFolders
-          .filter((f) => !candidateIds.has(f.id) && (f.depth === 1 || f.depth === 2))
+          .filter((f) => !candidateIds.has(f.id) && f.depth >= 1)
           .map((f) => f.id)
 
   const renumbered = new Map<string, string[]>()
@@ -309,22 +308,44 @@ export function renumberPlan(
     renameOps.push({ type: 'rename_folder', folderId: id, oldTitle, newTitle })
   }
 
-  // 遗留目录剥掉旧编号，而不是跟着重排。那个号是 TidyMark 自己加的，
-  // 给一个本轮没设计过、即将变成残留的目录重新编号，会让它看起来像本轮设计的一部分，
-  // 比残留本身更误导。剥掉之后 planFolderOrder 那条「带编号的在前、没编号的跟在后面」
-  // 会让它自然沉到设计好的目录后面，不必为「排在哪」新造任何机制。
-  // 本来就没编号的目录不碰：那是用户自己建的，不给它平添一次改名。
+  // 保底：没进本轮设计的目录也给号，接着该层设计目录的最大号往后编。
+  // 先剥旧号再编，避免和本轮 01..N 撞车。名字本身以数字开头的不剥不编。
+  const createdByTempId = new Map(
+    plan.operations.flatMap((o) => (o.type === 'create_folder' ? [[o.temporaryId, o] as const] : [])),
+  )
+  const parentOf = (id: string): string | null => {
+    const existing = folderById.get(id)
+    if (existing !== undefined) return existing.parentId
+    const created = createdByTempId.get(id)
+    if (created === undefined) return null
+    return created.parentTemporaryId ?? created.parentId
+  }
+  const designedCountByParent = new Map<string, number>()
+  for (const id of renumbered.keys()) {
+    const parentId = parentOf(id)
+    if (parentId === null) continue
+    designedCountByParent.set(parentId, (designedCountByParent.get(parentId) ?? 0) + 1)
+  }
+  const strayByParent = new Map<string, string[]>()
   for (const id of strayIds) {
-    const oldTitle = currentTitle(id)
-    const bare = stripNumberPrefix(oldTitle)
-    // 只剥 TidyMark 自己那一层：stripNumberPrefix 每次只剥一层，而剥完的结果会落盘，
-    // 于是名字本身就以数字开头的目录会被逐轮蚕食
-    // （'01 12 月清单' -> 第二轮 '12 月清单' -> 第三轮 '月清单'）。
-    // 剥完还带数字前缀，就说明剥掉的那一层下面还压着用户自己的名字，这一层不剥。
-    // 代价是这类目录保留旧号、看起来像本轮设计的一部分——两害相权：
-    // 顶着一个旧号只是难看，越剥越短是不可逆的数据损坏。
-    if (bare === oldTitle || hasNumberPrefix(bare)) continue
-    renameOps.push({ type: 'rename_folder', folderId: id, oldTitle, newTitle: bare })
+    const parentId = folderById.get(id)?.parentId
+    if (parentId === null || parentId === undefined) continue
+    const group = strayByParent.get(parentId) ?? []
+    group.push(id)
+    strayByParent.set(parentId, group)
+  }
+  for (const [parentId, ids] of strayByParent) {
+    let next = (designedCountByParent.get(parentId) ?? 0) + 1
+    for (const id of ids) {
+      const oldTitle = currentTitle(id)
+      const bare = stripNumberPrefix(oldTitle)
+      if (hasNumberPrefix(bare)) continue
+      const newTitle = `${String(next).padStart(2, '0')} ${bare}`
+      next++
+      if (oldTitle !== newTitle) {
+        renameOps.push({ type: 'rename_folder', folderId: id, oldTitle, newTitle })
+      }
+    }
   }
 
   const operations: BookmarkOperation[] = [

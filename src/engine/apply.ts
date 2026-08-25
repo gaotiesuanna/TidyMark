@@ -1,11 +1,12 @@
 import { findEmptyFolders, type EmptyFolder } from '@/core/empty'
 import type { Locale } from '@/core/locale'
-import { planFolderOrder } from '@/core/order'
+import { planBareFolderRenames, planFolderOrder } from '@/core/order'
 import { filterAccepted } from '@/core/plan'
-import type { Ports } from '@/core/ports'
+import type { BookmarkNode, Ports } from '@/core/ports'
+import { findScopeRoots } from '@/core/scan'
 import type { OrganizePlan } from '@/core/types'
 import {
-  msgBookmarkGone, msgEmptyFolderRemoveFailed, msgFolderSortFailed,
+  msgBookmarkGone, msgEmptyFolderRemoveFailed, msgFolderNumberFailed, msgFolderSortFailed,
   msgParentUnresolved, msgTargetUnresolved,
 } from './messages'
 import { captureSnapshot, saveSnapshot } from './snapshot'
@@ -89,6 +90,41 @@ async function sortFolders(
     }
   }
   return sorted
+}
+
+/**
+ * 落地后的保底：范围内还没编号的目录补上号，接着该层已有最大号往后编。
+ * 必须在排序之前调用——补完号 planFolderOrder 才能把它们排进编号序列。
+ */
+async function numberBareFolders(
+  ports: Ports,
+  scopeRootIds: string[],
+  skipped: SkipRecord[],
+  locale: Locale,
+  skipIds: ReadonlySet<string>,
+): Promise<void> {
+  const tree = await ports.bookmarks.getTree()
+  const renames: { id: string; newTitle: string }[] = []
+
+  function walk(node: BookmarkNode): void {
+    const folders = (node.children ?? []).filter((child) => child.url === undefined && !skipIds.has(child.id))
+    for (const rename of planBareFolderRenames(folders)) {
+      renames.push({ id: rename.id, newTitle: rename.newTitle })
+    }
+    for (const child of node.children ?? []) {
+      if (child.url === undefined) walk(child)
+    }
+  }
+
+  for (const root of findScopeRoots(tree, scopeRootIds)) walk(root)
+
+  for (const rename of renames) {
+    try {
+      await ports.bookmarks.update(rename.id, { title: rename.newTitle })
+    } catch (error) {
+      skipped.push({ bookmarkId: rename.id, reason: msgFolderNumberFailed(locale, String(error)) })
+    }
+  }
 }
 
 export async function applyPlan(
@@ -181,7 +217,16 @@ export async function applyPlan(
       ? await removeEmpty(ports, effectiveRootIds, skipped, locale, removableRootIds)
       : []
 
-  // 非推翻模式不产生编号，也就没有需要排序的目录，不该动用户自己的排列
+  // 非推翻模式不产生编号，也不该给用户自己的目录补号或重排
+  if (plan.rebuildStructure) {
+    await numberBareFolders(
+      ports,
+      effectiveRootIds,
+      skipped,
+      locale,
+      mergeRootId === null ? new Set() : new Set([mergeRootId]),
+    )
+  }
   const sortedFolders = plan.rebuildStructure
     ? await sortFolders(ports, effectiveRootIds, skipped, locale)
     : 0

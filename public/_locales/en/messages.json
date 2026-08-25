@@ -563,7 +563,7 @@
     "message": "These bookmarks have no usable structure yet, so this run redesigns the whole folder tree."
   },
   "prefsModeRebuildBody": {
-    "message": "Old folders left out of this design are no longer numbered: most lose their old prefix and sort after the numbered ones, with their contents untouched; the exception is a folder whose name genuinely starts with a digit, which keeps it so your own naming is not clipped. At the second level, only folders from this design are renumbered."
+    "message": "Old folders left out of this design are numbered after this round's folders and sort after them, with their contents untouched; the exception is a folder whose name genuinely starts with a digit, which keeps it so your own naming is not clipped. A final pass then numbers any folder that is still missing a prefix."
   },
   "prefsModeOverride": {
     "message": "Not right — redesign it"
