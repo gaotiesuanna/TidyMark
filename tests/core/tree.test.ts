@@ -170,6 +170,61 @@ describe('buildCategoryTree 复用已有目录', () => {
     expect(newFolders.some((f) => base(f.title) === 'rag')).toBe(false)
     expect(candidates.find((c) => c.path.length === 2)?.id).toBe('51')
   })
+
+  it('已有唯一同族目录时复用它，不并列再建一个', () => {
+    const voice = Array.from({ length: 6 }, (_, i) => [String(i), '语音合成', null] as [string, string, null])
+    const { candidates, newFolders, renameFolders } = buildTree({
+      tags: tags(voice), rootId, existingFolders: [folder('50', '语音交互')],
+    })
+    expect(newFolders.some((f) => base(f.title) === '语音合成')).toBe(false)
+    expect(candidates.find((c) => base(c.path[0]!) === '语音合成')?.id).toBe('50')
+    expect(renameFolders).toContainEqual({
+      folderId: '50', oldTitle: '语音交互', newTitle: '01 语音合成',
+    })
+  })
+
+  it('同族已有目录多于一个时不猜，照常新建', () => {
+    const voice = Array.from({ length: 6 }, (_, i) => [String(i), '语音合成', null] as [string, string, null])
+    const { candidates, newFolders } = buildTree({
+      tags: tags(voice), rootId,
+      existingFolders: [folder('50', '语音识别'), folder('51', '语音交互')],
+    })
+    expect(newFolders.some((f) => base(f.title) === '语音合成')).toBe(true)
+    expect(candidates.find((c) => base(c.path[0]!) === '语音合成')?.id).toMatch(/^tmp:/)
+  })
+
+  it('精确同名优先于同族', () => {
+    const voice = Array.from({ length: 6 }, (_, i) => [String(i), '语音合成', null] as [string, string, null])
+    const { candidates } = buildTree({
+      tags: tags(voice), rootId,
+      existingFolders: [folder('50', '语音交互'), folder('51', '语音合成')],
+    })
+    expect(candidates.find((c) => base(c.path[0]!) === '语音合成')?.id).toBe('51')
+  })
+
+  it('两个设计主题不会抢同一个已有同族目录', () => {
+    const spec: Array<[string, string, string | null]> = [
+      ...Array.from({ length: 6 }, (_, i) => ['a' + i, '语音合成', null] as [string, string, null]),
+      ...Array.from({ length: 6 }, (_, i) => ['b' + i, '语音识别', null] as [string, string, null]),
+    ]
+    const { candidates, newFolders } = buildTree({
+      tags: tags(spec), rootId, existingFolders: [folder('50', '语音交互')],
+    })
+    const synth = candidates.find((c) => base(c.path[0]!) === '语音合成')
+    const asr = candidates.find((c) => base(c.path[0]!) === '语音识别')
+    expect(synth?.id === '50' || asr?.id === '50').toBe(true)
+    expect(synth?.id === asr?.id).toBe(false)
+    expect(newFolders.some((f) => base(f.title) === '语音合成' || base(f.title) === '语音识别')).toBe(true)
+  })
+
+  it('兜底「其他」不跟「其他工具」算同族复用', () => {
+    const many = Array.from({ length: 6 }, (_, i) => [String(i), '前端', null] as [string, string, null])
+    const { candidates, newFolders } = buildTree({
+      tags: tags(many), rootId, existingFolders: [folder('50', '其他工具')],
+    })
+    expect(candidates.find((c) => base(c.path[0]!) === '其他')?.id).toMatch(/^tmp:/)
+    expect(newFolders.some((f) => base(f.title) === '其他')).toBe(true)
+  })
 })
 
 describe('buildCategoryTree 编号前缀', () => {

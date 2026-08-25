@@ -1,3 +1,4 @@
+import { uniqueFamilyMatch } from './family'
 import type { Locale } from './locale'
 import { normalizeName, stripNumberPrefix } from './map'
 import type { NewFolderSpec, RenameFolderSpec } from './plan'
@@ -105,8 +106,22 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
     if (!existingByParent.has(key)) existingByParent.set(key, folder)
     if (!existingByName.has(normalizeName(base))) existingByName.set(normalizeName(base), base)
   }
-  const findChild = (parentId: string, title: string): ExistingFolder | null =>
-    existingByParent.get(lookupKey(parentId, title)) ?? null
+  const siblingsOf = (parentId: string): ExistingFolder[] =>
+    input.existingFolders.filter((folder) => (folder.parentId ?? '') === parentId)
+  /** 先精确同名，再唯一同族。多个同族兄弟不猜，避免「语音识别」和「语音交互」抢同一个设计名。 */
+  const findChild = (parentId: string, title: string): ExistingFolder | null => {
+    const exact = existingByParent.get(lookupKey(parentId, title))
+    if (exact !== undefined && !claimed.has(exact.id)) {
+      claimed.add(exact.id)
+      return exact
+    }
+    if (normalizeName(title) === normalizeName(FALLBACK_TITLE[locale])) return null
+    const unused = siblingsOf(parentId).filter((folder) => !claimed.has(folder.id))
+    const family = uniqueFamilyMatch(title, unused)
+    if (family === null) return null
+    claimed.add(family.id)
+    return family
+  }
   const preferredName = (title: string): string =>
     existingByName.get(normalizeName(title)) ?? title
 
