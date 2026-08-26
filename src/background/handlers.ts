@@ -5,7 +5,7 @@ import {
   findOversizedFolders, measureFallbackShare, measureTopSiblings, promoteFallbackChildren,
 } from '@/core/audit'
 import type { Locale } from '@/core/locale'
-import { buildPlan, type NewFolderSpec, type RenameFolderSpec } from '@/core/plan'
+import { buildPlan, type FolderMoveSpec, type NewFolderSpec, type RenameFolderSpec } from '@/core/plan'
 import { MIN_FOLDER_BOOKMARKS, pruneReason, pruneSmallFolders } from '@/core/prune'
 import { findScopeRoots, scanTree } from '@/core/scan'
 import { detectMode } from '@/core/mode'
@@ -176,6 +176,7 @@ export async function handle(
         }
         let newFolders: NewFolderSpec[] = []
         let renameFolders: RenameFolderSpec[] = []
+        let folderMoves: FolderMoveSpec[] = []
         let tags: TagResult[] = []
         let planMergeRoot: NonNullable<OrganizePlan['mergeRoot']> | undefined
         /** 范围根的绝对层级（见 core/level.ts）。下切时算子目录的 startLevel 要用。 */
@@ -680,18 +681,24 @@ export async function handle(
         }
 
         // ---- 结构自检其三：把「其他」切出来的族提到一级 ----
-        // 06 票判了「下切不是合并的逆运算」——合并是设计阶段的减法，下切只能在落成后
-        // 做嵌套，被挤掉的主题永远回不到一级。而 01 票量到「其他」里 74% 是成建制的
-        // 主题。提升是目前唯一不花模型调用就能把它们捞回一级的手段（07 票）。
-        //
-        // 只在推翻模式下做：非推翻模式的承诺是「不重新设计结构」，把用户目录下面的
-        // 东西搬到一级破的正是这条承诺。
-        if (rebuild) {
-          const promotion = promoteFallbackChildren({ candidates, newFolders, classifications, locale })
+        // 「其他」是收容所，不应成为主题目录的父级。推翻模式下处理本轮新建的
+        // 子目录；归入现有模式下则生成 move_folder，把已有子目录整体移到范围根。
+        {
+          const promotion = promoteFallbackChildren({
+            candidates,
+            newFolders,
+            classifications,
+            locale,
+            rootIds: roots.map((r) => r.id),
+            existingFolders: scan.folders.map((f) => ({
+              id: f.id, parentId: f.parentId, index: f.index,
+            })),
+          })
           if (promotion.promoted.length > 0) {
             candidates = promotion.candidates
             newFolders = promotion.newFolders
             classifications = promotion.classifications
+            folderMoves = promotion.folderMoves
             const detail = promotion.promoted
               .map((p) => (locale === 'zh_CN' ? `「${p.title}」${p.count} 条` : `"${p.title}" (${p.count})`))
               .join(locale === 'zh_CN' ? '、' : ', ')
@@ -764,6 +771,7 @@ export async function handle(
           renameFolders,
           warnings,
           tags,
+          folderMoves,
           titleRewrites,
           mergeRoot: planMergeRoot,
         })

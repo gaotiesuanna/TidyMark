@@ -184,6 +184,7 @@ export function applyStructureEdits(
       if (removed.has(operation.temporaryId)) return []
       return [{ ...operation, title: pathById.get(operation.temporaryId)?.at(-1) ?? operation.title }]
     }
+    if (operation.type === 'move_folder') return [operation]
     if (operation.type === 'rename_folder') {
       if (removed.has(operation.folderId)) return []
       return [{ ...operation, newTitle: pathById.get(operation.folderId)?.at(-1) ?? operation.newTitle }]

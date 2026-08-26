@@ -1,6 +1,6 @@
 import type { Locale } from './locale'
 import { normalizeName, stripNumberPrefix } from './map'
-import type { NewFolderSpec } from './plan'
+import type { FolderMoveSpec, NewFolderSpec } from './plan'
 import { MIN_FOLDER_BOOKMARKS } from './prune'
 import { FALLBACK_TITLE, MAX_SIBLINGS as PRODUCT_MAX_SIBLINGS } from './tree'
 import { MAX_LEAF, SHAPE_MAX_SIBLINGS } from './shape'
@@ -298,17 +298,27 @@ export function promotedReason(locale: Locale, count: number): string {
     : `Would have landed in "Other", but this family has ${count} bookmarks and stands on its own, so it was promoted to the top level`
 }
 
+export interface ExistingFolderPlacement {
+  id: string
+  parentId: string | null
+  index: number
+}
+
 export interface PromoteInput {
   candidates: CategoryCandidate[]
   newFolders: NewFolderSpec[]
   classifications: Classification[]
   locale: Locale
+  /** 真正的范围根，用于识别带范围根路径前缀的现有「其他」。 */
+  rootIds?: readonly string[]
+  existingFolders?: readonly ExistingFolderPlacement[]
 }
 
 export interface PromoteResult {
   candidates: CategoryCandidate[]
   newFolders: NewFolderSpec[]
   classifications: Classification[]
+  folderMoves: FolderMoveSpec[]
   /** 提上来的族，按原顺序。A3 的警告与日志要靠它说数字。 */
   promoted: Array<{ title: string; count: number }>
 }
@@ -339,17 +349,25 @@ export interface PromoteResult {
  */
 export function promoteFallbackChildren(input: PromoteInput): PromoteResult {
   const fallbackKey = normalizeName(FALLBACK_TITLE[input.locale])
+  const specById = new Map(input.newFolders.map((f) => [f.temporaryId, f]))
+  const placementById = new Map((input.existingFolders ?? []).map((f) => [f.id, f]))
+  const rootIds = new Set(input.rootIds ?? [])
+  const isTopLevelFallback = (candidate: CategoryCandidate): boolean => {
+    const spec = specById.get(candidate.id)
+    const placement = placementById.get(candidate.id)
+    return candidate.path.length === 1
+      || (spec !== undefined && spec.parentId !== null)
+      || (placement !== undefined && rootIds.has(placement.parentId ?? ''))
+  }
   const fallback = input.candidates.find(
-    (c) => c.path.length === 1 && normalizeName(stripNumberPrefix(c.path[0] ?? '')) === fallbackKey,
+    (c) => normalizeName(stripNumberPrefix(c.path.at(-1) ?? '')) === fallbackKey
+      && isTopLevelFallback(c),
   )
   const noop: PromoteResult = {
     candidates: input.candidates, newFolders: input.newFolders,
-    classifications: input.classifications, promoted: [],
+    classifications: input.classifications, folderMoves: [], promoted: [],
   }
   if (fallback === undefined) return noop
-
-  const fallbackSpec = input.newFolders.find((f) => f.temporaryId === fallback.id)
-  if (fallbackSpec === undefined) return noop
 
   const counts = new Map<string, number>()
   for (const classification of input.classifications) {
@@ -359,28 +377,29 @@ export function promoteFallbackChildren(input: PromoteInput): PromoteResult {
   }
 
   const risers = input.candidates.filter(
-    (c) => c.path.length === 2
-      && c.path[0] === fallback.path[0]
+    (c) => c.path.length === fallback.path.length + 1
+      && fallback.path.every((segment, i) => c.path[i] === segment)
       && (counts.get(c.id) ?? 0) >= MIN_FOLDER_BOOKMARKS,
   )
   if (risers.length === 0) return noop
 
   const riserIds = new Set(risers.map((c) => c.id))
-  // 孙目录（及更深）跟着它们的祖先上提同样的一层
-  const movedIds = new Set(riserIds)
   const lifted = new Map<string, string[]>()
+  const fallbackSegment = fallback.path.length - 1
   for (const candidate of input.candidates) {
-    if (candidate.path.length < 2 || candidate.path[0] !== fallback.path[0]) continue
+    if (candidate.path.length <= fallback.path.length
+      || !fallback.path.every((segment, i) => candidate.path[i] === segment)) continue
     const owner = risers.find((r) => r.path.every((segment, i) => candidate.path[i] === segment))
     if (owner === undefined) continue
-    movedIds.add(candidate.id)
-    lifted.set(candidate.id, candidate.path.slice(1))
+    lifted.set(candidate.id, [
+      ...candidate.path.slice(0, fallbackSegment),
+      ...candidate.path.slice(fallbackSegment + 1),
+    ])
   }
 
   const candidates = input.candidates.map(
     (c) => (lifted.has(c.id) ? { ...c, path: lifted.get(c.id)! } : c),
   )
-  // 「其他」排到所有提上来的族后面：收容所在真实主题之后才读得通
   const fallbackIndex = candidates.findIndex((c) => c.id === fallback.id)
   const [fallbackEntry] = candidates.splice(fallbackIndex, 1)
   const lastRiser = candidates.reduce(
@@ -388,11 +407,27 @@ export function promoteFallbackChildren(input: PromoteInput): PromoteResult {
   )
   candidates.splice(lastRiser + 1, 0, fallbackEntry!)
 
+  const fallbackSpec = specById.get(fallback.id)
+  const fallbackPlacement = placementById.get(fallback.id)
+  const targetParentId = fallbackSpec?.parentTemporaryId ?? fallbackSpec?.parentId
+    ?? fallbackPlacement?.parentId
   const newFolders = input.newFolders.map((f) => (
-    riserIds.has(f.temporaryId)
+    riserIds.has(f.temporaryId) && fallbackSpec !== undefined
       ? { ...f, parentId: fallbackSpec.parentId, parentTemporaryId: fallbackSpec.parentTemporaryId }
       : f
   ))
+  const folderMoves = risers.flatMap((r): FolderMoveSpec[] => {
+    if (specById.has(r.id)) return []
+    const placement = placementById.get(r.id)
+    if (placement === undefined || targetParentId === undefined || targetParentId === null
+      || targetParentId.startsWith('tmp:') || placement.parentId === targetParentId) return []
+    return [{
+      folderId: r.id,
+      fromParentId: placement.parentId!,
+      originalIndex: placement.index,
+      toParentId: targetParentId,
+    }]
+  })
 
   const reasonById = new Map(
     risers.map((r) => [r.id, promotedReason(input.locale, counts.get(r.id) ?? 0)]),
@@ -403,7 +438,7 @@ export function promoteFallbackChildren(input: PromoteInput): PromoteResult {
   })
 
   return {
-    candidates, newFolders, classifications,
+    candidates, newFolders, classifications, folderMoves,
     promoted: risers.map((r) => ({
       title: stripNumberPrefix(r.path.at(-1) ?? ''), count: counts.get(r.id) ?? 0,
     })),

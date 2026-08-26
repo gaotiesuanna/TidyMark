@@ -17,6 +17,10 @@ export function msgFolderSortFailed(locale: Locale, detail: string): string {
   return locale === 'zh_CN' ? `目录排序失败：${detail}` : `Failed to sort folder: ${detail}`
 }
 
+export function msgFolderMoveFailed(locale: Locale, detail: string): string {
+  return locale === 'zh_CN' ? `目录移动失败：${detail}` : `Failed to move folder: ${detail}`
+}
+
 export function msgFolderNumberFailed(locale: Locale, detail: string): string {
   return locale === 'zh_CN' ? `目录补号失败：${detail}` : `Failed to number folder: ${detail}`
 }

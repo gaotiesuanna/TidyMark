@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { folderNumber, planBareFolderRenames, planFolderOrder } from '@/core/order'
+import { folderNumber, planBareFolderRenames, planFolderRenames, planFolderOrder } from '@/core/order'
 import type { BookmarkNode } from '@/core/ports'
 
 describe('folderNumber', () => {
@@ -54,6 +54,20 @@ describe('planBareFolderRenames', () => {
       { id: 'a', title: '01 FastAPI' },
       { id: 'b', title: '02 量化交易' },
     ])).toEqual([])
+  })
+})
+
+describe('planFolderRenames', () => {
+  it('整层编号从 03 开始时回到 01', () => {
+    expect(planFolderRenames([
+      { id: 'a', title: '03 语音识别' },
+      { id: 'b', title: '04 语音合成' },
+      { id: 'c', title: '05 语音克隆' },
+    ])).toEqual([
+      { id: 'a', oldTitle: '03 语音识别', newTitle: '01 语音识别' },
+      { id: 'b', oldTitle: '04 语音合成', newTitle: '02 语音合成' },
+      { id: 'c', oldTitle: '05 语音克隆', newTitle: '03 语音克隆' },
+    ])
   })
 })
 

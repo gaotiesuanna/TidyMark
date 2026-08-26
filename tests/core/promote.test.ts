@@ -131,6 +131,39 @@ describe('promoteFallbackChildren', () => {
     })
     expect(r.candidates.find((c) => c.id === 'tmp:12')!.path).toEqual(['01 量化交易', '01 A股'])
   })
+
+  it('带范围根前缀时，其他的子目录仍提到范围根下', () => {
+    const base = fixture()
+    const r = promoteFallbackChildren({
+      ...base,
+      candidates: base.candidates.map((c) => ({ ...c, path: ['书签栏', ...c.path] })),
+    })
+    expect(r.candidates.find((c) => c.id === 'tmp:10')!.path).toEqual(['书签栏', '01 量化交易'])
+    expect(r.candidates.find((c) => c.id === 'tmp:11')!.path).toEqual(['书签栏', '02 Zotero'])
+  })
+  it('已有的其他子目录也生成移到范围根的结构操作', () => {
+    const r = promoteFallbackChildren({
+      locale: 'zh_CN',
+      rootIds: [rootId],
+      existingFolders: [
+        { id: 'other', parentId: rootId, index: 9 },
+        { id: 'child-a', parentId: 'other', index: 0 },
+        { id: 'child-b', parentId: 'other', index: 1 },
+      ],
+      candidates: [
+        cand('other', ['书签栏', '10 其他']),
+        cand('child-a', ['书签栏', '10 其他', '01 软件插件']),
+        cand('child-b', ['书签栏', '10 其他', '02 内容生成']),
+      ],
+      newFolders: [],
+      classifications: [...into('child-a', 4), ...into('child-b', 5)],
+    })
+
+    expect(r.folderMoves).toEqual([
+      { folderId: 'child-a', fromParentId: 'other', originalIndex: 0, toParentId: rootId },
+      { folderId: 'child-b', fromParentId: 'other', originalIndex: 1, toParentId: rootId },
+    ])
+  })
 })
 
 describe('promotedReason', () => {

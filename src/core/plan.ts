@@ -22,6 +22,13 @@ export interface NewFolderSpec {
   title: string
 }
 
+export interface FolderMoveSpec {
+  folderId: string
+  fromParentId: string
+  originalIndex: number
+  toParentId: string
+}
+
 /** 复用已有目录时，把它改名成带编号的新名字。 */
 export interface RenameFolderSpec {
   folderId: string
@@ -39,6 +46,7 @@ export interface BuildPlanInput {
   classifications: Classification[]
   newFolders: NewFolderSpec[]
   renameFolders?: RenameFolderSpec[]
+  folderMoves?: FolderMoveSpec[]
   warnings?: string[]
   tags?: TagResult[]
   /** 合并模式：所有新目录挂在这个本批新建的容器目录下。 */
@@ -58,6 +66,14 @@ export function buildPlan(input: BuildPlanInput): OrganizePlan {
     parentId: f.parentId,
     parentTemporaryId: f.parentTemporaryId,
     title: f.title,
+  }))
+
+  const folderMoveOps: BookmarkOperation[] = (input.folderMoves ?? []).map((move) => ({
+    type: 'move_folder',
+    folderId: move.folderId,
+    fromParentId: move.fromParentId,
+    originalIndex: move.originalIndex,
+    toParentId: move.toParentId,
   }))
 
   const renameOps: BookmarkOperation[] = (input.renameFolders ?? []).map((f) => ({
@@ -139,7 +155,7 @@ export function buildPlan(input: BuildPlanInput): OrganizePlan {
     })
   }
 
-  const operations = [...createOps, ...renameOps, ...renameBookmarkOps, ...moveOps]
+  const operations = [...createOps, ...folderMoveOps, ...renameOps, ...renameBookmarkOps, ...moveOps]
   const plan: OrganizePlan = {
     id: input.id,
     createdAt: input.createdAt,
@@ -347,7 +363,6 @@ export function renumberPlan(
       }
     }
   }
-
   const operations: BookmarkOperation[] = [
     ...plan.operations.flatMap((operation): BookmarkOperation[] => {
       if (operation.type !== 'create_folder') return []
@@ -355,6 +370,7 @@ export function renumberPlan(
       return title === null ? [operation] : [{ ...operation, title }]
     }),
     ...renameOps,
+    ...plan.operations.filter((o) => o.type === 'move_folder'),
     // 标题改写与编号无关，原样保留
     ...plan.operations.filter((o) => o.type === 'rename_bookmark'),
     ...plan.operations.filter((o) => o.type === 'move_bookmark'),
@@ -507,11 +523,10 @@ export function filterAccepted(plan: OrganizePlan, accepted: Set<string>): Bookm
       cursor = createByTempId.get(cursor)?.parentTemporaryId ?? null
     }
   }
-
   const keptCreates = creates.filter((c) => needed.has(c.temporaryId))
-  // 标题改写是设置开关的结果，与「是否接受某条移动建议」无关，一律保留
+  // 标题改写与结构移动都与「是否接受某条书签建议」无关，一律保留
   const renames = plan.operations.filter(
-    (o) => o.type === 'rename_folder' || o.type === 'rename_bookmark',
+    (o) => o.type === 'move_folder' || o.type === 'rename_folder' || o.type === 'rename_bookmark',
   )
   return [...keptCreates, ...renames, ...moves]
 }

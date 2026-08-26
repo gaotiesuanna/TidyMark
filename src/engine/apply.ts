@@ -1,12 +1,13 @@
 import { findEmptyFolders, type EmptyFolder } from '@/core/empty'
 import type { Locale } from '@/core/locale'
-import { planBareFolderRenames, planFolderOrder } from '@/core/order'
+import { planFolderRenames, planFolderOrder } from '@/core/order'
 import { filterAccepted } from '@/core/plan'
 import type { BookmarkNode, Ports } from '@/core/ports'
 import { findScopeRoots } from '@/core/scan'
 import type { OrganizePlan } from '@/core/types'
 import {
-  msgBookmarkGone, msgEmptyFolderRemoveFailed, msgFolderNumberFailed, msgFolderSortFailed,
+  msgBookmarkGone, msgEmptyFolderRemoveFailed, msgFolderMoveFailed, msgFolderNumberFailed,
+  msgFolderSortFailed,
   msgParentUnresolved, msgTargetUnresolved,
 } from './messages'
 import { captureSnapshot, saveSnapshot } from './snapshot'
@@ -93,7 +94,7 @@ async function sortFolders(
 }
 
 /**
- * 落地后的保底：范围内还没编号的目录补上号，接着该层已有最大号往后编。
+ * 落地后的保底：范围内的目录编号至少从 01 起；缺号时再接着该层已有最大号补齐。
  * 必须在排序之前调用——补完号 planFolderOrder 才能把它们排进编号序列。
  */
 async function numberBareFolders(
@@ -108,7 +109,7 @@ async function numberBareFolders(
 
   function walk(node: BookmarkNode): void {
     const folders = (node.children ?? []).filter((child) => child.url === undefined && !skipIds.has(child.id))
-    for (const rename of planBareFolderRenames(folders)) {
+    for (const rename of planFolderRenames(folders)) {
       renames.push({ id: rename.id, newTitle: rename.newTitle })
     }
     for (const child of node.children ?? []) {
@@ -166,6 +167,12 @@ export async function applyPlan(
         createdFolderIds.push(created.id)
         // 容器目录的真实 id 只有这里知道，收尾的清理与排序都要靠它才能进到合并根内部
         if (operation.temporaryId === plan.mergeRoot?.temporaryId) mergeRootId = created.id
+      } else if (operation.type === 'move_folder') {
+        try {
+          await ports.bookmarks.move(operation.folderId, { parentId: operation.toParentId })
+        } catch (error) {
+          throw new Error(msgFolderMoveFailed(locale, String(error)))
+        }
       } else if (operation.type === 'move_bookmark') {
         const existing = await ports.bookmarks.get(operation.bookmarkId)
         if (existing === null) {

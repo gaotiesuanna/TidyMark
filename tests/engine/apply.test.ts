@@ -30,10 +30,15 @@ const classifications: Classification[] = [
   { bookmarkId: '101', targetCategoryId: '10', confidence: 0.9, reason: 'r', source: 'llm' },
 ]
 
-function makePlan(newFolders: Parameters<typeof buildPlan>[0]['newFolders'] = [], cands = candidates, cls = classifications) {
+function makePlan(
+  newFolders: Parameters<typeof buildPlan>[0]['newFolders'] = [],
+  cands = candidates,
+  cls = classifications,
+  folderMoves: Parameters<typeof buildPlan>[0]['folderMoves'] = [],
+) {
   return buildPlan({
     id: 'p1', createdAt: 1, scopeRootIds: ['1'], rebuildStructure: false,
-    items, candidates: cands, classifications: cls, newFolders,
+    items, candidates: cands, classifications: cls, newFolders, folderMoves,
   })
 }
 
@@ -91,6 +96,21 @@ describe('applyPlan', () => {
     const { ports, fake } = setup()
     await applyPlan(ports, plan, new Set(['100']), 'zh_CN')
     expect(fake.structure()).toContain('书签栏/开发/前端/React 文档')
+  })
+
+  it('执行结构移动，把其他的子目录移到范围根', async () => {
+    const plan = makePlan([], candidates, classifications, [{
+      folderId: '10',
+      fromParentId: '1',
+      originalIndex: 0,
+      toParentId: '11',
+    }])
+    const { ports, fake } = setup()
+
+    await applyPlan(ports, plan, new Set(), 'zh_CN')
+
+    expect(fake.structure()).toContain('书签栏/杂项/react/')
+    expect(fake.structure()).not.toContain('书签栏/react/')
   })
 
   it('新建的文件夹 id 写回快照，供撤销清理', async () => {
@@ -361,6 +381,29 @@ describe('applyPlan 给还没编号的目录补号', () => {
     expect(await childTitles(ports, '1')).toEqual(['01 FastAPI', '02 语音交互', '03 Web工程'])
     expect(await childTitles(ports, 'f-voice')).toEqual(['01 语音识别', '02 语音对话', '03 数字人'])
   })
+  it('推翻模式下，已有编号从 03 开始的层级也回到 01', async () => {
+    const shifted = [
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: 'f-api', title: '01 FastAPI', children: [
+            { id: '100', title: 'docs', url: 'https://fastapi.dev' },
+          ]},
+          { id: 'f-voice', title: '语音交互', children: [
+            { id: 'f-asr', title: '03 语音识别', children: [] },
+            { id: 'f-chat', title: '04 语音对话', children: [] },
+            { id: 'f-avatar', title: '05 数字人', children: [] },
+          ]},
+        ]},
+      ]},
+    ]
+    const fake = createFakeBookmarks(shifted)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+
+    await applyPlan(ports, leftoverPlan(true), new Set(['100']), 'zh_CN')
+
+    expect(await childTitles(ports, 'f-voice')).toEqual(['01 语音识别', '02 语音对话', '03 数字人'])
+  })
+
 
   it('非推翻模式不给用户自己的目录补号', async () => {
     const fake = createFakeBookmarks(leftover)

@@ -1,3 +1,4 @@
+import { stripNumberPrefix } from './map'
 import type { BookmarkNode } from './ports'
 import { findScopeRoots } from './scan'
 
@@ -43,6 +44,31 @@ export function planBareFolderRenames(
     next++
   }
   return renames
+}
+
+/**
+ * 保底修正整层从 02、03 等偏移编号开始的目录。
+ *
+ * 只有同层全部是整数编号且最小号大于 01 时才重排；带小数的旧版层级和
+ * 未编号目录仍走原有补号逻辑，避免把用户名字里的数字误当成我们的编号。
+ */
+export function planFolderRenames(
+  siblings: readonly { id: string; title: string }[],
+): FolderRename[] {
+  const numbers = siblings
+    .map((sibling) => folderNumber(sibling.title))
+  if (
+    numbers.length > 0
+    && numbers.every((number): number is number => number !== null && Number.isInteger(number))
+    && Math.min(...numbers) > 1
+  ) {
+    return siblings.map((sibling, index) => ({
+      id: sibling.id,
+      oldTitle: sibling.title,
+      newTitle: `${String(index + 1).padStart(2, '0')} ${stripNumberPrefix(sibling.title)}`,
+    }))
+  }
+  return planBareFolderRenames(siblings)
 }
 
 /**
