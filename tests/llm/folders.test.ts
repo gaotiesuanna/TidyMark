@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   collectTopics,
+  normalizeSkillDesign,
   applyDesign,
   designFolders as designFoldersRaw,
   designTagFolders as designTagFoldersRaw,
@@ -97,6 +98,47 @@ describe('applyDesign', () => {
     const input = [tag('1', 'a'), tag('2', 'b'), tag('3', 'c')]
     const result = applyDesign(input, design([['b', ['B']]]))
     expect(result.map((t) => t.bookmarkId)).toEqual(['1', '2', '3'])
+  })
+})
+
+describe('normalizeSkillDesign', () => {
+  it('技能被模型放到神经网络模型下时提升为一级', () => {
+    const design = {
+      folders: [{ title: '神经网络模型', children: ['技能', '研究'] }],
+      mapping: new Map([
+        ['技能', ['神经网络模型', '技能']],
+        ['Claude Code', ['Claude Code']],
+        ['研究', ['神经网络模型', '研究']],
+      ]),
+    }
+    const normalized = normalizeSkillDesign(design, 'zh_CN')
+
+    expect(normalized.mapping.get('技能')).toEqual(['技能'])
+    expect(normalized.folders.some((folder) => folder.title === '技能')).toBe(true)
+    expect(normalized.mapping.get('Claude Code')).toEqual(['Claude Code'])
+    expect(normalized.mapping.get('研究')).toEqual(['神经网络模型', '研究'])
+    expect(normalized.folders).toContainEqual({
+      title: '神经网络模型',
+      children: ['研究'],
+    })
+    expect(design.folders).toEqual([{ title: '神经网络模型', children: ['技能', '研究'] }])
+  })
+
+  it('技能已经是一级目录时保持目录结构不变并返回副本', () => {
+    const design = {
+      folders: [{ title: '技能', children: ['技能工具'] }, { title: 'Claude Code', children: [] }],
+      mapping: new Map([
+        ['技能', ['技能']],
+        ['技能工具', ['技能', '技能工具']],
+        ['Claude Code', ['Claude Code']],
+      ]),
+    }
+    const normalized = normalizeSkillDesign(design, 'zh_CN')
+
+    expect(normalized).toEqual(design)
+    expect(normalized).not.toBe(design)
+    expect(normalized.folders).not.toBe(design.folders)
+    expect(normalized.mapping).not.toBe(design.mapping)
   })
 })
 

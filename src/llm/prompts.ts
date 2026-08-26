@@ -185,7 +185,7 @@ export function foldersPrompt(
           allowChildren
             ? `3. 书签少时只给一层目录，不要硬凑${below}级目录；只有当某个${here}级目录下确实存在多个清晰的子主题、书签数量也撑得起来时，才用 children 分出${below}级。`
             : '3. 只输出一层目录，children 一律返回空数组。',
-          `4. ${here}级目录名要具体，禁止使用这些宽泛词：${BROAD_WORDS.zh_CN}。「Claude Code」「LLM 原理」「终端工具」是好名字，「AI」「开发」不是。`,
+          `4. ${here}级目录名要具体，禁止使用这些宽泛词：${BROAD_WORDS.zh_CN}。「Claude Code」「LLM 原理」「终端工具」是好名字，「AI」「开发」不是。可复用 skill/skills 仓库统一放在独立的一级「技能」目录，不得嵌套在「Claude」或「神经网络模型」等目录下。`,
         ]
 
     return [
@@ -228,7 +228,7 @@ export function foldersPrompt(
         allowChildren
           ? `3. With few bookmarks, produce a single level. Only use children when a ${here} folder genuinely contains several distinct subtopics with enough bookmarks to justify them as ${below} folders.`
           : '3. Output only one level. Always return an empty array for children.',
-        `4. ${here === 'top-level' ? 'Top-level' : here} folder names must be specific. Never use these vague words: ${BROAD_WORDS.en}. "Claude Code", "LLM internals", "Terminal tools" are good names; "AI", "Dev" are not.`,
+        `4. ${here === 'top-level' ? 'Top-level' : here} folder names must be specific. Never use these vague words: ${BROAD_WORDS.en}. "Claude Code", "LLM internals", "Terminal tools" are good names; "AI", "Dev" are not. Reusable skill/skills repositories belong in a standalone top-level "Skills" folder and must not be nested under "Claude", neural-model, or similar folders.`,
       ]
 
   return [

@@ -5,6 +5,7 @@ import type { TagResult } from '@/core/types'
 import type { TopicCluster } from '@/core/newTopics'
 import { MAX_SIBLINGS } from '@/core/tree'
 import { SHAPE_MAX_SIBLINGS } from '@/core/shape'
+import { SKILL_TOPIC } from '@/core/rules'
 import { NO_TOPIC } from './tags'
 import type { LlmClient } from './client'
 import {
@@ -24,6 +25,37 @@ export interface FolderDesign {
   folders: Array<{ title: string; children: string[] }>
   /** normalizeName(原始标签) → 目录路径，长度 1 或 2。查不到的标签视为未映射。 */
   mapping: Map<string, string[]>
+}
+
+/**
+ * Keep the reusable skill repository category at the top level regardless of
+ * where the model places it, without mutating the model's folder design.
+ */
+export function normalizeSkillDesign(design: FolderDesign, locale: Locale): FolderDesign {
+  const folders = design.folders.map((folder) => ({
+    title: folder.title,
+    children: [...folder.children],
+  }))
+  const mapping = new Map(
+    [...design.mapping].map(([topic, path]) => [topic, [...path]]),
+  )
+  const skillKey = normalizeName(SKILL_TOPIC[locale])
+  const skillPath = mapping.get(skillKey)
+
+  if (skillPath !== undefined && skillPath.length > 1) {
+    const parentKey = normalizeName(skillPath[0]!)
+    const childKey = normalizeName(skillPath[1]!)
+    const parent = folders.find((folder) => normalizeName(folder.title) === parentKey)
+    if (parent !== undefined) {
+      parent.children = parent.children.filter((child) => normalizeName(child) !== childKey)
+    }
+    mapping.set(skillKey, [SKILL_TOPIC[locale]])
+    if (!folders.some((folder) => normalizeName(folder.title) === skillKey)) {
+      folders.push({ title: SKILL_TOPIC[locale], children: [] })
+    }
+  }
+
+  return { folders, mapping }
 }
 
 /**
@@ -408,11 +440,15 @@ export async function designFolders(
     )
     return null
   }
+  const adopt = (attempt: Extract<DesignAttempt, { ok: true }>): FolderDesign => {
+    const design = normalizeSkillDesign(attempt.design, locale)
+    logAdopted({ ...attempt, design }, locale, options)
+    return design
+  }
 
   const firstIssues = findIssues(first.design, topics, options, locale)
   if (issueCount(firstIssues) === 0) {
-    logAdopted(first, locale, options)
-    return first.design
+    return adopt(first)
   }
 
   if (firstIssues.compound.length > 0) {
@@ -425,8 +461,7 @@ export async function designFolders(
   // 重问是取消之后才新发起的一次请求，不属于「已经在跑的这次请求不中途打断」
   // 这条承诺覆盖的范围——用户点了取消，这次请求本就不该发出去（见 issues review I3）。
   if (options.isCancelled?.() === true) {
-    logAdopted(first, locale, options)
-    return first.design
+    return adopt(first)
   }
 
   // 只重问一次。重问失败（网络错、返回形状不对）就用第一版——名字不好看，
@@ -441,8 +476,7 @@ export async function designFolders(
     // 重问失败≠首轮失败：第一版仍然被采用，不是退回原始标签，
     // 不能打 logFoldersFailed 那条文案（见 issues review I1）
     options.onLog?.(logFoldersRetryFailed(locale, second.detail), 'warn')
-    logAdopted(first, locale, options)
-    return first.design
+    return adopt(first)
   }
 
   const secondIssues = findIssues(second.design, topics, options, locale)
@@ -462,8 +496,7 @@ export async function designFolders(
   if (remaining.families.length > 0) {
     options.onLog?.(logFamiliesRemain(locale, familyDetail(locale, remaining.families)), 'warn')
   }
-  logAdopted(chosen, locale, options)
-  return chosen.design
+  return adopt(chosen)
 }
 
 /** 一版设计里所有该重问的毛病。两类分开存，日志与反馈都要分别点名。 */
