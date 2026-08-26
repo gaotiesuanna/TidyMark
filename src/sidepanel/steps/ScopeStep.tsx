@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { plural, t } from '@/i18n'
 import { countScopedBookmarks } from '@/core/export'
+import { scanTree, scopeFolderPaths } from '@/core/scan'
 import { BookmarkTree, topLevelNodes } from '../components/BookmarkTree'
 import { isModelConfigured } from '@/llm/config'
 import { activeLlm } from '@/storage/settings'
@@ -29,6 +30,16 @@ export function ScopeStep() {
     () => countScopedBookmarks(tree, [...checkedIds]),
     [tree, checkedIds],
   )
+  // 勾选当下就能从已经在手的树算出范围统计，不必等点扫描、跳到偏好页。
+  // 和后台 goScan 走同一个 scanTree：空文件夹、无标题、重名这些树上看不出来的数，口径才对得上。
+  const preview = useMemo(() => {
+    if (checkedIds.size === 0) return null
+    const ids = [...checkedIds]
+    return {
+      paths: scopeFolderPaths(tree, ids),
+      stats: scanTree(tree, ids).stats,
+    }
+  }, [tree, checkedIds])
 
   function toggleExpand(id: string): void {
     const next = new Set(expandedIds)
@@ -86,8 +97,33 @@ export function ScopeStep() {
           负的左右外边距抵掉 <main> 的 p-4，让顶边线和白底铺满整宽——否则树滚到下面会从两侧透出来。
           底部同理：<main> 底下那 16px 内边距也在滚动区里，吸底位置得跟着往下挪 16px（-bottom-4）才盖得住，
           否则目录树会从这条缝里滚过去露出来；-mb-4 则是把这 16px 从文档流里减回去，
-          免得滚到最底时操作区反被顶起来、底边又露出一条白缝。pb-4 把视觉内边距补回来。 */}
-      <div className="sticky -bottom-4 -mx-4 -mb-4 mt-3 border-t border-neutral-200 bg-white px-4 pb-4 pt-3">
+          免得滚到最底时操作区反被顶起来、底边又露出一条白缝。pb-4 把视觉内边距补回来。
+          范围统计跟按钮钉在一起：勾选时不必滚过整棵树才看见空文件夹、重名这些数。 */}
+      <div className="sticky -bottom-4 -mx-4 -mb-4 mt-3 space-y-3 border-t border-neutral-200 bg-white px-4 pb-4 pt-3">
+        {preview !== null && (
+          <section className="rounded border p-3 text-sm">
+            <h2 className="mb-2 font-medium">{t('prefsScanTitle')}</h2>
+            {preview.paths.length > 0 && (
+              <div className="mb-2">
+                <p className="text-xs text-neutral-500">{t('prefsScanScope')}</p>
+                <ul>
+                  {preview.paths.map((path) => (
+                    <li key={path} className="break-all font-mono text-xs">{path}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <dl className="grid grid-cols-2 gap-y-1 text-xs">
+              <dt className="text-neutral-500">{t('prefsStatBookmarks')}</dt><dd>{preview.stats.totalBookmarks}</dd>
+              <dt className="text-neutral-500">{t('prefsStatFolders')}</dt><dd>{preview.stats.totalFolders}</dd>
+              <dt className="text-neutral-500">{t('prefsStatEmpty')}</dt><dd>{preview.stats.emptyFolders}</dd>
+              <dt className="text-neutral-500">{t('prefsStatUntitled')}</dt><dd>{preview.stats.untitledBookmarks}</dd>
+              <dt className="text-neutral-500">{t('prefsStatDuplicates')}</dt><dd>{preview.stats.duplicateUrlGroups}</dd>
+              <dt className="text-neutral-500">{t('prefsStatDuplicateFolders')}</dt><dd>{preview.stats.duplicateFolderGroups}</dd>
+              <dt className="text-neutral-500">{t('prefsStatDepth')}</dt><dd>{preview.stats.maxDepth}</dd>
+            </dl>
+          </section>
+        )}
         <button
           className="w-full cursor-pointer rounded-md bg-neutral-800 py-2 text-sm font-medium text-white transition-colors duration-150 hover:enabled:bg-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
           disabled={checkedIds.size === 0 || busy !== null}
@@ -112,3 +148,4 @@ export function ScopeStep() {
     </div>
   )
 }
+

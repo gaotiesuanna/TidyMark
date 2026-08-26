@@ -20,6 +20,26 @@ const tree: BookmarkNode[] = [
   ]},
 ]
 
+/** 子目录里有书签，目录下还散着几条——用来钉「范围内书签数」不是文件夹数。 */
+const withLoose: BookmarkNode[] = [
+  { id: '0', title: '', children: [
+    { id: '1', parentId: '0', title: '书签栏', children: [
+      { id: '10', parentId: '1', title: 'react', children: [
+        { id: '100', parentId: '10', title: 'hooks', children: [
+          { id: '1000', parentId: '100', title: 'a', url: 'https://a.test' },
+        ]},
+        { id: '101', parentId: '10', title: 'router', children: [
+          { id: '1010', parentId: '101', title: 'b', url: 'https://b.test' },
+        ]},
+        { id: '1020', parentId: '10', title: 'c', url: 'https://c.test' },
+        { id: '1021', parentId: '10', title: 'd', url: 'https://d.test' },
+        { id: '1022', parentId: '10', title: 'e', url: 'https://e.test' },
+      ]},
+    ]},
+  ]},
+]
+
+
 beforeEach(() => {
   useStore.setState({
     tree, checkedIds: new Set(), busy: null, error: null,
@@ -152,24 +172,6 @@ describe('ScopeStep 还没配模型时的提示', () => {
  * findScopeRoots + 整棵子树遍历）。按钮要报的是这次真正要处理的东西：书签数。
  */
 describe('ScopeStep 扫描按钮报的数', () => {
-  const withLoose: BookmarkNode[] = [
-    { id: '0', title: '', children: [
-      { id: '1', title: '书签栏', children: [
-        { id: '10', title: 'react', children: [
-          { id: '100', title: 'hooks', children: [
-            { id: '1000', title: 'a', url: 'https://a.test' },
-          ]},
-          { id: '101', title: 'router', children: [
-            { id: '1010', title: 'b', url: 'https://b.test' },
-          ]},
-          // 直接散在 react 底下、没进任何子目录的三条
-          { id: '1020', title: 'c', url: 'https://c.test' },
-          { id: '1021', title: 'd', url: 'https://d.test' },
-          { id: '1022', title: 'e', url: 'https://e.test' },
-        ]},
-      ]},
-    ]},
-  ]
 
   it('报书签数，并把文件夹数降为附注——散在目录下的书签也算在内', async () => {
     useStore.setState({ tree: withLoose, checkedIds: new Set(), busy: null, error: null })
@@ -193,4 +195,44 @@ describe('ScopeStep 扫描按钮报的数', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: 'react' }))
     expect(screen.getByRole('button', { name: '扫描选中的 1 条书签（1 个文件夹）' })).toBeTruthy()
   })
+})
+
+/**
+ * 扫描结果卡从偏好页挪到这一页：勾选本身已经决定范围，树又已经在手，
+ * 不必等点扫描、跳到下一步才看见自己勾了什么。空文件夹、无标题、重名这些
+ * 树上看不出来的数，选中的当下就该在。
+ */
+describe('ScopeStep 勾选后立刻显示范围统计', () => {
+  it('没勾选时不渲染扫描结果', () => {
+    render(<ScopeStep />)
+    expect(screen.queryByText('扫描结果')).toBeNull()
+  })
+
+  it('勾中深层目录后画出 /父/子/ 路径', async () => {
+    render(<ScopeStep />)
+    await userEvent.click(screen.getByRole('checkbox', { name: 'react' }))
+    expect(screen.getByText('/书签栏/react/')).toBeTruthy()
+  })
+
+  it('级联勾选只显示真正的范围根', async () => {
+    render(<ScopeStep />)
+    await userEvent.click(screen.getByRole('checkbox', { name: '书签栏' }))
+    expect(screen.getByText('/书签栏/')).toBeTruthy()
+    expect(screen.queryByText('/书签栏/react/')).toBeNull()
+  })
+
+  it('勾选后立刻报范围内的书签数和文件夹数，散链也算', async () => {
+    useStore.setState({ tree: withLoose, checkedIds: new Set(), busy: null, error: null })
+    render(<ScopeStep />)
+    await userEvent.click(screen.getByRole('checkbox', { name: 'react' }))
+    expect(screen.getByText('扫描结果')).toBeTruthy()
+    expect(screen.getByText('书签').nextElementSibling?.textContent).toBe('5')
+    expect(screen.getByText('文件夹').nextElementSibling?.textContent).toBe('3')
+    expect(screen.getByText('空文件夹').nextElementSibling?.textContent).toBe('0')
+    expect(screen.getByText('无标题书签').nextElementSibling?.textContent).toBe('0')
+    expect(screen.getByText('重复链接组').nextElementSibling?.textContent).toBe('0')
+    expect(screen.getByText('重名目录').nextElementSibling?.textContent).toBe('0')
+    expect(screen.getByText('最深层级').nextElementSibling?.textContent).toBe('1')
+  })
+
 })

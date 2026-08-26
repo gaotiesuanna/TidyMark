@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { scopeFolderPaths } from '@/core/scan'
 import { detectMode } from '@/core/mode'
 import { currentLocale, t } from '@/i18n'
 import { isLocalBaseUrl, isModelConfigured } from '@/llm/config'
@@ -43,7 +42,6 @@ function pickableModels(endpoints: Endpoint[]): Array<{ baseUrl: string; model: 
 export function PreferencesStep() {
   const {
     scan, settings, setSettings, analyze, busy, reset, modeOverride, setModeOverride, openSettings,
-    tree, checkedIds,
   } = useStore()
   const locale = currentLocale()
   // 与后台是同一个纯函数——但前提是同一份扫描结果：书签在 goScan 之后、这次
@@ -55,12 +53,7 @@ export function PreferencesStep() {
     () => (scan === null ? null : detectMode(scan, locale)),
     [scan, locale],
   )
-  const scopePaths = useMemo(
-    () => scopeFolderPaths(tree, [...checkedIds]),
-    [tree, checkedIds],
-  )
   if (scan === null || decision === null) return null
-  const { stats } = scan
   const rebuild = (modeOverride ?? decision.mode) === 'rebuild'
   // 模型配置在设置页，这里只判断配没配。没配时不禁用按钮：一个禁用的按钮既不解释
   // 为什么，也不给出路；换成一个能点、点了直接落到设置页的按钮永远更好。
@@ -71,29 +64,6 @@ export function PreferencesStep() {
 
   return (
     <div className="space-y-4">
-      <section className="rounded border p-3 text-sm">
-        <h2 className="mb-2 font-medium">{t('prefsScanTitle')}</h2>
-        {scopePaths.length > 0 && (
-          <div className="mb-2">
-            <p className="text-xs text-neutral-500">{t('prefsScanScope')}</p>
-            <ul>
-              {scopePaths.map((path) => (
-                <li key={path} className="break-all font-mono text-xs">{path}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        <dl className="grid grid-cols-2 gap-y-1 text-xs">
-          <dt className="text-neutral-500">{t('prefsStatBookmarks')}</dt><dd>{stats.totalBookmarks}</dd>
-          <dt className="text-neutral-500">{t('prefsStatFolders')}</dt><dd>{stats.totalFolders}</dd>
-          <dt className="text-neutral-500">{t('prefsStatEmpty')}</dt><dd>{stats.emptyFolders}</dd>
-          <dt className="text-neutral-500">{t('prefsStatUntitled')}</dt><dd>{stats.untitledBookmarks}</dd>
-          <dt className="text-neutral-500">{t('prefsStatDuplicates')}</dt><dd>{stats.duplicateUrlGroups}</dd>
-          <dt className="text-neutral-500">{t('prefsStatDuplicateFolders')}</dt><dd>{stats.duplicateFolderGroups}</dd>
-          <dt className="text-neutral-500">{t('prefsStatDepth')}</dt><dd>{stats.maxDepth}</dd>
-        </dl>
-      </section>
-
       <section className="rounded border p-3">
         <div className="space-y-1 text-sm">
           <p>{rebuild ? t('prefsModeRebuild') : t('prefsModeAdditive')}</p>
