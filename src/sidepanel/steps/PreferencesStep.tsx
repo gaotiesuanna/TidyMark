@@ -143,11 +143,10 @@ export function PreferencesStep() {
           />
           <span>
             {t('prefsCleanTitle')}
-            <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-400">
-              {t('prefsCleanSummary')}
-            </span>
             <span className="mt-0.5 block">
-              <Detail label={detailLabel()}>{t('prefsCleanBody')}</Detail>
+              <Detail label={detailLabel()}>
+                {`${t('prefsCleanSummary')} ${t('prefsCleanBody')}`}
+              </Detail>
             </span>
           </span>
         </label>

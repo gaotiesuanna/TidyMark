@@ -119,8 +119,8 @@ export interface Progress {
 
 /** 日志上限，超出后丢弃最旧的几行。 */
 export const MAX_LOGS = 200
-/** 单行长度上限——接口返回的错误体可能是整段 JSON，完整内容仍在后台 console 里。 */
-export const MAX_LOG_LENGTH = 200
+/** 单行长度上限。批次结果要把二三十条「标题 → 主题」放下，200 会砍成看不懂的残句。 */
+export const MAX_LOG_LENGTH = 4000
 
 /** 超长时开头保留多少字，其余额度留给结尾。 */
 const HEAD_CHARS = Math.floor(MAX_LOG_LENGTH / 2)

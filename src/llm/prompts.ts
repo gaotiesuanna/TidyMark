@@ -56,9 +56,10 @@ export function tagsPrompt(locale: Locale): string[] {
       '规则：',
       '1. 主题回答「这个书签讲什么、解决什么问题」，要具体。',
       `2. 禁止使用这些宽泛词：${BROAD_WORDS.zh_CN}。`,
-      '3. 例如「Claude Code」「KV Cache」「终端工具」「提示工程」，而不是「AI」「开发」。',
-      '4. 主题名用中文，2 到 8 个字；专有技术名词（React、RAG、MCP）可直接用原文。',
-      '5. 尽量复用已出现过的主题名，不要为同一概念创造多个说法。',
+      '3. 存放可复用 skill/skills 的仓库统一标成「技能」，不要按依附的 Claude、GPT 等模型名称归类。',
+      '4. 例如「Claude Code」「KV Cache」「终端工具」「提示工程」，而不是「AI」「开发」。',
+      '5. 主题名用中文，2 到 8 个字；专有技术名词（React、RAG、MCP）可直接用原文。',
+      '6. 尽量复用已出现过的主题名，不要为同一概念创造多个说法。',
     ]
   }
   return [
@@ -67,9 +68,10 @@ export function tagsPrompt(locale: Locale): string[] {
     'Rules:',
     '1. The topic answers "what is this about, what problem does it solve". Be specific.',
     `2. Never use these vague words: ${BROAD_WORDS.en}.`,
-    '3. Good: "Claude Code", "KV Cache", "Terminal tools", "Prompt engineering". Bad: "AI", "Dev".',
-    '4. Write topics in English, 1 to 4 words. Established technical names (React, RAG, MCP) stay as they are.',
-    '5. Reuse topics you have already produced. Do not invent several names for one concept.',
+    '3. Reusable skill/skills repositories must use the standalone topic "Skills"; do not classify them by an attached model name such as Claude or GPT.',
+    '4. Good: "Claude Code", "KV Cache", "Terminal tools", "Prompt engineering". Bad: "AI", "Dev".',
+    '5. Write topics in English, 1 to 4 words. Established technical names (React, RAG, MCP) stay as they are.',
+    '6. Reuse topics you have already produced. Do not invent several names for one concept.',
   ]
 }
 

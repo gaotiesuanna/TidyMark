@@ -39,6 +39,28 @@ export function logBatch(
 }
 
 /**
+ * 一批模型给出的逐条结果。跟在「第 N 批完成」后面，让用户看见模型到底标了什么。
+ * 空输出写成「未标」，不能省略——漏标和标了空字符串对目录设计是同一件事。
+ */
+export function logBatchOutputs(
+  locale: Locale,
+  label: string,
+  index: number,
+  rows: ReadonlyArray<{ title: string; output: string }>,
+): string {
+  const what = locale === 'zh_CN' ? label.replace(/批次$/, '') : label
+  const blank = locale === 'zh_CN' ? '（未标）' : '(unlabeled)'
+  const header = locale === 'zh_CN'
+    ? `${what} 第 ${index + 1} 批结果：`
+    : `${what} ${index + 1} results:`
+  const body = rows.map((row) => {
+    const output = row.output.trim() === '' ? blank : row.output
+    return `${row.title} → ${output}`
+  })
+  return [header, ...body].join('\n')
+}
+
+/**
  * `size` 与 `ok` 都按**书签条数**算，不按请求条目数——用户在同一屏里连着读到
  * 「N 个书签」「这一行」「N 条移动建议」，中间换口径就是一个没有任何解释的数字。
  *

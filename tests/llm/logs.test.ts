@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { LOCALES } from '@/core/locale'
 import {
-  fallbackReason, logBatch, logBatchDone, logBatchFailed,
+  fallbackReason, logBatch, logBatchDone, logBatchFailed, logBatchOutputs,
   logCompoundNames, logCompoundNamesRemain, logDuplicateTopics, logFoldersDone, logFoldersFailed,
   logBatchPartFailed, logBatchSplit, logFamiliesRemain, logFragmentedFamilies,
   logFoldersRetryFailed, logNoTopicMapped,
@@ -172,5 +172,35 @@ describe('logBatch 报出还没回来的批次', () => {
     const line = logBatch('en', 'Tag batch', 7, 8, 24, { done: 6, inflight: [4, 6] })
     expect(line).toContain('6/8')
     expect(line).toContain('batches 5, 7 still running')
+  })
+})
+
+describe('logBatchOutputs 列出这一批模型给出的结果', () => {
+  it('每条书签一行，标题对着模型输出', () => {
+    const line = logBatchOutputs('zh_CN', '标签批次', 3, [
+      { title: 'React 文档', output: '前端' },
+      { title: 'PaddleSpeech', output: '语音合成' },
+    ])
+    expect(line).toContain('第 4 批结果')
+    expect(line).toContain('React 文档 → 前端')
+    expect(line).toContain('PaddleSpeech → 语音合成')
+  })
+
+  it('模型没标的书签写未标，不假装有结果', () => {
+    const line = logBatchOutputs('zh_CN', '标签批次', 0, [
+      { title: '杂项', output: '' },
+    ])
+    expect(line).toContain('杂项 → （未标）')
+  })
+
+  it('英文同源且不含中文', () => {
+    const line = logBatchOutputs('en', 'Tag batch', 0, [
+      { title: 'React docs', output: 'Frontend' },
+      { title: 'misc', output: '' },
+    ])
+    expect(line).toContain('Tag batch 1 results:')
+    expect(line).toContain('React docs → Frontend')
+    expect(line).toContain('misc → (unlabeled)')
+    expect(/[一-鿿]/.test(line)).toBe(false)
   })
 })

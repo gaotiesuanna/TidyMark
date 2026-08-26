@@ -108,6 +108,7 @@ export function buildCategoryTree(input: BuildTreeInput): BuildTreeOutput {
   }
   const siblingsOf = (parentId: string): ExistingFolder[] =>
     input.existingFolders.filter((folder) => (folder.parentId ?? '') === parentId)
+  const claimed = new Set<string>()
   /** 先精确同名，再唯一同族。多个同族兄弟不猜，避免「语音识别」和「语音交互」抢同一个设计名。 */
   const findChild = (parentId: string, title: string): ExistingFolder | null => {
     const exact = existingByParent.get(lookupKey(parentId, title))

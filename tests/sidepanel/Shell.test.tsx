@@ -18,6 +18,12 @@ describe('Shell 设置入口', () => {
     expect(screen.getByText('步骤内容')).toBeDefined()
   })
 
+  it('分隔线位于步骤条上方，而不是步骤条下方', () => {
+    render(<Shell><div>步骤内容</div></Shell>)
+    expect(screen.getByRole('banner').className).not.toContain('border-b')
+    expect(screen.getByRole('list').className).toContain('border-t')
+  })
+
   it('点齿轮打开设置页，步骤条与步骤内容都让位', async () => {
     render(<Shell><div>步骤内容</div></Shell>)
     await userEvent.click(screen.getByRole('button', { name: '设置' }))

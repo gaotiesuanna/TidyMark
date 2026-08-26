@@ -48,7 +48,7 @@ export function Shell({ children }: { children: ReactNode }) {
   } = useStore()
   return (
     <div className="flex h-screen flex-col bg-white text-neutral-800">
-      <header className="border-b border-neutral-200 px-4 py-2.5">
+      <header className="px-4 py-2.5">
         {/* Chrome 侧栏顶部已经显示了图标和「TidyMark」，这里再写一遍是重复，还白占一行高度。
             但那个标题栏属于浏览器界面、不在本文档里，读屏用户在文档中导航时找不到它，
             所以只是视觉隐藏而非删除——保证这个页面至少还有一个 h1。 */}
@@ -103,9 +103,10 @@ export function Shell({ children }: { children: ReactNode }) {
 
             步骤条是只读的进度指示，不是导航：往前跳不可能（没分析过就没有预览），
             往回退今天也只有「确认结构」那一步有专门的按钮。所以刻意不长成按钮的样子——
-            圆角加填充底色是按钮的视觉语言，会一直勾着人去点一个点不动的东西。 */}
+            圆角加填充底色是按钮的视觉语言，会一直勾着人去点一个点不动的东西。
+            分隔线放在步骤条上沿，视觉上把模式切换和流程进度分成两层。 */}
         {!settingsOpen && mode === 'organize' && (
-          <ol className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          <ol className="-mx-4 mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 border-t border-neutral-200 px-4 text-xs">
             {STEPS.map((each, i) => (
               <li key={each.key} className="flex items-center gap-x-2 whitespace-nowrap">
                 {/* 分隔点只是视觉上的断句，读屏念出来是噪音 */}

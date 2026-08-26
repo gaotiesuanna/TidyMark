@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { PreferencesStep } from '@/sidepanel/steps/PreferencesStep'
 import { useStore } from '@/sidepanel/store'
@@ -74,23 +74,28 @@ describe('PreferencesStep 不再有域名聚合', () => {
 })
 
 describe('PreferencesStep 清理空文件夹的说明', () => {
-  // 这段说明是无条件渲染的，可它描述的行为在合并模式下并不成立：
+  // 这段说明描述的行为在合并模式下有例外：
   // 源文件夹会被清空删除，而且删不删跟这个开关无关（apply.ts 里是
   // `removeEmptyFolders === true || mergeRootId !== null`）。
   // 界面上唯一一处讲「什么不会被删」的地方说了假话，比不讲更糟。
-  it('交代合并时源文件夹会被删除，且不受这个开关约束', () => {
+  async function openCleanDetail(): Promise<HTMLElement> {
     setup(messyScan)
     render(<PreferencesStep />)
-    const body = screen.getByText(/删除范围内不含任何书签的文件夹/)
+    const label = screen.getByText('整理后清理空文件夹').closest('label')
+    if (label === null) throw new Error('找不到清理空文件夹那一行')
+    await userEvent.click(within(label).getByRole('button', { name: '说明' }))
+    return within(label).getByText(/删除范围内不含任何书签的文件夹/)
+  }
+
+  it('交代合并时源文件夹会被删除，且不受这个开关约束', async () => {
+    const body = await openCleanDetail()
     expect(body.textContent).toMatch(/合并/)
     expect(body.textContent).toMatch(/删除/)
     expect(body.textContent).toMatch(/不受.*开关/)
   })
 
-  it('例外那半句本身要带上「可撤销」——删除很吓人，撤销才是让人敢按的那句', () => {
-    setup(messyScan)
-    render(<PreferencesStep />)
-    const body = screen.getByText(/删除范围内不含任何书签的文件夹/).textContent ?? ''
+  it('例外那半句本身要带上「可撤销」——删除很吓人，撤销才是让人敢按的那句', async () => {
+    const body = (await openCleanDetail()).textContent ?? ''
     // 只查整段里有没有「撤销」是查不出东西的：原文早就有「撤销时会连同目录一起还原」，
     // 那句讲的是别的事。要看的是「合并」之后那半句自己有没有交代可撤销。
     const exception = body.slice(body.indexOf('合并'))
@@ -167,7 +172,7 @@ describe('PreferencesStep 不再摆配一次就不动的设置', () => {
   it('模型配置整段都不在偏好页上——它是配一次就不动的，属于设置页', () => {
     render(<PreferencesStep />)
     // 空断言防身：这一页确实渲染出内容了
-    expect(screen.getByText(/删除范围内不含任何书签的文件夹/)).toBeTruthy()
+    expect(screen.getByText('整理后清理空文件夹')).toBeTruthy()
 
     expect(screen.queryByPlaceholderText('Base URL')).toBeNull()
     expect(screen.queryByPlaceholderText('API Key')).toBeNull()
