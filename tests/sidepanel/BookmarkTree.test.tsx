@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { BookmarkTree } from '@/sidepanel/components/BookmarkTree'
+import { BookmarkTree, filterBookmarkTree } from '@/sidepanel/components/BookmarkTree'
 import type { BookmarkNode } from '@/core/ports'
 
 const nodes: BookmarkNode[] = [
@@ -91,5 +91,38 @@ describe('BookmarkTree 展开收起', () => {
     renderTree({ expandedIds: new Set() })
     expect(screen.getByText('书签栏')).toBeDefined()
     expect(screen.queryByText('react')).toBeNull()
+  })
+ 
+  it('按文件夹名、书签标题或 URL 保留匹配节点和祖先', () => {
+    const result = filterBookmarkTree(nodes, 'a.dev')
+    expect(result.hasMatches).toBe(true)
+    expect(result.nodes[0]?.title).toBe('书签栏')
+    expect(result.nodes[0]?.children?.map((node) => node.title)).toEqual(['react'])
+    expect(result.nodes[0]?.children?.[0]?.children?.map((node) => node.title)).toEqual(['A'])
+    expect(result.expandedIds).toEqual(new Set(['1', '10']))
+  })
+
+  it('文件夹名称命中时只保留命中的文件夹，不展开无关后代', () => {
+    const result = filterBookmarkTree(nodes, '工作常用')
+    expect(result.nodes[0]?.children?.map((node) => node.title)).toEqual(['工作常用'])
+    expect(result.nodes[0]?.children?.[0]?.children).toEqual([])
+    expect(result.expandedIds).toEqual(new Set(['1']))
+  })
+
+  it('搜索渲染书签结果，但默认树仍只渲染文件夹', () => {
+    const view = renderTree({ nodes, showBookmarks: true, expandedIds: new Set(['1', '10']) })
+    expect(screen.getByText('A')).toBeDefined()
+    expect(screen.getByText('https://a.dev')).toBeDefined()
+    view.unmount()
+
+    renderTree({ nodes, showBookmarks: false, expandedIds: new Set(['1', '10']) })
+    expect(screen.queryByText('A')).toBeNull()
+  })
+
+  it('空查询返回原节点且不进入搜索结果模式', () => {
+    const result = filterBookmarkTree(nodes, '  ')
+    expect(result.nodes).toBe(nodes)
+    expect(result.hasMatches).toBe(false)
+    expect(result.expandedIds).toEqual(new Set())
   })
 })
