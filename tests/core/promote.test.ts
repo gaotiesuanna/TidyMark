@@ -99,14 +99,96 @@ describe('promoteFallbackChildren', () => {
     ])
   })
 
-  it('装不满 MIN_FOLDER_BOOKMARKS 的族不提，留在「其他」底下', () => {
+  it('小于最小阈值但非空的子目录也应提升，空子目录不提升', () => {
     const base = fixture()
     const r = promoteFallbackChildren({
       ...base,
-      classifications: [...into('tmp:1', 6), ...into('tmp:9', 3), ...into('tmp:10', 5), ...into('tmp:11', 2)],
+      candidates: [
+        ...base.candidates,
+        cand('tmp:13', ['05 其他', '03 空目录']),
+      ],
+      newFolders: [
+        ...base.newFolders,
+        spec('tmp:13', { tmp: 'tmp:9' }, '03 空目录'),
+      ],
+      classifications: [
+        ...into('tmp:1', 6),
+        ...into('tmp:9', 3),
+        ...into('tmp:10', 5),
+        ...into('tmp:11', 2),
+      ],
     })
-    expect(r.promoted.map((p) => p.title)).toEqual(['量化交易'])
-    expect(r.candidates.find((c) => c.id === 'tmp:11')!.path).toEqual(['05 其他', '02 Zotero'])
+    expect(r.promoted.map((p) => p.title)).toEqual(['量化交易', 'Zotero'])
+    expect(r.candidates.find((c) => c.id === 'tmp:11')!.path).toEqual(['02 Zotero'])
+    expect(r.candidates.find((c) => c.id === 'tmp:13')!.path).toEqual(['05 其他', '03 空目录'])
+  })
+
+  it('跨根时每棵树的其他子目录都提升到自己的范围根', () => {
+    const r = promoteFallbackChildren({
+      locale: 'zh_CN',
+      rootIds: ['root-a', 'root-b'],
+      existingFolders: [
+        { id: 'other-a', parentId: 'root-a', index: 0 },
+        { id: 'child-a', parentId: 'other-a', index: 0 },
+        { id: 'other-b', parentId: 'root-b', index: 0 },
+        { id: 'child-b', parentId: 'other-b', index: 0 },
+      ],
+      candidates: [
+        cand('other-a', ['根 A', '01 其他']),
+        cand('child-a', ['根 A', '01 其他', '01 小主题']),
+        cand('other-b', ['根 B', '01 其他']),
+        cand('child-b', ['根 B', '01 其他', '01 小主题']),
+      ],
+      newFolders: [],
+      classifications: [
+        ...into('child-a', 1),
+        ...into('child-b', 1),
+      ],
+      bookmarkCountByFolder: new Map([
+        ['child-a', 1],
+        ['child-b', 1],
+      ]),
+    })
+
+    expect(r.folderMoves).toEqual([
+      { folderId: 'child-a', fromParentId: 'other-a', originalIndex: 0, toParentId: 'root-a' },
+      { folderId: 'child-b', fromParentId: 'other-b', originalIndex: 0, toParentId: 'root-b' },
+    ])
+    expect(r.candidates.find((c) => c.id === 'child-a')!.path).toEqual(['根 A', '01 小主题'])
+    expect(r.candidates.find((c) => c.id === 'child-b')!.path).toEqual(['根 B', '01 小主题'])
+  })
+
+  it('已有目录的小于阈值子目录也提升，空目录不生成结构移动', () => {
+    const r = promoteFallbackChildren({
+      locale: 'zh_CN',
+      rootIds: [rootId],
+      existingFolders: [
+        { id: 'other', parentId: rootId, index: 0 },
+        { id: 'small', parentId: 'other', index: 0 },
+        { id: 'empty', parentId: 'other', index: 1 },
+      ],
+      candidates: [
+        cand('other', ['书签栏', '10 其他']),
+        cand('small', ['书签栏', '10 其他', '01 小主题']),
+        cand('empty', ['书签栏', '10 其他', '02 空目录']),
+      ],
+      newFolders: [],
+      classifications: [],
+      bookmarkCountByFolder: new Map([['small', 1], ['empty', 0]]),
+    })
+    expect(r.folderMoves).toEqual([
+      { folderId: 'small', fromParentId: 'other', originalIndex: 0, toParentId: rootId },
+    ])
+    expect(r.candidates.find((c) => c.id === 'empty')!.path).toEqual(['书签栏', '10 其他', '02 空目录'])
+  })
+
+  it('装不满 MIN_FOLDER_BOOKMARKS 的族不再因为阈值被跳过', () => {
+    const base = fixture()
+    const r = promoteFallbackChildren({
+      ...base,
+      classifications: [...into('tmp:10', 5), ...into('tmp:11', 2)],
+    })
+    expect(r.promoted.map((p) => p.title)).toEqual(['量化交易', 'Zotero'])
   })
 
   it('没有「其他」时原样返回', () => {

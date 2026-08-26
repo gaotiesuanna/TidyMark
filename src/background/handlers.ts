@@ -456,7 +456,7 @@ export async function handle(
           }
         }
 
-        const warnings =
+        let warnings =
           failed.length > 0
             ? [
                 t(
@@ -684,6 +684,13 @@ export async function handle(
         // 「其他」是收容所，不应成为主题目录的父级。推翻模式下处理本轮新建的
         // 子目录；归入现有模式下则生成 move_folder，把已有子目录整体移到范围根。
         {
+          const bookmarkCountByFolder = new Map<string, number>()
+          for (const bookmark of scan.bookmarks) {
+            bookmarkCountByFolder.set(
+              bookmark.parentId,
+              (bookmarkCountByFolder.get(bookmark.parentId) ?? 0) + 1,
+            )
+          }
           const promotion = promoteFallbackChildren({
             candidates,
             newFolders,
@@ -693,12 +700,15 @@ export async function handle(
             existingFolders: scan.folders.map((f) => ({
               id: f.id, parentId: f.parentId, index: f.index,
             })),
+            bookmarkCountByFolder,
           })
+          candidates = promotion.candidates
+          newFolders = promotion.newFolders
+          classifications = promotion.classifications
+          folderMoves = promotion.folderMoves
+          warnings.push(...promotion.warnings)
+          for (const warning of promotion.warnings) log('classify', warning, 'warn')
           if (promotion.promoted.length > 0) {
-            candidates = promotion.candidates
-            newFolders = promotion.newFolders
-            classifications = promotion.classifications
-            folderMoves = promotion.folderMoves
             const detail = promotion.promoted
               .map((p) => (locale === 'zh_CN' ? `「${p.title}」${p.count} 条` : `"${p.title}" (${p.count})`))
               .join(locale === 'zh_CN' ? '、' : ', ')

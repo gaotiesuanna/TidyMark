@@ -524,9 +524,11 @@ export function filterAccepted(plan: OrganizePlan, accepted: Set<string>): Bookm
     }
   }
   const keptCreates = creates.filter((c) => needed.has(c.temporaryId))
-  // 标题改写与结构移动都与「是否接受某条书签建议」无关，一律保留
+  // Structural moves are independent of bookmark acceptance and must happen
+  // after creation but before bookmark moves.
+  const folderMoves = plan.operations.filter((o) => o.type === 'move_folder')
   const renames = plan.operations.filter(
-    (o) => o.type === 'move_folder' || o.type === 'rename_folder' || o.type === 'rename_bookmark',
+    (o) => o.type === 'rename_folder' || o.type === 'rename_bookmark',
   )
-  return [...keptCreates, ...renames, ...moves]
+  return [...keptCreates, ...folderMoves, ...renames, ...moves]
 }

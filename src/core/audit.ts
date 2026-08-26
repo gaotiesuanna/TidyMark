@@ -312,6 +312,8 @@ export interface PromoteInput {
   /** 真正的范围根，用于识别带范围根路径前缀的现有「其他」。 */
   rootIds?: readonly string[]
   existingFolders?: readonly ExistingFolderPlacement[]
+  /** 现有目录中的存量书签数；临时目录仍由 classifications 计数。 */
+  bookmarkCountByFolder?: ReadonlyMap<string, number>
 }
 
 export interface PromoteResult {
@@ -319,6 +321,7 @@ export interface PromoteResult {
   newFolders: NewFolderSpec[]
   classifications: Classification[]
   folderMoves: FolderMoveSpec[]
+  warnings: string[]
   /** 提上来的族，按原顺序。A3 的警告与日志要靠它说数字。 */
   promoted: Array<{ title: string; count: number }>
 }
@@ -340,7 +343,8 @@ export interface PromoteResult {
  * 三条约束：
  * - **不合并**。并起来要起名字，起名字要花模型调用，而「零调用」是这条路唯一的卖点；
  *   机械拼接还会撞上产品自己判为缺陷的复合标题（07 票判准 B）。
- * - **装不满 MIN_FOLDER_BOOKMARKS 的族不提**——提上去也是个站不住的一级目录。
+ * - **非空就提**。目录是否值得提升由实际书签数决定，不能用固定阈值把小但有内容的主题留在收容所；
+ *   空目录仍留在「其他」下，交给现有的清理逻辑处理。
  * - **提上来的插在「其他」前面**，让收容所留在最后一位（判准 C）。
  *
  * 必须在 buildPlan **之前**调用：一级编号由 core/plan.ts 的 renumberPlan 按
@@ -352,95 +356,183 @@ export function promoteFallbackChildren(input: PromoteInput): PromoteResult {
   const specById = new Map(input.newFolders.map((f) => [f.temporaryId, f]))
   const placementById = new Map((input.existingFolders ?? []).map((f) => [f.id, f]))
   const rootIds = new Set(input.rootIds ?? [])
-  const isTopLevelFallback = (candidate: CategoryCandidate): boolean => {
-    const spec = specById.get(candidate.id)
-    const placement = placementById.get(candidate.id)
-    return candidate.path.length === 1
-      || (spec !== undefined && spec.parentId !== null)
-      || (placement !== undefined && rootIds.has(placement.parentId ?? ''))
-  }
-  const fallback = input.candidates.find(
-    (c) => normalizeName(stripNumberPrefix(c.path.at(-1) ?? '')) === fallbackKey
-      && isTopLevelFallback(c),
-  )
-  const noop: PromoteResult = {
-    candidates: input.candidates, newFolders: input.newFolders,
-    classifications: input.classifications, folderMoves: [], promoted: [],
-  }
-  if (fallback === undefined) return noop
-
-  const counts = new Map<string, number>()
+  const classificationCounts = new Map<string, number>()
   for (const classification of input.classifications) {
+    if (classification.targetCategoryId === null) continue
     const id = classification.targetCategoryId
-    if (id === null) continue
-    counts.set(id, (counts.get(id) ?? 0) + 1)
+    classificationCounts.set(id, (classificationCounts.get(id) ?? 0) + 1)
+  }
+  const parentOf = (id: string): string | null | undefined => {
+    const spec = specById.get(id)
+    if (spec !== undefined) return spec.parentTemporaryId ?? spec.parentId
+    return placementById.get(id)?.parentId
+  }
+  const warning = (title: string): string =>
+    input.locale === 'zh_CN'
+      ? `无法确认目录「${title}」的真实父目录，未执行提升`
+      : `Could not confirm the real parent of "${title}"; promotion skipped`
+
+  type Fallback = {
+    candidate: CategoryCandidate
+    parentId: string | null
+    parentTemporaryId: string | null
+  }
+  const fallbackFor = (candidate: CategoryCandidate): Fallback | null => {
+    const spec = specById.get(candidate.id)
+    if (spec !== undefined) {
+      if (spec.parentTemporaryId !== null) return null
+      if (spec.parentId === null) return null
+      if (rootIds.size > 0 && !rootIds.has(spec.parentId)) return null
+      return { candidate, parentId: spec.parentId, parentTemporaryId: null }
+    }
+    const placement = placementById.get(candidate.id)
+    if (placement !== undefined) {
+      if (placement.parentId === null) return null
+      if (rootIds.size > 0 && !rootIds.has(placement.parentId)) return null
+      return { candidate, parentId: placement.parentId, parentTemporaryId: null }
+    }
+    // Legacy callers without identity metadata can only safely identify a
+    // root-level candidate when there is no multi-root scope to disambiguate.
+    if (rootIds.size === 0 && candidate.path.length === 1) {
+      return { candidate, parentId: null, parentTemporaryId: null }
+    }
+    return null
   }
 
-  const risers = input.candidates.filter(
-    (c) => c.path.length === fallback.path.length + 1
-      && fallback.path.every((segment, i) => c.path[i] === segment)
-      && (counts.get(c.id) ?? 0) >= MIN_FOLDER_BOOKMARKS,
-  )
-  if (risers.length === 0) return noop
+  const fallbacks = input.candidates
+    .filter((c) => normalizeName(stripNumberPrefix(c.path.at(-1) ?? '')) === fallbackKey)
+    .map(fallbackFor)
+    .filter((f): f is Fallback => f !== null)
+  const noop: PromoteResult = {
+    candidates: input.candidates,
+    newFolders: input.newFolders,
+    classifications: input.classifications,
+    folderMoves: [],
+    warnings: [],
+    promoted: [],
+  }
+  if (fallbacks.length === 0) return noop
 
-  const riserIds = new Set(risers.map((c) => c.id))
+  const warnings: string[] = []
+  const promotedByFallback = new Map<string, Set<string>>()
+  const promoted: CategoryCandidate[] = []
+  const promotedIds = new Set<string>()
   const lifted = new Map<string, string[]>()
-  const fallbackSegment = fallback.path.length - 1
-  for (const candidate of input.candidates) {
-    if (candidate.path.length <= fallback.path.length
-      || !fallback.path.every((segment, i) => candidate.path[i] === segment)) continue
-    const owner = risers.find((r) => r.path.every((segment, i) => candidate.path[i] === segment))
-    if (owner === undefined) continue
-    lifted.set(candidate.id, [
-      ...candidate.path.slice(0, fallbackSegment),
-      ...candidate.path.slice(fallbackSegment + 1),
-    ])
+  const folderMoves: FolderMoveSpec[] = []
+  const promotedCounts = new Map<string, number>()
+
+  const isPathChild = (fallback: CategoryCandidate, candidate: CategoryCandidate): boolean =>
+    candidate.path.length === fallback.path.length + 1
+      && fallback.path.every((segment, i) => candidate.path[i] === segment)
+
+  const isDescendant = (riser: CategoryCandidate, candidate: CategoryCandidate): boolean => {
+    if (candidate.id === riser.id) return true
+    const seen = new Set<string>()
+    let cursor: string | null | undefined = candidate.id
+    while (cursor !== null && cursor !== undefined && !seen.has(cursor)) {
+      seen.add(cursor)
+      cursor = parentOf(cursor)
+      if (cursor === riser.id) return true
+    }
+    return isPathChild(riser, candidate)
   }
 
-  const candidates = input.candidates.map(
-    (c) => (lifted.has(c.id) ? { ...c, path: lifted.get(c.id)! } : c),
-  )
-  const fallbackIndex = candidates.findIndex((c) => c.id === fallback.id)
-  const [fallbackEntry] = candidates.splice(fallbackIndex, 1)
-  const lastRiser = candidates.reduce(
-    (acc, c, i) => (riserIds.has(c.id) ? i : acc), -1,
-  )
-  candidates.splice(lastRiser + 1, 0, fallbackEntry!)
+  for (const fallback of fallbacks) {
+    const risers: CategoryCandidate[] = []
+    for (const candidate of input.candidates) {
+      if (candidate.id === fallback.candidate.id || !isPathChild(fallback.candidate, candidate)) continue
+      const parent = parentOf(candidate.id)
+      if (parent !== fallback.candidate.id) {
+        // A matching path without a matching identity is ambiguous across roots.
+        if (parent === undefined) warnings.push(warning(candidate.path.at(-1) ?? candidate.id))
+        continue
+      }
+      const spec = specById.get(candidate.id)
+      const placement = placementById.get(candidate.id)
+      const count = spec === undefined
+        ? (input.bookmarkCountByFolder?.get(candidate.id) ?? classificationCounts.get(candidate.id) ?? 0)
+        : (classificationCounts.get(candidate.id) ?? 0)
+      if (count <= 0) continue
 
-  const fallbackSpec = specById.get(fallback.id)
-  const fallbackPlacement = placementById.get(fallback.id)
-  const targetParentId = fallbackSpec?.parentTemporaryId ?? fallbackSpec?.parentId
-    ?? fallbackPlacement?.parentId
-  const newFolders = input.newFolders.map((f) => (
-    riserIds.has(f.temporaryId) && fallbackSpec !== undefined
-      ? { ...f, parentId: fallbackSpec.parentId, parentTemporaryId: fallbackSpec.parentTemporaryId }
-      : f
+      const targetParentId = fallback.parentId
+      if (spec === undefined) {
+        if (placement === undefined || placement.parentId !== fallback.candidate.id
+          || targetParentId === null || targetParentId.startsWith('tmp:')) {
+          warnings.push(warning(candidate.path.at(-1) ?? candidate.id))
+          continue
+        }
+        folderMoves.push({
+          folderId: candidate.id,
+          fromParentId: placement.parentId!,
+          originalIndex: placement.index,
+          toParentId: targetParentId,
+        })
+      }
+      risers.push(candidate)
+      promoted.push(candidate)
+      promotedIds.add(candidate.id)
+      promotedCounts.set(candidate.id, count)
+    }
+    if (risers.length === 0) continue
+    promotedByFallback.set(fallback.candidate.id, new Set(risers.map((r) => r.id)))
+    const fallbackSegment = fallback.candidate.path.length - 1
+    for (const candidate of input.candidates) {
+      if (!risers.some((r) => isDescendant(r, candidate))) continue
+      lifted.set(candidate.id, [
+        ...candidate.path.slice(0, fallbackSegment),
+        ...candidate.path.slice(fallbackSegment + 1),
+      ])
+    }
+  }
+  if (promoted.length === 0) return { ...noop, warnings }
+
+  const candidates = input.candidates.map((candidate) => (
+    lifted.has(candidate.id) ? { ...candidate, path: lifted.get(candidate.id)! } : candidate
   ))
-  const folderMoves = risers.flatMap((r): FolderMoveSpec[] => {
-    if (specById.has(r.id)) return []
-    const placement = placementById.get(r.id)
-    if (placement === undefined || targetParentId === undefined || targetParentId === null
-      || targetParentId.startsWith('tmp:') || placement.parentId === targetParentId) return []
-    return [{
-      folderId: r.id,
-      fromParentId: placement.parentId!,
-      originalIndex: placement.index,
-      toParentId: targetParentId,
-    }]
-  })
+  // Move promoted children immediately before their own fallback, without
+  // allowing similarly named folders from another root to cross the boundary.
+  const candidatesById = new Map(candidates.map((candidate) => [candidate.id, candidate]))
+  const reordered: CategoryCandidate[] = []
+  for (const candidate of candidates) {
+    if (promotedIds.has(candidate.id)) continue
+    const riserIds = promotedByFallback.get(candidate.id)
+    if (riserIds !== undefined) {
+      for (const id of riserIds) reordered.push(candidatesById.get(id)!)
+    }
+    reordered.push(candidate)
+  }
 
+  const newFolders = input.newFolders.map((folder) => {
+    if (!promotedIds.has(folder.temporaryId)) return folder
+    const fallback = fallbacks.find((f) => promotedByFallback.get(f.candidate.id)?.has(folder.temporaryId))
+    if (fallback === undefined) return folder
+    return {
+      ...folder,
+      parentId: fallback.parentId,
+      parentTemporaryId: fallback.parentTemporaryId,
+    }
+  })
   const reasonById = new Map(
-    risers.map((r) => [r.id, promotedReason(input.locale, counts.get(r.id) ?? 0)]),
+    promoted.map((candidate) => [
+      candidate.id,
+      promotedReason(input.locale, promotedCounts.get(candidate.id) ?? 0),
+    ]),
   )
-  const classifications = input.classifications.map((c) => {
-    const reason = c.targetCategoryId === null ? undefined : reasonById.get(c.targetCategoryId)
-    return reason === undefined ? c : { ...c, reason }
+  const classifications = input.classifications.map((classification) => {
+    const reason = classification.targetCategoryId === null
+      ? undefined
+      : reasonById.get(classification.targetCategoryId)
+    return reason === undefined ? classification : { ...classification, reason }
   })
-
   return {
-    candidates, newFolders, classifications, folderMoves,
-    promoted: risers.map((r) => ({
-      title: stripNumberPrefix(r.path.at(-1) ?? ''), count: counts.get(r.id) ?? 0,
+    candidates: reordered,
+    newFolders,
+    classifications,
+    folderMoves,
+    warnings,
+    promoted: promoted.map((candidate) => ({
+      title: stripNumberPrefix(candidate.path.at(-1) ?? ''),
+      count: promotedCounts.get(candidate.id) ?? 0,
     })),
   }
 }
