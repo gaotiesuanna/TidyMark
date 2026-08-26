@@ -225,7 +225,7 @@ function defaultChecked(groups: DuplicateGroup[]): Set<string> {
 interface State {
   step: Step
   /**
-   * 顶层模式。整理、清理、导入导出是三条平行的路，不是一条路上的几步——所以它不叫 step，
+   * 顶层模式。整理、清理、浏览是三条平行的路，不是一条路上的几步——所以它不叫 step，
    * 也不进 Shell 的步骤条（那条是只读的进度指示，见 Shell.tsx 的注释）。
    *
    * 切模式**不清空另一侧的状态**：用户可以跑到一半去清理再切回来看他的计划。

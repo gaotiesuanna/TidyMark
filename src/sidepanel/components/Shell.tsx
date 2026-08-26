@@ -17,10 +17,11 @@ const MODES = [
   { key: 'cleanup', labelKey: 'shellModeCleanup' },
   { key: 'transfer', labelKey: 'shellModeTransfer' },
 ] as const
-/** 分段控件的外壳：浅灰槽 + 内嵌白片，白片浮起来的那一格就是当前模式。 */
-const tabGroup = 'inline-flex min-w-0 flex-wrap rounded-lg bg-neutral-100 p-0.5 text-xs'
+/** 分段控件：浅灰槽 + 内嵌白片。三项均分整行，不做成左簇右齿轮的第二标题栏——
+    Chrome 侧栏顶栏已经是那个布局，再学一遍中间会空一截。 */
+const tabGroup = 'flex min-w-0 flex-1 rounded-lg bg-neutral-100 p-0.5 text-xs'
 const tabBase = [
-  'inline-flex h-7 cursor-pointer items-center justify-center rounded-md px-3 font-medium',
+  'inline-flex h-7 min-w-0 flex-1 cursor-pointer items-center justify-center rounded-md px-2 font-medium',
   'transition-colors duration-150 motion-reduce:transition-none',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400',
   'disabled:cursor-not-allowed disabled:opacity-40',
@@ -53,10 +54,10 @@ export function Shell({ children }: { children: ReactNode }) {
             但那个标题栏属于浏览器界面、不在本文档里，读屏用户在文档中导航时找不到它，
             所以只是视觉隐藏而非删除——保证这个页面至少还有一个 h1。 */}
         <h1 className="sr-only">TidyMark</h1>
-        {/* 第一行永远是「左边是身份、右边是出口」：模式切换（或设置页的返回）在左，齿轮在右。
-            以前齿轮单独占第二行，清理模式下那行只剩它一个，孤零零地贴在左边缘——
-            一整条横杠只为一个 16px 的图标而存在。合成一行后头部少一行高度，正文多一行。 */}
-        <div className="flex items-center justify-between gap-2">
+        {/* 模式切换占满这一行、齿轮贴在槽右边。不要 justify-between：
+            Chrome 顶栏已经是「左身份、右按钮」，再做一遍就是两条叠着的工具栏。
+            齿轮仍跟模式同一行——单独占一行的话，清理模式下那行只剩一个 16px 图标。 */}
+        <div className="flex items-center gap-2">
           {/* 三条平行的路，不是一条路上的几步——所以是并列的分段控件，不是步骤条里的第五格。
               塞进步骤条会让前四格点不动、第五格能点，用户第一次点错就学会「这条随便点」。
               忙的时候禁用：busy 是单槽，切过去也什么都干不了，还会让人以为切换失灵。 */}
@@ -98,32 +99,47 @@ export function Shell({ children }: { children: ReactNode }) {
             </button>
           )}
         </div>
-        {/* 侧栏可以被拖得很窄，四个步骤一行放不下。不换行就会在标签中间断词
-            （「1.」和「Scope」被拆成两行），所以让整条步骤条按项换行、项内不断词。
-
-            步骤条是只读的进度指示，不是导航：往前跳不可能（没分析过就没有预览），
-            往回退今天也只有「确认结构」那一步有专门的按钮。所以刻意不长成按钮的样子——
+        {/* 步骤条是整理这条路上的进度，不是导航：往前跳不可能（没分析过就没有预览），
+            往回退今天也只有「确认结构」那一步有专门的按钮。所以刻意不长成按钮——
             圆角加填充底色是按钮的视觉语言，会一直勾着人去点一个点不动的东西。
-            分隔线放在步骤条上沿，视觉上把模式切换和流程进度分成两层。 */}
+
+            侧栏窄、四个标签却必须铺满这一行：左对齐加点号分隔会在右侧留一块空白，
+            看起来像没排完的面包屑。每项 flex-1 均分宽度，底下用一条轨道表示进度；
+            min-w-min + nowrap 保证项内不断词，窄到一行放不下时按项折到下一行。
+
+            当前步靠字重 + 深色轨道，不只靠颜色。分隔线放在步骤条上沿，
+            把模式切换和流程进度分成两层。 */}
         {!settingsOpen && mode === 'organize' && (
-          <ol className="-mx-4 mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 border-t border-neutral-200 px-4 text-xs">
-            {STEPS.map((each, i) => (
-              <li key={each.key} className="flex items-center gap-x-2 whitespace-nowrap">
-                {/* 分隔点只是视觉上的断句，读屏念出来是噪音 */}
-                {i > 0 && <span aria-hidden="true" className="text-neutral-300">·</span>}
-                <span
-                  // 读屏靠它知道「现在在第几步」——视觉上的加粗与下划线传达不到那边
-                  {...(each.key === step ? { 'aria-current': 'step' as const } : {})}
-                  className={
-                    each.key === step
-                      ? 'font-medium text-neutral-800 underline underline-offset-4'
-                      : 'text-neutral-400'
-                  }
-                >
-                  {i + 1}. {t(each.labelKey)}
-                </span>
-              </li>
-            ))}
+          <ol className="-mx-4 mt-2 flex min-w-0 flex-wrap border-t border-neutral-200 px-4 pt-2 text-xs">
+            {STEPS.map((each, i) => {
+              const current = each.key === step
+              const passed = STEPS.findIndex((s) => s.key === step) > i
+              return (
+                <li key={each.key} className="flex min-w-min flex-1 flex-col items-center px-1">
+                  <span
+                    // 读屏靠它知道「现在在第几步」——字重与轨道传达不到那边
+                    {...(current ? { 'aria-current': 'step' as const } : {})}
+                    className={
+                      'whitespace-nowrap ' +
+                      (current
+                        ? 'font-medium text-neutral-800'
+                        : passed
+                          ? 'text-neutral-600'
+                          : 'text-neutral-400')
+                    }
+                  >
+                    {i + 1}. {t(each.labelKey)}
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={
+                      'mt-1.5 h-0.5 w-full rounded-full ' +
+                      (current ? 'bg-neutral-800' : passed ? 'bg-neutral-400' : 'bg-neutral-200')
+                    }
+                  />
+                </li>
+              )
+            })}
           </ol>
         )}
       </header>

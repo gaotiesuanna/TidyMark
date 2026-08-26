@@ -51,7 +51,7 @@ describe('Shell 设置入口', () => {
 
 /**
  * 步骤条是只读的进度指示，不是导航——所以它刻意不长成按钮的样子。
- * 代价是「现在在第几步」只剩加粗与下划线在传达，读屏那边什么都收不到，
+ * 代价是「现在在第几步」只剩字重与轨道在传达，读屏那边什么都收不到，
  * aria-current 是唯一能被程序读到的载体，得有测试守着。
  */
 describe('Shell 步骤条', () => {
@@ -122,7 +122,7 @@ describe('Shell 模式切换', () => {
     render(<Shell><div>步骤内容</div></Shell>)
     expect(screen.getByRole('tab', { name: 'AI 整理' }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByRole('tab', { name: '本地清理' }).getAttribute('aria-selected')).toBe('false')
-    expect(screen.getByRole('tab', { name: '导入导出' }).getAttribute('aria-selected')).toBe('false')
+    expect(screen.getByRole('tab', { name: '浏览书签' }).getAttribute('aria-selected')).toBe('false')
   })
 
   it('点本地清理切到清理模式，步骤条随之让位', async () => {
@@ -132,9 +132,9 @@ describe('Shell 模式切换', () => {
     expect(screen.queryByText('1. 选范围')).toBeNull()
   })
 
-  it('点导入导出切到导入导出模式，步骤条随之让位', async () => {
+  it('点浏览书签切到浏览模式，步骤条随之让位', async () => {
     render(<Shell><div>步骤内容</div></Shell>)
-    await userEvent.click(screen.getByRole('tab', { name: '导入导出' }))
+    await userEvent.click(screen.getByRole('tab', { name: '浏览书签' }))
     expect(useStore.getState().mode).toBe('transfer')
     expect(screen.queryByText('1. 选范围')).toBeNull()
   })
@@ -146,7 +146,7 @@ describe('Shell 模式切换', () => {
     expect(screen.getByText('步骤内容')).toBeDefined()
   })
 
-  it('导入导出模式下不展示步骤条，但正文照常渲染', () => {
+  it('浏览书签模式下不展示步骤条，但正文照常渲染', () => {
     useStore.setState({ mode: 'transfer' })
     render(<Shell><div>步骤内容</div></Shell>)
     expect(screen.queryByText('1. 选范围')).toBeNull()
@@ -159,7 +159,7 @@ describe('Shell 模式切换', () => {
     render(<Shell><div>步骤内容</div></Shell>)
     expect((screen.getByRole('tab', { name: 'AI 整理' }) as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByRole('tab', { name: '本地清理' }) as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByRole('tab', { name: '导入导出' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('tab', { name: '浏览书签' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('设置页打开时模式按钮不显示——那时整个正文是设置', async () => {
