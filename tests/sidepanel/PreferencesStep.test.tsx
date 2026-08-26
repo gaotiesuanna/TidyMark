@@ -332,10 +332,10 @@ describe('PreferencesStep 的权限预告', () => {
 })
 
 /**
- * 扫描结果卡已经挪到选范围页：勾选当下就能看见路径和统计，
- * 偏好页再摆一遍是重复，而且会让这一页的决定（模式、清理）被挤下去。
+ * 统计表留在选范围页。偏好页看不见树了，还是得把路径摆出来——
+ * 只报「react」会跟别处同名目录撞车，写法仍是 /书签栏/react/。
  */
-describe('PreferencesStep 不再重复扫描结果', () => {
+describe('PreferencesStep 显示当前选择的文件夹', () => {
   const tree: BookmarkNode[] = [
     { id: '0', title: '', children: [
       { id: '1', title: '书签栏', children: [
@@ -345,14 +345,31 @@ describe('PreferencesStep 不再重复扫描结果', () => {
     ]},
   ]
 
-  it('偏好页上没有扫描结果卡，也不再报范围路径', () => {
+  it('把勾中的深层目录画成 /父/子/ 路径', () => {
+    setup(anyScan)
+    useStore.setState({ tree, checkedIds: new Set(['10']) })
+    render(<PreferencesStep />)
+    expect(screen.getByText('当前范围')).toBeTruthy()
+    expect(screen.getByText('/书签栏/react/')).toBeTruthy()
+  })
+
+  it('级联勾选只显示真正的范围根', () => {
+    setup(anyScan)
+    useStore.setState({ tree, checkedIds: new Set(['1', '10', '11']) })
+    render(<PreferencesStep />)
+    expect(screen.getByText('/书签栏/')).toBeTruthy()
+    expect(screen.queryByText('/书签栏/react/')).toBeNull()
+  })
+
+  it('不把扫描结果统计表再摆一遍', () => {
     setup(anyScan)
     useStore.setState({ tree, checkedIds: new Set(['10']) })
     render(<PreferencesStep />)
     expect(screen.queryByText('扫描结果')).toBeNull()
-    expect(screen.queryByText('/书签栏/react/')).toBeNull()
+    expect(screen.queryByText('重名目录')).toBeNull()
   })
 })
+
 
 
 describe('偏好页的模型下拉', () => {

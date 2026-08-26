@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { scopeFolderPaths } from '@/core/scan'
 import { detectMode } from '@/core/mode'
 import { currentLocale, t } from '@/i18n'
 import { isLocalBaseUrl, isModelConfigured } from '@/llm/config'
@@ -42,6 +43,7 @@ function pickableModels(endpoints: Endpoint[]): Array<{ baseUrl: string; model: 
 export function PreferencesStep() {
   const {
     scan, settings, setSettings, analyze, busy, reset, modeOverride, setModeOverride, openSettings,
+    tree, checkedIds,
   } = useStore()
   const locale = currentLocale()
   // 与后台是同一个纯函数——但前提是同一份扫描结果：书签在 goScan 之后、这次
@@ -52,6 +54,10 @@ export function PreferencesStep() {
   const decision = useMemo(
     () => (scan === null ? null : detectMode(scan, locale)),
     [scan, locale],
+  )
+  const scopePaths = useMemo(
+    () => scopeFolderPaths(tree, [...checkedIds]),
+    [tree, checkedIds],
   )
   if (scan === null || decision === null) return null
   const rebuild = (modeOverride ?? decision.mode) === 'rebuild'
@@ -65,6 +71,16 @@ export function PreferencesStep() {
   return (
     <div className="space-y-4">
       <section className="rounded border p-3">
+        {scopePaths.length > 0 && (
+          <div className="mb-3">
+            <p className="text-xs text-neutral-500">{t('prefsScanScope')}</p>
+            <ul>
+              {scopePaths.map((path) => (
+                <li key={path} className="break-all font-mono text-xs">{path}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="space-y-1 text-sm">
           <p>{rebuild ? t('prefsModeRebuild') : t('prefsModeAdditive')}</p>
           {/* 摘要常驻、细节折叠：这一段讲的是「你现有的文件夹会被改名」，是对用户
