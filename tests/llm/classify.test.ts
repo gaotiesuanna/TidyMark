@@ -73,6 +73,14 @@ describe('cacheKey', () => {
     const nested: CategoryCandidate[] = [{ id: 'x', path: ['a', 'b'] }]
     expect(cacheKey(it1, slash, 'zh_CN', 'm')).not.toBe(cacheKey(it1, nested, 'zh_CN', 'm'))
   })
+  it('语义规则版本变化会使旧缓存 key 失效', () => {
+    const legacyVersion = djb2(
+      ['zh_CN', 'm', ...candidates.map((c) => c.path.join('\u0000')).sort()].join('|'),
+    )
+    const legacyKey = `${djb2(it1.url)}:${legacyVersion}`
+    expect(cacheKey(it1, candidates, 'zh_CN', 'm')).not.toBe(legacyKey)
+  })
+
 })
 
 describe('buildBatchPrompt', () => {
@@ -117,6 +125,7 @@ describe('classifyBookmarks', () => {
     const client = clientReturning({
       results: [{ bookmark_id: '1', target_category_id: '10', confidence: 0.9, reason: '与 React 相关' }],
     })
+
     const results = await classify({
       items: [item('1', 'https://some-blog.dev/react-hooks')],
       candidates,
@@ -124,6 +133,38 @@ describe('classifyBookmarks', () => {
       cache: new Map(),
     })
     expect(results[0]!).toMatchObject({ targetCategoryId: '10', confidence: 0.9, source: 'llm' })
+  })
+  it('技能规则优先于过期缓存标签，并且不调用模型', async () => {
+    const skillItem = item(
+      '1',
+      'https://github.com/op7418/Claude-to-IM-skill',
+      'Claude-to-IM-skill',
+    )
+    const skillCandidates: CategoryCandidate[] = [
+      { id: 'skills', path: ['书签栏', '技能'] },
+      { id: 'claude', path: ['书签栏', 'Claude'] },
+    ]
+    const client = clientReturning({ results: [] })
+    const cache = new Map<string, CachedClassification>([
+      [
+        cacheKey(skillItem, skillCandidates, 'zh_CN', 'm'),
+        {
+          targetPath: ['书签栏', 'Claude'],
+          url: skillItem.url,
+          confidence: 0.8,
+          reason: '缓存中的 Claude',
+        },
+      ],
+    ])
+
+    const results = await classify({ items: [skillItem], candidates: skillCandidates, client, cache })
+
+    expect(client.complete).not.toHaveBeenCalled()
+    expect(results[0]).toMatchObject({
+      targetCategoryId: 'skills',
+      source: 'rule',
+      confidence: 1,
+    })
   })
 
   it('模型返回 null 表示无合适目录，保持原位', async () => {
@@ -566,7 +607,7 @@ describe('classifyBookmarks 同 URL 只问一遍', () => {
     })
 
     expect(complete).toHaveBeenCalledTimes(1)
-    expect(logs).toHaveLength(1)
+    expect(logs.filter((l) => l.message.startsWith('分类批次'))).toHaveLength(1)
     expect(logs[0]!.message).toContain('5 条')
     expect(logs[0]!.message).toContain('成功 5 条')
     // 提问数不再冒充书签数，但也不能藏起来——用户得看懂为什么只发了 2 次请求。
@@ -591,9 +632,23 @@ describe('classifyBookmarks 同 URL 只问一遍', () => {
       onLog: (message) => logs.push(message),
     })
 
-    expect(logs).toHaveLength(1)
+    expect(logs.filter((m) => m.startsWith('分类批次'))).toHaveLength(1)
     // 整行钉死：绝大多数批次没有重复 URL，不该为少数情形给所有人加噪音。
     expect(logs[0]!).toMatch(/^分类批次 1\/1：2 条，成功 2 条，耗时 \d+ms$/)
+  })
+
+  it('一批回来后把模型给出的落位打进日志', async () => {
+    const logs: string[] = []
+    await classify({
+      items: [item('1', 'https://react.dev')],
+      candidates,
+      client: clientReturning({
+        results: [{ bookmark_id: '1', target_category_id: '10', confidence: 0.9, reason: 'r' }],
+      }),
+      cache: new Map(),
+      onLog: (message) => logs.push(message),
+    })
+    expect(logs.some((m) => m.includes('T →') && m.includes('react'))).toBe(true)
   })
 })
 

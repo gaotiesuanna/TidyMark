@@ -12,6 +12,14 @@ describe('classifyByRules', () => {
     expect(r.resourceType).toBe('repository')
     expect(r.tags).toEqual(['GitHub', 'facebook', 'react'])
   })
+  it('skill 仓库优先识别为独立技能类型', () => {
+    const r = classifyByRules(
+      item('https://github.com/op7418/Claude-to-IM-skill', 'Claude-to-IM-skill'),
+      'zh_CN',
+    )!
+    expect(r.tags).toEqual(['技能'])
+    expect(r.resourceType).toBe('tool')
+  })
 
   it('GitHub 首页不抽 owner/repo', () => {
     const r = classifyByRules(item('https://github.com'), 'zh_CN')!

@@ -79,6 +79,16 @@ describe('resolveByRules', () => {
     )!
     expect(result.targetCategoryId).toBe('10')
   })
+  it('多个叶子目录匹配同一规则 tag 时不确定归属', () => {
+    const duplicateLeaves = [
+      { id: '20', title: 'react', parentId: '2', index: 0, path: ['工作'], depth: 1, level: 1 },
+      { id: '21', title: 'react', parentId: '3', index: 0, path: ['个人'], depth: 1, level: 1 },
+    ]
+    expect(
+      resolveByRules(item(), { tags: ['react'], resourceType: 'repository', reason: 'r' }, duplicateLeaves),
+    ).toBeNull()
+  })
+
 
   it('没有任何候选匹配时返回 null，交给 LLM', () => {
     expect(resolveByRules(item(), { tags: ['视频'], resourceType: 'video', reason: 'r' }, candidates))

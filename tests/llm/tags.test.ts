@@ -30,6 +30,17 @@ describe('extractTags', () => {
     expect(results).toEqual([{ bookmarkId: '1', primaryTopic: 'React', secondaryTopic: null }])
   })
 
+  it('skill 仓库不被归成 Claude，而是单独标成技能', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      results: [{ bookmark_id: '1', primary_topic: 'Claude' }],
+    })
+    const results = await extractTags(
+      [item('1', 'https://github.com/op7418/Claude-to-IM-skill')],
+      { complete },
+    )
+    expect(results[0]!.primaryTopic).toBe('技能')
+  })
+
   it('不再向模型索要二级主题，层级由目录设计阶段决定', async () => {
     const complete = vi.fn().mockResolvedValue({
       results: [{ bookmark_id: '1', primary_topic: 'React', secondary_topic: '组件' }],
@@ -52,6 +63,15 @@ describe('extractTags', () => {
     const items = Array.from({ length: 5 }, (_, i) => item(String(i), `https://s${i}.dev`))
     await extractTags(items, { complete }, { batchSize: 2 })
     expect(complete).toHaveBeenCalledTimes(3)
+  })
+
+  it('一批回来后把模型给出的主题打进日志', async () => {
+    const logs: string[] = []
+    const complete = vi.fn().mockResolvedValue({
+      results: [{ bookmark_id: '1', primary_topic: 'React' }],
+    })
+    await extractTags([item('1', 'https://react.dev')], { complete }, { onLog: (m) => logs.push(m) })
+    expect(logs.some((m) => m.includes('T1 → React'))).toBe(true)
   })
 
   it('失败的批次不抛错，主题留空，不参与目录设计', async () => {

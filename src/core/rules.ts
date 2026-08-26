@@ -16,12 +16,30 @@ const TAG_VIDEO: Bilingual = { zh_CN: '视频', en: 'Videos' }
 const TAG_DESIGN: Bilingual = { zh_CN: '设计', en: 'Design' }
 const TAG_DOCS: Bilingual = { zh_CN: '官方文档', en: 'Docs' }
 
+
+export const SKILL_TOPIC: Bilingual = { zh_CN: '技能', en: 'Skills' }
+
+/**
+ * GitHub/GitLab 仓库名或路径里明确写了 skill(s) 时，按技能仓库处理。
+ * 这类仓库存放的是可复用能力，不应因为依附 Claude 等模型而归入模型目录。
+ */
+export function isSkillBookmark(item: BookmarkItem): boolean {
+  const url = sanitizeUrl(item.url)
+  if (url === null || (url.domain !== 'github.com' && url.domain !== 'gitlab.com')) return false
+  return /(?:^|[-_\s/.])skills?(?:$|[-_\s/.])/i.test(`${item.title} ${url.path}`)
+}
 interface DomainRule {
   match: (domain: string) => boolean
   resourceType: ResourceType
   tags: (domain: string, path: string, locale: Locale) => string[]
 }
 
+/** GitHub、GitLab、Notion 这类专有名词两种语言相同，不做翻译。 */
+function reasonFor(domain: string, locale: Locale): string {
+  return locale === 'zh_CN'
+    ? `根据域名规则 ${domain} 判定`
+    : `Matched by domain rule ${domain}`
+}
 const RULES: DomainRule[] = [
   {
     match: (d) => d === 'github.com',
@@ -40,16 +58,20 @@ const RULES: DomainRule[] = [
   { match: (d) => d.startsWith('docs.') || d.startsWith('developer.'), resourceType: 'documentation', tags: (_d, _p, l) => [TAG_DOCS[l]] },
 ]
 
-/** GitHub、GitLab、Notion 这类专有名词两种语言相同，不做翻译。 */
-function reasonFor(domain: string, locale: Locale): string {
-  return locale === 'zh_CN'
-    ? `根据域名规则 ${domain} 判定`
-    : `Matched by domain rule ${domain}`
-}
-
+/** GitHub/GitLab 仓库名或路径里明确写了 skill(s) 时优先按技能处理。 */
 export function classifyByRules(item: BookmarkItem, locale: Locale): RuleResult | null {
   const url = sanitizeUrl(item.url)
   if (url === null) return null
+
+  if (isSkillBookmark(item)) {
+    return {
+      tags: [SKILL_TOPIC[locale]],
+      resourceType: 'tool',
+      reason: locale === 'zh_CN'
+        ? '根据仓库路径中的 skill 判定'
+        : 'Matched by the skill marker in the repository path',
+    }
+  }
 
   for (const rule of RULES) {
     if (!rule.match(url.domain)) continue

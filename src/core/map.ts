@@ -77,9 +77,11 @@ export function resolveByRules(
   for (let i = rule.tags.length - 1; i >= 0; i--) {
     const tag = normalizeName(rule.tags[i]!)
     // 候选目录名可能带「01.2 」这样的编号前缀，比较时先去掉
-    const hit = candidates.find(
+    const matches = candidates.filter(
       (c) => normalizeName(stripNumberPrefix(c.path[c.path.length - 1]!)) === tag,
     )
+    if (matches.length > 1) return null
+    const hit = matches[0]
     if (hit) {
       return {
         bookmarkId: item.id,

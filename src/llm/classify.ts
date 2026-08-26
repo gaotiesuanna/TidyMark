@@ -5,7 +5,7 @@ import { resolveByRules } from '@/core/map'
 import { sanitizeUrl } from '@/core/sanitize'
 import type { BookmarkItem, CachedClassification, CategoryCandidate, Classification } from '@/core/types'
 import type { LlmClient } from './client'
-import { fallbackReason, logBatchDone, logBatchSplit } from './logs'
+import { fallbackReason, logBatchDone, logBatchOutputs, logBatchSplit } from './logs'
 import { classifyPrompt } from './prompts'
 
 export interface ClassifyInput {
@@ -30,6 +30,8 @@ export interface ClassifyInput {
    */
   includeTopicRule?: boolean
 }
+
+const SEMANTIC_RULE_VERSION = 2
 
 const MAX_RETRIES = 2
 
@@ -59,7 +61,9 @@ export function cacheKey(
   locale: Locale,
   model: string,
 ): string {
-  const version = djb2([locale, model, ...candidates.map((c) => pathKey(c.path)).sort()].join('|'))
+  const version = djb2(
+    [SEMANTIC_RULE_VERSION, locale, model, ...candidates.map((c) => pathKey(c.path)).sort()].join('|'),
+  )
   return `${djb2(item.url)}:${version}`
 }
 
@@ -262,16 +266,23 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
   const pending: BookmarkItem[] = []
 
   for (const item of items) {
-    const cached = cache.get(cacheKey(item, candidates, locale, model))
-    const hit = cached ? fromCache(item, cached, idByPath) : null
-    if (hit) {
-      resolved.set(item.id, hit)
-      continue
-    }
+    // 规则是当前语义的硬信号，必须先于缓存判断；否则模型曾经把技能仓库
+    // 放进 Claude 的旧结果会遮住现在可确定的技能归属。
     const rule = classifyByRules(item, locale)
     const byRule = rule ? resolveByRules(item, rule, candidates) : null
     if (byRule) {
       resolved.set(item.id, byRule)
+      continue
+    }
+    // 有硬信号但候选不唯一时，缓存也可能携带同样过期的错误语义，直接走模型。
+    if (rule) {
+      pending.push(item)
+      continue
+    }
+    const cached = cache.get(cacheKey(item, candidates, locale, model))
+    const hit = cached ? fromCache(item, cached, idByPath) : null
+    if (hit) {
+      resolved.set(item.id, hit)
       continue
     }
     pending.push(item)
@@ -365,6 +376,22 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
           const sep = locale === 'zh_CN' ? '。' : '. '
           input.onLog?.(`${summary}${sep}${results[0]?.reason ?? ''}`, 'error')
         } else input.onLog?.(summary, 'warn')
+        const outputs = batch.map((rep, i) => {
+          const result = results[i]!
+          const path = result.targetCategoryId === null ? null : pathById.get(result.targetCategoryId)
+          const output = result.source !== 'llm'
+            ? ''
+            : path === undefined
+              ? ''
+              : path === null
+                ? (locale === 'zh_CN' ? '无合适目录' : 'no folder')
+                : path.at(-1) ?? ''
+          return { title: rep.title, output }
+        })
+        input.onLog?.(
+          logBatchOutputs(locale, locale === 'zh_CN' ? '分类批次' : 'Classify batch', index, outputs),
+          'info',
+        )
       }
       for (let i = 0; i < results.length; i++) {
         const result = results[i]!

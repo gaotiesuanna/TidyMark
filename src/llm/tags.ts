@@ -1,8 +1,9 @@
 import type { Locale } from '@/core/locale'
+import { isSkillBookmark, SKILL_TOPIC } from '@/core/rules'
 import { sanitizeUrl } from '@/core/sanitize'
 import type { BookmarkItem, TagResult } from '@/core/types'
 import type { LlmClient } from './client'
-import { logBatch, logBatchFailed, logBatchPartFailed, logBatchSplit } from './logs'
+import { logBatch, logBatchFailed, logBatchOutputs, logBatchPartFailed, logBatchSplit } from './logs'
 import { tagsPrompt } from './prompts'
 
 export type { TagResult }
@@ -204,6 +205,15 @@ async function runExtraction(
           }),
           'info',
         )
+        options.onLog?.(
+          logBatchOutputs(
+            locale,
+            label,
+            index,
+            batch.map((item) => ({ title: item.title, output: topics.get(item.id) ?? '' })),
+          ),
+          'info',
+        )
       } catch (error) {
         inflight.delete(index)
         completedBatches += 1
@@ -239,5 +249,10 @@ export async function extractTags(
   options: ExtractOptions = {},
 ): Promise<TagResult[]> {
   const label = locale === 'zh_CN' ? '标签批次' : 'Tag batch'
-  return runExtraction(items, client, (batch) => buildPrompt(locale, batch), options, label, locale)
+  const tags = await runExtraction(items, client, (batch) => buildPrompt(locale, batch), options, label, locale)
+  return tags.map((tag, index) => (
+    isSkillBookmark(items[index]!)
+      ? { ...tag, primaryTopic: SKILL_TOPIC[locale], secondaryTopic: null }
+      : tag
+  ))
 }
