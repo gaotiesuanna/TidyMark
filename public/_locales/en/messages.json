@@ -63,6 +63,15 @@
       }
     }
   },
+  "treeSearchLabel": {
+    "message": "Search bookmarks"
+  },
+  "treeSearchPlaceholder": {
+    "message": "Search folders, bookmarks, or URLs"
+  },
+  "treeSearchEmpty": {
+    "message": "No matching bookmarks found"
+  },
   "scopeNeedModel": {
     "message": "TidyMark files your bookmarks with an AI model of your own, and there is not one yet. Pick a preset, paste an API key, and that is the whole setup."
   },

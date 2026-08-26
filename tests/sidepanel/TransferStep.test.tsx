@@ -12,6 +12,7 @@ const tree: BookmarkNode[] = [
         { id: '100', title: 'hooks', children: [
           { id: '1000', title: '更深一层', children: [] },
         ]},
+        { id: '101', title: 'A', url: 'https://a.dev' },
       ]},
       { id: '11', title: '工作常用', children: [] },
     ]},
@@ -70,4 +71,43 @@ describe('TransferStep', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: 'react' }))
     expect([...useStore.getState().checkedIds].sort()).toEqual(['10', '100', '1000'])
   })
+  it('搜索书签标题、URL并保留祖先层级', async () => {
+    render(<TransferStep />)
+    const input = screen.getByRole('searchbox', { name: '搜索书签' })
+
+    await userEvent.type(input, 'a.dev')
+    expect(screen.getByText('书签栏')).toBeDefined()
+    expect(screen.getByText('react')).toBeDefined()
+    expect(screen.getByText('A')).toBeDefined()
+    expect(screen.getByText('https://a.dev')).toBeDefined()
+  })
+
+  it('搜索时自动展开命中路径，清空后恢复搜索前的展开状态', async () => {
+    render(<TransferStep />)
+    const react = screen.getByText('react')
+    expect(screen.queryByText('A')).toBeNull()
+
+    const input = screen.getByRole('searchbox', { name: '搜索书签' })
+    await userEvent.type(input, 'a.dev')
+    expect(screen.getByText('A')).toBeDefined()
+
+    await userEvent.clear(input)
+    expect(screen.queryByText('A')).toBeNull()
+    expect(react).toBeDefined()
+  })
+
+  it('无匹配时显示提示，匹配结果不清理现有勾选', async () => {
+    useStore.setState({ checkedIds: new Set(['10']) })
+    render(<TransferStep />)
+    const input = screen.getByRole('searchbox', { name: '搜索书签' })
+
+    await userEvent.type(input, 'a.dev')
+    expect(screen.getByText('A')).toBeDefined()
+    expect((screen.getByRole('checkbox', { name: 'react' }) as HTMLInputElement).checked).toBe(true)
+
+    await userEvent.clear(input)
+    await userEvent.type(input, 'does-not-exist')
+    expect(screen.getByText('没有找到相关书签')).toBeDefined()
+  })
 })
+

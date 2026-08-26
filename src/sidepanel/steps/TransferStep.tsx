@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { t } from '@/i18n'
-import { BookmarkTree, topLevelNodes } from '../components/BookmarkTree'
+import { BookmarkTree, filterBookmarkTree, topLevelNodes } from '../components/BookmarkTree'
 import { ExportPanel } from '../components/ExportPanel'
 import { ImportPanel } from '../components/ImportPanel'
 import { segmentActive, segmentButton, segmentTrack } from '../components/buttonStyles'
@@ -18,17 +18,47 @@ export function TransferStep() {
   const { tree, checkedIds, toggle, busy } = useStore()
   const [transfer, setTransfer] = useState<TransferPanel>(initialTransfer)
   const [expanded, setExpanded] = useState<Set<string> | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [expandedBeforeSearch, setExpandedBeforeSearch] = useState<Set<string> | null>(null)
+  const [searchExpandedIds, setSearchExpandedIds] = useState<Set<string> | null>(null)
   const defaultExpanded = useMemo(
     () => new Set(topLevelNodes(tree).map((node) => node.id)),
     [tree],
   )
   const expandedIds = expanded ?? defaultExpanded
+  const searchActive = searchQuery.trim().length > 0
+  const searchResult = useMemo(
+    () => filterBookmarkTree(tree, searchQuery),
+    [tree, searchQuery],
+  )
+  const visibleNodes = searchActive ? searchResult.nodes : tree
+  const visibleExpandedIds = searchActive
+    ? (searchExpandedIds ?? searchResult.expandedIds)
+    : expandedIds
+
+  function changeSearchQuery(value: string): void {
+    const wasActive = searchQuery.trim().length > 0
+    const willBeActive = value.trim().length > 0
+    if (!wasActive && willBeActive) setExpandedBeforeSearch(new Set(expandedIds))
+    if (wasActive && !willBeActive) {
+      setExpanded(expandedBeforeSearch ?? expandedIds)
+      setExpandedBeforeSearch(null)
+    }
+    setSearchExpandedIds(null)
+    setSearchQuery(value)
+  }
 
   function toggleExpand(id: string): void {
-    const next = new Set(expandedIds)
+    const next = new Set(visibleExpandedIds)
     if (next.has(id)) next.delete(id)
     else next.add(id)
-    setExpanded(next)
+    if (searchActive) setSearchExpandedIds(next)
+    else setExpanded(next)
+  }
+
+  function setAllExpanded(ids: string[]): void {
+    if (searchActive) setSearchExpandedIds(new Set(ids))
+    else setExpanded(new Set(ids))
   }
 
   return (
@@ -39,26 +69,41 @@ export function TransferStep() {
         <div className="flex gap-1 text-xs">
           <button
             className="rounded border px-2 py-1 hover:bg-neutral-50"
-            onClick={() => setExpanded(new Set(collectAllFolderIds(tree)))}
+            onClick={() => setAllExpanded(collectAllFolderIds(visibleNodes))}
           >
             {t('scopeExpandAll')}
           </button>
           <button
             className="rounded border px-2 py-1 hover:bg-neutral-50"
-            onClick={() => setExpanded(new Set())}
+            onClick={() => setAllExpanded([])}
           >
             {t('scopeCollapseAll')}
           </button>
+          <label className="min-w-0 flex-1">
+            <span className="sr-only">{t('treeSearchLabel')}</span>
+            <input
+              type="search"
+              aria-label={t('treeSearchLabel')}
+              value={searchQuery}
+              onChange={(event) => changeSearchQuery(event.target.value)}
+              placeholder={t('treeSearchPlaceholder')}
+              className="w-full min-w-0 rounded border px-2 py-1 outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-300"
+            />
+          </label>
         </div>
 
         <div className="rounded border">
           <BookmarkTree
-            nodes={tree}
+            nodes={visibleNodes}
             checkedIds={checkedIds}
             onToggle={toggle}
-            expandedIds={expandedIds}
+            expandedIds={visibleExpandedIds}
             onToggleExpand={toggleExpand}
+            showBookmarks={searchActive}
           />
+          {searchActive && !searchResult.hasMatches && (
+            <p className="px-2 py-3 text-center text-xs text-neutral-500">{t('treeSearchEmpty')}</p>
+          )}
         </div>
       </div>
       {/* 操作区钉在底部：书签上千条时目录树很长，导入导出不该被推到要滚半天才看得见的地方。

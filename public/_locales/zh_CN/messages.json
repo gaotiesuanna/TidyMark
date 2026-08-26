@@ -63,6 +63,15 @@
       }
     }
   },
+  "treeSearchLabel": {
+    "message": "搜索书签"
+  },
+  "treeSearchPlaceholder": {
+    "message": "搜索文件夹、书签或 URL"
+  },
+  "treeSearchEmpty": {
+    "message": "没有找到相关书签"
+  },
   "scopeNeedModel": {
     "message": "书签怎么分类，由你自己配的模型说了算——现在还没配。挑一个预设，粘上 API Key，就这两步。"
   },
