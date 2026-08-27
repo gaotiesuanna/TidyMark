@@ -13,7 +13,7 @@ import {
 import type { BookmarkNode } from '@/core/ports'
 import { faviconSrc } from '../lib/favicons'
 import { ensureHistoryPermission, hasHistoryPermission, visitUrls } from '../lib/visits'
-import { TrendingUpIcon } from '../components/icons'
+import { ChevronDownIcon, TrendingUpIcon } from '../components/icons'
 import { useStore } from '../store'
 
 type Metric = 'bookmarked' | 'visited'
@@ -235,12 +235,23 @@ function DomainRow({
       {expandable ? (
         <button
           type="button"
-          className="flex w-full cursor-pointer items-center gap-2.5 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
+          className={[
+            'flex w-full cursor-pointer items-center gap-2.5 rounded-md px-1 py-1 -mx-1 text-left',
+            'transition-colors duration-150 motion-reduce:transition-none',
+            'hover:bg-neutral-50 active:bg-neutral-100',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400',
+          ].join(' ')}
           aria-expanded={open}
           aria-label={t(open ? 'dashDomainCollapse' : 'dashDomainExpand', row.domain)}
           onClick={onToggle}
         >
           {summary}
+          <ChevronDownIcon
+            className={[
+              'h-3.5 w-3.5 shrink-0 text-neutral-400 transition-transform duration-150 motion-reduce:transition-none',
+              open ? 'rotate-180' : '',
+            ].join(' ')}
+          />
         </button>
       ) : (
         <div className="flex items-center gap-2.5">{summary}</div>

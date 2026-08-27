@@ -134,6 +134,12 @@ describe('DashboardStep', () => {
     expect(useStore.getState().settings.topDomainCount).toBe(9)
   })
 
+  it('书签栏域名行带有展开箭头', () => {
+    render(<DashboardStep />)
+    const btn = screen.getByRole('button', { name: t('dashDomainExpand', 'github.com') })
+    expect(btn.querySelector('svg')).not.toBeNull()
+  })
+
   it('点书签栏域名展开对应路径和条数', async () => {
     const user = userEvent.setup()
     render(<DashboardStep />)

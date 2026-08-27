@@ -162,6 +162,14 @@ export function ChevronLeftIcon({ className }: { className?: string }) {
   )
 }
 
+export function ChevronDownIcon({ className }: { className?: string }) {
+  return (
+    <Icon {...(className === undefined ? {} : { className })}>
+      <path d="m6 9 6 6 6-6" />
+    </Icon>
+  )
+}
+
 export function TrendingUpIcon({ className }: { className?: string }) {
   return (
     <Icon {...(className === undefined ? {} : { className })}>
