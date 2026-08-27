@@ -3,9 +3,15 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CleanupStep } from '@/sidepanel/steps/CleanupStep'
 import { useStore } from '@/sidepanel/store'
+import { send } from '@/sidepanel/lib/send'
+import { ensureHistoryPermission } from '@/sidepanel/lib/visits'
 import type { BookmarkNode } from '@/core/ports'
 import type { BookmarkItem } from '@/core/types'
+import type { StaleScanResult } from '@/core/stale'
 import type { CleanupResult } from '@/engine/cleanup'
+
+vi.mock('@/sidepanel/lib/send', () => ({ send: vi.fn() }))
+vi.mock('@/sidepanel/lib/visits', () => ({ ensureHistoryPermission: vi.fn() }))
 
 /**
  * 目录丙只有一条书签，而那条是重复项——勾上它，目录丙就该在「空文件夹」一节
@@ -50,11 +56,22 @@ const scan = {
   emptyFolders: [],
   items: [], folders: [], scopeRootIds: ['1'],
 }
+const staleResult: StaleScanResult = {
+  items: [],
+  scannedAt: 1_754_000_000_000,
+  cutoff3Months: 1_738_000_000_000,
+  cutoff6Months: 1_722_000_000_000,
+  cutoff12Months: 1_706_000_000_000,
+  scopeRootIdByBookmarkId: {},
+}
 
 beforeEach(() => {
+  vi.mocked(send).mockReset()
+  vi.mocked(ensureHistoryPermission).mockReset()
   useStore.setState({
     tree,
     mode: 'cleanup',
+    checkedIds: new Set(['selected-root']),
     busy: null,
     error: null,
     cleanupScan: scan,
@@ -63,8 +80,114 @@ beforeEach(() => {
     // exact 组的默认勾选：除保留项之外全勾上
     cleanupChecked: new Set(['101', '120']),
     cleanupFolders: new Set(),
+    cleanupMove: new Set(),
+    cleanupStaleMove: new Set(),
+    staleScan: null,
+    staleState: 'idle',
+    staleError: null,
     undoAvailable: false,
     runCleanupScan: vi.fn(async () => {}),
+  })
+})
+
+describe('长期未点击书签扫描状态', () => {
+  it('页面挂载不申请历史权限', () => {
+    render(<CleanupStep />)
+    expect(ensureHistoryPermission).not.toHaveBeenCalled()
+  })
+
+  it('扫描动作才申请权限，并只发送当前勾选范围', async () => {
+    vi.mocked(ensureHistoryPermission).mockResolvedValue(true)
+    vi.mocked(send).mockResolvedValue({
+      ok: true, kind: 'cleanup_stale_scan', scan: staleResult,
+    } as never)
+
+    await useStore.getState().runStaleScan()
+
+    expect(ensureHistoryPermission).toHaveBeenCalledTimes(1)
+    expect(send).toHaveBeenCalledWith({
+      kind: 'cleanup_stale_scan',
+      scopeRootIds: ['selected-root'],
+    })
+    expect(useStore.getState().staleState).toBe('empty')
+  })
+
+  it('没有勾选范围时保持 idle，既不申请权限也不发请求', async () => {
+    useStore.setState({ checkedIds: new Set(), staleState: 'ready', staleScan: staleResult })
+
+    await useStore.getState().runStaleScan()
+
+    expect(ensureHistoryPermission).not.toHaveBeenCalled()
+    expect(send).not.toHaveBeenCalled()
+    expect(useStore.getState().staleState).toBe('idle')
+  })
+
+  it('权限拒绝与空结果是不同状态，且拒绝不发请求', async () => {
+    vi.mocked(ensureHistoryPermission).mockResolvedValue(false)
+
+    await useStore.getState().runStaleScan()
+
+    expect(useStore.getState().staleState).toBe('denied')
+    expect(useStore.getState().staleState).not.toBe('empty')
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('保留历史查询错误文本', async () => {
+    vi.mocked(ensureHistoryPermission).mockResolvedValue(true)
+    vi.mocked(send).mockResolvedValue({ ok: false, error: 'history unavailable' } as never)
+
+    await useStore.getState().runStaleScan()
+
+    expect(useStore.getState().staleState).toBe('error')
+    expect(useStore.getState().staleError).toBe('history unavailable')
+  })
+
+  it('范围改变后忽略在途扫描响应', async () => {
+    vi.mocked(ensureHistoryPermission).mockResolvedValue(true)
+    let resolveSend: ((value: unknown) => void) | undefined
+    vi.mocked(send).mockImplementation(
+      () => new Promise((resolve) => { resolveSend = resolve }) as never,
+    )
+
+    const pending = useStore.getState().runStaleScan()
+    await Promise.resolve()
+    expect(useStore.getState().staleState).toBe('loading')
+    useStore.setState({ checkedIds: new Set(['another-root']) })
+    expect([...useStore.getState().checkedIds]).toEqual(['another-root'])
+    resolveSend?.({ ok: true, kind: 'cleanup_stale_scan', scan: staleResult })
+    await pending
+
+    expect(useStore.getState().staleScan).toBeNull()
+    expect(useStore.getState().staleState).toBe('loading')
+  })
+
+  it('run 序号改变后忽略在途扫描响应', async () => {
+    vi.mocked(ensureHistoryPermission).mockResolvedValue(true)
+    let resolveSend: ((value: unknown) => void) | undefined
+    vi.mocked(send).mockImplementation(
+      () => new Promise((resolve) => { resolveSend = resolve }) as never,
+    )
+
+    const pending = useStore.getState().runStaleScan()
+    await Promise.resolve()
+    useStore.setState({ runSeq: useStore.getState().runSeq + 1 })
+    resolveSend?.({ ok: true, kind: 'cleanup_stale_scan', scan: staleResult })
+    await pending
+
+    expect(useStore.getState().staleScan).toBeNull()
+    expect(useStore.getState().staleState).toBe('loading')
+  })
+
+  it('长期未点击书签的删除与移动选择互斥', () => {
+    useStore.setState({ cleanupChecked: new Set(['stale-id']), cleanupStaleMove: new Set() })
+
+    useStore.getState().toggleStaleMove('stale-id')
+    expect(useStore.getState().cleanupChecked.has('stale-id')).toBe(false)
+    expect(useStore.getState().cleanupStaleMove.has('stale-id')).toBe(true)
+
+    useStore.getState().toggleStaleDelete('stale-id')
+    expect(useStore.getState().cleanupChecked.has('stale-id')).toBe(true)
+    expect(useStore.getState().cleanupStaleMove.has('stale-id')).toBe(false)
   })
 })
 
