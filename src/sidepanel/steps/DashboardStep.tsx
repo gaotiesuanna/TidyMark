@@ -79,7 +79,7 @@ export function DashboardStep() {
 
   function commitTopN(raw: string) {
     setDraft(null)
-    const next = clampTopDomainCount(Number.parseInt(raw, 10))
+    const next = clampTopDomainCount(Number(raw))
     if (next === topN) return
     void setSettings({ ...settings, topDomainCount: next })
   }

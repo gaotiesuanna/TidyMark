@@ -124,6 +124,16 @@ describe('DashboardStep', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(8)
   })
 
+  it('输入 8.6 四舍五入写成 9', async () => {
+    const user = userEvent.setup()
+    render(<DashboardStep />)
+    const input = screen.getByLabelText(t('dashTopCountLabel'))
+    await user.clear(input)
+    await user.type(input, '8.6')
+    await user.tab()
+    expect(useStore.getState().settings.topDomainCount).toBe(9)
+  })
+
   it('点书签栏域名展开对应路径和条数', async () => {
     const user = userEvent.setup()
     render(<DashboardStep />)

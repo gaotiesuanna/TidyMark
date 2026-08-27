@@ -13,7 +13,6 @@ export async function hasHistoryPermission(): Promise<boolean> {
  * 调用方必须先解释再调它。
  */
 export async function ensureHistoryPermission(): Promise<boolean> {
-  if (await hasHistoryPermission()) return true
   return chrome.permissions.request(HISTORY)
 }
 
