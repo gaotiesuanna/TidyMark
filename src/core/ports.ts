@@ -1,3 +1,8 @@
+export interface HistoryVisit {
+  url: string
+  lastVisitTime?: number
+}
+
 export interface BookmarkNode {
   id: string
   parentId?: string
