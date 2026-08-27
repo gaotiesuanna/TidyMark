@@ -21,6 +21,8 @@ export function ScopeStep() {
     [tree],
   )
   const expandedIds = expanded ?? defaultExpanded
+  const folderIds = collectAllFolderIds(tree)
+  const allOpen = folderIds.length > 0 && folderIds.every((id) => expandedIds.has(id))
   // 按钮报的是「这次要处理多少条书签」，不是勾中几个文件夹：一个目录下的书签既可能
   // 分在子目录里、也可能直接散着，而目录树只画文件夹，散着的那些在这一页从不显形。
   // 只报文件夹数时，用户没有任何地方能确认那些散链算不算在内（真实案例：某个目录
@@ -71,15 +73,9 @@ export function ScopeStep() {
         <div className="flex gap-1 text-xs">
           <button
             className="rounded border px-2 py-1 hover:bg-neutral-50"
-            onClick={() => setExpanded(new Set(collectAllFolderIds(tree)))}
+            onClick={() => setExpanded(new Set(allOpen ? [] : folderIds))}
           >
-            {t('scopeExpandAll')}
-          </button>
-          <button
-            className="rounded border px-2 py-1 hover:bg-neutral-50"
-            onClick={() => setExpanded(new Set())}
-          >
-            {t('scopeCollapseAll')}
+            {t(allOpen ? 'scopeCollapseAll' : 'scopeExpandAll')}
           </button>
         </div>
 

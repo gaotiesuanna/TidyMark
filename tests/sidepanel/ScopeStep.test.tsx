@@ -69,18 +69,22 @@ describe('ScopeStep 目录展开', () => {
     expect(screen.queryByText('hooks')).toBeNull()
   })
 
-  it('全部展开后所有层级都可见', async () => {
+  it('全部展开后按钮变成全部收起，再点则全部收起', async () => {
     render(<ScopeStep />)
-    await userEvent.click(screen.getByText('全部展开'))
+    expect(screen.getByRole('button', { name: '全部展开' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '全部收起' })).toBeNull()
+
+    await userEvent.click(screen.getByRole('button', { name: '全部展开' }))
     expect(screen.getByText('hooks')).toBeDefined()
     expect(screen.getByText('更深一层')).toBeDefined()
-  })
+    expect(screen.queryByRole('button', { name: '全部展开' })).toBeNull()
+    expect(screen.getByRole('button', { name: '全部收起' })).toBeTruthy()
 
-  it('全部收起后只剩根目录', async () => {
-    render(<ScopeStep />)
-    await userEvent.click(screen.getByText('全部收起'))
+    await userEvent.click(screen.getByRole('button', { name: '全部收起' }))
     expect(screen.getByText('书签栏')).toBeDefined()
     expect(screen.queryByText('react')).toBeNull()
+    expect(screen.getByRole('button', { name: '全部展开' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '全部收起' })).toBeNull()
   })
 
   it('折叠状态不影响勾选，勾选仍连带子目录', async () => {

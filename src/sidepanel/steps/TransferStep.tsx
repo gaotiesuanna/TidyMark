@@ -35,6 +35,8 @@ export function TransferStep() {
   const visibleExpandedIds = searchActive
     ? (searchExpandedIds ?? searchResult.expandedIds)
     : expandedIds
+  const folderIds = collectAllFolderIds(visibleNodes)
+  const allOpen = folderIds.length > 0 && folderIds.every((id) => visibleExpandedIds.has(id))
 
   function changeSearchQuery(value: string): void {
     const wasActive = searchQuery.trim().length > 0
@@ -69,15 +71,9 @@ export function TransferStep() {
         <div className="flex gap-1 text-xs">
           <button
             className="rounded border px-2 py-1 hover:bg-neutral-50"
-            onClick={() => setAllExpanded(collectAllFolderIds(visibleNodes))}
+            onClick={() => setAllExpanded(allOpen ? [] : folderIds)}
           >
-            {t('scopeExpandAll')}
-          </button>
-          <button
-            className="rounded border px-2 py-1 hover:bg-neutral-50"
-            onClick={() => setAllExpanded([])}
-          >
-            {t('scopeCollapseAll')}
+            {t(allOpen ? 'scopeCollapseAll' : 'scopeExpandAll')}
           </button>
           <label className="min-w-0 flex-1">
             <span className="sr-only">{t('treeSearchLabel')}</span>

@@ -71,6 +71,21 @@ describe('TransferStep', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: 'react' }))
     expect([...useStore.getState().checkedIds].sort()).toEqual(['10', '100', '1000'])
   })
+
+  it('全部展开后按钮变成全部收起，再点则全部收起', async () => {
+    render(<TransferStep />)
+    expect(screen.getByRole('button', { name: '全部展开' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '全部收起' })).toBeNull()
+
+    await userEvent.click(screen.getByRole('button', { name: '全部展开' }))
+    expect(screen.getByText('更深一层')).toBeDefined()
+    expect(screen.queryByRole('button', { name: '全部展开' })).toBeNull()
+    expect(screen.getByRole('button', { name: '全部收起' })).toBeTruthy()
+
+    await userEvent.click(screen.getByRole('button', { name: '全部收起' }))
+    expect(screen.queryByText('react')).toBeNull()
+    expect(screen.getByRole('button', { name: '全部展开' })).toBeTruthy()
+  })
   it('搜索书签标题、URL并保留祖先层级', async () => {
     render(<TransferStep />)
     const input = screen.getByRole('searchbox', { name: '搜索书签' })
