@@ -40,12 +40,12 @@ export function ResultStep() {
   const finish = (): void => window.close()
 
   return (
-    <div className="space-y-4 text-sm">
+    <div className="space-y-4 text-base leading-body">
       <section className="rounded border p-3">
         <h2 className="mb-2 font-medium">
           {applyResult.status === 'completed' ? t('resultCompleted') : t('resultInterrupted')}
         </h2>
-        <dl className="grid grid-cols-2 gap-y-1 text-xs">
+        <dl className="grid grid-cols-2 gap-y-1 text-sm leading-caption">
           <dt className="text-neutral-500">{t('resultStatExecuted')}</dt><dd>{applyResult.executed}</dd>
           <dt className="text-neutral-500">{t('resultStatCreated')}</dt><dd>{applyResult.createdFolderIds.length}</dd>
           <dt className="text-neutral-500">{t('resultStatRemoved')}</dt><dd>{cleanedEmptyFolders.length}</dd>
@@ -53,7 +53,7 @@ export function ResultStep() {
           <dt className="text-neutral-500">{t('resultStatSkipped')}</dt><dd>{applyResult.skipped.length}</dd>
         </dl>
         {cleanedEmptyFolders.length > 0 && (
-          <details className="mt-2 text-xs text-neutral-500">
+          <details className="mt-2 text-sm leading-caption text-neutral-500">
             <summary className="cursor-pointer">{t('resultRemovedDetails')}</summary>
             <ul className="mt-1 space-y-0.5">
               {cleanedEmptyFolders.map((folder) => (
@@ -66,7 +66,7 @@ export function ResultStep() {
            撤销结果区（undoResult !== null）接管了叙事，这里整段让路，
            与下面结果树标题按 undoResult 切换标题的做法是同一个道理。 */}
         {undoResult === null && plan !== null && plan.mergeRoot !== null && applyResult.mergeRootId !== null && (
-          <div className="mt-2 text-xs text-neutral-500">
+          <div className="mt-2 text-sm leading-caption text-neutral-500">
             {/* 个数取 sourceTitles.length，不用 scopeRootIds.length——后者是级联勾选的全集，会把子目录也算进去。
                这句说的是"这次合并涉及几个源目录"，是合并操作本身的规模，不是"删了几个"，
                所以哪怕下面那行一个源目录都没删掉，这个数字也不用跟着变。 */}
@@ -87,13 +87,13 @@ export function ResultStep() {
           </div>
         )}
         {applyResult.error !== null && (
-          <p className="mt-2 rounded bg-red-50 p-2 text-xs text-red-700">
+          <p className="mt-2 rounded bg-red-50 p-2 text-sm leading-caption text-red-700">
             {t('resultFailedAt', String((applyResult.failedAt ?? 0) + 1), applyResult.error ?? '')}
             <br />{t('resultFailedHint')}
           </p>
         )}
         {applyResult.skipped.length > 0 && (
-          <ul className="mt-2 space-y-0.5 text-xs text-neutral-500">
+          <ul className="mt-2 space-y-0.5 text-sm leading-caption text-neutral-500">
             {applyResult.skipped.map((each) => (
               <li key={each.bookmarkId}>{t('resultSkippedItem', each.bookmarkId, each.reason)}</li>
             ))}
@@ -106,7 +106,7 @@ export function ResultStep() {
           <h2 className="mb-1 font-medium">
             {undoResult === null ? t('resultTreeAfterApply') : t('resultTreeAfterUndo')}
           </h2>
-          <p className="mb-2 text-xs text-neutral-500">
+          <p className="mb-2 text-sm leading-caption text-neutral-500">
             {t('resultTreeHint')}
           </p>
           <ResultTree nodes={tree} />
@@ -114,7 +114,7 @@ export function ResultStep() {
       )}
 
       {undoResult !== null && (
-        <section className="rounded border border-green-200 bg-green-50 p-3 text-xs">
+        <section className="rounded border border-green-200 bg-green-50 p-3 text-sm leading-caption">
           <p>{plural(undoResult.restored, 'resultUndoneOne', 'resultUndoneOther', String(undoResult.restored), String(undoResult.removedFolders))}</p>
           {undoResult.skipped.length > 0 && (
             <ul className="mt-1 space-y-0.5 text-neutral-600">
@@ -129,21 +129,21 @@ export function ResultStep() {
       <div className="space-y-2">
         <div className="flex gap-2">
           <button
-            className="flex-1 rounded border border-red-300 py-2 text-sm text-red-700 disabled:opacity-40"
+            className="flex-1 rounded border border-red-300 py-2 text-base leading-body text-red-700 disabled:opacity-40"
             disabled={!undoAvailable || busy !== null}
             onClick={() => void undo()}
           >
             {t('resultUndoButton')}
           </button>
           <button
-            className="flex-1 rounded border py-2 text-sm hover:bg-neutral-50"
+            className="flex-1 rounded border py-2 text-base leading-body hover:bg-neutral-50"
             onClick={reset}
           >
             {t('resultAgain')}
           </button>
         </div>
         <button
-          className="w-full rounded bg-neutral-800 py-2 text-sm text-white"
+          className="w-full rounded bg-neutral-800 py-2 text-base leading-body text-white"
           onClick={finish}
         >
           {t('resultFinish')}

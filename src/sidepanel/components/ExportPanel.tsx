@@ -53,7 +53,7 @@ export function ExportPanel() {
 
   return (
     <div className="space-y-2">
-      <p className="px-0.5 text-xs tabular-nums text-neutral-500">
+      <p className="px-0.5 text-sm leading-caption tabular-nums text-neutral-500">
         {plural(count, 'exportGroupOne', 'exportGroupOther', String(count))}
       </p>
       <div className={choiceList}>

@@ -50,7 +50,7 @@ export function domainOf(baseUrl: string): string {
 }
 
 const btn =
-  'inline-flex min-h-8 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-neutral-200 bg-white px-2.5 text-sm text-neutral-700 transition-colors duration-150 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40'
+  'inline-flex min-h-8 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-neutral-200 bg-white px-2.5 text-base leading-body text-neutral-700 transition-colors duration-150 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40'
 const iconBtn =
   'inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-neutral-500 transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 disabled:cursor-not-allowed disabled:opacity-40'
 /**
@@ -61,7 +61,7 @@ const iconBtn =
 const iconBtnDanger =
   'inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-red-600 transition-colors duration-150 hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 motion-reduce:transition-none'
 const field =
-  'w-full rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400'
+  'w-full rounded-md border border-neutral-200 px-2.5 py-1.5 text-base leading-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400'
 
 function IconAction({
   label, danger, disabled, onClick, children,
@@ -188,10 +188,10 @@ export function EndpointCard({
     <article className="space-y-3 rounded-lg border border-neutral-200 p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">
+          <span className="block truncate text-base leading-body font-medium">
             {domainOf(endpoint.baseUrl)}
           </span>
-          <span className="mt-0.5 block text-xs text-neutral-500">
+          <span className="mt-0.5 block text-sm leading-caption text-neutral-500">
             {keyNote}
           </span>
         </div>
@@ -219,7 +219,7 @@ export function EndpointCard({
       {editing && (
         <div className="space-y-2">
           <label className="block space-y-1">
-            <span className="text-xs font-medium text-neutral-600">Base URL</span>
+            <span className="text-sm leading-caption font-medium text-neutral-600">Base URL</span>
             <input
               ref={urlRef}
               className={field}
@@ -230,7 +230,7 @@ export function EndpointCard({
             />
           </label>
           <label className="block space-y-1">
-            <span className="text-xs font-medium text-neutral-600">API Key</span>
+            <span className="text-sm leading-caption font-medium text-neutral-600">API Key</span>
             <input
               ref={keyRef}
               className={field}
@@ -242,7 +242,7 @@ export function EndpointCard({
             />
           </label>
           {problem !== null && (
-            <p className="text-xs leading-relaxed text-neutral-600">
+            <p className="text-sm leading-relaxed text-neutral-600">
               {problem === 'full' ? t('settingsBaseUrlFull') : t('settingsBaseUrlEmpty')}
             </p>
           )}
@@ -255,7 +255,7 @@ export function EndpointCard({
           return (
             <li key={model} className="space-y-1">
               <div className="flex items-center gap-0.5">
-                <label className="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 text-sm">
+                <label className="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 text-base leading-body">
                   <input
                     type="radio"
                     className="h-4 w-4 shrink-0 accent-neutral-800"
@@ -293,16 +293,16 @@ export function EndpointCard({
               {/* 结论一律走模型名底下这一行，不挤在同一行里：往返毫秒数、失败原因长度都不定，
                   同一行意味着它们要跟模型名抢宽度，而抢输的总是模型名 */}
               {test?.state === 'running' && (
-                <p className="pl-6 text-xs text-neutral-500">{t('settingsTestRunning')}</p>
+                <p className="pl-6 text-sm leading-caption text-neutral-500">{t('settingsTestRunning')}</p>
               )}
               {/* 成功也用这一页通用的次要文字层级，不上绿色勾：整个界面全程没用过状态色 */}
               {test?.state === 'ok' && (
-                <p className="pl-6 text-xs text-neutral-500">
+                <p className="pl-6 text-sm leading-caption text-neutral-500">
                   {t('settingsTestOk', String(test.ms ?? 0))}
                 </p>
               )}
               {test?.state === 'fail' && (
-                <p className="pl-6 text-xs leading-relaxed text-neutral-600">
+                <p className="pl-6 text-sm leading-relaxed text-neutral-600">
                   {describeFailure(test.reason)}
                   {/* 原始报错留着：分类给方向，状态码和响应体才是定位用得上的证据。
                       后台已经把 Key 从这段文本里剥掉了（见 llm/probe.ts 的 stripSecret） */}
@@ -319,7 +319,7 @@ export function EndpointCard({
       {/* 一个模型都没有时说清楚下一步：空列表本身只是「什么都没有」，
           它不会告诉人「先填 Key、再从服务商的清单里挑」 */}
       {endpoint.models.length === 0 && (
-        <p className="text-xs leading-relaxed text-neutral-500">{t('settingsModelNone')}</p>
+        <p className="text-sm leading-relaxed text-neutral-500">{t('settingsModelNone')}</p>
       )}
 
       {editing && !adding && (
@@ -332,7 +332,7 @@ export function EndpointCard({
         <div className="flex items-center gap-1 rounded-lg border border-neutral-200 bg-white py-0.5 pl-2 pr-1">
           <select
             aria-label={t('settingsModelAdd')}
-            className="min-h-8 min-w-0 flex-1 cursor-pointer border-0 bg-transparent text-sm focus-visible:outline-none"
+            className="min-h-8 min-w-0 flex-1 cursor-pointer border-0 bg-transparent text-base leading-body focus-visible:outline-none"
             value=""
             disabled={catalog.state === 'loading'}
             onChange={(e) => addModel(e.target.value)}
@@ -352,7 +352,7 @@ export function EndpointCard({
       {showInput && (
         <div className="flex items-center gap-1 rounded-lg border border-neutral-200 bg-white py-0.5 pl-2 pr-1">
           <input
-            className="min-h-8 min-w-0 flex-1 border-0 bg-transparent px-0 text-sm focus-visible:outline-none"
+            className="min-h-8 min-w-0 flex-1 border-0 bg-transparent px-0 text-base leading-body focus-visible:outline-none"
             aria-label={t('settingsModelAdd')}
             placeholder={t('settingsModelAdd')}
             value={newModel}

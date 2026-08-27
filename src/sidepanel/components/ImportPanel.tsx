@@ -72,7 +72,7 @@ export function ImportPanel() {
       })),
     ]
     return (
-      <div className="space-y-2 text-xs">
+      <div className="space-y-2 text-sm leading-caption">
         {picker}
         {/* 成功状态不能只靠颜色，勾选图标 + 文字一起给（色盲/高对比度模式下也读得出来） */}
         <p className="flex items-start gap-1.5 text-neutral-700">
@@ -101,7 +101,7 @@ export function ImportPanel() {
 
   if (importError !== null) {
     return (
-      <div className="space-y-2 text-xs">
+      <div className="space-y-2 text-sm leading-caption">
         {picker}
         <p className="flex items-start gap-1.5 rounded-md border border-red-200 bg-red-50 p-2 text-red-700">
           <AlertIcon className="mt-px h-3.5 w-3.5 shrink-0" />
@@ -117,7 +117,7 @@ export function ImportPanel() {
   if (importFile !== null) {
     const { name, preview } = importFile
     return (
-      <div className="space-y-2 text-xs">
+      <div className="space-y-2 text-sm leading-caption">
         {picker}
         <p className="flex items-center gap-1.5 font-medium text-neutral-700">
           <FileIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
@@ -160,7 +160,7 @@ export function ImportPanel() {
   }
 
   return (
-    <div className="text-xs">
+    <div className="text-sm leading-caption">
       {picker}
       <button
         className={filePickerButton}

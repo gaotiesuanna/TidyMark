@@ -121,7 +121,7 @@ export function SettingsPanel() {
           标题已经在 Shell 头部和返回同一行，这里不再写一遍。
           外框去掉：端点卡自己有边，再套一层就是框套框。 */}
       <section className="space-y-3">
-        <h3 className="text-sm font-medium">{t('settingsModelTitle')}</h3>
+        <h3 className="text-base leading-body font-medium">{t('settingsModelTitle')}</h3>
 
 
         {settings.endpoints.map((endpoint, index) => {
@@ -152,7 +152,7 @@ export function SettingsPanel() {
         {picking ? (
           <div className="space-y-2 rounded-lg border border-neutral-200 bg-neutral-50/50 p-3">
             <div className="flex items-start justify-between gap-2">
-              <p className="text-xs leading-5 text-neutral-600">{t('settingsPresetHint')}</p>
+              <p className="text-sm leading-body text-neutral-600">{t('settingsPresetHint')}</p>
               <button
                 type="button"
                 aria-label={t('settingsEndpointCancel')}
@@ -172,11 +172,11 @@ export function SettingsPanel() {
                   className={presetCard}
                   onClick={() => pickPreset(preset)}
                 >
-                  <span className="w-full truncate text-sm font-medium text-neutral-800">
+                  <span className="w-full truncate text-base leading-body font-medium text-neutral-800">
                     {preset.label[locale]}
                   </span>
                   {/* 域名同时是给读屏的补充：光一个「智谱」听不出要连到哪台服务器 */}
-                  <span className="w-full truncate text-xs text-neutral-500">
+                  <span className="w-full truncate text-sm leading-caption text-neutral-500">
                     {domainOf(preset.baseUrl)}
                   </span>
                 </button>
@@ -187,11 +187,11 @@ export function SettingsPanel() {
                 className={`${presetCard} col-span-2 border-dashed`}
                 onClick={addBlank}
               >
-                <span className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-800">
+                <span className="inline-flex items-center gap-1.5 text-base leading-body font-medium text-neutral-800">
                   <PlusIcon className="h-3.5 w-3.5" />
                   {t('settingsEndpointCustom')}
                 </span>
-                <span className="w-full truncate text-xs text-neutral-500">
+                <span className="w-full truncate text-sm leading-caption text-neutral-500">
                   {t('settingsEndpointCustomHint')}
                 </span>
               </button>
@@ -200,7 +200,7 @@ export function SettingsPanel() {
         ) : (
           <button
             type="button"
-            className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-neutral-300 bg-white px-3 py-2.5 text-sm font-medium text-neutral-600 transition-colors duration-150 hover:border-neutral-400 hover:bg-neutral-50 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 motion-reduce:transition-none"
+            className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-neutral-300 bg-white px-3 py-2.5 text-base leading-body font-medium text-neutral-600 transition-colors duration-150 hover:border-neutral-400 hover:bg-neutral-50 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 motion-reduce:transition-none"
             onClick={() => setPicking(true)}
           >
             <PlusIcon className="h-4 w-4" />
@@ -209,7 +209,7 @@ export function SettingsPanel() {
         )}
 
 
-        <p className="text-xs leading-relaxed text-neutral-500">
+        <p className="text-sm leading-relaxed text-neutral-500">
           {t('settingsPrivacyKey')}
           {' '}
           {t('settingsPrivacyPayload')}
@@ -217,10 +217,10 @@ export function SettingsPanel() {
       </section>
 
       <section className="space-y-2 border-t border-neutral-200 pt-5">
-        <h3 className="text-sm font-medium">{t('settingsLangTitle')}</h3>
-        <label className="block text-sm">
+        <h3 className="text-base leading-body font-medium">{t('settingsLangTitle')}</h3>
+        <label className="block text-base leading-body">
           <select
-            className="w-full min-h-8 cursor-pointer rounded border border-neutral-200 bg-white px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
+            className="w-full min-h-8 cursor-pointer rounded border border-neutral-200 bg-white px-2.5 text-base leading-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
             aria-label={t('settingsLangTitle')}
             value={settings.uiLocale}
             onChange={(e) =>
@@ -234,12 +234,12 @@ export function SettingsPanel() {
             <option value="en">English</option>
           </select>
         </label>
-        <p className="text-xs leading-relaxed text-neutral-500">{t('settingsLangBody')}</p>
+        <p className="text-sm leading-relaxed text-neutral-500">{t('settingsLangBody')}</p>
       </section>
 
       {/* 统一 GitHub 标题改的是书签自己的名字，不是「这一轮怎么整理」，所以不在偏好页 */}
       <section className="border-t border-neutral-200 pt-5">
-        <label className="flex items-start gap-2 text-sm">
+        <label className="flex items-start gap-2 text-base leading-body">
           <input
             type="checkbox"
             className="mt-1 h-3.5 w-3.5"
@@ -248,7 +248,7 @@ export function SettingsPanel() {
           />
           <span>
             {t('settingsGithubTitle')}
-            <span className="mt-0.5 block text-xs leading-relaxed text-neutral-500">
+            <span className="mt-0.5 block text-sm leading-relaxed text-neutral-500">
               {t('settingsGithubBody')}
             </span>
           </span>

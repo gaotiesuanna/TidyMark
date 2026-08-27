@@ -16,7 +16,7 @@ export function StructureStep() {
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-neutral-500">
+      <p className="text-sm leading-caption text-neutral-500">
         {plural(nodes.length, 'structureIntroOne', 'structureIntroOther', String(nodes.length), String(total))}
         {' '}
         {t('structureHint')}
@@ -25,7 +25,7 @@ export function StructureStep() {
       {/* 合并根是容器不是分类，不进下面那份两层列表；它不可删除，也不带计数 */}
       {plan.mergeRoot !== null && (
         <div className="space-y-1 rounded border border-neutral-300 bg-neutral-50 p-2">
-          <label className="flex items-center gap-2 text-xs">
+          <label className="flex items-center gap-2 text-sm leading-caption">
             <span className="shrink-0 text-neutral-500">{t('structureMergeLabel')}</span>
             <input
               className="min-w-0 flex-1 rounded border px-2 py-1"
@@ -37,7 +37,7 @@ export function StructureStep() {
              而在这之前，整条动线没有任何一处讲过这件事——偏好页那段「范围根目录不会被删除」
              讲的还是非合并模式。第一次听说不能是结果页，那时已经删完了。
              点名到具体标题，不说「源文件夹」这种对不上号的话；删除吓人，撤销才是让人敢按的那句。 */}
-          <p className="text-[11px] leading-relaxed text-neutral-500">
+          <p className="text-xs leading-relaxed text-neutral-500">
             {t('structureMergeNotice', joinTitles(plan.mergeRoot.sourceTitles, currentLocale()))}
           </p>
         </div>
@@ -48,7 +48,7 @@ export function StructureStep() {
           const prefix = String(index + 1).padStart(2, '0')
           return (
             <li key={node.id} className="rounded border p-2">
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-2 text-sm leading-caption">
                 <span className="w-8 shrink-0 text-neutral-400">{prefix}</span>
                 {node.removable ? (
                   <input
@@ -98,7 +98,7 @@ export function StructureStep() {
               {node.children.length > 0 && (
                 <ul className="mt-1 space-y-1 pl-8">
                   {node.children.map((child, childIndex) => (
-                    <li key={child.id} className="flex items-center gap-2 text-xs">
+                    <li key={child.id} className="flex items-center gap-2 text-sm leading-caption">
                       <span className="w-10 shrink-0 text-neutral-400">
                         {String(childIndex + 1).padStart(2, '0')}
                       </span>
@@ -140,14 +140,14 @@ export function StructureStep() {
         })}
       </ul>
 
-      <p className="text-[11px] leading-relaxed text-neutral-400">
+      <p className="text-xs leading-relaxed text-neutral-400">
         {t('structureFallback')}
       </p>
 
       <div className="sticky bottom-0 flex gap-2 bg-white pt-2">
-        <button className="rounded border px-3 py-2 text-sm" onClick={backToPreferences}>{t('structureBack')}</button>
+        <button className="rounded border px-3 py-2 text-base leading-body" onClick={backToPreferences}>{t('structureBack')}</button>
         <button
-          className="flex-1 rounded bg-neutral-800 py-2 text-sm text-white"
+          className="flex-1 rounded bg-neutral-800 py-2 text-base leading-body text-white"
           onClick={confirmStructure}
         >
           {t('structureNext')}

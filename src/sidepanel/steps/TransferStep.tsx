@@ -66,9 +66,9 @@ export function TransferStep() {
   return (
     <div>
       <div className="space-y-3">
-        <p className="text-xs leading-relaxed text-neutral-500">{t('transferIntro')}</p>
+        <p className="text-sm leading-relaxed text-neutral-500">{t('transferIntro')}</p>
 
-        <div className="flex gap-1 text-xs">
+        <div className="flex gap-1 text-sm leading-caption">
           <button
             className="rounded border px-2 py-1 hover:bg-neutral-50"
             onClick={() => setAllExpanded(allOpen ? [] : folderIds)}
@@ -98,7 +98,7 @@ export function TransferStep() {
             showBookmarks={searchActive}
           />
           {searchActive && !searchResult.hasMatches && (
-            <p className="px-2 py-3 text-center text-xs text-neutral-500">{t('treeSearchEmpty')}</p>
+            <p className="px-2 py-3 text-center text-sm leading-caption text-neutral-500">{t('treeSearchEmpty')}</p>
           )}
         </div>
       </div>

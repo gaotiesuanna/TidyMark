@@ -73,27 +73,27 @@ export function PreferencesStep() {
       <section className="rounded border p-3">
         {scopePaths.length > 0 && (
           <div className="mb-3">
-            <p className="text-xs text-neutral-500">{t('prefsScanScope')}</p>
+            <p className="text-sm leading-caption text-neutral-500">{t('prefsScanScope')}</p>
             <ul>
               {scopePaths.map((path) => (
-                <li key={path} className="break-all font-mono text-xs">{path}</li>
+                <li key={path} className="break-all font-mono text-sm leading-caption">{path}</li>
               ))}
             </ul>
           </div>
         )}
-        <div className="space-y-1 text-sm">
+        <div className="space-y-1 text-base leading-body">
           <p>{rebuild ? t('prefsModeRebuild') : t('prefsModeAdditive')}</p>
           {/* 摘要常驻、细节折叠：这一段讲的是「你现有的文件夹会被改名」，是对用户
               自己数据的后果，藏起来就不是知情的选择了（issues/22 的原则）。
               而编号规则的边角（名字本身以数字开头的怎么办）读一次就够。 */}
-          <p className="text-[11px] leading-relaxed text-neutral-400">
+          <p className="text-xs leading-relaxed text-neutral-400">
             {rebuild ? t('prefsModeRebuildSummary') : t('prefsModeAdditiveBody')}
           </p>
           {rebuild && (
             <Detail label={detailLabel()}>{t('prefsModeRebuildBody')}</Detail>
           )}
           {/* 推翻之后，那条理由讲的是已经被用户否掉的结论，再摆着只会跟上面那句打架 */}
-          <p className="text-[11px] leading-relaxed text-neutral-400">
+          <p className="text-xs leading-relaxed text-neutral-400">
             {modeOverride === null ? decision.reason : t('prefsModeOverridden')}
           </p>
           {modeOverride === null ? (
@@ -104,7 +104,7 @@ export function PreferencesStep() {
             // 误判成 rebuild 时用户能做的是这一轮整个放弃（prefsBack）或者事后撤销。
             decision.mode === 'additive' && (
               <button
-                className="text-xs text-neutral-500 underline hover:text-neutral-800"
+                className="text-sm leading-caption text-neutral-500 underline hover:text-neutral-800"
                 onClick={() => setModeOverride('rebuild')}
               >
                 {t('prefsModeOverride')}
@@ -112,7 +112,7 @@ export function PreferencesStep() {
             )
           ) : (
             <button
-              className="text-xs text-neutral-500 underline hover:text-neutral-800"
+              className="text-sm leading-caption text-neutral-500 underline hover:text-neutral-800"
               onClick={() => setModeOverride(null)}
             >
               {t('prefsModeAuto')}
@@ -120,7 +120,7 @@ export function PreferencesStep() {
           )}
         </div>
 
-        <label className="mt-3 flex items-start gap-2 text-sm">
+        <label className="mt-3 flex items-start gap-2 text-base leading-body">
           <input
             type="checkbox"
             className="mt-1 h-3.5 w-3.5"
@@ -143,13 +143,13 @@ export function PreferencesStep() {
         {/* 模型状态放在按钮上方：设置藏在齿轮后面，点开始前得看见即将用哪一个；
             没配时也不只靠按钮上那几个字。权限预告仍在两种状态下都摆着。 */}
         {needModel ? (
-          <p className="text-xs leading-relaxed text-neutral-600">{t('prefsModelMissing')}</p>
+          <p className="text-sm leading-relaxed text-neutral-600">{t('prefsModelMissing')}</p>
         ) : (
-          <div className="flex items-center gap-2 text-xs text-neutral-600">
+          <div className="flex items-center gap-2 text-sm leading-caption text-neutral-600">
             <label htmlFor="model-pick">{t('prefsModelLabel')}</label>
             <select
               id="model-pick"
-              className="min-w-0 flex-1 rounded border px-1 py-0.5 text-xs"
+              className="min-w-0 flex-1 rounded border px-1 py-0.5 text-sm leading-caption"
               value={optionValue(settings.active.baseUrl, settings.active.model)}
               onChange={(e) => {
                 if (e.target.value === OPEN_SETTINGS) return openSettings()
@@ -172,19 +172,19 @@ export function PreferencesStep() {
         {/* 试过折叠它，收回了：真会撞上浏览器那个权限弹窗的恰恰是已经配好模型的人
             （见本文件同名用例），藏起来弹窗就成了突袭。改成删掉不属于这一屏的那半句
             ——失效链接检查是本地清理里的功能、另一项权限，讲在这里只是把话拉长。 */}
-        <p className="text-[11px] leading-relaxed text-neutral-400">{t('prefsPermissionNotice')}</p>
+        <p className="text-xs leading-relaxed text-neutral-400">{t('prefsPermissionNotice')}</p>
         <div className="flex gap-2">
-          <button className="rounded border px-3 py-2 text-sm" onClick={reset}>{t('prefsBack')}</button>
+          <button className="rounded border px-3 py-2 text-base leading-body" onClick={reset}>{t('prefsBack')}</button>
           {needModel ? (
             <button
-              className="flex-1 rounded border border-neutral-800 py-2 text-sm text-neutral-800"
+              className="flex-1 rounded border border-neutral-800 py-2 text-base leading-body text-neutral-800"
               onClick={openSettings}
             >
               {t('prefsGoConfigure')}
             </button>
           ) : (
             <button
-              className="flex-1 rounded bg-neutral-800 py-2 text-sm text-white disabled:opacity-40"
+              className="flex-1 rounded bg-neutral-800 py-2 text-base leading-body text-white disabled:opacity-40"
               disabled={busy !== null}
               onClick={() => void analyze()}
             >

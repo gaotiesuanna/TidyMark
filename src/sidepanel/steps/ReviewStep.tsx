@@ -155,12 +155,12 @@ export function ReviewStep() {
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-neutral-500">
+      <p className="text-sm leading-caption text-neutral-500">
         {plural(plan.rows.length, 'reviewSummaryOne', 'reviewSummaryOther', String(plan.rows.length), String(accepted.size))}
       </p>
 
       {(summary.createdFolders > 0 || summary.renamedFolders > 0) && (
-        <p className="text-xs text-neutral-500">
+        <p className="text-sm leading-caption text-neutral-500">
           {plural(summary.createdFolders, 'reviewCreateFoldersOne', 'reviewCreateFoldersOther', String(summary.createdFolders))}
           {summary.renamedFolders > 0 && plural(summary.renamedFolders, 'reviewRenameFoldersOne', 'reviewRenameFoldersOther', String(summary.renamedFolders))}
           {t('reviewSummaryPeriod')}
@@ -168,17 +168,17 @@ export function ReviewStep() {
       )}
 
       {summary.renamedBookmarks > 0 && (
-        <p className="text-xs text-neutral-500">
+        <p className="text-sm leading-caption text-neutral-500">
           {plural(summary.renamedBookmarks, 'reviewRenameBookmarksOne', 'reviewRenameBookmarksOther', String(summary.renamedBookmarks))}
         </p>
       )}
 
       {settings.removeEmptyFolders && (
-        <p className="text-xs text-neutral-500">{t('reviewCleanNote')}</p>
+        <p className="text-sm leading-caption text-neutral-500">{t('reviewCleanNote')}</p>
       )}
 
       {plan.warnings.length > 0 && (
-        <ul className="space-y-1 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+        <ul className="space-y-1 rounded border border-amber-200 bg-amber-50 p-2 text-sm leading-caption text-amber-800">
           {plan.warnings.map((warning) => (
             <li key={warning}>{warning}</li>
           ))}
@@ -186,12 +186,12 @@ export function ReviewStep() {
       )}
 
       {plan.rows.length === 0 && (
-        <p className="rounded border bg-neutral-50 p-3 text-xs leading-relaxed text-neutral-500">
+        <p className="rounded border bg-neutral-50 p-3 text-sm leading-relaxed text-neutral-500">
           {t('reviewEmpty')}
         </p>
       )}
 
-      <div className="flex gap-1 text-xs">
+      <div className="flex gap-1 text-sm leading-caption">
         <button className="rounded border px-2 py-1 hover:bg-neutral-50" onClick={acceptAll}>{t('reviewAcceptAll')}</button>
         <button className="rounded border px-2 py-1 hover:bg-neutral-50" onClick={rejectAll}>{t('reviewRejectAll')}</button>
         {/* 两个筛选开关：只管看得见看不见，不碰 accepted，可以叠加 */}
@@ -223,7 +223,7 @@ export function ReviewStep() {
           没有任何筛选时也成立，这句只在筛选把本来存在的行藏起来时才成立，不能混。
           不把「筛掉了多少」写进来——按钮已经把话说完了，没必要让用户自己做减法。 */}
       {plan.rows.length > 0 && visibleGroups.length === 0 && (
-        <div className="rounded border bg-neutral-50 p-3 text-xs leading-relaxed text-neutral-500">
+        <div className="rounded border bg-neutral-50 p-3 text-sm leading-relaxed text-neutral-500">
           <p>{t('reviewFilterEmpty')}</p>
           <button
             type="button"
@@ -245,20 +245,20 @@ export function ReviewStep() {
             <div key={group.key} className="space-y-1">
               <button
                 type="button"
-                className="flex w-full items-center gap-2 rounded bg-neutral-100 px-2 py-1 text-left text-xs font-medium hover:bg-neutral-200"
+                className="flex w-full items-center gap-2 rounded bg-neutral-100 px-2 py-1 text-left text-sm leading-caption font-medium hover:bg-neutral-200"
                 onClick={() => toggleGroup(group)}
               >
                 <span className="truncate">{group.label}</span>
                 <span className="shrink-0 text-neutral-400">{t('reviewGroupCount', String(group.rows.length))}</span>
                 {group.allRule && (
-                  <span className="shrink-0 rounded bg-emerald-100 px-1 text-[10px] text-emerald-700">{t('reviewGroupAllRule')}</span>
+                  <span className="shrink-0 rounded bg-emerald-100 px-1 text-2xs text-emerald-700">{t('reviewGroupAllRule')}</span>
                 )}
               </button>
 
               {!collapsed && (
                 <ul className="space-y-1">
                   {group.rows.map((row) => (
-                    <li key={row.bookmarkId} className="rounded border p-2 text-xs">
+                    <li key={row.bookmarkId} className="rounded border p-2 text-sm leading-caption">
                       <div className="flex items-start gap-2">
                         <label className="flex flex-1 cursor-pointer items-start gap-2">
                           <input
@@ -272,7 +272,7 @@ export function ReviewStep() {
                             <div className="flex items-center gap-2">
                               <span className="truncate font-medium">{row.title}</span>
                               {row.confidence < MARK_CONFIDENCE && (
-                                <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] text-amber-700">{t('reviewMarked')}</span>
+                                <span className="shrink-0 rounded bg-amber-100 px-1 text-2xs text-amber-700">{t('reviewMarked')}</span>
                               )}
                               <span className="ml-auto shrink-0 text-neutral-400">{Math.round(row.confidence * 100)}%</span>
                             </div>
@@ -328,7 +328,7 @@ export function ReviewStep() {
         <div className="space-y-1">
           <button
             type="button"
-            className="flex w-full items-center gap-2 rounded bg-neutral-100 px-2 py-1 text-left text-xs font-medium hover:bg-neutral-200"
+            className="flex w-full items-center gap-2 rounded bg-neutral-100 px-2 py-1 text-left text-sm leading-caption font-medium hover:bg-neutral-200"
             onClick={() => setUnchangedCollapsed((prev) => !prev)}
           >
             <span className="truncate">{t('reviewUnchangedTitle', String(plan.unchanged.length))}</span>
@@ -341,10 +341,10 @@ export function ReviewStep() {
                 if (rows.length === 0) return null
                 return (
                   <div key={kind} className="space-y-1">
-                    <p className="text-[10px] font-medium text-neutral-500">{unchangedKindLabel(kind)}</p>
+                    <p className="text-2xs font-medium text-neutral-500">{unchangedKindLabel(kind)}</p>
                     <ul className="space-y-1">
                       {rows.map((row) => (
-                        <li key={row.bookmarkId} className="rounded border p-2 text-xs">
+                        <li key={row.bookmarkId} className="rounded border p-2 text-sm leading-caption">
                           <div className="truncate font-medium">{row.title}</div>
                           <div className="mt-1 text-neutral-500">{row.currentPath.join(' / ')}</div>
                           {row.reason !== '' && <div className="mt-0.5 text-neutral-400">{row.reason}</div>}
@@ -360,9 +360,9 @@ export function ReviewStep() {
       )}
 
       <div className="sticky bottom-0 flex gap-2 bg-white pt-2">
-        <button className="rounded border px-3 py-2 text-sm" onClick={reset}>{t('reviewDiscard')}</button>
+        <button className="rounded border px-3 py-2 text-base leading-body" onClick={reset}>{t('reviewDiscard')}</button>
         <button
-          className="flex-1 rounded bg-neutral-800 py-2 text-sm text-white disabled:opacity-40"
+          className="flex-1 rounded bg-neutral-800 py-2 text-base leading-body text-white disabled:opacity-40"
           disabled={accepted.size === 0 || busy !== null}
           onClick={() => void apply()}
         >

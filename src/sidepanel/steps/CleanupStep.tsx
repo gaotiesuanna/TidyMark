@@ -13,11 +13,11 @@ import { useStore } from '../store'
 function ItemLine({ item }: { item: BookmarkItem }) {
   return (
     <div className="min-w-0 flex-1">
-      <div className="truncate text-xs text-neutral-800">
+      <div className="truncate text-sm leading-caption text-neutral-800">
         {item.title.trim() === '' ? item.url : item.title}
       </div>
-      <div className="break-all text-[11px] leading-snug text-neutral-400">{item.url}</div>
-      <div className="truncate text-[11px] text-neutral-400">/{item.currentPath.join('/')}/</div>
+      <div className="break-all text-xs leading-snug text-neutral-400">{item.url}</div>
+      <div className="truncate text-xs text-neutral-400">/{item.currentPath.join('/')}/</div>
     </div>
   )
 }
@@ -62,7 +62,7 @@ function DuplicateGroupCard({ group }: { group: DuplicateGroup }) {
 
 /** 结果页那两个并排的次要按钮：同宽、同高，谁也不比谁更像主操作。 */
 const secondaryAction = [
-  'cursor-pointer rounded-md border border-neutral-300 py-2 text-sm text-neutral-700',
+  'cursor-pointer rounded-md border border-neutral-300 py-2 text-base leading-body text-neutral-700',
   'transition-colors duration-150 motion-reduce:transition-none',
   'hover:enabled:border-neutral-400 hover:enabled:bg-neutral-50',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1',
@@ -78,7 +78,7 @@ const CLEANUP_TABS: Array<{ key: CleanupTab; labelKey: Parameters<typeof t>[0] }
 ]
 
 /** 比顶栏模式切换小一号：同一种白片槽，高度和字号都收一档，避免两排分段控件抢视觉。 */
-const subTabGroup = 'flex min-w-0 rounded-md bg-neutral-100 p-0.5 text-[11px]'
+const subTabGroup = 'flex min-w-0 rounded-md bg-neutral-100 p-0.5 text-xs'
 const subTabBase = [
   'inline-flex h-6 min-w-0 flex-1 cursor-pointer items-center justify-center rounded px-1 font-medium',
   'transition-colors duration-150 motion-reduce:transition-none',
@@ -123,7 +123,7 @@ export function CleanupStep() {
 
   if (cleanupResult !== null) {
     return (
-      <div className="space-y-3 text-xs">
+      <div className="space-y-3 text-sm leading-caption">
         <p className="font-medium text-neutral-800">
           {plural(
             cleanupResult.deleted,
@@ -165,7 +165,7 @@ export function CleanupStep() {
           </div>
           {/* 侧栏本身是一个独立文档，关掉它就结束了本次清理（同 ResultStep 的「结束整理」） */}
           <button
-            className="w-full cursor-pointer rounded-md bg-neutral-800 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 motion-reduce:transition-none"
+            className="w-full cursor-pointer rounded-md bg-neutral-800 py-2 text-base leading-body font-medium text-white transition-colors duration-150 hover:bg-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 motion-reduce:transition-none"
             onClick={() => window.close()}
           >
             {t('cleanupFinish')}
@@ -187,7 +187,7 @@ export function CleanupStep() {
   return (
     <div>
       <div className="space-y-4">
-        <p className="text-xs leading-relaxed text-neutral-500">{t('cleanupIntro')}</p>
+        <p className="text-sm leading-relaxed text-neutral-500">{t('cleanupIntro')}</p>
 
         <div role="tablist" aria-label={t('cleanupTabListLabel')} className={subTabGroup}>
           {CLEANUP_TABS.map((each) => (
@@ -220,12 +220,12 @@ export function CleanupStep() {
             className="space-y-2"
           >
             {cleanupScan.duplicates.length === 0 ? (
-              <p className="text-xs text-neutral-500">{t('cleanupNothingFound')}</p>
+              <p className="text-sm leading-caption text-neutral-500">{t('cleanupNothingFound')}</p>
             ) : (
               <>
                 {exact.length > 0 && (
                   <>
-                    <h3 className="text-[11px] text-neutral-500">{t('cleanupGroupExact')}</h3>
+                    <h3 className="text-xs text-neutral-500">{t('cleanupGroupExact')}</h3>
                     <ul className="space-y-2">
                       {exact.map((group) => <DuplicateGroupCard key={group.key} group={group} />)}
                     </ul>
@@ -234,8 +234,8 @@ export function CleanupStep() {
 
                 {normalized.length > 0 && (
                   <>
-                    <h3 className="text-[11px] text-neutral-500">{t('cleanupGroupNormalized')}</h3>
-                    <p className="text-[11px] leading-relaxed text-neutral-400">
+                    <h3 className="text-xs text-neutral-500">{t('cleanupGroupNormalized')}</h3>
+                    <p className="text-xs leading-relaxed text-neutral-400">
                       {t('cleanupGroupNormalizedHint')}
                     </p>
                     <ul className="space-y-2">
@@ -257,9 +257,9 @@ export function CleanupStep() {
           >
             {linkCheckState === 'idle' && (
               <>
-                <p className="text-[11px] leading-relaxed text-neutral-500">{t('cleanupLinksExplain')}</p>
+                <p className="text-xs leading-relaxed text-neutral-500">{t('cleanupLinksExplain')}</p>
                 <button
-                  className="rounded-md border border-neutral-300 px-2.5 py-1 text-xs hover:border-neutral-400 disabled:opacity-40"
+                  className="rounded-md border border-neutral-300 px-2.5 py-1 text-sm leading-caption hover:border-neutral-400 disabled:opacity-40"
                   disabled={busy !== null}
                   onClick={() => void startLinkCheck()}
                 >
@@ -269,15 +269,15 @@ export function CleanupStep() {
             )}
 
             {linkCheckState === 'denied' && (
-              <p className="text-[11px] leading-relaxed text-neutral-500">{t('cleanupLinksDenied')}</p>
+              <p className="text-xs leading-relaxed text-neutral-500">{t('cleanupLinksDenied')}</p>
             )}
 
             {linkCheckState === 'done' && (
               <>
                 {dead.length > 0 && (
                   <>
-                    <h3 className="text-[11px] text-neutral-500">{t('cleanupGroupDead')}</h3>
-                    <p className="text-[11px] leading-relaxed text-neutral-400">{t('cleanupDeadActionHint')}</p>
+                    <h3 className="text-xs text-neutral-500">{t('cleanupGroupDead')}</h3>
+                    <p className="text-xs leading-relaxed text-neutral-400">{t('cleanupDeadActionHint')}</p>
                     <ul className="space-y-1">
                       {dead.map((link) => (
                         <li key={link.bookmarkId} className="flex items-start gap-2">
@@ -295,7 +295,7 @@ export function CleanupStep() {
                             aria-label={`${t('cleanupDeadActionMove')} ${link.url}`}
                             onChange={() => toggleCleanupMove(link.bookmarkId)}
                           />
-                          <span className="min-w-0 break-all text-[11px] text-neutral-600">
+                          <span className="min-w-0 break-all text-xs text-neutral-600">
                             {link.url}（{link.status}）
                           </span>
                         </li>
@@ -306,11 +306,11 @@ export function CleanupStep() {
 
                 {suspect.length > 0 && (
                   <>
-                    <h3 className="text-[11px] text-neutral-500">{t('cleanupGroupSuspect')}</h3>
-                    <p className="text-[11px] leading-relaxed text-neutral-400">{t('cleanupGroupSuspectHint')}</p>
+                    <h3 className="text-xs text-neutral-500">{t('cleanupGroupSuspect')}</h3>
+                    <p className="text-xs leading-relaxed text-neutral-400">{t('cleanupGroupSuspectHint')}</p>
                     <ul className="space-y-1">
                       {suspect.map((link) => (
-                        <li key={link.bookmarkId} className="break-all text-[11px] text-neutral-500">
+                        <li key={link.bookmarkId} className="break-all text-xs text-neutral-500">
                           {link.url}（{link.status ?? link.errorKind}）
                         </li>
                       ))}
@@ -324,7 +324,7 @@ export function CleanupStep() {
 
         {willBeEmpty.length > 0 && (
           <section className="space-y-2">
-            <h2 className="text-xs font-medium text-neutral-700">{t('cleanupSectionEmpty')}</h2>
+            <h2 className="text-sm leading-caption font-medium text-neutral-700">{t('cleanupSectionEmpty')}</h2>
             <ul className="space-y-1">
               {willBeEmpty.map((folder) => (
                 <li key={folder.id} className="flex items-start gap-2">
@@ -336,14 +336,14 @@ export function CleanupStep() {
                     onChange={() => toggleCleanupFolder(folder.id)}
                   />
                   <div className="min-w-0">
-                    <span className="text-xs text-neutral-800">{folder.title}</span>
+                    <span className="text-sm leading-caption text-neutral-800">{folder.title}</span>
                     {/* 本来就空的和「因为你的勾选才会变空的」是两件事，用户需要分得清 */}
                     {!alreadyEmpty.has(folder.id) && (
-                      <span className="ml-1 text-[11px] text-neutral-400">
+                      <span className="ml-1 text-xs text-neutral-400">
                         {t('cleanupWillBecomeEmpty')}
                       </span>
                     )}
-                    <div className="truncate text-[11px] text-neutral-400">
+                    <div className="truncate text-xs text-neutral-400">
                       /{folder.path.join('/')}/
                     </div>
                   </div>
@@ -358,12 +358,12 @@ export function CleanupStep() {
       <div className="sticky -bottom-4 -mx-4 -mb-4 mt-3 space-y-2 border-t border-neutral-200 bg-white px-4 pb-4 pt-3">
         {/* 撤销只有一个槽，清理会把上一次 AI 整理的快照覆盖掉。不静默覆盖 */}
         {undoAvailable && (
-          <p className="text-[11px] leading-relaxed text-amber-700">
+          <p className="text-xs leading-relaxed text-amber-700">
             {t('cleanupOverwriteUndoWarning')}
           </p>
         )}
         <button
-          className="w-full cursor-pointer rounded-md bg-neutral-800 py-2 text-sm font-medium text-white hover:enabled:bg-neutral-900 disabled:cursor-not-allowed disabled:opacity-40"
+          className="w-full cursor-pointer rounded-md bg-neutral-800 py-2 text-base leading-body font-medium text-white hover:enabled:bg-neutral-900 disabled:cursor-not-allowed disabled:opacity-40"
           disabled={total === 0 || busy !== null}
           onClick={() => void runCleanup()}
         >

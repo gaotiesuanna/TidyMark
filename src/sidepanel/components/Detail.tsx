@@ -16,7 +16,7 @@ export function Detail({ label, children }: { label: string; children: ReactNode
   return (
     <div>
       <button
-        className="flex items-center gap-1 text-left text-[11px] text-neutral-500 hover:text-neutral-800"
+        className="flex items-center gap-1 text-left text-xs text-neutral-500 hover:text-neutral-800"
         aria-expanded={expanded}
         onClick={() => setExpanded(!expanded)}
       >
@@ -24,7 +24,7 @@ export function Detail({ label, children }: { label: string; children: ReactNode
         <span>{label}</span>
       </button>
       {expanded && (
-        <p className="mt-1 text-[11px] leading-relaxed text-neutral-400">{children}</p>
+        <p className="mt-1 text-xs leading-relaxed text-neutral-400">{children}</p>
       )}
     </div>
   )

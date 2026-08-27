@@ -46,7 +46,7 @@ export function ProgressPanel({ busy, progress, logs, onCancel }: Props) {
       : null
 
   return (
-    <div role="status" className="mt-3 rounded border bg-neutral-50 p-2 text-xs">
+    <div role="status" className="mt-3 rounded border bg-neutral-50 p-2 text-sm leading-caption">
       {busy !== null && (
         <div className="flex items-center gap-2 text-neutral-600">
           <span

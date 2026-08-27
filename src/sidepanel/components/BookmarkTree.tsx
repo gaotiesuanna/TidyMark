@@ -60,7 +60,7 @@ function Row({
       <div className="flex items-center gap-1.5 py-0.5 pr-2 text-neutral-600" style={{ paddingLeft: `${depth * 14 + 4}px` }}>
         <LinkIcon className="h-3 w-3 shrink-0 text-neutral-300" />
         <span className="truncate">{node.title}</span>
-        <span className="ml-auto truncate text-xs text-neutral-400">{node.url}</span>
+        <span className="ml-auto truncate text-sm leading-caption text-neutral-400">{node.url}</span>
       </div>
     )
   }
@@ -71,7 +71,7 @@ function Row({
       <div className="flex items-center rounded hover:bg-neutral-100" style={{ paddingLeft: `${depth * 14 + 4}px` }}>
         {children.length > 0 ? (
           <button
-            className="h-5 w-5 shrink-0 text-xs text-neutral-400 hover:text-neutral-700"
+            className="h-5 w-5 shrink-0 text-sm leading-caption text-neutral-400 hover:text-neutral-700"
             aria-label={expanded ? t('treeCollapse', node.title) : t('treeExpand', node.title)}
             aria-expanded={expanded}
             onClick={() => onToggleExpand(node.id)}
@@ -90,7 +90,7 @@ function Row({
             className="h-3.5 w-3.5 shrink-0"
           />
           <span className="truncate">{node.title}</span>
-          <span className="ml-auto shrink-0 text-xs text-neutral-400">{countBookmarks(node)}</span>
+          <span className="ml-auto shrink-0 text-sm leading-caption text-neutral-400">{countBookmarks(node)}</span>
         </label>
       </div>
       {expanded && children.map((child) => (
@@ -111,7 +111,7 @@ function Row({
 
 export function BookmarkTree({ nodes, checkedIds, onToggle, expandedIds, onToggleExpand, showBookmarks = false }: Props) {
   return (
-    <div className="text-sm">
+    <div className="text-base leading-body">
       {topLevelNodes(nodes).map((node) => (
         <Row
           key={node.id}

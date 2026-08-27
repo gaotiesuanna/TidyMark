@@ -20,7 +20,7 @@ const MODES = [
 ] as const
 /** 分段控件：浅灰槽 + 内嵌白片。四项均分整行，不做成左簇右齿轮的第二标题栏——
     Chrome 侧栏顶栏已经是那个布局，再学一遍中间会空一截。 */
-const tabGroup = 'flex min-w-0 flex-1 rounded-lg bg-neutral-100 p-0.5 text-xs'
+const tabGroup = 'flex min-w-0 flex-1 rounded-lg bg-neutral-100 p-0.5 text-sm leading-caption'
 const tabBase = [
   'inline-flex h-7 min-w-0 flex-1 cursor-pointer items-center justify-center rounded-md px-2 font-medium',
   'transition-colors duration-150 motion-reduce:transition-none',
@@ -68,13 +68,13 @@ export function Shell({ children }: { children: ReactNode }) {
                正文里再写一个「设置」会变成顶栏只剩返回、下面孤零零一个标题。 */
             <>
               <button
-                className="-ml-2 inline-flex h-8 cursor-pointer items-center gap-1 rounded-md px-2 text-sm text-neutral-600 transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 motion-reduce:transition-none"
+                className="-ml-2 inline-flex h-8 cursor-pointer items-center gap-1 rounded-md px-2 text-base leading-body text-neutral-600 transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 motion-reduce:transition-none"
                 onClick={closeSettings}
               >
                 <ChevronLeftIcon className="h-3.5 w-3.5" />
                 {t('settingsBack')}
               </button>
-              <h2 className="text-sm font-medium text-neutral-900">{t('settingsTitle')}</h2>
+              <h2 className="text-base leading-body font-medium text-neutral-900">{t('settingsTitle')}</h2>
             </>
           ) : (
             <div className={tabGroup} role="tablist">
@@ -115,7 +115,7 @@ export function Shell({ children }: { children: ReactNode }) {
             当前步靠字重 + 深色轨道，不只靠颜色。分隔线放在步骤条上沿，
             把模式切换和流程进度分成两层。 */}
         {!settingsOpen && mode === 'organize' && (
-          <ol className="-mx-4 mt-2 flex min-w-0 flex-wrap border-t border-neutral-200 px-4 pt-2 text-xs">
+          <ol className="-mx-4 mt-2 flex min-w-0 flex-wrap border-t border-neutral-200 px-4 pt-2 text-sm leading-caption">
             {STEPS.map((each, i) => {
               const current = each.key === step
               const passed = STEPS.findIndex((s) => s.key === step) > i
@@ -157,7 +157,7 @@ export function Shell({ children }: { children: ReactNode }) {
       {!settingsOpen && error !== null && (
         <div
           role="alert"
-          className="flex items-start gap-2.5 border-b border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700"
+          className="flex items-start gap-2.5 border-b border-red-200 bg-red-50 px-4 py-3 text-sm leading-caption text-red-700"
         >
           <AlertIcon className="mt-px h-4 w-4 shrink-0" />
           <div className="min-w-0 flex-1 space-y-2">

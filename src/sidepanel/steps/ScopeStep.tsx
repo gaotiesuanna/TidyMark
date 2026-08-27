@@ -58,19 +58,19 @@ export function ScopeStep() {
             也不做「不再提示」——真需要配置的人会因此永久失去入口，而配好之后它自己就消失了，没有需要关闭的场景。 */}
         {needModel && (
           <section className="space-y-2 rounded-md border border-neutral-200 bg-neutral-50 p-3">
-            <p className="text-xs leading-relaxed text-neutral-600">{t('scopeNeedModel')}</p>
+            <p className="text-sm leading-relaxed text-neutral-600">{t('scopeNeedModel')}</p>
             <button
-              className="cursor-pointer rounded-md border border-neutral-300 bg-white px-2.5 py-1 text-xs font-medium text-neutral-700 transition-colors duration-150 hover:border-neutral-400 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 motion-reduce:transition-none"
+              className="cursor-pointer rounded-md border border-neutral-300 bg-white px-2.5 py-1 text-sm leading-caption font-medium text-neutral-700 transition-colors duration-150 hover:border-neutral-400 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 motion-reduce:transition-none"
               onClick={openSettings}
             >
               {t('scopeNeedModelAction')}
             </button>
           </section>
         )}
-        <p className="text-xs leading-relaxed text-neutral-500">{t('scopeIntro')}</p>
-        <p className="text-xs font-medium leading-relaxed text-neutral-600">{t('scopeSafety')}</p>
+        <p className="text-sm leading-relaxed text-neutral-500">{t('scopeIntro')}</p>
+        <p className="text-sm font-medium leading-relaxed text-neutral-600">{t('scopeSafety')}</p>
 
-        <div className="flex gap-1 text-xs">
+        <div className="flex gap-1 text-sm leading-caption">
           <button
             className="rounded border px-2 py-1 hover:bg-neutral-50"
             onClick={() => setExpanded(new Set(allOpen ? [] : folderIds))}
@@ -97,19 +97,19 @@ export function ScopeStep() {
           范围统计跟按钮钉在一起：勾选时不必滚过整棵树才看见空文件夹、重名这些数。 */}
       <div className="sticky -bottom-4 -mx-4 -mb-4 mt-3 space-y-3 border-t border-neutral-200 bg-white px-4 pb-4 pt-3">
         {preview !== null && (
-          <section className="rounded border p-3 text-sm">
+          <section className="rounded border p-3 text-base leading-body">
             <h2 className="mb-2 font-medium">{t('prefsScanTitle')}</h2>
             {preview.paths.length > 0 && (
               <div className="mb-2">
-                <p className="text-xs text-neutral-500">{t('prefsScanScope')}</p>
+                <p className="text-sm leading-caption text-neutral-500">{t('prefsScanScope')}</p>
                 <ul>
                   {preview.paths.map((path) => (
-                    <li key={path} className="break-all font-mono text-xs">{path}</li>
+                    <li key={path} className="break-all font-mono text-sm leading-caption">{path}</li>
                   ))}
                 </ul>
               </div>
             )}
-            <dl className="grid grid-cols-2 gap-y-1 text-xs">
+            <dl className="grid grid-cols-2 gap-y-1 text-sm leading-caption">
               <dt className="text-neutral-500">{t('prefsStatBookmarks')}</dt><dd>{preview.stats.totalBookmarks}</dd>
               <dt className="text-neutral-500">{t('prefsStatFolders')}</dt><dd>{preview.stats.totalFolders}</dd>
               <dt className="text-neutral-500">{t('prefsStatEmpty')}</dt><dd>{preview.stats.emptyFolders}</dd>
@@ -121,7 +121,7 @@ export function ScopeStep() {
           </section>
         )}
         <button
-          className="w-full cursor-pointer rounded-md bg-neutral-800 py-2 text-sm font-medium text-white transition-colors duration-150 hover:enabled:bg-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
+          className="w-full cursor-pointer rounded-md bg-neutral-800 py-2 text-base leading-body font-medium text-white transition-colors duration-150 hover:enabled:bg-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
           disabled={checkedIds.size === 0 || busy !== null}
           onClick={() => void goScan()}
         >
