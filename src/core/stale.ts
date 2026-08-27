@@ -1,5 +1,3 @@
-import type { HistoryVisit } from './ports'
-import { normalizeUrl } from './url'
 import type { BookmarkItem } from './types'
 
 export type StaleBucket =
@@ -8,10 +6,24 @@ export type StaleBucket =
   | 'overOneYear'
   | 'unknown'
 
+const AGE_RANK: Record<Exclude<StaleBucket, 'unknown'>, number> = {
+  threeToSixMonths: 0,
+  sixToTwelveMonths: 1,
+  overOneYear: 2,
+}
+
+/** 时间筛选只包含有明确上次打开时间的书签；unknown 不能推断为超过任意时长。 */
+export function matchesStaleFilter(bucket: StaleBucket, filter: 'all' | StaleBucket): boolean {
+  if (filter === 'all') return true
+  if (filter === 'unknown') return bucket === 'unknown'
+  if (bucket === 'unknown') return false
+  return AGE_RANK[bucket] >= AGE_RANK[filter]
+}
+
 export interface StaleBookmark {
   item: BookmarkItem
   bucket: StaleBucket
-  lastVisitedAt?: number
+  lastUsedAt?: number
 }
 
 export interface StaleScanResult {
@@ -35,7 +47,6 @@ function subtractMonths(timestamp: number, count: number): number {
 
 export function classifyStaleBookmarks(
   items: BookmarkItem[],
-  visits: HistoryVisit[],
   scannedAt: number,
   scopeRootIdByBookmarkId: ReadonlyMap<string, string>,
 ): StaleScanResult {
@@ -43,28 +54,17 @@ export function classifyStaleBookmarks(
   const cutoff6Months = subtractMonths(scannedAt, 6)
   const cutoff12Months = subtractMonths(scannedAt, 12)
 
-  const latestVisitByUrl = new Map<string, number | undefined>()
-  for (const visit of visits) {
-    const url = normalizeUrl(visit.url)
-    const previous = latestVisitByUrl.get(url)
-    if (visit.lastVisitTime !== undefined && (previous === undefined || visit.lastVisitTime > previous)) {
-      latestVisitByUrl.set(url, visit.lastVisitTime)
-    } else if (!latestVisitByUrl.has(url)) {
-      latestVisitByUrl.set(url, undefined)
-    }
-  }
-
   const staleItems: StaleBookmark[] = []
   for (const item of items) {
-    const lastVisitedAt = latestVisitByUrl.get(normalizeUrl(item.url))
-    if (lastVisitedAt === undefined) {
+    const lastUsedAt = item.dateLastUsed
+    if (lastUsedAt === undefined) {
       staleItems.push({ item, bucket: 'unknown' })
-    } else if (lastVisitedAt <= cutoff12Months) {
-      staleItems.push({ item, bucket: 'overOneYear', lastVisitedAt })
-    } else if (lastVisitedAt <= cutoff6Months) {
-      staleItems.push({ item, bucket: 'sixToTwelveMonths', lastVisitedAt })
-    } else if (lastVisitedAt <= cutoff3Months) {
-      staleItems.push({ item, bucket: 'threeToSixMonths', lastVisitedAt })
+    } else if (lastUsedAt <= cutoff12Months) {
+      staleItems.push({ item, bucket: 'overOneYear', lastUsedAt })
+    } else if (lastUsedAt <= cutoff6Months) {
+      staleItems.push({ item, bucket: 'sixToTwelveMonths', lastUsedAt })
+    } else if (lastUsedAt <= cutoff3Months) {
+      staleItems.push({ item, bucket: 'threeToSixMonths', lastUsedAt })
     }
   }
 

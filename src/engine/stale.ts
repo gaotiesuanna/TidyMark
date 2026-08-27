@@ -19,7 +19,5 @@ export async function scanStaleBookmarks(
 
   for (const root of roots) walk(root, root.id)
 
-  if (ports.history === undefined) throw new Error('History API unavailable')
-  const visits = await ports.history.search()
-  return classifyStaleBookmarks(scan.bookmarks, visits, scannedAt, scopeRootIdByBookmarkId)
+  return classifyStaleBookmarks(scan.bookmarks, scannedAt, scopeRootIdByBookmarkId)
 }

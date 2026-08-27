@@ -8,6 +8,8 @@ function toNode(raw: chrome.bookmarks.BookmarkTreeNode): BookmarkNode {
     title: raw.title,
   }
   if (raw.url !== undefined) node.url = raw.url
+  if (raw.dateAdded !== undefined) node.dateAdded = raw.dateAdded
+  if (raw.dateLastUsed !== undefined) node.dateLastUsed = raw.dateLastUsed
   if (raw.children !== undefined) node.children = raw.children.map(toNode)
   return node
 }

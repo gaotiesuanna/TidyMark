@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { currentLocale, t } from '@/i18n'
 import { toHtmlLang } from '@/core/locale'
-import type { StaleBucket } from '@/core/stale'
+import { matchesStaleFilter, type StaleBucket } from '@/core/stale'
 import { useStore } from '../store'
 
 type StaleFilter = 'all' | StaleBucket
@@ -42,7 +42,7 @@ export function StaleCleanupSection({ showHeading = true }: { showHeading?: bool
   const [filter, setFilter] = useState<StaleFilter>('all')
 
   const visibleItems = useMemo(
-    () => staleScan?.items.filter(({ bucket }) => filter === 'all' || bucket === filter) ?? [],
+    () => staleScan?.items.filter(({ bucket }) => matchesStaleFilter(bucket, filter)) ?? [],
     [filter, staleScan],
   )
 
@@ -70,10 +70,6 @@ export function StaleCleanupSection({ showHeading = true }: { showHeading?: bool
 
       {staleState === 'loading' && (
         <p className="text-[11px] leading-relaxed text-neutral-500">{t('cleanupStaleLoading')}</p>
-      )}
-
-      {staleState === 'denied' && (
-        <p className="text-[11px] leading-relaxed text-neutral-500">{t('cleanupStaleDenied')}</p>
       )}
 
       {staleState === 'error' && (
@@ -132,7 +128,7 @@ export function StaleCleanupSection({ showHeading = true }: { showHeading?: bool
                 </tr>
               </thead>
               <tbody>
-                {visibleItems.map(({ item, bucket, lastVisitedAt }) => (
+                {visibleItems.map(({ item, bucket, lastUsedAt }) => (
                   <tr key={item.id} className="border-t border-neutral-100 align-top">
                     <th scope="row" className="max-w-[16rem] py-2 pr-2 font-normal text-neutral-800">
                       <div>{item.title}</div>
@@ -149,7 +145,7 @@ export function StaleCleanupSection({ showHeading = true }: { showHeading?: bool
                       )}
                     </th>
                     <td className="whitespace-nowrap py-2 pr-2 text-neutral-500">
-                      {lastVisitedAt === undefined ? t('cleanupStaleNeverVisited') : formatDate(lastVisitedAt)}
+                      {lastUsedAt === undefined ? t('cleanupStaleNoLastUsed') : formatDate(lastUsedAt)}
                     </td>
                     <td className="whitespace-nowrap py-2 pr-2 text-neutral-500">{t(BUCKET_LABELS[bucket])}</td>
                     <td className="py-2">

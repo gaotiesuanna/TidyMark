@@ -4,6 +4,8 @@ export interface TreeSpec {
   id: string
   title: string
   url?: string
+  dateAdded?: number
+  dateLastUsed?: number
   children?: TreeSpec[]
 }
 
@@ -12,6 +14,8 @@ interface Entry {
   parentId?: string
   title: string
   url?: string
+  dateAdded?: number
+  dateLastUsed?: number
   childIds: string[]
 }
 
@@ -31,6 +35,8 @@ export function createFakeBookmarks(initial: TreeSpec[]): FakeBookmarks {
       parentId,
       title: spec.title,
       url: spec.url,
+      dateAdded: spec.dateAdded,
+      dateLastUsed: spec.dateLastUsed,
       childIds: [],
     })
     if (parentId) entries.get(parentId)!.childIds.push(spec.id)
@@ -58,6 +64,8 @@ export function createFakeBookmarks(initial: TreeSpec[]): FakeBookmarks {
       title: entry.title,
     }
     if (entry.url !== undefined) node.url = entry.url
+    if (entry.dateAdded !== undefined) node.dateAdded = entry.dateAdded
+    if (entry.dateLastUsed !== undefined) node.dateLastUsed = entry.dateLastUsed
     if (deep && entry.url === undefined) {
       node.children = entry.childIds.map((id) => toNode(must(id), true))
     }

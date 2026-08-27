@@ -2,16 +2,15 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CleanupStep } from '@/sidepanel/steps/CleanupStep'
+import { Shell } from '@/sidepanel/components/Shell'
 import { useStore } from '@/sidepanel/store'
 import { send } from '@/sidepanel/lib/send'
-import { ensureHistoryPermission } from '@/sidepanel/lib/visits'
 import type { BookmarkNode } from '@/core/ports'
 import type { BookmarkItem } from '@/core/types'
 import type { StaleScanResult } from '@/core/stale'
 import type { CleanupResult } from '@/engine/cleanup'
 
 vi.mock('@/sidepanel/lib/send', () => ({ send: vi.fn() }))
-vi.mock('@/sidepanel/lib/visits', () => ({ ensureHistoryPermission: vi.fn() }))
 
 /**
  * 目录丙只有一条书签，而那条是重复项——勾上它，目录丙就该在「空文件夹」一节
@@ -75,7 +74,7 @@ const staleReadyResult: StaleScanResult = {
         currentPath: ['书签栏', '目录甲'],
       }),
       bucket: 'overOneYear',
-      lastVisitedAt: new Date(2025, 0, 10).getTime(),
+      lastUsedAt: new Date(2025, 0, 10).getTime(),
     },
     {
       item: item({
@@ -97,7 +96,6 @@ const staleReadyResult: StaleScanResult = {
 
 beforeEach(() => {
   vi.mocked(send).mockReset()
-  vi.mocked(ensureHistoryPermission).mockReset()
   useStore.setState({
     tree,
     mode: 'cleanup',
@@ -125,13 +123,12 @@ async function openCleanupTab(name: string): Promise<void> {
 }
 
 describe('长期未点击书签扫描状态', () => {
-  it('页面挂载不申请历史权限', () => {
+  it('页面说明扫描不读取浏览历史', () => {
     render(<CleanupStep />)
-    expect(ensureHistoryPermission).not.toHaveBeenCalled()
+    expect(screen.getByText(/不读取浏览历史/)).toBeDefined()
   })
 
-  it('扫描动作才申请权限，并发送清理扫描的全库根', async () => {
-    vi.mocked(ensureHistoryPermission).mockResolvedValue(true)
+  it('扫描长期未点击书签发送清理扫描的全库根', async () => {
     vi.mocked(send).mockResolvedValue({
       ok: true, kind: 'cleanup_stale_scan', scan: staleResult,
     } as never)
@@ -139,7 +136,6 @@ describe('长期未点击书签扫描状态', () => {
 
     await useStore.getState().runStaleScan()
 
-    expect(ensureHistoryPermission).toHaveBeenCalledTimes(1)
     expect(send).toHaveBeenCalledWith({
       kind: 'cleanup_stale_scan',
       scopeRootIds: ['1'],
@@ -147,8 +143,7 @@ describe('长期未点击书签扫描状态', () => {
     expect(useStore.getState().staleState).toBe('empty')
   })
 
-  it('清理页未勾选整理范围时仍按全库根申请权限并扫描', async () => {
-    vi.mocked(ensureHistoryPermission).mockResolvedValue(true)
+  it('清理页未勾选整理范围时仍按全库根扫描', async () => {
     vi.mocked(send).mockResolvedValue({
       ok: true, kind: 'cleanup_stale_scan', scan: staleResult,
     } as never)
@@ -156,7 +151,6 @@ describe('长期未点击书签扫描状态', () => {
 
     await useStore.getState().runStaleScan()
 
-    expect(ensureHistoryPermission).toHaveBeenCalledTimes(1)
     expect(send).toHaveBeenCalledWith({
       kind: 'cleanup_stale_scan',
       scopeRootIds: ['1'],
@@ -164,46 +158,31 @@ describe('长期未点击书签扫描状态', () => {
     expect(useStore.getState().staleState).toBe('empty')
   })
 
-  it('点击允许按钮时即使没有整理勾选也会申请历史权限', async () => {
-    vi.mocked(ensureHistoryPermission).mockResolvedValue(true)
+  it('点击扫描按钮时即使没有整理勾选也会按全库根扫描', async () => {
     vi.mocked(send).mockResolvedValue({
       ok: true, kind: 'cleanup_stale_scan', scan: staleResult,
     } as never)
     useStore.setState({ checkedIds: new Set() })
     render(<CleanupStep />)
 
-    await userEvent.click(screen.getByRole('button', { name: /允许并扫描/ }))
+    await userEvent.click(screen.getByRole('button', { name: /扫描长期未点击书签/ }))
 
-    expect(ensureHistoryPermission).toHaveBeenCalledTimes(1)
     expect(send).toHaveBeenCalledWith({
       kind: 'cleanup_stale_scan',
       scopeRootIds: ['1'],
     })
   })
 
-
-  it('权限拒绝与空结果是不同状态，且拒绝不发请求', async () => {
-    vi.mocked(ensureHistoryPermission).mockResolvedValue(false)
-
-    await useStore.getState().runStaleScan()
-
-    expect(useStore.getState().staleState).toBe('denied')
-    expect(useStore.getState().staleState).not.toBe('empty')
-    expect(send).not.toHaveBeenCalled()
-  })
-
-  it('保留历史查询错误文本', async () => {
-    vi.mocked(ensureHistoryPermission).mockResolvedValue(true)
-    vi.mocked(send).mockResolvedValue({ ok: false, error: 'history unavailable' } as never)
+  it('保留书签使用时间查询错误文本', async () => {
+    vi.mocked(send).mockResolvedValue({ ok: false, error: 'bookmark usage unavailable' } as never)
 
     await useStore.getState().runStaleScan()
 
     expect(useStore.getState().staleState).toBe('error')
-    expect(useStore.getState().staleError).toBe('history unavailable')
+    expect(useStore.getState().staleError).toBe('bookmark usage unavailable')
   })
 
   it('清理范围改变后忽略在途扫描响应', async () => {
-    vi.mocked(ensureHistoryPermission).mockResolvedValue(true)
     let resolveSend: ((value: unknown) => void) | undefined
     vi.mocked(send).mockImplementation(
       () => new Promise((resolve) => { resolveSend = resolve }) as never,
@@ -222,7 +201,6 @@ describe('长期未点击书签扫描状态', () => {
 
 
   it('run 序号改变后忽略在途扫描响应', async () => {
-    vi.mocked(ensureHistoryPermission).mockResolvedValue(true)
     let resolveSend: ((value: unknown) => void) | undefined
     vi.mocked(send).mockImplementation(
       () => new Promise((resolve) => { resolveSend = resolve }) as never,
@@ -250,7 +228,6 @@ describe('长期未点击书签扫描状态', () => {
     expect(useStore.getState().cleanupStaleMove.has('stale-id')).toBe(false)
   })
   it('stale history scan preserves duplicate and dead-link selections', async () => {
-    vi.mocked(ensureHistoryPermission).mockResolvedValue(true)
     vi.mocked(send).mockResolvedValue({
       ok: true, kind: 'cleanup_stale_scan', scan: staleReadyResult,
     } as never)
@@ -304,9 +281,8 @@ describe('长期未点击书签扫描状态', () => {
 describe('CleanupStep 长期未点击书签一节', () => {
   it('授权前只展示说明和允许按钮，不在挂载时申请历史权限', () => {
     render(<CleanupStep />)
-    expect(screen.getByText(/读取浏览历史/)).toBeDefined()
-    expect(screen.getByRole('button', { name: /允许并扫描/ })).toBeDefined()
-    expect(ensureHistoryPermission).not.toHaveBeenCalled()
+    expect(screen.getByText(/不读取浏览历史/)).toBeDefined()
+    expect(screen.getByRole('button', { name: /扫描长期未点击书签/ })).toBeDefined()
   })
 
   it('准备完成后显示五个筛选档位、截止日期和书签详情', () => {
@@ -318,18 +294,17 @@ describe('CleanupStep 长期未点击书签一节', () => {
     })
     render(<CleanupStep />)
 
-    for (const label of ['全部', '3–6 个月', '6–12 个月', '1 年以上', '无访问记录']) {
+    for (const label of ['全部', '3个月以上', '6个月以上', '1 年以上', '无上次打开时间']) {
       expect(screen.getByRole('tab', { name: label })).toBeDefined()
     }
     expect(screen.getByText('旧文章')).toBeDefined()
     expect(screen.getByText('https://example.com/old')).toBeDefined()
     expect(screen.getAllByText('/书签栏/目录甲/').length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/最后访问|无访问记录/).length).toBeGreaterThan(0)
-    expect(screen.getByText('当前历史查询没有可用匹配')).toBeDefined()
-    expect(screen.getByText(/分档截止日期/)).toBeDefined()
+    expect(screen.getAllByText(/上次打开|无上次打开时间/).length).toBeGreaterThan(0)
+    expect(screen.getByText(/上次打开早于/)).toBeDefined()
   })
 
-  it('默认不勾选长期未点击书签，并允许单独筛选和选择无访问记录', async () => {
+  it('默认不勾选长期未点击书签，并允许单独筛选和选择未知时间', async () => {
     useStore.setState({
       staleScan: staleReadyResult,
       staleState: 'ready',
@@ -342,7 +317,7 @@ describe('CleanupStep 长期未点击书签一节', () => {
     const moveOld = screen.getByRole('checkbox', { name: '移到待清理 旧文章' }) as HTMLInputElement
     expect(deleteOld.checked).toBe(false)
     expect(moveOld.checked).toBe(false)
-    await userEvent.click(screen.getByRole('tab', { name: '无访问记录' }))
+    await userEvent.click(screen.getByRole('tab', { name: '无上次打开时间' }))
     expect(screen.getByText('没有记录的文章')).toBeDefined()
     expect(screen.queryByText('旧文章')).toBeNull()
     await userEvent.click(screen.getByRole('checkbox', { name: '删除 没有记录的文章' }))
@@ -367,6 +342,42 @@ describe('CleanupStep 长期未点击书签一节', () => {
     expect(screen.getByRole('button', { name: '清理 1 项' })).toBeDefined()
     expect((screen.getByRole('button', { name: '清理 1 项' }) as HTMLButtonElement).disabled).toBe(false)
   })
+
+  it('三个月以上筛选包含更久未点击但不包含未知时间', async () => {
+    useStore.setState({
+      staleScan: {
+        ...staleReadyResult,
+        items: [
+          {
+            item: item({
+              id: 'stale-mid',
+              title: '半年前的',
+              url: 'https://example.com/mid',
+              parentId: '10',
+              currentPath: ['书签栏', '目录甲'],
+            }),
+            bucket: 'threeToSixMonths',
+            lastUsedAt: new Date(2026, 3, 1).getTime(),
+          },
+          ...staleReadyResult.items,
+        ],
+      },
+      staleState: 'ready',
+      cleanupChecked: new Set(),
+      cleanupStaleMove: new Set(),
+    })
+    render(<CleanupStep />)
+
+    await userEvent.click(screen.getByRole('tab', { name: '3个月以上' }))
+    expect(screen.getByText('半年前的')).toBeDefined()
+    expect(screen.getByText('旧文章')).toBeDefined()
+    expect(screen.queryByText('没有记录的文章')).toBeNull()
+
+    await userEvent.click(screen.getByRole('tab', { name: '6个月以上' }))
+    expect(screen.queryByText('半年前的')).toBeNull()
+    expect(screen.queryByText('没有记录的文章')).toBeNull()
+    expect(screen.getByText('旧文章')).toBeDefined()
+  })
 })
 
 describe('CleanupStep 功能小 tab', () => {
@@ -383,7 +394,7 @@ describe('CleanupStep 功能小 tab', () => {
     render(<CleanupStep />)
     await openCleanupTab('重复收藏')
     expect(screen.getByRole('checkbox', { name: '删除 a' })).toBeDefined()
-    expect(screen.queryByRole('button', { name: /允许并扫描/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /扫描长期未点击书签/ })).toBeNull()
   })
 
   it('切到失效链接才看到开始检查', async () => {
@@ -399,6 +410,23 @@ describe('CleanupStep 功能小 tab', () => {
     expect(screen.getByRole('button', { name: '清理 2 项' })).toBeDefined()
     await openCleanupTab('长期未点击')
     expect(screen.getByRole('button', { name: '清理 2 项' })).toBeDefined()
+  })
+
+  it('清理扫描日志默认不出现在长期未点击 tab', () => {
+    useStore.setState({
+      logs: [{ id: 1, phase: 'cleanup', level: 'info', message: '扫描完成：2 组重复、0 个空文件夹' }],
+    })
+    render(<Shell><CleanupStep /></Shell>)
+    expect(screen.queryByText(/2 组重复/)).toBeNull()
+  })
+
+  it('切到重复收藏才看到清理扫描日志', async () => {
+    useStore.setState({
+      logs: [{ id: 1, phase: 'cleanup', level: 'info', message: '扫描完成：2 组重复、0 个空文件夹' }],
+    })
+    render(<Shell><CleanupStep /></Shell>)
+    await openCleanupTab('重复收藏')
+    expect(screen.getByText(/2 组重复/)).toBeDefined()
   })
 })
 

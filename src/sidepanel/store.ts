@@ -24,7 +24,6 @@ import { DEFAULT_SETTINGS, activeLlm, endpointKey } from '@/storage/settings'
 import { send } from './lib/send'
 import type { TestFailure } from '@/background/messages'
 import { ensureAllHostsPermission, ensureHostPermission, hasHostPermission } from './lib/permissions'
-import { ensureHistoryPermission } from './lib/visits'
 import { connectProgress, startKeepalive, type ProgressConnection } from './lib/progress'
 import { applyDocumentLang } from './lib/documentLang'
 
@@ -339,8 +338,8 @@ interface State {
   cleanupStaleMove: Set<string>
   /** 当前范围内长期未点击书签的扫描结果。 */
   staleScan: StaleScanResult | null
-  /** 历史权限与查询的状态，权限拒绝和没有匹配项必须区分。 */
-  staleState: 'idle' | 'loading' | 'ready' | 'empty' | 'denied' | 'error'
+  /** 长期未点击书签的读取与分类状态。 */
+  staleState: 'idle' | 'loading' | 'ready' | 'empty' | 'error'
   /** 最近一次长期未点击书签扫描的错误。 */
   staleError: string | null
 
@@ -835,7 +834,7 @@ export const useStore = create<State>((set, get) => ({
   },
   async runStaleScan() {
     // 清理是全库扫描，没有整理页那套勾选。用 cleanupScan 的顶层根，不要读
-    // checkedIds：清理页看不见勾选，空集合会让「允许并扫描」点了毫无反应。
+    // checkedIds：清理页看不见勾选，空集合会让扫描按钮点了毫无反应。
     const scopeRootIds = [...(get().cleanupScan?.scopeRootIds ?? [])]
     if (scopeRootIds.length === 0) {
       set({ staleScan: null, staleState: 'idle', staleError: null })
@@ -849,16 +848,6 @@ export const useStore = create<State>((set, get) => ({
       && [...(get().cleanupScan?.scopeRootIds ?? [])].sort().join('\u0000') === scope
 
     try {
-      // chrome.permissions.request() requires a user gesture; callers invoke this only from
-      // the explicit allow button, never from a mount/effect. Must run before set() so a
-      // re-render does not drop the button (and the gesture) before the prompt.
-      if (!await ensureHistoryPermission()) {
-        if (!currentScopeMatches()) return
-        set({ staleScan: null, staleState: 'denied', staleError: null })
-        return
-      }
-      if (!currentScopeMatches()) return
-
       set({ staleScan: null, staleState: 'loading', staleError: null })
 
       const res = await send({ kind: 'cleanup_stale_scan', scopeRootIds })

@@ -61,6 +61,8 @@ export function scanTree(tree: BookmarkNode[], scopeRootIds: string[]): ScanResu
         parentId: node.parentId ?? '',
         index: node.index ?? 0,
         currentPath: path,
+        dateAdded: node.dateAdded,
+        dateLastUsed: node.dateLastUsed,
       })
       return
     }

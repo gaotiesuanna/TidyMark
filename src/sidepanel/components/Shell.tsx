@@ -47,6 +47,7 @@ export function Shell({ children }: { children: ReactNode }) {
     settingsOpen,
     openSettings,
     closeSettings,
+    cleanupScan,
   } = useStore()
   return (
     <div className="flex h-screen flex-col bg-white text-neutral-800">
@@ -179,13 +180,16 @@ export function Shell({ children }: { children: ReactNode }) {
         {settingsOpen ? <SettingsPanel /> : (
           <>
             {children}
-            {/* 紧跟在当前步骤的操作按钮下方，让状态出现在点击的地方 */}
-            <ProgressPanel
-              busy={busy}
-              progress={progress}
-              logs={logs}
-              {...(busyKind === 'analyze' || busyKind === 'checkLinks' ? { onCancel: () => void cancel() } : {})}
-            />
+            {/* 清理扫描结果属于「重复收藏」那一格，由 CleanupStep 自己画。
+                扫描还没回来时 CleanupStep 是 null，进度仍由这里顶上。 */}
+            {(mode !== 'cleanup' || cleanupScan === null) && (
+              <ProgressPanel
+                busy={busy}
+                progress={progress}
+                logs={logs}
+                {...(busyKind === 'analyze' || busyKind === 'checkLinks' ? { onCancel: () => void cancel() } : {})}
+              />
+            )}
           </>
         )}
       </main>

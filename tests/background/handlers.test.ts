@@ -3103,21 +3103,16 @@ describe('cleanup_stale_scan', () => {
       { id: '0', title: '', children: [
         { id: '1', title: '书签栏', children: [
           { id: '10', title: '范围内', children: [
-            { id: '100', title: '旧书签', url: 'https://old.example' },
+            { id: '100', title: '旧书签', url: 'https://old.example', dateLastUsed: 1 },
           ] },
         ] },
         { id: '2', title: '其他书签', children: [
-          { id: '20', title: '范围外', url: 'https://outside.example' },
+          { id: '20', title: '范围外', url: 'https://outside.example', dateLastUsed: 1 },
         ] },
       ] },
     ])
-    const history = createFakeHistory([
-      { url: 'https://old.example', lastVisitTime: 1 },
-      { url: 'https://outside.example', lastVisitTime: 1 },
-    ])
     const ports = {
       bookmarks: bookmarks.api,
-      history: history.api,
       storage: createFakeStorage(),
     }
 
@@ -3132,11 +3127,11 @@ describe('cleanup_stale_scan', () => {
     expect(response.scan.scopeRootIdByBookmarkId).toEqual({ '100': '1' })
   })
 
-  it('returns the history query error instead of an empty stale result', async () => {
+  it('ignores History API failures because stale scanning uses bookmark metadata', async () => {
     const bookmarks = createFakeBookmarks([
       { id: '0', title: '', children: [
         { id: '1', title: '书签栏', children: [
-          { id: '100', title: '旧书签', url: 'https://old.example' },
+          { id: '100', title: '旧书签', url: 'https://old.example', dateLastUsed: 1 },
         ] },
       ] },
     ])
@@ -3153,9 +3148,10 @@ describe('cleanup_stale_scan', () => {
       scopeRootIds: ['1'],
     })
 
-    expect(response.ok).toBe(false)
-    if (response.ok) throw new Error('unexpected')
-    expect(response.error).toContain('history unavailable')
+    expect(response.ok).toBe(true)
+    if (!response.ok || response.kind !== 'cleanup_stale_scan') throw new Error('unexpected')
+    expect(response.scan.items[0]?.lastUsedAt).toBe(1)
+    expect(history.api.search).not.toHaveBeenCalled()
   })
 })
 

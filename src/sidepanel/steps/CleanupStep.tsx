@@ -4,6 +4,7 @@ import { emptyAfterRemoval } from '@/core/cleanup'
 import type { DuplicateGroup } from '@/core/duplicates'
 import type { BookmarkItem } from '@/core/types'
 import { StaleCleanupSection } from '../components/StaleCleanupSection'
+import { ProgressPanel } from '../components/ProgressPanel'
 import { useStore } from '../store'
 /**
  * 一条待处理的书签摊开三样：标题、完整 URL、完整路径。
@@ -91,7 +92,8 @@ export function CleanupStep() {
     tree, cleanupScan, cleanupResult, cleanupChecked, cleanupFolders,
     cleanupLinks, linkCheckState, cleanupMove, cleanupStaleMove,
     startLinkCheck, toggleCleanupMove, toggleCleanupItem,
-    busy, undoAvailable, runCleanupScan, runCleanup, toggleCleanupFolder, undo,
+    busy, busyKind, progress, logs, cancel,
+    undoAvailable, runCleanupScan, runCleanup, toggleCleanupFolder, undo,
   } = useStore()
   const [tab, setTab] = useState<CleanupTab>('stale')
 
@@ -368,6 +370,14 @@ export function CleanupStep() {
           {plural(total, 'cleanupRunOne', 'cleanupRunOther', String(total))}
         </button>
       </div>
+      {(tab === 'duplicates' || busy !== null) && (
+        <ProgressPanel
+          busy={busy}
+          progress={progress}
+          logs={logs}
+          {...(busyKind === 'checkLinks' ? { onCancel: () => void cancel() } : {})}
+        />
+      )}
     </div>
   )
 }

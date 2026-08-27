@@ -10,6 +10,8 @@ export interface BookmarkItem {
   index: number
   currentPath: string[]
   dateAdded?: number
+  /** Chrome 记录的这条书签最后一次被打开的时间；与同 URL 的普通浏览记录无关。 */
+  dateLastUsed?: number
 }
 
 export interface FolderItem {

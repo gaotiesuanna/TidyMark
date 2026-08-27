@@ -246,19 +246,16 @@
     "message": "失效链接"
   },
   "cleanupStaleExplain": {
-    "message": "查看当前范围内长期未点击的书签需要读取浏览历史。Chrome 会先请求这项权限；只有你点击下面的按钮才会申请。"
+    "message": "按 Chrome 记录的每条书签上次打开时间，找出当前范围内长期未使用的书签。不读取浏览历史。"
   },
   "cleanupStaleAllow": {
-    "message": "允许并扫描浏览历史"
+    "message": "扫描长期未点击书签"
   },
   "cleanupStaleLoading": {
-    "message": "正在读取浏览历史……"
-  },
-  "cleanupStaleDenied": {
-    "message": "没有获得浏览历史权限，这一项已跳过。其他清理仍可使用。"
+    "message": "正在读取书签的上次打开时间……"
   },
   "cleanupStaleError": {
-    "message": "读取浏览历史失败。"
+    "message": "读取书签使用时间失败。"
   },
   "cleanupStaleEmpty": {
     "message": "当前范围内没有发现长期未点击的书签。"
@@ -272,7 +269,7 @@
     "placeholders": { "date": { "content": "$1" } }
   },
   "cleanupStaleCutoffs": {
-    "message": "分档截止日期：3–6 个月 $three$；6–12 个月 $six$；1 年以上 $year$",
+    "message": "上次打开早于：3 个月 $three$；6 个月 $six$；1 年 $year$",
     "placeholders": {
       "three": { "content": "$1" },
       "six": { "content": "$2" },
@@ -286,22 +283,22 @@
     "message": "全部"
   },
   "cleanupStaleFilterThreeToSix": {
-    "message": "3–6 个月"
+    "message": "3个月以上"
   },
   "cleanupStaleFilterSixToTwelve": {
-    "message": "6–12 个月"
+    "message": "6个月以上"
   },
   "cleanupStaleFilterOverOneYear": {
     "message": "1 年以上"
   },
   "cleanupStaleFilterUnknown": {
-    "message": "无访问记录"
+    "message": "无上次打开时间"
   },
   "cleanupStaleFilterEmpty": {
     "message": "这一档没有书签。"
   },
   "cleanupStaleUnknownHint": {
-    "message": "当前历史查询没有可用匹配"
+    "message": "Chrome 未提供这条书签的上次打开时间；不能判断闲置了多久"
   },
   "cleanupStaleActionDelete": {
     "message": "删除"
@@ -316,7 +313,7 @@
     "message": "书签"
   },
   "cleanupStaleColumnLastVisit": {
-    "message": "最后访问"
+    "message": "上次打开"
   },
   "cleanupStaleColumnBucket": {
     "message": "分档"
@@ -324,8 +321,8 @@
   "cleanupStaleColumnActions": {
     "message": "操作"
   },
-  "cleanupStaleNeverVisited": {
-    "message": "无访问记录"
+  "cleanupStaleNoLastUsed": {
+    "message": "无上次打开时间"
   },
   "cleanupStaleFolderTitle": {
     "message": "待清理"

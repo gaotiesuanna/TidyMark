@@ -246,19 +246,16 @@
     "message": "Dead links"
   },
   "cleanupStaleExplain": {
-    "message": "Viewing long-unvisited bookmarks in the current scope requires access to your browsing history. Chrome asks for this permission first; it is requested only when you press the button below."
+    "message": "Find long-unused bookmarks in the current scope from each bookmark's last-opened time recorded by Chrome. Browsing history is not read."
   },
   "cleanupStaleAllow": {
-    "message": "Allow and scan browsing history"
+    "message": "Scan long-unused bookmarks"
   },
   "cleanupStaleLoading": {
-    "message": "Reading browsing history…"
-  },
-  "cleanupStaleDenied": {
-    "message": "Browsing history permission was not granted, so this is skipped. Other cleanups remain available."
+    "message": "Reading bookmark last-opened times…"
   },
   "cleanupStaleError": {
-    "message": "Reading browsing history failed."
+    "message": "Reading bookmark usage times failed."
   },
   "cleanupStaleEmpty": {
     "message": "No long-unvisited bookmarks were found in the current scope."
@@ -272,7 +269,7 @@
     "placeholders": { "date": { "content": "$1" } }
   },
   "cleanupStaleCutoffs": {
-    "message": "Bucket cutoffs: 3–6 months $three$; 6–12 months $six$; over 1 year $year$",
+    "message": "Last opened before: 3 months $three$; 6 months $six$; 1 year $year$",
     "placeholders": {
       "three": { "content": "$1" },
       "six": { "content": "$2" },
@@ -286,22 +283,22 @@
     "message": "All"
   },
   "cleanupStaleFilterThreeToSix": {
-    "message": "3–6 months"
+    "message": "3+ months"
   },
   "cleanupStaleFilterSixToTwelve": {
-    "message": "6–12 months"
+    "message": "6+ months"
   },
   "cleanupStaleFilterOverOneYear": {
     "message": "Over 1 year"
   },
   "cleanupStaleFilterUnknown": {
-    "message": "No visit history"
+    "message": "No last-opened time"
   },
   "cleanupStaleFilterEmpty": {
     "message": "No bookmarks in this bucket."
   },
   "cleanupStaleUnknownHint": {
-    "message": "The current history query had no usable match"
+    "message": "Chrome did not provide a last-opened time for this bookmark, so its unused duration is unknown"
   },
   "cleanupStaleActionDelete": {
     "message": "Delete"
@@ -316,7 +313,7 @@
     "message": "Bookmark"
   },
   "cleanupStaleColumnLastVisit": {
-    "message": "Last visit"
+    "message": "Last opened"
   },
   "cleanupStaleColumnBucket": {
     "message": "Bucket"
@@ -324,8 +321,8 @@
   "cleanupStaleColumnActions": {
     "message": "Actions"
   },
-  "cleanupStaleNeverVisited": {
-    "message": "No visit history"
+  "cleanupStaleNoLastUsed": {
+    "message": "No last-opened time"
   },
   "cleanupStaleFolderTitle": {
     "message": "To clean up"

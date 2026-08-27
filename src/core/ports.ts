@@ -9,6 +9,8 @@ export interface BookmarkNode {
   index?: number
   title: string
   url?: string
+  dateAdded?: number
+  dateLastUsed?: number
   children?: BookmarkNode[]
 }
 
