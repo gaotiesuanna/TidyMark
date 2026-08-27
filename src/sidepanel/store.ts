@@ -332,6 +332,8 @@ interface State {
   linkCheckState: 'idle' | 'denied' | 'running' | 'done'
   /** 选了「移到失效链接文件夹」的死链。与 cleanupChecked（选删除）互斥。 */
   cleanupMove: Set<string>
+  /** 选了「移到待清理文件夹」的长期未点击书签。与 cleanupChecked 互斥。 */
+  cleanupStaleMove: Set<string>
 
   init(): Promise<void>
   refreshTree(): Promise<void>
@@ -391,8 +393,11 @@ interface State {
   runCleanup(): Promise<void>
   toggleCleanupItem(id: string): void
   setCleanupKeep(groupKey: string, id: string): void
-  toggleCleanupFolder(id: string): void
   toggleCleanupMove(id: string): void
+  toggleCleanupStaleMove(id: string): void
+  toggleStaleDelete(id: string): void
+  toggleStaleMove(id: string): void
+  toggleCleanupFolder(id: string): void
   /**
    * 第③节的入口。先解释、再申请权限、再查——顺序不能换：用户在看懂之前就被
    * Chrome 那句「读取你在所有网站上的数据」弹脸，十有八九直接点拒绝，
@@ -451,9 +456,10 @@ export const useStore = create<State>((set, get) => ({
   cleanupKeep: {},
   cleanupChecked: new Set(),
   cleanupFolders: new Set(),
-  cleanupLinks: [],
-  linkCheckState: 'idle',
   cleanupMove: new Set(),
+  cleanupLinks: [],
+  cleanupStaleMove: new Set(),
+  linkCheckState: 'idle',
 
   /** 整理或撤销之后重新读一次书签树，结果页据此展示真实结构。 */
   async refreshTree() {
@@ -799,6 +805,7 @@ export const useStore = create<State>((set, get) => ({
       cleanupKeep: {},
       cleanupChecked: defaultChecked(res.scan.duplicates),
       cleanupFolders: new Set(),
+      cleanupStaleMove: new Set(),
       cleanupResult: null,
       busy: null,
       busyKind: null,
@@ -813,6 +820,8 @@ export const useStore = create<State>((set, get) => ({
     const selection: CleanupSelection = {
       deleteBookmarkIds: [...get().cleanupChecked],
       moveBookmarkIds: [...get().cleanupMove],
+      staleMoveBookmarkIds: [...get().cleanupStaleMove],
+      staleMoveRootByBookmarkId: {},
       deleteFolderIds: [...get().cleanupFolders],
     }
     set({ busy: t('busyApplying'), busyKind: 'cleanup', error: null, progress: null, logs: [] })
@@ -823,6 +832,7 @@ export const useStore = create<State>((set, get) => ({
         planId: `cleanup-${Date.now()}`,
         scopeRootIds: scan.scopeRootIds,
         selection,
+        staleMoveFolderTitle: '待清理',
         deadFolderTitle: t('cleanupDeadFolderTitle'),
         barId,
         items: scan.items,
@@ -845,9 +855,13 @@ export const useStore = create<State>((set, get) => ({
 
   toggleCleanupItem(id) {
     const checked = new Set(get().cleanupChecked)
+    const staleMove = new Set(get().cleanupStaleMove)
     if (checked.has(id)) checked.delete(id)
-    else checked.add(id)
-    set({ cleanupChecked: checked })
+    else {
+      checked.add(id)
+      staleMove.delete(id)
+    }
+    set({ cleanupChecked: checked, cleanupStaleMove: staleMove })
   },
 
   setCleanupKeep(groupKey, id) {
@@ -871,17 +885,44 @@ export const useStore = create<State>((set, get) => ({
     else folders.add(id)
     set({ cleanupFolders: folders })
   },
-
   toggleCleanupMove: (id) => {
     const move = new Set(get().cleanupMove)
     const checked = new Set(get().cleanupChecked)
+    const staleMove = new Set(get().cleanupStaleMove)
     if (move.has(id)) move.delete(id)
     else {
       move.add(id)
       // 一条链接不可能既删掉又移走，勾上一个就把另一个摘掉
       checked.delete(id)
+      staleMove.delete(id)
     }
-    set({ cleanupMove: move, cleanupChecked: checked })
+    set({ cleanupMove: move, cleanupChecked: checked, cleanupStaleMove: staleMove })
+  },
+
+  toggleStaleDelete: (id) => {
+    const checked = new Set(get().cleanupChecked)
+    const staleMove = new Set(get().cleanupStaleMove)
+    if (checked.has(id)) checked.delete(id)
+    else {
+      checked.add(id)
+      staleMove.delete(id)
+    }
+    set({ cleanupChecked: checked, cleanupStaleMove: staleMove })
+  },
+
+  toggleStaleMove: (id) => {
+    const staleMove = new Set(get().cleanupStaleMove)
+    const checked = new Set(get().cleanupChecked)
+    if (staleMove.has(id)) staleMove.delete(id)
+    else {
+      staleMove.add(id)
+      checked.delete(id)
+    }
+    set({ cleanupStaleMove: staleMove, cleanupChecked: checked })
+  },
+
+  toggleCleanupStaleMove: (id) => {
+    get().toggleStaleMove(id)
   },
 
   startLinkCheck: async () => {
