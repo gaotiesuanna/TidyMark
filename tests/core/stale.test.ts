@@ -25,21 +25,30 @@ function bucketAt(lastUsedAt: Date): StaleBucket | undefined {
 it('assigns exact natural-month boundaries to their older buckets', () => {
   expect(bucketAt(new Date(2026, 4, 26, 12))).toBe('threeToSixMonths')
   expect(bucketAt(new Date(2026, 1, 26, 12))).toBe('sixToTwelveMonths')
-  expect(bucketAt(new Date(2025, 7, 26, 12))).toBe('overOneYear')
+  expect(bucketAt(new Date(2025, 7, 26, 12))).toBe('oneToTwoYears')
+  expect(bucketAt(new Date(2024, 7, 26, 12))).toBe('overTwoYears')
 })
 
 describe('matchesStaleFilter', () => {
   it('uses cumulative age filters without treating unknown as an age', () => {
     expect(matchesStaleFilter('threeToSixMonths', 'threeToSixMonths')).toBe(true)
     expect(matchesStaleFilter('sixToTwelveMonths', 'threeToSixMonths')).toBe(true)
-    expect(matchesStaleFilter('overOneYear', 'threeToSixMonths')).toBe(true)
+    expect(matchesStaleFilter('oneToTwoYears', 'threeToSixMonths')).toBe(true)
+    expect(matchesStaleFilter('overTwoYears', 'threeToSixMonths')).toBe(true)
     expect(matchesStaleFilter('unknown', 'threeToSixMonths')).toBe(false)
+  })
+
+  it('keeps one-year and two-year cumulative filters distinct', () => {
+    expect(matchesStaleFilter('oneToTwoYears', 'oneToTwoYears')).toBe(true)
+    expect(matchesStaleFilter('overTwoYears', 'oneToTwoYears')).toBe(true)
+    expect(matchesStaleFilter('oneToTwoYears', 'overTwoYears')).toBe(false)
+    expect(matchesStaleFilter('overTwoYears', 'overTwoYears')).toBe(true)
   })
 
   it('keeps unknown records in their dedicated filter', () => {
     expect(matchesStaleFilter('unknown', 'all')).toBe(true)
     expect(matchesStaleFilter('unknown', 'unknown')).toBe(true)
-    expect(matchesStaleFilter('overOneYear', 'unknown')).toBe(false)
+    expect(matchesStaleFilter('overTwoYears', 'unknown')).toBe(false)
   })
 })
 
@@ -53,7 +62,7 @@ describe('classifyStaleBookmarks', () => {
     expect(result.items.map(({ item: bookmark, bucket, lastUsedAt }) => (
       [bookmark.id, bucket, lastUsedAt]
     ))).toEqual([
-      ['old', 'overOneYear', new Date(2025, 0, 1).getTime()],
+      ['old', 'oneToTwoYears', new Date(2025, 0, 1).getTime()],
     ])
   })
 
@@ -62,7 +71,8 @@ describe('classifyStaleBookmarks', () => {
       [
         item('three-to-six', new Date(2026, 4, 26, 12).getTime()),
         item('six-to-twelve', new Date(2026, 1, 26, 12).getTime()),
-        item('over-year', new Date(2025, 7, 26, 12).getTime()),
+        item('one-to-two-years', new Date(2025, 7, 26, 12).getTime()),
+        item('over-two-years', new Date(2024, 7, 26, 12).getTime()),
         item('recent', new Date(2026, 4, 27, 12).getTime()),
       ],
       scanDate,
@@ -72,10 +82,12 @@ describe('classifyStaleBookmarks', () => {
     expect(result.cutoff3Months).toBe(new Date(2026, 4, 26, 12).getTime())
     expect(result.cutoff6Months).toBe(new Date(2026, 1, 26, 12).getTime())
     expect(result.cutoff12Months).toBe(new Date(2025, 7, 26, 12).getTime())
+    expect(result.cutoff24Months).toBe(new Date(2024, 7, 26, 12).getTime())
     expect(result.items.map(({ item: bookmark, bucket }) => [bookmark.id, bucket])).toEqual([
       ['three-to-six', 'threeToSixMonths'],
       ['six-to-twelve', 'sixToTwelveMonths'],
-      ['over-year', 'overOneYear'],
+      ['one-to-two-years', 'oneToTwoYears'],
+      ['over-two-years', 'overTwoYears'],
     ])
   })
 

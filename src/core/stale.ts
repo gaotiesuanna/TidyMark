@@ -3,13 +3,15 @@ import type { BookmarkItem } from './types'
 export type StaleBucket =
   | 'threeToSixMonths'
   | 'sixToTwelveMonths'
-  | 'overOneYear'
+  | 'oneToTwoYears'
+  | 'overTwoYears'
   | 'unknown'
 
 const AGE_RANK: Record<Exclude<StaleBucket, 'unknown'>, number> = {
   threeToSixMonths: 0,
   sixToTwelveMonths: 1,
-  overOneYear: 2,
+  oneToTwoYears: 2,
+  overTwoYears: 3,
 }
 
 /** 时间筛选只包含有明确上次打开时间的书签；unknown 不能推断为超过任意时长。 */
@@ -32,6 +34,7 @@ export interface StaleScanResult {
   cutoff3Months: number
   cutoff6Months: number
   cutoff12Months: number
+  cutoff24Months: number
   scopeRootIdByBookmarkId: Record<string, string>
 }
 
@@ -53,14 +56,17 @@ export function classifyStaleBookmarks(
   const cutoff3Months = subtractMonths(scannedAt, 3)
   const cutoff6Months = subtractMonths(scannedAt, 6)
   const cutoff12Months = subtractMonths(scannedAt, 12)
+  const cutoff24Months = subtractMonths(scannedAt, 24)
 
   const staleItems: StaleBookmark[] = []
   for (const item of items) {
     const lastUsedAt = item.dateLastUsed
     if (lastUsedAt === undefined) {
       staleItems.push({ item, bucket: 'unknown' })
+    } else if (lastUsedAt <= cutoff24Months) {
+      staleItems.push({ item, bucket: 'overTwoYears', lastUsedAt })
     } else if (lastUsedAt <= cutoff12Months) {
-      staleItems.push({ item, bucket: 'overOneYear', lastUsedAt })
+      staleItems.push({ item, bucket: 'oneToTwoYears', lastUsedAt })
     } else if (lastUsedAt <= cutoff6Months) {
       staleItems.push({ item, bucket: 'sixToTwelveMonths', lastUsedAt })
     } else if (lastUsedAt <= cutoff3Months) {
@@ -74,6 +80,7 @@ export function classifyStaleBookmarks(
     cutoff3Months,
     cutoff6Months,
     cutoff12Months,
+    cutoff24Months,
     scopeRootIdByBookmarkId: Object.fromEntries(scopeRootIdByBookmarkId),
   }
 }

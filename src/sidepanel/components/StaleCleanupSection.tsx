@@ -11,14 +11,16 @@ const FILTERS: Array<{ value: StaleFilter; label: Parameters<typeof t>[0] }> = [
   { value: 'all', label: 'cleanupStaleFilterAll' },
   { value: 'threeToSixMonths', label: 'cleanupStaleFilterThreeToSix' },
   { value: 'sixToTwelveMonths', label: 'cleanupStaleFilterSixToTwelve' },
-  { value: 'overOneYear', label: 'cleanupStaleFilterOverOneYear' },
+  { value: 'oneToTwoYears', label: 'cleanupStaleFilterOverOneYear' },
+  { value: 'overTwoYears', label: 'cleanupStaleFilterOverTwoYears' },
   { value: 'unknown', label: 'cleanupStaleFilterUnknown' },
 ]
 
 const BUCKET_LABELS: Record<StaleBucket, Parameters<typeof t>[0]> = {
   threeToSixMonths: 'cleanupStaleFilterThreeToSix',
   sixToTwelveMonths: 'cleanupStaleFilterSixToTwelve',
-  overOneYear: 'cleanupStaleFilterOverOneYear',
+  oneToTwoYears: 'cleanupStaleFilterOverOneYear',
+  overTwoYears: 'cleanupStaleFilterOverTwoYears',
   unknown: 'cleanupStaleFilterUnknown',
 }
 
@@ -97,7 +99,13 @@ export function StaleCleanupSection({ showHeading = true }: { showHeading?: bool
             <p>{t('cleanupStaleCurrentScope', String(cleanupScan?.scopeRootIds.length ?? 0))}</p>
             <p>{t('cleanupStaleScannedAt', formatDate(staleScan.scannedAt))}</p>
             <p>
-              {t('cleanupStaleCutoffs', formatDate(staleScan.cutoff3Months), formatDate(staleScan.cutoff6Months), formatDate(staleScan.cutoff12Months))}
+              {t(
+                'cleanupStaleCutoffs',
+                formatDate(staleScan.cutoff3Months),
+                formatDate(staleScan.cutoff6Months),
+                formatDate(staleScan.cutoff12Months),
+                formatDate(staleScan.cutoff24Months),
+              )}
             </p>
           </div>
 

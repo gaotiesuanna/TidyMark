@@ -269,11 +269,12 @@
     "placeholders": { "date": { "content": "$1" } }
   },
   "cleanupStaleCutoffs": {
-    "message": "Last opened before: 3 months $three$; 6 months $six$; 1 year $year$",
+    "message": "Last opened before: 3 months $three$; 6 months $six$; 1 year $year$; 2 years $twoYears$",
     "placeholders": {
       "three": { "content": "$1" },
       "six": { "content": "$2" },
-      "year": { "content": "$3" }
+      "year": { "content": "$3" },
+      "twoYears": { "content": "$4" }
     }
   },
   "cleanupStaleFilterListLabel": {
@@ -290,6 +291,9 @@
   },
   "cleanupStaleFilterOverOneYear": {
     "message": "Over 1 year"
+  },
+  "cleanupStaleFilterOverTwoYears": {
+    "message": "Over 2 years"
   },
   "cleanupStaleFilterUnknown": {
     "message": "No last-opened time"

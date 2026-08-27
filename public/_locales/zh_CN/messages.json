@@ -269,11 +269,12 @@
     "placeholders": { "date": { "content": "$1" } }
   },
   "cleanupStaleCutoffs": {
-    "message": "上次打开早于：3 个月 $three$；6 个月 $six$；1 年 $year$",
+    "message": "上次打开早于：3 个月 $three$；6 个月 $six$；1 年 $year$；2 年 $twoYears$",
     "placeholders": {
       "three": { "content": "$1" },
       "six": { "content": "$2" },
-      "year": { "content": "$3" }
+      "year": { "content": "$3" },
+      "twoYears": { "content": "$4" }
     }
   },
   "cleanupStaleFilterListLabel": {
@@ -290,6 +291,9 @@
   },
   "cleanupStaleFilterOverOneYear": {
     "message": "1 年以上"
+  },
+  "cleanupStaleFilterOverTwoYears": {
+    "message": "2 年以上"
   },
   "cleanupStaleFilterUnknown": {
     "message": "无上次打开时间"

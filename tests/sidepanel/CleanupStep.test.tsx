@@ -61,6 +61,7 @@ const staleResult: StaleScanResult = {
   cutoff3Months: 1_738_000_000_000,
   cutoff6Months: 1_722_000_000_000,
   cutoff12Months: 1_706_000_000_000,
+  cutoff24Months: 1_674_000_000_000,
   scopeRootIdByBookmarkId: {},
 }
 const staleReadyResult: StaleScanResult = {
@@ -73,7 +74,7 @@ const staleReadyResult: StaleScanResult = {
         parentId: '10',
         currentPath: ['书签栏', '目录甲'],
       }),
-      bucket: 'overOneYear',
+      bucket: 'oneToTwoYears',
       lastUsedAt: new Date(2025, 0, 10).getTime(),
     },
     {
@@ -91,6 +92,7 @@ const staleReadyResult: StaleScanResult = {
   cutoff3Months: new Date(2026, 4, 26, 12).getTime(),
   cutoff6Months: new Date(2026, 1, 26, 12).getTime(),
   cutoff12Months: new Date(2025, 7, 26, 12).getTime(),
+  cutoff24Months: new Date(2024, 7, 26, 12).getTime(),
   scopeRootIdByBookmarkId: { 'stale-old': '10', 'stale-unknown': '10' },
 }
 
@@ -285,7 +287,7 @@ describe('CleanupStep 长期未点击书签一节', () => {
     expect(screen.getByRole('button', { name: /扫描长期未点击书签/ })).toBeDefined()
   })
 
-  it('准备完成后显示五个筛选档位、截止日期和书签详情', () => {
+  it('准备完成后显示六个筛选档位、截止日期和书签详情', () => {
     useStore.setState({
       staleScan: staleReadyResult,
       staleState: 'ready',
@@ -294,7 +296,7 @@ describe('CleanupStep 长期未点击书签一节', () => {
     })
     render(<CleanupStep />)
 
-    for (const label of ['全部', '3个月以上', '6个月以上', '1 年以上', '无上次打开时间']) {
+    for (const label of ['全部', '3个月以上', '6个月以上', '1 年以上', '2 年以上', '无上次打开时间']) {
       expect(screen.getByRole('tab', { name: label })).toBeDefined()
     }
     expect(screen.getByText('旧文章')).toBeDefined()

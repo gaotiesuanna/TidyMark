@@ -26,7 +26,8 @@ describe('scanStaleBookmarks', () => {
     const ports = portsWithBookmarks([
       { id: '100', title: '三到六个月', url: 'https://three.example', dateLastUsed: new Date(2026, 4, 26, 12).getTime() },
       { id: '101', title: '六到十二个月', url: 'https://six.example', dateLastUsed: new Date(2026, 1, 26, 12).getTime() },
-      { id: '102', title: '一年以上', url: 'https://year.example', dateLastUsed: new Date(2025, 7, 26, 12).getTime() },
+      { id: '102', title: '一到两年', url: 'https://year.example', dateLastUsed: new Date(2025, 7, 26, 12).getTime() },
+      { id: '103', title: '两年以上', url: 'https://two-year.example', dateLastUsed: new Date(2024, 7, 26, 12).getTime() },
     ])
 
     const result = await scanStaleBookmarks(ports, ['1'], scannedAt)
@@ -34,7 +35,8 @@ describe('scanStaleBookmarks', () => {
     expect(result.items.map(({ item, bucket }) => [item.id, bucket])).toEqual([
       ['100', 'threeToSixMonths'],
       ['101', 'sixToTwelveMonths'],
-      ['102', 'overOneYear'],
+      ['102', 'oneToTwoYears'],
+      ['103', 'overTwoYears'],
     ])
   })
 
