@@ -1,6 +1,7 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import { handle, deepenBudget } from '@/background/handlers'
 import { createFakeBookmarks, type TreeSpec } from '../fakes/fake-bookmarks'
+import { createFakeHistory } from '../fakes/fake-history'
 import { createFakeStorage } from '../fakes/fake-storage'
 import { DEFAULT_SETTINGS, SETTINGS_KEY, activeLlm, loadCache, saveSettings, type Settings } from '@/storage/settings'
 import { currentLocale, setLocale } from '@/i18n'
@@ -3091,6 +3092,68 @@ describe('cleanup_scan', () => {
     // 跨顶层目录的那一组正是限定范围会漏掉的
     expect(response.scan.duplicates).toHaveLength(1)
     expect(response.scan.duplicates[0]!.items.map((i) => i.id).sort()).toEqual(['10', '20'])
+  })
+})
+
+describe('cleanup_stale_scan', () => {
+  it('routes a scoped request to the stale scan engine', async () => {
+    const bookmarks = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: '范围内', children: [
+            { id: '100', title: '旧书签', url: 'https://old.example' },
+          ] },
+        ] },
+        { id: '2', title: '其他书签', children: [
+          { id: '20', title: '范围外', url: 'https://outside.example' },
+        ] },
+      ] },
+    ])
+    const history = createFakeHistory([
+      { url: 'https://old.example', lastVisitTime: 1 },
+      { url: 'https://outside.example', lastVisitTime: 1 },
+    ])
+    const ports = {
+      bookmarks: bookmarks.api,
+      history: history.api,
+      storage: createFakeStorage(),
+    }
+
+    const response = await handle(ports, {
+      kind: 'cleanup_stale_scan',
+      scopeRootIds: ['1', '10'],
+    })
+
+    expect(response.ok).toBe(true)
+    if (!response.ok || response.kind !== 'cleanup_stale_scan') throw new Error('unexpected')
+    expect(response.scan.items.map(({ item }) => item.id)).toEqual(['100'])
+    expect(response.scan.scopeRootIdByBookmarkId).toEqual({ '100': '1' })
+  })
+
+  it('returns the history query error instead of an empty stale result', async () => {
+    const bookmarks = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '100', title: '旧书签', url: 'https://old.example' },
+        ] },
+      ] },
+    ])
+    const history = createFakeHistory()
+    history.api.search = vi.fn().mockRejectedValue(new Error('history unavailable'))
+    const ports = {
+      bookmarks: bookmarks.api,
+      history: history.api,
+      storage: createFakeStorage(),
+    }
+
+    const response = await handle(ports, {
+      kind: 'cleanup_stale_scan',
+      scopeRootIds: ['1'],
+    })
+
+    expect(response.ok).toBe(false)
+    if (response.ok) throw new Error('unexpected')
+    expect(response.error).toContain('history unavailable')
   })
 })
 
