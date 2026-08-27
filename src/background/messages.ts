@@ -55,6 +55,7 @@ export type Request =
    * 反而把最该抓的那批漏掉（见设计文档第四节）。
    */
   | { kind: 'cleanup_scan' }
+  | { kind: 'apply_cleanup'; input: CleanupInput }
   | { kind: 'cleanup_stale_scan'; scopeRootIds: string[] }
   /**
    * 必须走后台：service worker 才有那份 host 权限的完整上下文，
@@ -77,6 +78,7 @@ export type Response =
   | { ok: true; kind: 'test_model'; ms: number }
   | { ok: true; kind: 'list_models'; models: string[] }
   | { ok: true; kind: 'cleanup_scan'; scan: CleanupScan }
+  | { ok: true; kind: 'apply_cleanup'; result: CleanupResult }
   | { ok: true; kind: 'cleanup_stale_scan'; scan: StaleScanResult }
   | { ok: true; kind: 'check_links'; results: LinkResult[] }
   /**

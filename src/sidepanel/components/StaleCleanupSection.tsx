@@ -6,7 +6,6 @@ import { useStore } from '../store'
 
 type StaleFilter = 'all' | StaleBucket
 
-type StaleState = 'idle' | 'loading' | 'ready' | 'empty' | 'denied' | 'error'
 
 const FILTERS: Array<{ value: StaleFilter; label: Parameters<typeof t>[0] }> = [
   { value: 'all', label: 'cleanupStaleFilterAll' },
