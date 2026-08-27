@@ -106,6 +106,8 @@ it('takes the newest normalized visit and sends missing history to unknown', () 
     .toBe(new Date(2026, 5, 1).getTime())
   expect(result.items.find(({ item: bookmark }) => bookmark.id === 'never')?.bucket).toBe('unknown')
 })
+```
+
 
 Also test exact 3/6/12-month cutoffs, URLs with meaningful query parameters, input immutability, and a visit newer than three months being absent from `items`.
 
