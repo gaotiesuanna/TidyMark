@@ -3089,7 +3089,9 @@ describe('cleanup_scan', () => {
 
     expect(response.ok).toBe(true)
     if (!response.ok || response.kind !== 'cleanup_scan') throw new Error('unexpected')
-    // 跨顶层目录的那一组正是限定范围会漏掉的
+    // stale cleanup has a separate scoped message; the existing full-library request
+    // still reports both top-level roots without a scope argument.
+    expect(response.scan.scopeRootIds).toEqual(['1', '2'])
     expect(response.scan.duplicates).toHaveLength(1)
     expect(response.scan.duplicates[0]!.items.map((i) => i.id).sort()).toEqual(['10', '20'])
   })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifyStaleBookmarks } from '@/core/stale'
+import { classifyStaleBookmarks, type StaleBucket } from '@/core/stale'
 import type { HistoryVisit } from '@/core/ports'
 import type { BookmarkItem } from '@/core/types'
 
@@ -13,6 +13,22 @@ const item = (id: string, url: string): BookmarkItem => ({
   index: 0,
   currentPath: ['root'],
 })
+function bucketAt(lastVisitedAt: Date): StaleBucket | undefined {
+  const result = classifyStaleBookmarks(
+    [item('bookmark', 'https://example.test')],
+    [{ url: 'https://example.test', lastVisitTime: lastVisitedAt.getTime() }],
+    scanDate,
+    new Map([['bookmark', 'root']]),
+  )
+  return result.items[0]?.bucket
+}
+
+it('assigns exact natural-month boundaries to their older buckets', () => {
+  expect(bucketAt(new Date(2026, 4, 26, 12))).toBe('threeToSixMonths')
+  expect(bucketAt(new Date(2026, 1, 26, 12))).toBe('sixToTwelveMonths')
+  expect(bucketAt(new Date(2025, 7, 26, 12))).toBe('overOneYear')
+})
+
 
 describe('classifyStaleBookmarks', () => {
   it('uses mutually exclusive natural-month buckets', () => {

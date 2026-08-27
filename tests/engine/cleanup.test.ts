@@ -258,6 +258,32 @@ describe('applyCleanup 移到各范围根的待清理文件夹', () => {
     expect(result.skipped.map((item) => item.bookmarkId)).toContain('100')
     expect((await bookmarks.api.get('101'))!.parentId).not.toBe('10')
   })
+  it('combines duplicate deletion and stale move in one undoable cleanup', async () => {
+    const { ports, bookmarks, storage } = setup()
+    const scan = await scanOf(ports)
+    const result = await applyCleanup(ports, input({
+      selection: {
+        deleteBookmarkIds: ['101'],
+        moveBookmarkIds: [],
+        staleMoveBookmarkIds: ['110'],
+        staleMoveRootByBookmarkId: { '110': '11' },
+        deleteFolderIds: [],
+      },
+    }, scan), 'zh_CN')
+
+    expect(result.status).toBe('completed')
+    expect(result.deleted).toBe(1)
+    expect(result.moved).toBe(1)
+    expect(await bookmarks.api.get('101')).toBeNull()
+    expect((await bookmarks.api.get('110'))!.parentId).not.toBe('11')
+    expect((await storage.get<BookmarkSnapshot>(SNAPSHOT_KEY))!.deletedBookmarkIds).toEqual(['101'])
+
+    await undoLast(ports, 'zh_CN')
+
+    expect(bookmarks.structure()).toContain('/书签栏/目录甲/a 又存了一遍')
+    expect(bookmarks.structure()).toContain('/书签栏/目录乙/dead')
+  })
+
 })
 
 describe('applyCleanup 快照', () => {

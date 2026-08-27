@@ -220,6 +220,57 @@ describe('长期未点击书签扫描状态', () => {
     expect(useStore.getState().cleanupChecked.has('stale-id')).toBe(true)
     expect(useStore.getState().cleanupStaleMove.has('stale-id')).toBe(false)
   })
+  it('stale history scan preserves duplicate and dead-link selections', async () => {
+    vi.mocked(ensureHistoryPermission).mockResolvedValue(true)
+    vi.mocked(send).mockResolvedValue({
+      ok: true, kind: 'cleanup_stale_scan', scan: staleReadyResult,
+    } as never)
+    useStore.setState({
+      cleanupChecked: new Set(['101', 'dead-link']),
+      cleanupMove: new Set(['dead-link-move']),
+      cleanupStaleMove: new Set(),
+      staleScan: null,
+      staleState: 'idle',
+      staleError: null,
+    })
+
+    await useStore.getState().runStaleScan()
+
+    expect([...useStore.getState().cleanupChecked]).toEqual(['101', 'dead-link'])
+    expect([...useStore.getState().cleanupMove]).toEqual(['dead-link-move'])
+    expect(useStore.getState().staleState).toBe('ready')
+  })
+
+  it('changing checkedIds clears the old stale scan', () => {
+    useStore.setState({
+      checkedIds: new Set(['1']),
+      staleScan: staleReadyResult,
+      staleState: 'ready',
+      staleError: 'old scan error',
+    })
+
+    useStore.getState().toggle('10')
+
+    expect(useStore.getState().staleScan).toBeNull()
+    expect(useStore.getState().staleState).toBe('idle')
+    expect(useStore.getState().staleError).toBeNull()
+  })
+
+  it('refreshing the tree clears the old stale scan', async () => {
+    vi.mocked(send).mockResolvedValue({ ok: true, kind: 'get_tree', tree } as never)
+    useStore.setState({
+      staleScan: staleReadyResult,
+      staleState: 'ready',
+      staleError: 'old scan error',
+    })
+
+    await useStore.getState().refreshTree()
+
+    expect(useStore.getState().staleScan).toBeNull()
+    expect(useStore.getState().staleState).toBe('idle')
+    expect(useStore.getState().staleError).toBeNull()
+  })
+
 })
 describe('CleanupStep 长期未点击书签一节', () => {
   it('授权前只展示说明和允许按钮，不在挂载时申请历史权限', () => {
@@ -354,9 +405,19 @@ describe('CleanupStep 空状态', () => {
   })
 
   it('一项都没勾时执行按钮禁用', () => {
-    useStore.setState({ cleanupChecked: new Set(), cleanupFolders: new Set() })
+    useStore.setState({
+      cleanupScan: scan,
+      cleanupResult: null,
+      busy: null,
+      cleanupChecked: new Set(),
+      cleanupMove: new Set(),
+      cleanupStaleMove: new Set(),
+      cleanupFolders: new Set(),
+      staleScan: null,
+      staleState: 'idle',
+    })
     render(<CleanupStep />)
-    expect((screen.getByRole('button', { name: /清理/ }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: /清理|clean/i }) as HTMLButtonElement).disabled).toBe(true)
   })
 })
 

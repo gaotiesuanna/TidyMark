@@ -487,6 +487,9 @@ export const useStore = create<State>((set, get) => ({
     set({
       tree: res.tree,
       checkedIds: new Set([...get().checkedIds].filter((id) => alive.has(id))),
+      staleScan: null,
+      staleState: 'idle',
+      staleError: null,
     })
   },
 
@@ -536,7 +539,13 @@ export const useStore = create<State>((set, get) => ({
   },
 
   toggle(id) {
-    set({ checkedIds: toggleChecked(get().checkedIds, id, get().tree) })
+    const checkedIds = toggleChecked(get().checkedIds, id, get().tree)
+    set({
+      checkedIds,
+      staleScan: null,
+      staleState: 'idle',
+      staleError: null,
+    })
   },
 
   async goScan() {
