@@ -3,8 +3,8 @@ import { plural, t } from '@/i18n'
 import { emptyAfterRemoval } from '@/core/cleanup'
 import type { DuplicateGroup } from '@/core/duplicates'
 import type { BookmarkItem } from '@/core/types'
+import { StaleCleanupSection } from '../components/StaleCleanupSection'
 import { useStore } from '../store'
-
 /**
  * 一条待处理的书签摊开三样：标题、完整 URL、完整路径。
  * URL 刻意不截断——「可能相同」那档全靠它看出两条到底差在哪，截了这一档就没法审。
@@ -71,7 +71,8 @@ const secondaryAction = [
 export function CleanupStep() {
   const {
     tree, cleanupScan, cleanupResult, cleanupChecked, cleanupFolders,
-    cleanupLinks, linkCheckState, cleanupMove, startLinkCheck, toggleCleanupMove, toggleCleanupItem,
+    cleanupLinks, linkCheckState, cleanupMove, cleanupStaleMove, staleScan,
+    startLinkCheck, toggleCleanupMove, toggleCleanupItem,
     busy, undoAvailable, runCleanupScan, runCleanup, toggleCleanupFolder, undo,
   } = useStore()
 
@@ -82,8 +83,8 @@ export function CleanupStep() {
    * 少并这一半，预览会漏报一部分目录，用户执行完才发现多清了几个。
    */
   const vacated = useMemo(
-    () => new Set([...cleanupChecked, ...cleanupMove]),
-    [cleanupChecked, cleanupMove],
+    () => new Set([...cleanupChecked, ...cleanupMove, ...cleanupStaleMove]),
+    [cleanupChecked, cleanupMove, cleanupStaleMove],
   )
   /**
    * 空目录这一节跟着上面的勾选实时变。直接显示 cleanupScan.emptyFolders 报的是删除
@@ -160,13 +161,16 @@ export function CleanupStep() {
   const normalized = cleanupScan.duplicates.filter((g) => g.kind === 'normalized')
   const dead = cleanupLinks.filter((l) => l.verdict === 'dead')
   const suspect = cleanupLinks.filter((l) => l.verdict === 'suspect')
-  const total = cleanupChecked.size + cleanupMove.size + cleanupFolders.size
-  const nothing = cleanupScan.duplicates.length === 0 && willBeEmpty.length === 0
+  const total = cleanupChecked.size + cleanupMove.size + cleanupStaleMove.size + cleanupFolders.size
+  const nothing = cleanupScan.duplicates.length === 0
+    && willBeEmpty.length === 0
+    && (staleScan?.items.length ?? 0) === 0
 
   return (
     <div>
       <div className="space-y-4">
         <p className="text-xs leading-relaxed text-neutral-500">{t('cleanupIntro')}</p>
+        <StaleCleanupSection />
 
         {nothing && <p className="text-xs text-neutral-500">{t('cleanupNothingFound')}</p>}
 

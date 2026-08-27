@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { setLocale } from '@/i18n'
 import { makePlan } from '../fakes/plan'
 import { ScopeStep } from '@/sidepanel/steps/ScopeStep'
+import { CleanupStep } from '@/sidepanel/steps/CleanupStep'
 import { TransferStep } from '@/sidepanel/steps/TransferStep'
 import { DashboardStep } from '@/sidepanel/steps/DashboardStep'
 import { PreferencesStep } from '@/sidepanel/steps/PreferencesStep'
@@ -76,6 +77,25 @@ describe('英文界面渲染守卫：步骤组件', () => {
     const { container } = render(<ScopeStep />)
     assertNoChinese(container, 'ScopeStep')
   })
+  it('CleanupStep with stale-history permission prompt', () => {
+    useStore.setState({
+      cleanupScan: { duplicates: [], emptyFolders: [], items: [], folders: [], scopeRootIds: [] },
+      cleanupResult: null,
+      cleanupChecked: new Set(),
+      cleanupMove: new Set(),
+      cleanupFolders: new Set(),
+      cleanupStaleMove: new Set(),
+      cleanupLinks: [],
+      linkCheckState: 'idle',
+      staleScan: null,
+      staleState: 'idle',
+      staleError: null,
+      runCleanupScan: async () => {},
+    })
+    const { container } = render(<CleanupStep />)
+    assertNoChinese(container, 'CleanupStep')
+  })
+
 
   it('TransferStep', () => {
     useStore.setState({

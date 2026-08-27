@@ -64,6 +64,36 @@ const staleResult: StaleScanResult = {
   cutoff12Months: 1_706_000_000_000,
   scopeRootIdByBookmarkId: {},
 }
+const staleReadyResult: StaleScanResult = {
+  items: [
+    {
+      item: item({
+        id: 'stale-old',
+        title: '旧文章',
+        url: 'https://example.com/old',
+        parentId: '10',
+        currentPath: ['书签栏', '目录甲'],
+      }),
+      bucket: 'overOneYear',
+      lastVisitedAt: new Date(2025, 0, 10).getTime(),
+    },
+    {
+      item: item({
+        id: 'stale-unknown',
+        title: '没有记录的文章',
+        url: 'https://example.com/unknown',
+        parentId: '10',
+        currentPath: ['书签栏', '目录甲'],
+      }),
+      bucket: 'unknown',
+    },
+  ],
+  scannedAt: new Date(2026, 7, 26, 12).getTime(),
+  cutoff3Months: new Date(2026, 4, 26, 12).getTime(),
+  cutoff6Months: new Date(2026, 1, 26, 12).getTime(),
+  cutoff12Months: new Date(2025, 7, 26, 12).getTime(),
+  scopeRootIdByBookmarkId: { 'stale-old': '10', 'stale-unknown': '10' },
+}
 
 beforeEach(() => {
   vi.mocked(send).mockReset()
@@ -161,6 +191,7 @@ describe('长期未点击书签扫描状态', () => {
     expect(useStore.getState().staleState).toBe('loading')
   })
 
+
   it('run 序号改变后忽略在途扫描响应', async () => {
     vi.mocked(ensureHistoryPermission).mockResolvedValue(true)
     let resolveSend: ((value: unknown) => void) | undefined
@@ -188,6 +219,73 @@ describe('长期未点击书签扫描状态', () => {
     useStore.getState().toggleStaleDelete('stale-id')
     expect(useStore.getState().cleanupChecked.has('stale-id')).toBe(true)
     expect(useStore.getState().cleanupStaleMove.has('stale-id')).toBe(false)
+  })
+})
+describe('CleanupStep 长期未点击书签一节', () => {
+  it('授权前只展示说明和允许按钮，不在挂载时申请历史权限', () => {
+    render(<CleanupStep />)
+    expect(screen.getByText(/读取浏览历史/)).toBeDefined()
+    expect(screen.getByRole('button', { name: /允许并扫描/ })).toBeDefined()
+    expect(ensureHistoryPermission).not.toHaveBeenCalled()
+  })
+
+  it('准备完成后显示五个筛选档位、截止日期和书签详情', () => {
+    useStore.setState({
+      staleScan: staleReadyResult,
+      staleState: 'ready',
+      cleanupChecked: new Set(),
+      cleanupStaleMove: new Set(),
+    })
+    render(<CleanupStep />)
+
+    for (const label of ['全部', '3–6 个月', '6–12 个月', '1 年以上', '无访问记录']) {
+      expect(screen.getByRole('tab', { name: label })).toBeDefined()
+    }
+    expect(screen.getByText('旧文章')).toBeDefined()
+    expect(screen.getByText('https://example.com/old')).toBeDefined()
+    expect(screen.getAllByText('/书签栏/目录甲/').length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/最后访问|无访问记录/).length).toBeGreaterThan(0)
+    expect(screen.getByText('当前历史查询没有可用匹配')).toBeDefined()
+    expect(screen.getByText(/分档截止日期/)).toBeDefined()
+  })
+
+  it('默认不勾选长期未点击书签，并允许单独筛选和选择无访问记录', async () => {
+    useStore.setState({
+      staleScan: staleReadyResult,
+      staleState: 'ready',
+      cleanupChecked: new Set(),
+      cleanupStaleMove: new Set(),
+    })
+    render(<CleanupStep />)
+
+    const deleteOld = screen.getByRole('checkbox', { name: '删除 旧文章' }) as HTMLInputElement
+    const moveOld = screen.getByRole('checkbox', { name: '移到待清理 旧文章' }) as HTMLInputElement
+    expect(deleteOld.checked).toBe(false)
+    expect(moveOld.checked).toBe(false)
+    await userEvent.click(screen.getByRole('tab', { name: '无访问记录' }))
+    expect(screen.getByText('没有记录的文章')).toBeDefined()
+    expect(screen.queryByText('旧文章')).toBeNull()
+    await userEvent.click(screen.getByRole('checkbox', { name: '删除 没有记录的文章' }))
+    expect(useStore.getState().cleanupChecked.has('stale-unknown')).toBe(true)
+  })
+
+  it('长期未点击书签的选择合并进底部执行数量', async () => {
+    useStore.setState({
+      cleanupScan: scan,
+      cleanupResult: null,
+      cleanupChecked: new Set(),
+      staleScan: staleReadyResult,
+      staleState: 'ready',
+      cleanupStaleMove: new Set(),
+      cleanupFolders: new Set(),
+      cleanupMove: new Set(),
+    })
+    render(<CleanupStep />)
+    const run = screen.getByRole('button', { name: '清理 0 项' }) as HTMLButtonElement
+    expect(run.disabled).toBe(true)
+    await userEvent.click(screen.getByRole('checkbox', { name: '移到待清理 旧文章' }))
+    expect(screen.getByRole('button', { name: '清理 1 项' })).toBeDefined()
+    expect((screen.getByRole('button', { name: '清理 1 项' }) as HTMLButtonElement).disabled).toBe(false)
   })
 })
 

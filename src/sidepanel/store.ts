@@ -874,11 +874,17 @@ export const useStore = create<State>((set, get) => ({
     if (scan === null) return
     // 书签栏是 tree 里第一个顶层节点的第一个子节点：那个顶层节点是根，浏览器从不让它显形
     const barId = get().tree[0]?.children?.[0]?.id ?? ''
+    const { cleanupStaleMove, staleScan } = get()
+    const staleMoveRootByBookmarkId: Record<string, string> = {}
+    for (const id of cleanupStaleMove) {
+      const rootId = staleScan?.scopeRootIdByBookmarkId[id]
+      if (rootId !== undefined) staleMoveRootByBookmarkId[id] = rootId
+    }
     const selection: CleanupSelection = {
       deleteBookmarkIds: [...get().cleanupChecked],
       moveBookmarkIds: [...get().cleanupMove],
-      staleMoveBookmarkIds: [...get().cleanupStaleMove],
-      staleMoveRootByBookmarkId: {},
+      staleMoveBookmarkIds: [...cleanupStaleMove],
+      staleMoveRootByBookmarkId,
       deleteFolderIds: [...get().cleanupFolders],
     }
     set({ busy: t('busyApplying'), busyKind: 'cleanup', error: null, progress: null, logs: [] })
@@ -889,7 +895,7 @@ export const useStore = create<State>((set, get) => ({
         planId: `cleanup-${Date.now()}`,
         scopeRootIds: scan.scopeRootIds,
         selection,
-        staleMoveFolderTitle: '待清理',
+        staleMoveFolderTitle: t('cleanupStaleFolderTitle'),
         deadFolderTitle: t('cleanupDeadFolderTitle'),
         barId,
         items: scan.items,
