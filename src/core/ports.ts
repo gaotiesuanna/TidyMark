@@ -1,3 +1,8 @@
+export interface HistoryVisit {
+  url: string
+  lastVisitTime?: number
+}
+
 export interface BookmarkNode {
   id: string
   parentId?: string
@@ -17,6 +22,10 @@ export interface BookmarksApi {
   remove(id: string): Promise<void>
 }
 
+export interface HistoryApi {
+  search(): Promise<HistoryVisit[]>
+}
+
 export interface StorageApi {
   get<T>(key: string): Promise<T | null>
   set<T>(key: string, value: T): Promise<void>
@@ -25,5 +34,6 @@ export interface StorageApi {
 
 export interface Ports {
   bookmarks: BookmarksApi
+  history?: HistoryApi
   storage: StorageApi
 }

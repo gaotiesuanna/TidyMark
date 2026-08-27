@@ -27,6 +27,8 @@ export interface CleanupInput {
   selection: CleanupSelection
   /** 已按界面语言取好的「失效链接」。engine 不 import i18n 以外的取词入口，文案由调用方给。 */
   deadFolderTitle: string
+  /** 已按界面语言取好的「待清理」。每个范围根各自复用或创建同名直接子目录。 */
+  staleMoveFolderTitle: string
   /** 「失效链接」文件夹建在谁下面，通常是书签栏。 */
   barId: string
   items: BookmarkItem[]
@@ -77,6 +79,7 @@ function buildSnapshot(input: CleanupInput, planId: string, createdAt: number): 
   const touchedBookmarks = new Set([
     ...input.selection.deleteBookmarkIds,
     ...input.selection.moveBookmarkIds,
+    ...input.selection.staleMoveBookmarkIds,
   ])
   const touchedFolders = new Set(input.selection.deleteFolderIds)
 
@@ -119,16 +122,68 @@ export async function applyCleanup(
 
   const snapshot = buildSnapshot(input, input.planId, now())
   await saveSnapshot(ports, snapshot)
-
   const total = input.selection.deleteBookmarkIds.length
     + input.selection.moveBookmarkIds.length
+    + input.selection.staleMoveBookmarkIds.length
     + input.selection.deleteFolderIds.length
   let done = 0
   const tick = (): void => { onProgress?.(++done, total) }
   onProgress?.(0, total)
 
   try {
-    // 1. 「失效链接」文件夹：同名已存在就复用，且**不记进 createdFolderIds**——
+    // 1. 按范围根分组移动长期未点击书签。每个范围根只解析一次目的地，
+    //    这样同根的多条书签一定复用同一个直接子目录。
+    const staleByRoot = new Map<string, string[]>()
+    for (const id of input.selection.staleMoveBookmarkIds) {
+      const rootId = input.selection.staleMoveRootByBookmarkId[id]
+      if (rootId === undefined) {
+        skipped.push({ bookmarkId: id, reason: msgCleanupMoveFailed(locale, 'scope root is missing') })
+        tick()
+        continue
+      }
+      const ids = staleByRoot.get(rootId) ?? []
+      ids.push(id)
+      staleByRoot.set(rootId, ids)
+    }
+
+    for (const [rootId, ids] of staleByRoot) {
+      let staleFolderId = input.folders.find(
+        (folder) => folder.parentId === rootId && folder.title === input.staleMoveFolderTitle,
+      )?.id
+      if (staleFolderId === undefined) {
+        try {
+          const created = await ports.bookmarks.create({
+            parentId: rootId,
+            title: input.staleMoveFolderTitle,
+          })
+          staleFolderId = created.id
+          createdFolderIds.push(created.id)
+        } catch (error) {
+          for (const id of ids) {
+            skipped.push({ bookmarkId: id, reason: msgCleanupMoveFailed(locale, String(error)) })
+            tick()
+          }
+          continue
+        }
+      }
+
+      for (const id of ids) {
+        try {
+          if ((await ports.bookmarks.get(id)) === null) {
+            skipped.push({ bookmarkId: id, reason: msgCleanupBookmarkGone(locale, id) })
+            continue
+          }
+          await ports.bookmarks.move(id, { parentId: staleFolderId })
+          moved++
+        } catch (error) {
+          skipped.push({ bookmarkId: id, reason: msgCleanupMoveFailed(locale, String(error)) })
+        } finally {
+          tick()
+        }
+      }
+    }
+
+    // 2. 「失效链接」文件夹：同名已存在就复用，且**不记进 createdFolderIds**——
     //    记了的话撤销会把用户上一轮攒下的死链一起删掉。
     if (input.selection.moveBookmarkIds.length > 0) {
       const existing = input.folders.find(
@@ -146,7 +201,7 @@ export async function applyCleanup(
       }
     }
 
-    // 2. 移走
+    // 3. 移走
     for (const id of input.selection.moveBookmarkIds) {
       try {
         if ((await ports.bookmarks.get(id)) === null) {

@@ -9,6 +9,7 @@ import type { ExportNode } from '@/core/export'
 import type { ImportResult } from '@/engine/importTree'
 import type { OrganizeMode } from '@/core/mode'
 import type { TestFailure } from '@/llm/probe'
+import type { StaleScanResult } from '@/core/stale'
 
 /**
  * 失败分类跟着探针本身定义在 llm/probe.ts（那一层零浏览器依赖），这里再导出一次，
@@ -55,6 +56,7 @@ export type Request =
    */
   | { kind: 'cleanup_scan' }
   | { kind: 'apply_cleanup'; input: CleanupInput }
+  | { kind: 'cleanup_stale_scan'; scopeRootIds: string[] }
   /**
    * 必须走后台：service worker 才有那份 host 权限的完整上下文，
    * 而且长时间的批量请求需要 keepalive 撑着，与 analyze 同一条路。
@@ -77,6 +79,7 @@ export type Response =
   | { ok: true; kind: 'list_models'; models: string[] }
   | { ok: true; kind: 'cleanup_scan'; scan: CleanupScan }
   | { ok: true; kind: 'apply_cleanup'; result: CleanupResult }
+  | { ok: true; kind: 'cleanup_stale_scan'; scan: StaleScanResult }
   | { ok: true; kind: 'check_links'; results: LinkResult[] }
   /**
    * cancelled 为 true 表示用户主动取消，不是出错。

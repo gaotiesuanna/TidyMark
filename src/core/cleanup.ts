@@ -7,6 +7,10 @@ export interface CleanupSelection {
   deleteBookmarkIds: string[]
   /** 要移进「失效链接」文件夹的书签。 */
   moveBookmarkIds: string[]
+  /** 要移进各自范围根下「待清理」文件夹的长期未点击书签。 */
+  staleMoveBookmarkIds: string[]
+  /** 每条长期未点击书签所属的范围根，用于按根分组目的地。 */
+  staleMoveRootByBookmarkId: Record<string, string>
   /** 要删掉的空目录。 */
   deleteFolderIds: string[]
 }

@@ -17,6 +17,7 @@ import type { Ports } from '@/core/ports'
 import type { OrganizePlan, TagResult } from '@/core/types'
 import { applyPlan } from '@/engine/apply'
 import { applyCleanup, scanForCleanup } from '@/engine/cleanup'
+import { scanStaleBookmarks } from '@/engine/stale'
 import { checkLinks } from '@/engine/linkCheck'
 import { loadSnapshot } from '@/engine/snapshot'
 import { undoLast } from '@/engine/undo'
@@ -816,6 +817,11 @@ export async function handle(
           String(scan.emptyFolders.length),
         ))
         return { ok: true, kind: 'cleanup_scan', scan }
+      }
+
+      case 'cleanup_stale_scan': {
+        const scan = await scanStaleBookmarks(ports, request.scopeRootIds)
+        return { ok: true, kind: 'cleanup_stale_scan', scan }
       }
 
       case 'apply_cleanup': {

@@ -230,6 +230,94 @@
   "cleanupSectionLinks": {
     "message": "Dead links"
   },
+  "cleanupSectionStale": {
+    "message": "Long-unvisited bookmarks"
+  },
+  "cleanupStaleExplain": {
+    "message": "Viewing long-unvisited bookmarks in the current scope requires access to your browsing history. Chrome asks for this permission first; it is requested only when you press the button below."
+  },
+  "cleanupStaleAllow": {
+    "message": "Allow and scan browsing history"
+  },
+  "cleanupStaleLoading": {
+    "message": "Reading browsing history…"
+  },
+  "cleanupStaleDenied": {
+    "message": "Browsing history permission was not granted, so this is skipped. Other cleanups remain available."
+  },
+  "cleanupStaleError": {
+    "message": "Reading browsing history failed."
+  },
+  "cleanupStaleEmpty": {
+    "message": "No long-unvisited bookmarks were found in the current scope."
+  },
+  "cleanupStaleCurrentScope": {
+    "message": "Current scope: $count$ folders",
+    "placeholders": { "count": { "content": "$1" } }
+  },
+  "cleanupStaleScannedAt": {
+    "message": "Scanned: $date$",
+    "placeholders": { "date": { "content": "$1" } }
+  },
+  "cleanupStaleCutoffs": {
+    "message": "Bucket cutoffs: 3–6 months $three$; 6–12 months $six$; over 1 year $year$",
+    "placeholders": {
+      "three": { "content": "$1" },
+      "six": { "content": "$2" },
+      "year": { "content": "$3" }
+    }
+  },
+  "cleanupStaleFilterListLabel": {
+    "message": "Filter long-unvisited bookmarks"
+  },
+  "cleanupStaleFilterAll": {
+    "message": "All"
+  },
+  "cleanupStaleFilterThreeToSix": {
+    "message": "3–6 months"
+  },
+  "cleanupStaleFilterSixToTwelve": {
+    "message": "6–12 months"
+  },
+  "cleanupStaleFilterOverOneYear": {
+    "message": "Over 1 year"
+  },
+  "cleanupStaleFilterUnknown": {
+    "message": "No visit history"
+  },
+  "cleanupStaleFilterEmpty": {
+    "message": "No bookmarks in this bucket."
+  },
+  "cleanupStaleUnknownHint": {
+    "message": "The current history query had no usable match"
+  },
+  "cleanupStaleActionDelete": {
+    "message": "Delete"
+  },
+  "cleanupStaleActionMove": {
+    "message": "Move to cleanup"
+  },
+  "cleanupStaleTableLabel": {
+    "message": "Long-unvisited bookmarks list"
+  },
+  "cleanupStaleColumnBookmark": {
+    "message": "Bookmark"
+  },
+  "cleanupStaleColumnLastVisit": {
+    "message": "Last visit"
+  },
+  "cleanupStaleColumnBucket": {
+    "message": "Bucket"
+  },
+  "cleanupStaleColumnActions": {
+    "message": "Actions"
+  },
+  "cleanupStaleNeverVisited": {
+    "message": "No visit history"
+  },
+  "cleanupStaleFolderTitle": {
+    "message": "To clean up"
+  },
   "cleanupLinksStart": {
     "message": "Start checking (requires access to all websites)"
   },

@@ -15,6 +15,7 @@ import type { CleanupSelection } from '@/core/cleanup'
 import type { DuplicateGroup } from '@/core/duplicates'
 import type { ApplyResult } from '@/engine/apply'
 import type { CleanupResult, CleanupScan } from '@/engine/cleanup'
+import type { StaleScanResult } from '@/core/stale'
 import type { ImportResult } from '@/engine/importTree'
 import type { LinkResult } from '@/engine/linkCheck'
 import type { UndoResult } from '@/engine/undo'
@@ -23,6 +24,7 @@ import { DEFAULT_SETTINGS, activeLlm, endpointKey } from '@/storage/settings'
 import { send } from './lib/send'
 import type { TestFailure } from '@/background/messages'
 import { ensureAllHostsPermission, ensureHostPermission, hasHostPermission } from './lib/permissions'
+import { ensureHistoryPermission } from './lib/visits'
 import { connectProgress, startKeepalive, type ProgressConnection } from './lib/progress'
 import { applyDocumentLang } from './lib/documentLang'
 
@@ -207,6 +209,7 @@ export function toggleChecked(
   return next
 }
 
+
 /**
  * 默认勾选：exact 组里除保留项之外的全勾上，normalized 组一条都不勾。
  * 分档的全部意义就在这个默认值上——低置信那档误判的代价是永久删掉用户的书签。
@@ -332,6 +335,14 @@ interface State {
   linkCheckState: 'idle' | 'denied' | 'running' | 'done'
   /** 选了「移到失效链接文件夹」的死链。与 cleanupChecked（选删除）互斥。 */
   cleanupMove: Set<string>
+  /** 选了「移到待清理文件夹」的长期未点击书签。与 cleanupChecked 互斥。 */
+  cleanupStaleMove: Set<string>
+  /** 当前范围内长期未点击书签的扫描结果。 */
+  staleScan: StaleScanResult | null
+  /** 历史权限与查询的状态，权限拒绝和没有匹配项必须区分。 */
+  staleState: 'idle' | 'loading' | 'ready' | 'empty' | 'denied' | 'error'
+  /** 最近一次长期未点击书签扫描的错误。 */
+  staleError: string | null
 
   init(): Promise<void>
   refreshTree(): Promise<void>
@@ -388,11 +399,15 @@ interface State {
   listModels(baseUrl: string, apiKey: string): Promise<string[] | null>
   setMode(mode: AppMode): void
   runCleanupScan(): Promise<void>
+  runStaleScan(): Promise<void>
   runCleanup(): Promise<void>
   toggleCleanupItem(id: string): void
   setCleanupKeep(groupKey: string, id: string): void
-  toggleCleanupFolder(id: string): void
   toggleCleanupMove(id: string): void
+  toggleCleanupStaleMove(id: string): void
+  toggleStaleDelete(id: string): void
+  toggleStaleMove(id: string): void
+  toggleCleanupFolder(id: string): void
   /**
    * 第③节的入口。先解释、再申请权限、再查——顺序不能换：用户在看懂之前就被
    * Chrome 那句「读取你在所有网站上的数据」弹脸，十有八九直接点拒绝，
@@ -451,9 +466,13 @@ export const useStore = create<State>((set, get) => ({
   cleanupKeep: {},
   cleanupChecked: new Set(),
   cleanupFolders: new Set(),
-  cleanupLinks: [],
-  linkCheckState: 'idle',
   cleanupMove: new Set(),
+  cleanupLinks: [],
+  cleanupStaleMove: new Set(),
+  staleScan: null,
+  staleState: 'idle',
+  staleError: null,
+  linkCheckState: 'idle',
 
   /** 整理或撤销之后重新读一次书签树，结果页据此展示真实结构。 */
   async refreshTree() {
@@ -468,6 +487,9 @@ export const useStore = create<State>((set, get) => ({
     set({
       tree: res.tree,
       checkedIds: new Set([...get().checkedIds].filter((id) => alive.has(id))),
+      staleScan: null,
+      staleState: 'idle',
+      staleError: null,
     })
   },
 
@@ -517,7 +539,13 @@ export const useStore = create<State>((set, get) => ({
   },
 
   toggle(id) {
-    set({ checkedIds: toggleChecked(get().checkedIds, id, get().tree) })
+    const checkedIds = toggleChecked(get().checkedIds, id, get().tree)
+    set({
+      checkedIds,
+      staleScan: null,
+      staleState: 'idle',
+      staleError: null,
+    })
   },
 
   async goScan() {
@@ -799,10 +827,55 @@ export const useStore = create<State>((set, get) => ({
       cleanupKeep: {},
       cleanupChecked: defaultChecked(res.scan.duplicates),
       cleanupFolders: new Set(),
+      cleanupStaleMove: new Set(),
       cleanupResult: null,
       busy: null,
       busyKind: null,
     })
+  },
+  async runStaleScan() {
+    const scopeRootIds = [...get().checkedIds]
+    if (scopeRootIds.length === 0) {
+      set({ staleScan: null, staleState: 'idle', staleError: null })
+      return
+    }
+
+    const run = get().runSeq
+    const scope = [...scopeRootIds].sort().join('\u0000')
+    const currentScopeMatches = (): boolean =>
+      get().runSeq === run
+      && [...get().checkedIds].sort().join('\u0000') === scope
+
+    set({ staleScan: null, staleState: 'loading', staleError: null })
+
+    try {
+      // chrome.permissions.request() requires a user gesture; callers invoke this only from
+      // the explicit allow button, never from a mount/effect.
+      if (!await ensureHistoryPermission()) {
+        if (!currentScopeMatches()) return
+        set({ staleState: 'denied' })
+        return
+      }
+
+      const res = await send({ kind: 'cleanup_stale_scan', scopeRootIds })
+      if (!currentScopeMatches()) return
+      if (!res.ok) {
+        set({ staleState: 'error', staleError: res.error })
+        return
+      }
+      if (res.kind !== 'cleanup_stale_scan') return
+      set({
+        staleScan: res.scan,
+        staleState: res.scan.items.length > 0 ? 'ready' : 'empty',
+        staleError: null,
+      })
+    } catch (error) {
+      if (!currentScopeMatches()) return
+      set({
+        staleState: 'error',
+        staleError: error instanceof Error ? error.message : String(error),
+      })
+    }
   },
 
   async runCleanup() {
@@ -810,9 +883,17 @@ export const useStore = create<State>((set, get) => ({
     if (scan === null) return
     // 书签栏是 tree 里第一个顶层节点的第一个子节点：那个顶层节点是根，浏览器从不让它显形
     const barId = get().tree[0]?.children?.[0]?.id ?? ''
+    const { cleanupStaleMove, staleScan } = get()
+    const staleMoveRootByBookmarkId: Record<string, string> = {}
+    for (const id of cleanupStaleMove) {
+      const rootId = staleScan?.scopeRootIdByBookmarkId[id]
+      if (rootId !== undefined) staleMoveRootByBookmarkId[id] = rootId
+    }
     const selection: CleanupSelection = {
       deleteBookmarkIds: [...get().cleanupChecked],
       moveBookmarkIds: [...get().cleanupMove],
+      staleMoveBookmarkIds: [...cleanupStaleMove],
+      staleMoveRootByBookmarkId,
       deleteFolderIds: [...get().cleanupFolders],
     }
     set({ busy: t('busyApplying'), busyKind: 'cleanup', error: null, progress: null, logs: [] })
@@ -823,6 +904,7 @@ export const useStore = create<State>((set, get) => ({
         planId: `cleanup-${Date.now()}`,
         scopeRootIds: scan.scopeRootIds,
         selection,
+        staleMoveFolderTitle: t('cleanupStaleFolderTitle'),
         deadFolderTitle: t('cleanupDeadFolderTitle'),
         barId,
         items: scan.items,
@@ -845,9 +927,13 @@ export const useStore = create<State>((set, get) => ({
 
   toggleCleanupItem(id) {
     const checked = new Set(get().cleanupChecked)
+    const staleMove = new Set(get().cleanupStaleMove)
     if (checked.has(id)) checked.delete(id)
-    else checked.add(id)
-    set({ cleanupChecked: checked })
+    else {
+      checked.add(id)
+      staleMove.delete(id)
+    }
+    set({ cleanupChecked: checked, cleanupStaleMove: staleMove })
   },
 
   setCleanupKeep(groupKey, id) {
@@ -871,17 +957,44 @@ export const useStore = create<State>((set, get) => ({
     else folders.add(id)
     set({ cleanupFolders: folders })
   },
-
   toggleCleanupMove: (id) => {
     const move = new Set(get().cleanupMove)
     const checked = new Set(get().cleanupChecked)
+    const staleMove = new Set(get().cleanupStaleMove)
     if (move.has(id)) move.delete(id)
     else {
       move.add(id)
       // 一条链接不可能既删掉又移走，勾上一个就把另一个摘掉
       checked.delete(id)
+      staleMove.delete(id)
     }
-    set({ cleanupMove: move, cleanupChecked: checked })
+    set({ cleanupMove: move, cleanupChecked: checked, cleanupStaleMove: staleMove })
+  },
+
+  toggleStaleDelete: (id) => {
+    const checked = new Set(get().cleanupChecked)
+    const staleMove = new Set(get().cleanupStaleMove)
+    if (checked.has(id)) checked.delete(id)
+    else {
+      checked.add(id)
+      staleMove.delete(id)
+    }
+    set({ cleanupChecked: checked, cleanupStaleMove: staleMove })
+  },
+
+  toggleStaleMove: (id) => {
+    const staleMove = new Set(get().cleanupStaleMove)
+    const checked = new Set(get().cleanupChecked)
+    if (staleMove.has(id)) staleMove.delete(id)
+    else {
+      staleMove.add(id)
+      checked.delete(id)
+    }
+    set({ cleanupStaleMove: staleMove, cleanupChecked: checked })
+  },
+
+  toggleCleanupStaleMove: (id) => {
+    get().toggleStaleMove(id)
   },
 
   startLinkCheck: async () => {

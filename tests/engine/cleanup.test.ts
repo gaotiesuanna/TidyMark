@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { applyCleanup, type CleanupInput } from '@/engine/cleanup'
+import { undoLast } from '@/engine/undo'
 import { SNAPSHOT_KEY, type BookmarkSnapshot } from '@/engine/snapshot'
 import { scanTree } from '@/core/scan'
 import type { BookmarksApi } from '@/core/ports'
@@ -31,8 +32,12 @@ async function scanOf(ports: { bookmarks: BookmarksApi }): Promise<ScanResult> {
 
 function input(over: Partial<CleanupInput>, scan: ScanResult): CleanupInput {
   return {
-    planId: 'c1', scopeRootIds: ['1'], barId: '1', deadFolderTitle: '失效链接',
-    selection: { deleteBookmarkIds: [], moveBookmarkIds: [], deleteFolderIds: [] },
+    planId: 'c1', scopeRootIds: ['1'], barId: '1',
+    deadFolderTitle: '失效链接', staleMoveFolderTitle: '待清理',
+    selection: {
+      deleteBookmarkIds: [], moveBookmarkIds: [],
+      staleMoveBookmarkIds: [], staleMoveRootByBookmarkId: {}, deleteFolderIds: [],
+    },
     items: scan.bookmarks, folders: scan.folders,
     ...over,
   }
@@ -43,7 +48,10 @@ describe('applyCleanup 删除', () => {
     const { ports, bookmarks } = setup()
     const scan = await scanOf(ports)
     const result = await applyCleanup(ports, input({
-      selection: { deleteBookmarkIds: ['101'], moveBookmarkIds: [], deleteFolderIds: [] },
+      selection: {
+        deleteBookmarkIds: ['101'], moveBookmarkIds: [],
+        staleMoveBookmarkIds: [], staleMoveRootByBookmarkId: {}, deleteFolderIds: [],
+      },
     }, scan), 'zh_CN')
 
     expect(result.status).toBe('completed')
@@ -56,7 +64,10 @@ describe('applyCleanup 删除', () => {
     const { ports, bookmarks } = setup()
     const scan = await scanOf(ports)
     await applyCleanup(ports, input({
-      selection: { deleteBookmarkIds: ['110'], moveBookmarkIds: [], deleteFolderIds: ['11'] },
+      selection: {
+        deleteBookmarkIds: ['110'], moveBookmarkIds: [],
+        staleMoveBookmarkIds: [], staleMoveRootByBookmarkId: {}, deleteFolderIds: ['11'],
+      },
     }, scan), 'zh_CN')
 
     expect(await bookmarks.api.get('11')).toBeNull()
@@ -70,7 +81,10 @@ describe('applyCleanup 删除', () => {
     const { ports, bookmarks } = setup()
     const scan = await scanOf(ports)
     await applyCleanup(ports, input({
-      selection: { deleteBookmarkIds: ['110'], moveBookmarkIds: [], deleteFolderIds: [] },
+      selection: {
+        deleteBookmarkIds: ['110'], moveBookmarkIds: [],
+        staleMoveBookmarkIds: [], staleMoveRootByBookmarkId: {}, deleteFolderIds: [],
+      },
     }, scan), 'zh_CN')
 
     expect(await bookmarks.api.get('11')).not.toBeNull()
@@ -80,7 +94,10 @@ describe('applyCleanup 删除', () => {
     const { ports, bookmarks } = setup()
     const scan = await scanOf(ports)
     const result = await applyCleanup(ports, input({
-      selection: { deleteBookmarkIds: [], moveBookmarkIds: [], deleteFolderIds: ['11'] },
+      selection: {
+        deleteBookmarkIds: [], moveBookmarkIds: [],
+        staleMoveBookmarkIds: [], staleMoveRootByBookmarkId: {}, deleteFolderIds: ['11'],
+      },
     }, scan), 'zh_CN')
 
     expect(await bookmarks.api.get('11')).not.toBeNull()
@@ -93,7 +110,10 @@ describe('applyCleanup 移到失效链接文件夹', () => {
     const { ports, bookmarks } = setup()
     const scan = await scanOf(ports)
     const result = await applyCleanup(ports, input({
-      selection: { deleteBookmarkIds: [], moveBookmarkIds: ['110'], deleteFolderIds: [] },
+      selection: {
+        deleteBookmarkIds: [], moveBookmarkIds: ['110'],
+        staleMoveBookmarkIds: [], staleMoveRootByBookmarkId: {}, deleteFolderIds: [],
+      },
     }, scan), 'zh_CN')
 
     expect(result.moved).toBe(1)
@@ -124,7 +144,10 @@ describe('applyCleanup 移到失效链接文件夹', () => {
     const scan = scanTree(await bookmarks.api.getTree(), ['1'])
 
     const result = await applyCleanup(ports, input({
-      selection: { deleteBookmarkIds: [], moveBookmarkIds: ['110'], deleteFolderIds: [] },
+      selection: {
+        deleteBookmarkIds: [], moveBookmarkIds: ['110'],
+        staleMoveBookmarkIds: [], staleMoveRootByBookmarkId: {}, deleteFolderIds: [],
+      },
     }, scan), 'zh_CN')
 
     expect(result.deadFolderId).toBe('9')
@@ -133,12 +156,145 @@ describe('applyCleanup 移到失效链接文件夹', () => {
   })
 })
 
+describe('applyCleanup 移到各范围根的待清理文件夹', () => {
+  it('每个范围根分别复用或创建直接子文件夹', async () => {
+    const bookmarks = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: 'root-a', children: [
+            { id: '11', title: '待清理', children: [
+              { id: '110', title: 'previous', url: 'https://previous' },
+            ]},
+            { id: '100', title: 'stale-a', url: 'https://stale-a' },
+          ]},
+          { id: '20', title: 'root-b', children: [
+            { id: '200', title: 'stale-b', url: 'https://stale-b' },
+          ]},
+        ]},
+      ]},
+    ])
+    const storage = createFakeStorage()
+    const ports = { bookmarks: bookmarks.api, storage }
+    const scan = scanTree(await bookmarks.api.getTree(), ['1'])
+    const result = await applyCleanup(ports, input({
+      selection: {
+        deleteBookmarkIds: [], moveBookmarkIds: [],
+        staleMoveBookmarkIds: ['100', '200'],
+        staleMoveRootByBookmarkId: { '100': '10', '200': '20' }, deleteFolderIds: [],
+      },
+    }, scan), 'zh_CN')
+
+    expect(result.moved).toBe(2)
+    expect((await bookmarks.api.get('100'))!.parentId).toBe('11')
+    expect(bookmarks.structure()).toContain('root-a/待清理/stale-a')
+    expect(bookmarks.structure()).toContain('root-b/待清理/stale-b')
+    const snapshot = await storage.get<BookmarkSnapshot>(SNAPSHOT_KEY)
+    expect(snapshot!.createdFolderIds).toHaveLength(1)
+    expect(snapshot!.createdFolderIds).not.toContain('11')
+  })
+
+  it('把新建待清理文件夹和移动书签纳入快照，并可撤销归位', async () => {
+    const bookmarks = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: 'root-a', children: [
+            { id: '100', title: 'stale-a', url: 'https://stale-a' },
+            { id: '101', title: 'stale-b', url: 'https://stale-b' },
+            { id: '102', title: 'keep', url: 'https://keep' },
+          ]},
+        ]},
+      ]},
+    ])
+    const storage = createFakeStorage()
+    const ports = { bookmarks: bookmarks.api, storage }
+    const scan = scanTree(await bookmarks.api.getTree(), ['1'])
+    await applyCleanup(ports, input({
+      selection: {
+        deleteBookmarkIds: [], moveBookmarkIds: [],
+        staleMoveBookmarkIds: ['100', '101'],
+        staleMoveRootByBookmarkId: { '100': '10', '101': '10' }, deleteFolderIds: [],
+      },
+    }, scan), 'zh_CN')
+
+    const snapshot = await storage.get<BookmarkSnapshot>(SNAPSHOT_KEY)
+    expect(snapshot!.nodes.map((node) => node.id)).toEqual(['100', '101'])
+    expect(snapshot!.deletedBookmarkIds).toEqual([])
+    await undoLast(ports, 'zh_CN')
+    expect(bookmarks.structure()).toContain('root-a/stale-a')
+    expect(bookmarks.structure()).toContain('root-a/stale-b')
+    expect(bookmarks.structure()).toContain('root-a/keep')
+    expect(bookmarks.structure()).not.toContain('root-a/待清理')
+  })
+
+  it('一条待清理移动失败时继续移动同组及其他书签', async () => {
+    const bookmarks = createFakeBookmarks([
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: 'root-a', children: [
+            { id: '100', title: 'stale-a', url: 'https://stale-a' },
+            { id: '101', title: 'stale-b', url: 'https://stale-b' },
+          ]},
+        ]},
+      ]},
+    ])
+    const storage = createFakeStorage()
+    const ports = { bookmarks: bookmarks.api, storage }
+    const originalMove = bookmarks.api.move.bind(bookmarks.api)
+    bookmarks.api.move = async (id, destination) => {
+      if (id === '100') throw new Error('move failed')
+      return originalMove(id, destination)
+    }
+    const scan = scanTree(await bookmarks.api.getTree(), ['1'])
+    const result = await applyCleanup(ports, input({
+      selection: {
+        deleteBookmarkIds: [], moveBookmarkIds: [],
+        staleMoveBookmarkIds: ['100', '101'],
+        staleMoveRootByBookmarkId: { '100': '10', '101': '10' }, deleteFolderIds: [],
+      },
+    }, scan), 'zh_CN')
+
+    expect(result.status).toBe('completed')
+    expect(result.moved).toBe(1)
+    expect(result.skipped.map((item) => item.bookmarkId)).toContain('100')
+    expect((await bookmarks.api.get('101'))!.parentId).not.toBe('10')
+  })
+  it('combines duplicate deletion and stale move in one undoable cleanup', async () => {
+    const { ports, bookmarks, storage } = setup()
+    const scan = await scanOf(ports)
+    const result = await applyCleanup(ports, input({
+      selection: {
+        deleteBookmarkIds: ['101'],
+        moveBookmarkIds: [],
+        staleMoveBookmarkIds: ['110'],
+        staleMoveRootByBookmarkId: { '110': '11' },
+        deleteFolderIds: [],
+      },
+    }, scan), 'zh_CN')
+
+    expect(result.status).toBe('completed')
+    expect(result.deleted).toBe(1)
+    expect(result.moved).toBe(1)
+    expect(await bookmarks.api.get('101')).toBeNull()
+    expect((await bookmarks.api.get('110'))!.parentId).not.toBe('11')
+    expect((await storage.get<BookmarkSnapshot>(SNAPSHOT_KEY))!.deletedBookmarkIds).toEqual(['101'])
+
+    await undoLast(ports, 'zh_CN')
+
+    expect(bookmarks.structure()).toContain('/书签栏/目录甲/a 又存了一遍')
+    expect(bookmarks.structure()).toContain('/书签栏/目录乙/dead')
+  })
+
+})
+
 describe('applyCleanup 快照', () => {
   it('只装本次会被动到的节点，不装整个范围', async () => {
     const { ports, storage } = setup()
     const scan = await scanOf(ports)
     await applyCleanup(ports, input({
-      selection: { deleteBookmarkIds: ['101'], moveBookmarkIds: [], deleteFolderIds: [] },
+      selection: {
+        deleteBookmarkIds: ['101'], moveBookmarkIds: [],
+        staleMoveBookmarkIds: [], staleMoveRootByBookmarkId: {}, deleteFolderIds: [],
+      },
     }, scan), 'zh_CN')
 
     const snapshot = await storage.get<BookmarkSnapshot>(SNAPSHOT_KEY)
@@ -154,7 +310,10 @@ describe('applyCleanup 快照', () => {
     const { ports, storage } = setup()
     const scan = await scanOf(ports)
     await applyCleanup(ports, input({
-      selection: { deleteBookmarkIds: [], moveBookmarkIds: ['110'], deleteFolderIds: [] },
+      selection: {
+        deleteBookmarkIds: [], moveBookmarkIds: ['110'],
+        staleMoveBookmarkIds: [], staleMoveRootByBookmarkId: {}, deleteFolderIds: [],
+      },
     }, scan), 'zh_CN')
 
     const snapshot = await storage.get<BookmarkSnapshot>(SNAPSHOT_KEY)
@@ -168,7 +327,10 @@ describe('applyCleanup 快照', () => {
     const { ports, storage } = setup()
     const scan = await scanOf(ports)
     await applyCleanup(ports, input({
-      selection: { deleteBookmarkIds: ['101'], moveBookmarkIds: ['110'], deleteFolderIds: [] },
+      selection: {
+        deleteBookmarkIds: ['101'], moveBookmarkIds: ['110'],
+        staleMoveBookmarkIds: [], staleMoveRootByBookmarkId: {}, deleteFolderIds: [],
+      },
     }, scan), 'zh_CN')
 
     const snapshot = await storage.get<BookmarkSnapshot>(SNAPSHOT_KEY)
@@ -179,7 +341,10 @@ describe('applyCleanup 快照', () => {
     const { ports, storage } = setup()
     const scan = await scanOf(ports)
     await applyCleanup(ports, input({
-      selection: { deleteBookmarkIds: ['110'], moveBookmarkIds: [], deleteFolderIds: ['11'] },
+      selection: {
+        deleteBookmarkIds: ['110'], moveBookmarkIds: [],
+        staleMoveBookmarkIds: [], staleMoveRootByBookmarkId: {}, deleteFolderIds: ['11'],
+      },
     }, scan), 'zh_CN')
 
     const snapshot = await storage.get<BookmarkSnapshot>(SNAPSHOT_KEY)
@@ -200,7 +365,10 @@ describe('applyCleanup 快照', () => {
     }
 
     await applyCleanup(ports, input({
-      selection: { deleteBookmarkIds: ['101'], moveBookmarkIds: [], deleteFolderIds: [] },
+      selection: {
+        deleteBookmarkIds: ['101'], moveBookmarkIds: [],
+        staleMoveBookmarkIds: [], staleMoveRootByBookmarkId: {}, deleteFolderIds: [],
+      },
     }, scan), 'zh_CN')
 
     expect(snapshotAtFirstRemove).not.toBeNull()
@@ -219,7 +387,10 @@ describe('applyCleanup 容错', () => {
     }
 
     const result = await applyCleanup(ports, input({
-      selection: { deleteBookmarkIds: ['101', '110'], moveBookmarkIds: [], deleteFolderIds: [] },
+      selection: {
+        deleteBookmarkIds: ['101', '110'], moveBookmarkIds: [],
+        staleMoveBookmarkIds: [], staleMoveRootByBookmarkId: {}, deleteFolderIds: [],
+      },
     }, scan), 'zh_CN')
 
     expect(result.status).toBe('completed')
@@ -234,7 +405,10 @@ describe('applyCleanup 容错', () => {
     await bookmarks.api.remove('101')
 
     const result = await applyCleanup(ports, input({
-      selection: { deleteBookmarkIds: ['101'], moveBookmarkIds: [], deleteFolderIds: [] },
+      selection: {
+        deleteBookmarkIds: ['101'], moveBookmarkIds: [],
+        staleMoveBookmarkIds: [], staleMoveRootByBookmarkId: {}, deleteFolderIds: [],
+      },
     }, scan), 'zh_CN')
 
     expect(result.status).toBe('completed')
