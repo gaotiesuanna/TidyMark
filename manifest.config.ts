@@ -9,6 +9,8 @@ export default defineManifest({
   // favicon：HTML 导出要把图标写进 ICON 属性，靠它读 chrome-extension://<id>/_favicon/
   // （只读 Chrome 本地已缓存的图标，不发外部请求）
   permissions: ['bookmarks', 'storage', 'unlimitedStorage', 'sidePanel', 'favicon'],
+  // history 只给看板的「访问」排行用，装的时候不要。点「允许读取浏览记录」才申请。
+  optional_permissions: ['history'],
   // https 那两条给模型端点用（按用户填的单个域名申请，见 sidepanel/lib/permissions.ts）。
   // http://*/* 是给失效链接检查加的：纯 http 的老书签恰恰是最可能已经死掉的那批，
   // 不声明就只能静默跳过它们，那是最糟的结果。

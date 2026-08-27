@@ -330,6 +330,32 @@ describe('uiLocale', () => {
   })
 })
 
+describe('topDomainCount', () => {
+  it('默认 15', () => {
+    expect(DEFAULT_SETTINGS.topDomainCount).toBe(15)
+  })
+
+  it('旧数据里没有这个字段时兜底成 15', async () => {
+    const p = ports()
+    await p.storage.set(SETTINGS_KEY, {})
+    expect((await loadSettings(p)).topDomainCount).toBe(15)
+  })
+
+  it('存过的数量读得回来', async () => {
+    const p = ports()
+    await p.storage.set(SETTINGS_KEY, { topDomainCount: 20 })
+    expect((await loadSettings(p)).topDomainCount).toBe(20)
+  })
+
+  it('越界或非法的存量值被夹回合法区间', async () => {
+    const p = ports()
+    await p.storage.set(SETTINGS_KEY, { topDomainCount: 0 })
+    expect((await loadSettings(p)).topDomainCount).toBe(1)
+    await p.storage.set(SETTINGS_KEY, { topDomainCount: 999 })
+    expect((await loadSettings(p)).topDomainCount).toBe(50)
+  })
+})
+
 /**
  * 预设填进去的是 baseUrl，不是完整端点——`src/llm/client.ts` 会自己接上
  * `/chat/completions`。而各家文档给的往往正是**完整端点**（OpenCode Go 的文档写的就是
@@ -370,6 +396,7 @@ describe('activeLlm', () => {
   const base = {
     removeEmptyFolders: true, domainGroups: [], rewriteGithubTitles: false,
     uiLocale: 'auto' as const,
+    topDomainCount: 15,
   }
   const withEndpoints = (
     endpoints: Endpoint[], active: { baseUrl: string; model: string },

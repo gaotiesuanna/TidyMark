@@ -7,6 +7,7 @@ import { ReviewStep } from './steps/ReviewStep'
 import { ResultStep } from './steps/ResultStep'
 import { CleanupStep } from './steps/CleanupStep'
 import { TransferStep } from './steps/TransferStep'
+import { DashboardStep } from './steps/DashboardStep'
 import { useStore } from './store'
 
 export default function App() {
@@ -21,7 +22,7 @@ export default function App() {
    */
   return (
     <Shell key={locale}>
-      {mode === 'cleanup' ? <CleanupStep /> : mode === 'transfer' ? <TransferStep /> : (
+      {mode === 'cleanup' ? <CleanupStep /> : mode === 'transfer' ? <TransferStep /> : mode === 'dashboard' ? <DashboardStep /> : (
         <>
           {step === 'scope' && <ScopeStep />}
           {step === 'preferences' && <PreferencesStep />}

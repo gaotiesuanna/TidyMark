@@ -1,6 +1,7 @@
 import type { Ports } from '@/core/ports'
-import type { Locale, UiLocale } from '@/core/locale'
+import { clampTopDomainCount, DEFAULT_TOP_DOMAINS } from '@/core/domains'
 import type { CachedClassification } from '@/core/types'
+import type { Locale, UiLocale } from '@/core/locale'
 import type { LlmConfig } from '@/llm/client'
 
 export const SETTINGS_KEY = 'tidymark:settings'
@@ -64,6 +65,8 @@ export interface Settings {
   rewriteGithubTitles: boolean
   /** 界面与产出的语言。'auto' 时跟随浏览器 UI 语言。 */
   uiLocale: UiLocale
+  /** 看板域名排行显示前几名。 */
+  topDomainCount: number
 }
 
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1'
@@ -82,6 +85,7 @@ export const DEFAULT_SETTINGS: Settings = {
   removeEmptyFolders: true,
   rewriteGithubTitles: false,
   uiLocale: 'auto',
+  topDomainCount: DEFAULT_TOP_DOMAINS,
 }
 
 /** 按主键找端点，找不到返回 null。 */
@@ -179,6 +183,7 @@ export async function loadSettings(ports: Ports): Promise<Settings> {
     removeEmptyFolders: stored?.removeEmptyFolders ?? DEFAULT_SETTINGS.removeEmptyFolders,
     rewriteGithubTitles: stored?.rewriteGithubTitles ?? DEFAULT_SETTINGS.rewriteGithubTitles,
     uiLocale: stored?.uiLocale ?? DEFAULT_SETTINGS.uiLocale,
+    topDomainCount: clampTopDomainCount(stored?.topDomainCount ?? DEFAULT_SETTINGS.topDomainCount),
   }
 }
 

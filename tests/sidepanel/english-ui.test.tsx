@@ -5,6 +5,7 @@ import { setLocale } from '@/i18n'
 import { makePlan } from '../fakes/plan'
 import { ScopeStep } from '@/sidepanel/steps/ScopeStep'
 import { TransferStep } from '@/sidepanel/steps/TransferStep'
+import { DashboardStep } from '@/sidepanel/steps/DashboardStep'
 import { PreferencesStep } from '@/sidepanel/steps/PreferencesStep'
 import { StructureStep } from '@/sidepanel/steps/StructureStep'
 import { ReviewStep } from '@/sidepanel/steps/ReviewStep'
@@ -83,6 +84,23 @@ describe('英文界面渲染守卫：步骤组件', () => {
     })
     const { container } = render(<TransferStep />)
     assertNoChinese(container, 'TransferStep')
+  })
+
+  it('DashboardStep', () => {
+    const chromeGlobal = globalThis as unknown as { chrome: Record<string, unknown> }
+    const originalRuntime = chromeGlobal.chrome.runtime
+    chromeGlobal.chrome.runtime = {
+      getURL: (path: string) => `chrome-extension://fakeid${path}`,
+    }
+    try {
+      useStore.setState({
+        tree, checkedIds: new Set(['10']), busy: null, error: null,
+      })
+      const { container } = render(<DashboardStep />)
+      assertNoChinese(container, 'DashboardStep')
+    } finally {
+      chromeGlobal.chrome.runtime = originalRuntime
+    }
   })
 
   it('PreferencesStep', () => {

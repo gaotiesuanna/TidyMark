@@ -16,8 +16,9 @@ const MODES = [
   { key: 'organize', labelKey: 'shellModeOrganize' },
   { key: 'cleanup', labelKey: 'shellModeCleanup' },
   { key: 'transfer', labelKey: 'shellModeTransfer' },
+  { key: 'dashboard', labelKey: 'shellModeDashboard' },
 ] as const
-/** 分段控件：浅灰槽 + 内嵌白片。三项均分整行，不做成左簇右齿轮的第二标题栏——
+/** 分段控件：浅灰槽 + 内嵌白片。四项均分整行，不做成左簇右齿轮的第二标题栏——
     Chrome 侧栏顶栏已经是那个布局，再学一遍中间会空一截。 */
 const tabGroup = 'flex min-w-0 flex-1 rounded-lg bg-neutral-100 p-0.5 text-xs'
 const tabBase = [
@@ -49,7 +50,7 @@ export function Shell({ children }: { children: ReactNode }) {
   } = useStore()
   return (
     <div className="flex h-screen flex-col bg-white text-neutral-800">
-      <header className="px-4 py-2.5">
+      <header className={settingsOpen ? 'border-b border-neutral-200 px-4 py-2.5' : 'px-4 py-2.5'}>
         {/* Chrome 侧栏顶部已经显示了图标和「TidyMark」，这里再写一遍是重复，还白占一行高度。
             但那个标题栏属于浏览器界面、不在本文档里，读屏用户在文档中导航时找不到它，
             所以只是视觉隐藏而非删除——保证这个页面至少还有一个 h1。 */}
@@ -58,19 +59,22 @@ export function Shell({ children }: { children: ReactNode }) {
             Chrome 顶栏已经是「左身份、右按钮」，再做一遍就是两条叠着的工具栏。
             齿轮仍跟模式同一行——单独占一行的话，清理模式下那行只剩一个 16px 图标。 */}
         <div className="flex items-center gap-2">
-          {/* 三条平行的路，不是一条路上的几步——所以是并列的分段控件，不是步骤条里的第五格。
+          {/* 四条平行的路，不是一条路上的几步——所以是并列的分段控件，不是步骤条里的第五格。
               塞进步骤条会让前四格点不动、第五格能点，用户第一次点错就学会「这条随便点」。
               忙的时候禁用：busy 是单槽，切过去也什么都干不了，还会让人以为切换失灵。 */}
           {settingsOpen ? (
-            /* 设置页里这个位置改放返回：设置不是第几步，步骤条显示出来会误导。
-               左指的箭头把「回到刚才那页」说清楚，光一个「返回」得靠读字才知道。 */
-            <button
-              className="-ml-2 inline-flex h-8 cursor-pointer items-center gap-1 rounded-md px-2 text-xs font-medium text-neutral-600 transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 motion-reduce:transition-none"
-              onClick={closeSettings}
-            >
-              <ChevronLeftIcon className="h-3.5 w-3.5" />
-              {t('settingsBack')}
-            </button>
+            /* 设置不是第几步，步骤条显示出来会误导。返回和标题同一行：
+               正文里再写一个「设置」会变成顶栏只剩返回、下面孤零零一个标题。 */
+            <>
+              <button
+                className="-ml-2 inline-flex h-8 cursor-pointer items-center gap-1 rounded-md px-2 text-sm text-neutral-600 transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 motion-reduce:transition-none"
+                onClick={closeSettings}
+              >
+                <ChevronLeftIcon className="h-3.5 w-3.5" />
+                {t('settingsBack')}
+              </button>
+              <h2 className="text-sm font-medium text-neutral-900">{t('settingsTitle')}</h2>
+            </>
           ) : (
             <div className={tabGroup} role="tablist">
               {MODES.map((each) => (

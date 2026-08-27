@@ -14,6 +14,57 @@
   "shellModeTransfer": {
     "message": "Browse"
   },
+  "shellModeDashboard": {
+    "message": "Stats"
+  },
+  "dashTopDomains": {
+    "message": "Top $count$ Domains",
+    "placeholders": { "count": { "content": "$1" } }
+  },
+  "dashTopDomainsLead": {
+    "message": "Top"
+  },
+  "dashTopCountLabel": {
+    "message": "How many domains to show"
+  },
+  "dashTopDomainsSub": {
+    "message": "Where your bookmarks come from"
+  },
+  "dashBookmarked": {
+    "message": "Bookmarked"
+  },
+  "dashVisited": {
+    "message": "Visited"
+  },
+  "dashEmptyBookmarks": {
+    "message": "No http(s) bookmarks to rank yet."
+  },
+  "dashEmptyVisits": {
+    "message": "No browsing history to rank yet."
+  },
+  "dashHistoryExplain": {
+    "message": "Ranking sites by visits means reading your browsing history. Chrome will now ask for permission to \"read your browsing history.\" TidyMark only counts visits per site, on this computer. If you never press this button it is never requested."
+  },
+  "dashHistoryAllow": {
+    "message": "Allow history access"
+  },
+  "dashHistoryDenied": {
+    "message": "Permission not granted. You can turn it on later in the extension settings."
+  },
+  "dashHistoryLoading": {
+    "message": "Reading browsing history…"
+  },
+  "dashListLabel": {
+    "message": "Top domains"
+  },
+  "dashDomainExpand": {
+    "message": "Show folder distribution for $domain$",
+    "placeholders": { "domain": { "content": "$1" } }
+  },
+  "dashDomainCollapse": {
+    "message": "Hide folder distribution for $domain$",
+    "placeholders": { "domain": { "content": "$1" } }
+  },
   "transferIntro": {
     "message": "Search bookmarks, select folders to export, or import a file someone shared. This does not change your existing folder structure."
   },

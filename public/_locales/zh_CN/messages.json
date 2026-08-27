@@ -14,6 +14,57 @@
   "shellModeTransfer": {
     "message": "浏览书签"
   },
+  "shellModeDashboard": {
+    "message": "看板"
+  },
+  "dashTopDomains": {
+    "message": "来源域名 Top $count$",
+    "placeholders": { "count": { "content": "$1" } }
+  },
+  "dashTopDomainsLead": {
+    "message": "来源域名 Top"
+  },
+  "dashTopCountLabel": {
+    "message": "显示前几名"
+  },
+  "dashTopDomainsSub": {
+    "message": "这些书签都来自哪些网站"
+  },
+  "dashBookmarked": {
+    "message": "书签"
+  },
+  "dashVisited": {
+    "message": "访问"
+  },
+  "dashEmptyBookmarks": {
+    "message": "还没有可统计的 http(s) 书签。"
+  },
+  "dashEmptyVisits": {
+    "message": "还没有可统计的浏览记录。"
+  },
+  "dashHistoryExplain": {
+    "message": "按访问次数排行需要读取浏览记录。Chrome 会问你要不要「读取您的浏览记录」。TidyMark 只用它来按网站计数，数据不出这台电脑。不点这个按钮就永远不会申请。"
+  },
+  "dashHistoryAllow": {
+    "message": "允许读取浏览记录"
+  },
+  "dashHistoryDenied": {
+    "message": "没有拿到浏览记录权限。之后可以在扩展设置里打开。"
+  },
+  "dashHistoryLoading": {
+    "message": "正在读取浏览记录…"
+  },
+  "dashListLabel": {
+    "message": "域名排行"
+  },
+  "dashDomainExpand": {
+    "message": "查看 $domain$ 在各文件夹的分布",
+    "placeholders": { "domain": { "content": "$1" } }
+  },
+  "dashDomainCollapse": {
+    "message": "收起 $domain$ 的文件夹分布",
+    "placeholders": { "domain": { "content": "$1" } }
+  },
   "transferIntro": {
     "message": "搜索书签或文件夹，勾选后导出，也可以导入别人分享的文件。这里不会改你现有的目录结构。"
   },

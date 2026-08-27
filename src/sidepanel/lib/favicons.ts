@@ -23,10 +23,11 @@ const CONCURRENCY = 12
  */
 const PROBE_URL = 'https://tidymark-favicon-probe.invalid/'
 
-function endpoint(pageUrl: string): string {
+/** 侧栏里直接当 <img src> 用：走同一条本地 _favicon/ 端点，不发外网。 */
+export function faviconSrc(pageUrl: string, size = SIZE): string {
   const url = new URL(chrome.runtime.getURL('/_favicon/'))
   url.searchParams.set('pageUrl', pageUrl)
-  url.searchParams.set('size', String(SIZE))
+  url.searchParams.set('size', String(size))
   return url.toString()
 }
 
@@ -42,7 +43,7 @@ function toDataUrl(blob: Blob): Promise<string> {
 /** 单条失败一律返回 null 由调用方跳过——导出不该因为一个图标取不到就整个失败。 */
 async function fetchIcon(pageUrl: string): Promise<string | null> {
   try {
-    const response = await fetch(endpoint(pageUrl))
+    const response = await fetch(faviconSrc(pageUrl))
     if (!response.ok) return null
     return await toDataUrl(await response.blob())
   } catch {
