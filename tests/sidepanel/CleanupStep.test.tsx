@@ -120,6 +120,10 @@ beforeEach(() => {
   })
 })
 
+async function openCleanupTab(name: string): Promise<void> {
+  await userEvent.click(screen.getByRole('tab', { name }))
+}
+
 describe('长期未点击书签扫描状态', () => {
   it('页面挂载不申请历史权限', () => {
     render(<CleanupStep />)
@@ -365,9 +369,43 @@ describe('CleanupStep 长期未点击书签一节', () => {
   })
 })
 
-describe('CleanupStep 默认勾选', () => {
-  it('完全相同那档勾上待删项，保留项不勾且不可勾', () => {
+describe('CleanupStep 功能小 tab', () => {
+  it('默认停在长期未点击，不展示重复项', () => {
     render(<CleanupStep />)
+    expect(screen.getByRole('tab', { name: '长期未点击' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('tab', { name: '重复收藏' }).getAttribute('aria-selected')).toBe('false')
+    expect(screen.getByRole('tab', { name: '失效链接' }).getAttribute('aria-selected')).toBe('false')
+    expect(screen.queryByRole('checkbox', { name: '删除 a' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /开始检查/ })).toBeNull()
+  })
+
+  it('切到重复收藏才看到重复项', async () => {
+    render(<CleanupStep />)
+    await openCleanupTab('重复收藏')
+    expect(screen.getByRole('checkbox', { name: '删除 a' })).toBeDefined()
+    expect(screen.queryByRole('button', { name: /允许并扫描/ })).toBeNull()
+  })
+
+  it('切到失效链接才看到开始检查', async () => {
+    render(<CleanupStep />)
+    await openCleanupTab('失效链接')
+    expect(screen.getByRole('button', { name: /开始检查/ })).toBeDefined()
+    expect(screen.queryByRole('checkbox', { name: '删除 a' })).toBeNull()
+  })
+
+  it('切走再切回仍保留已勾选项，底部数量跨 tab 合计', async () => {
+    render(<CleanupStep />)
+    await openCleanupTab('重复收藏')
+    expect(screen.getByRole('button', { name: '清理 2 项' })).toBeDefined()
+    await openCleanupTab('长期未点击')
+    expect(screen.getByRole('button', { name: '清理 2 项' })).toBeDefined()
+  })
+})
+
+describe('CleanupStep 默认勾选', () => {
+  it('完全相同那档勾上待删项，保留项不勾且不可勾', async () => {
+    render(<CleanupStep />)
+    await openCleanupTab('重复收藏')
     const keeper = screen.getByRole('checkbox', { name: '删除 a' }) as HTMLInputElement
     const doomed = screen.getByRole('checkbox', { name: '删除 a 又存了一遍' }) as HTMLInputElement
     expect(keeper.checked).toBe(false)
@@ -375,14 +413,16 @@ describe('CleanupStep 默认勾选', () => {
     expect(doomed.checked).toBe(true)
   })
 
-  it('可能相同那档一条都不勾', () => {
+  it('可能相同那档一条都不勾', async () => {
     render(<CleanupStep />)
+    await openCleanupTab('重复收藏')
     const box = screen.getByRole('checkbox', { name: '删除 b 带追踪参数' }) as HTMLInputElement
     expect(box.checked).toBe(false)
   })
 
-  it('可能相同那档带上说明，讲清为什么默认不勾', () => {
+  it('可能相同那档带上说明，讲清为什么默认不勾', async () => {
     render(<CleanupStep />)
+    await openCleanupTab('重复收藏')
     expect(screen.getByText(/默认不勾/)).toBeDefined()
   })
 })
@@ -396,6 +436,7 @@ describe('CleanupStep 空文件夹随勾选联动', () => {
 
   it('取消勾选后那个目录立刻消失', async () => {
     render(<CleanupStep />)
+    await openCleanupTab('重复收藏')
     await userEvent.click(screen.getByRole('checkbox', { name: '删除 a 第三遍' }))
     expect(screen.queryByText('目录丙')).toBeNull()
   })
@@ -420,12 +461,13 @@ describe('CleanupStep 覆盖警告', () => {
 })
 
 describe('CleanupStep 空状态', () => {
-  it('没有任何可清理项时明说，不留一个空白页面', () => {
+  it('没有任何可清理项时明说，不留一个空白页面', async () => {
     useStore.setState({
       cleanupScan: { ...scan, duplicates: [] },
       cleanupChecked: new Set(),
     })
     render(<CleanupStep />)
+    await openCleanupTab('重复收藏')
     expect(screen.getByText('没有找到可清理的东西。')).toBeDefined()
   })
 
@@ -451,28 +493,33 @@ describe('CleanupStep 失效链接一节', () => {
     useStore.setState({ cleanupLinks: [], linkCheckState: 'idle', cleanupMove: new Set() })
   })
 
-  it('没授权前只有说明和按钮，不列任何结果', () => {
+  it('没授权前只有说明和按钮，不列任何结果', async () => {
     render(<CleanupStep />)
+    await openCleanupTab('失效链接')
     expect(screen.getByText(/读取你在所有网站上的数据/)).toBeDefined()
     expect(screen.getByRole('button', { name: /开始检查/ })).toBeDefined()
     expect(screen.queryByText('确定失效')).toBeNull()
   })
 
-  it('说明必须排在按钮之前——用户不该在看懂之前就被弹权限', () => {
+  it('说明必须排在按钮之前——用户不该在看懂之前就被弹权限', async () => {
     render(<CleanupStep />)
+    await openCleanupTab('失效链接')
     const explain = screen.getByText(/读取你在所有网站上的数据/)
     const button = screen.getByRole('button', { name: /开始检查/ })
     expect(explain.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('拒绝授权后显示跳过提示，另外两节仍在', () => {
+  it('拒绝授权后显示跳过提示，另外两节仍在', async () => {
     useStore.setState({ linkCheckState: 'denied' })
     render(<CleanupStep />)
+    await openCleanupTab('失效链接')
     expect(screen.getByText(/另外两项照常可用/)).toBeDefined()
     expect(screen.getByText('重复收藏')).toBeDefined()
+    expect(screen.getByText('长期未点击')).toBeDefined()
   })
 
-  it('确定失效可勾选，可疑那档只读、没有勾选框', () => {
+
+  it('确定失效可勾选，可疑那档只读、没有勾选框', async () => {
     useStore.setState({
       linkCheckState: 'done',
       cleanupLinks: [
@@ -482,6 +529,7 @@ describe('CleanupStep 失效链接一节', () => {
       cleanupChecked: new Set(['200']),
     })
     render(<CleanupStep />)
+    await openCleanupTab('失效链接')
     expect((screen.getByRole('checkbox', { name: '删除 https://gone.com/p' }) as HTMLInputElement).checked).toBe(true)
     expect(screen.queryByRole('checkbox', { name: /https:\/\/blocked\.com/ })).toBeNull()
     expect(screen.getByText(/https:\/\/blocked\.com\/p/)).toBeDefined()
@@ -496,10 +544,12 @@ describe('CleanupStep 失效链接一节', () => {
       cleanupChecked: new Set(['200']),
     })
     render(<CleanupStep />)
+    await openCleanupTab('失效链接')
     await userEvent.click(screen.getByRole('checkbox', { name: '移到「失效链接」文件夹 https://gone.com/p' }))
     expect(useStore.getState().cleanupChecked.has('200')).toBe(false)
     expect(useStore.getState().cleanupMove.has('200')).toBe(true)
   })
+
 
   /**
    * 最容易漏的一条：移走同样腾空了原位置。只按「删除」那批推演，

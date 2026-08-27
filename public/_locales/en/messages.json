@@ -233,6 +233,18 @@
   "cleanupSectionStale": {
     "message": "Long-unvisited bookmarks"
   },
+  "cleanupTabListLabel": {
+    "message": "Cleanup categories"
+  },
+  "cleanupTabStale": {
+    "message": "Unvisited"
+  },
+  "cleanupTabDuplicates": {
+    "message": "Duplicates"
+  },
+  "cleanupTabLinks": {
+    "message": "Dead links"
+  },
   "cleanupStaleExplain": {
     "message": "Viewing long-unvisited bookmarks in the current scope requires access to your browsing history. Chrome asks for this permission first; it is requested only when you press the button below."
   },

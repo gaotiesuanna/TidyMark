@@ -26,7 +26,7 @@ function formatDate(timestamp: number): string {
   return new Intl.DateTimeFormat(toHtmlLang(currentLocale()), { dateStyle: 'medium' }).format(timestamp)
 }
 
-export function StaleCleanupSection() {
+export function StaleCleanupSection({ showHeading = true }: { showHeading?: boolean } = {}) {
   const {
     staleScan,
     staleState,
@@ -47,10 +47,12 @@ export function StaleCleanupSection() {
   )
 
   return (
-    <section className="space-y-2" aria-labelledby="cleanup-stale-heading">
-      <h2 id="cleanup-stale-heading" className="text-xs font-medium text-neutral-700">
-        {t('cleanupSectionStale')}
-      </h2>
+    <section className="space-y-2" aria-labelledby={showHeading ? 'cleanup-stale-heading' : undefined}>
+      {showHeading && (
+        <h2 id="cleanup-stale-heading" className="text-xs font-medium text-neutral-700">
+          {t('cleanupSectionStale')}
+        </h2>
+      )}
 
       {staleState === 'idle' && (
         <>

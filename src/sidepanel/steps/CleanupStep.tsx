@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { plural, t } from '@/i18n'
 import { emptyAfterRemoval } from '@/core/cleanup'
 import type { DuplicateGroup } from '@/core/duplicates'
@@ -68,13 +68,32 @@ const secondaryAction = [
   'disabled:cursor-not-allowed disabled:opacity-40',
 ].join(' ')
 
+type CleanupTab = 'stale' | 'duplicates' | 'links'
+
+const CLEANUP_TABS: Array<{ key: CleanupTab; labelKey: Parameters<typeof t>[0] }> = [
+  { key: 'stale', labelKey: 'cleanupTabStale' },
+  { key: 'duplicates', labelKey: 'cleanupTabDuplicates' },
+  { key: 'links', labelKey: 'cleanupTabLinks' },
+]
+
+/** 比顶栏模式切换小一号：同一种白片槽，高度和字号都收一档，避免两排分段控件抢视觉。 */
+const subTabGroup = 'flex min-w-0 rounded-md bg-neutral-100 p-0.5 text-[11px]'
+const subTabBase = [
+  'inline-flex h-6 min-w-0 flex-1 cursor-pointer items-center justify-center rounded px-1 font-medium',
+  'transition-colors duration-150 motion-reduce:transition-none',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400',
+].join(' ')
+const subTabOn = `${subTabBase} bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-200`
+const subTabOff = `${subTabBase} text-neutral-600 hover:text-neutral-800`
+
 export function CleanupStep() {
   const {
     tree, cleanupScan, cleanupResult, cleanupChecked, cleanupFolders,
-    cleanupLinks, linkCheckState, cleanupMove, cleanupStaleMove, staleScan,
+    cleanupLinks, linkCheckState, cleanupMove, cleanupStaleMove,
     startLinkCheck, toggleCleanupMove, toggleCleanupItem,
     busy, undoAvailable, runCleanupScan, runCleanup, toggleCleanupFolder, undo,
   } = useStore()
+  const [tab, setTab] = useState<CleanupTab>('stale')
 
   useEffect(() => { void runCleanupScan() }, [runCleanupScan])
 
@@ -162,117 +181,144 @@ export function CleanupStep() {
   const dead = cleanupLinks.filter((l) => l.verdict === 'dead')
   const suspect = cleanupLinks.filter((l) => l.verdict === 'suspect')
   const total = cleanupChecked.size + cleanupMove.size + cleanupStaleMove.size + cleanupFolders.size
-  const nothing = cleanupScan.duplicates.length === 0
-    && willBeEmpty.length === 0
-    && (staleScan?.items.length ?? 0) === 0
 
   return (
     <div>
       <div className="space-y-4">
         <p className="text-xs leading-relaxed text-neutral-500">{t('cleanupIntro')}</p>
-        <StaleCleanupSection />
 
-        {nothing && <p className="text-xs text-neutral-500">{t('cleanupNothingFound')}</p>}
+        <div role="tablist" aria-label={t('cleanupTabListLabel')} className={subTabGroup}>
+          {CLEANUP_TABS.map((each) => (
+            <button
+              key={each.key}
+              type="button"
+              role="tab"
+              id={`cleanup-tab-${each.key}`}
+              aria-controls={`cleanup-panel-${each.key}`}
+              aria-selected={tab === each.key}
+              className={tab === each.key ? subTabOn : subTabOff}
+              onClick={() => setTab(each.key)}
+            >
+              {t(each.labelKey)}
+            </button>
+          ))}
+        </div>
 
-        {cleanupScan.duplicates.length > 0 && (
-          <section className="space-y-2">
-            <h2 className="text-xs font-medium text-neutral-700">{t('cleanupSectionDuplicates')}</h2>
-
-            {exact.length > 0 && (
-              <>
-                <h3 className="text-[11px] text-neutral-500">{t('cleanupGroupExact')}</h3>
-                <ul className="space-y-2">
-                  {exact.map((group) => <DuplicateGroupCard key={group.key} group={group} />)}
-                </ul>
-              </>
-            )}
-
-            {normalized.length > 0 && (
-              <>
-                <h3 className="text-[11px] text-neutral-500">{t('cleanupGroupNormalized')}</h3>
-                {/* 这一档默认一条都不勾，提示必须说清为什么，否则用户不知道该看什么 */}
-                <p className="text-[11px] leading-relaxed text-neutral-400">
-                  {t('cleanupGroupNormalizedHint')}
-                </p>
-                <ul className="space-y-2">
-                  {normalized.map((group) => <DuplicateGroupCard key={group.key} group={group} />)}
-                </ul>
-              </>
-            )}
-          </section>
+        {tab === 'stale' && (
+          <div role="tabpanel" id="cleanup-panel-stale" aria-labelledby="cleanup-tab-stale">
+            <StaleCleanupSection showHeading={false} />
+          </div>
         )}
 
-        <section className="space-y-2">
-          <h2 className="text-xs font-medium text-neutral-700">{t('cleanupSectionLinks')}</h2>
+        {tab === 'duplicates' && (
+          <div
+            role="tabpanel"
+            id="cleanup-panel-duplicates"
+            aria-labelledby="cleanup-tab-duplicates"
+            className="space-y-2"
+          >
+            {cleanupScan.duplicates.length === 0 ? (
+              <p className="text-xs text-neutral-500">{t('cleanupNothingFound')}</p>
+            ) : (
+              <>
+                {exact.length > 0 && (
+                  <>
+                    <h3 className="text-[11px] text-neutral-500">{t('cleanupGroupExact')}</h3>
+                    <ul className="space-y-2">
+                      {exact.map((group) => <DuplicateGroupCard key={group.key} group={group} />)}
+                    </ul>
+                  </>
+                )}
 
-          {linkCheckState === 'idle' && (
-            <>
-              {/* 先解释再申请。这段话必须出现在按钮之前，而且要点名 Chrome 会怎么措辞——
-                  用户看到「读取你在所有网站上的数据」时不该是第一次听说这件事 */}
-              <p className="text-[11px] leading-relaxed text-neutral-500">{t('cleanupLinksExplain')}</p>
-              <button
-                className="rounded-md border border-neutral-300 px-2.5 py-1 text-xs hover:border-neutral-400 disabled:opacity-40"
-                disabled={busy !== null}
-                onClick={() => void startLinkCheck()}
-              >
-                {t('cleanupLinksStart')}
-              </button>
-            </>
-          )}
+                {normalized.length > 0 && (
+                  <>
+                    <h3 className="text-[11px] text-neutral-500">{t('cleanupGroupNormalized')}</h3>
+                    <p className="text-[11px] leading-relaxed text-neutral-400">
+                      {t('cleanupGroupNormalizedHint')}
+                    </p>
+                    <ul className="space-y-2">
+                      {normalized.map((group) => <DuplicateGroupCard key={group.key} group={group} />)}
+                    </ul>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
-          {linkCheckState === 'denied' && (
-            <p className="text-[11px] leading-relaxed text-neutral-500">{t('cleanupLinksDenied')}</p>
-          )}
+        {tab === 'links' && (
+          <div
+            role="tabpanel"
+            id="cleanup-panel-links"
+            aria-labelledby="cleanup-tab-links"
+            className="space-y-2"
+          >
+            {linkCheckState === 'idle' && (
+              <>
+                <p className="text-[11px] leading-relaxed text-neutral-500">{t('cleanupLinksExplain')}</p>
+                <button
+                  className="rounded-md border border-neutral-300 px-2.5 py-1 text-xs hover:border-neutral-400 disabled:opacity-40"
+                  disabled={busy !== null}
+                  onClick={() => void startLinkCheck()}
+                >
+                  {t('cleanupLinksStart')}
+                </button>
+              </>
+            )}
 
-          {linkCheckState === 'done' && (
-            <>
-              {dead.length > 0 && (
-                <>
-                  <h3 className="text-[11px] text-neutral-500">{t('cleanupGroupDead')}</h3>
-                  <p className="text-[11px] leading-relaxed text-neutral-400">{t('cleanupDeadActionHint')}</p>
-                  <ul className="space-y-1">
-                    {dead.map((link) => (
-                      <li key={link.bookmarkId} className="flex items-start gap-2">
-                        <input
-                          type="checkbox"
-                          className="mt-0.5 shrink-0"
-                          checked={cleanupChecked.has(link.bookmarkId)}
-                          aria-label={`${t('cleanupDeadActionDelete')} ${link.url}`}
-                          onChange={() => toggleCleanupItem(link.bookmarkId)}
-                        />
-                        <input
-                          type="checkbox"
-                          className="mt-0.5 shrink-0"
-                          checked={cleanupMove.has(link.bookmarkId)}
-                          aria-label={`${t('cleanupDeadActionMove')} ${link.url}`}
-                          onChange={() => toggleCleanupMove(link.bookmarkId)}
-                        />
-                        <span className="min-w-0 break-all text-[11px] text-neutral-600">
-                          {link.url}（{link.status}）
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
+            {linkCheckState === 'denied' && (
+              <p className="text-[11px] leading-relaxed text-neutral-500">{t('cleanupLinksDenied')}</p>
+            )}
 
-              {suspect.length > 0 && (
-                <>
-                  <h3 className="text-[11px] text-neutral-500">{t('cleanupGroupSuspect')}</h3>
-                  {/* 只读。这一档里每一条都可能是活着的页面，给勾选框等于邀请误删 */}
-                  <p className="text-[11px] leading-relaxed text-neutral-400">{t('cleanupGroupSuspectHint')}</p>
-                  <ul className="space-y-1">
-                    {suspect.map((link) => (
-                      <li key={link.bookmarkId} className="break-all text-[11px] text-neutral-500">
-                        {link.url}（{link.status ?? link.errorKind}）
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </>
-          )}
-        </section>
+            {linkCheckState === 'done' && (
+              <>
+                {dead.length > 0 && (
+                  <>
+                    <h3 className="text-[11px] text-neutral-500">{t('cleanupGroupDead')}</h3>
+                    <p className="text-[11px] leading-relaxed text-neutral-400">{t('cleanupDeadActionHint')}</p>
+                    <ul className="space-y-1">
+                      {dead.map((link) => (
+                        <li key={link.bookmarkId} className="flex items-start gap-2">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 shrink-0"
+                            checked={cleanupChecked.has(link.bookmarkId)}
+                            aria-label={`${t('cleanupDeadActionDelete')} ${link.url}`}
+                            onChange={() => toggleCleanupItem(link.bookmarkId)}
+                          />
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 shrink-0"
+                            checked={cleanupMove.has(link.bookmarkId)}
+                            aria-label={`${t('cleanupDeadActionMove')} ${link.url}`}
+                            onChange={() => toggleCleanupMove(link.bookmarkId)}
+                          />
+                          <span className="min-w-0 break-all text-[11px] text-neutral-600">
+                            {link.url}（{link.status}）
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+
+                {suspect.length > 0 && (
+                  <>
+                    <h3 className="text-[11px] text-neutral-500">{t('cleanupGroupSuspect')}</h3>
+                    <p className="text-[11px] leading-relaxed text-neutral-400">{t('cleanupGroupSuspectHint')}</p>
+                    <ul className="space-y-1">
+                      {suspect.map((link) => (
+                        <li key={link.bookmarkId} className="break-all text-[11px] text-neutral-500">
+                          {link.url}（{link.status ?? link.errorKind}）
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         {willBeEmpty.length > 0 && (
           <section className="space-y-2">

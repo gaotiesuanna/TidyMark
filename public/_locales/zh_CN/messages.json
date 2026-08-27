@@ -233,6 +233,18 @@
   "cleanupSectionStale": {
     "message": "长期未点击"
   },
+  "cleanupTabListLabel": {
+    "message": "清理项目"
+  },
+  "cleanupTabStale": {
+    "message": "长期未点击"
+  },
+  "cleanupTabDuplicates": {
+    "message": "重复收藏"
+  },
+  "cleanupTabLinks": {
+    "message": "失效链接"
+  },
   "cleanupStaleExplain": {
     "message": "查看当前范围内长期未点击的书签需要读取浏览历史。Chrome 会先请求这项权限；只有你点击下面的按钮才会申请。"
   },
