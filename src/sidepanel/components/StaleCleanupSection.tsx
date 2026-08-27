@@ -31,7 +31,7 @@ export function StaleCleanupSection() {
     staleScan,
     staleState,
     staleError,
-    checkedIds,
+    cleanupScan,
     cleanupChecked,
     cleanupStaleMove,
     busy,
@@ -96,7 +96,7 @@ export function StaleCleanupSection() {
       {staleState === 'ready' && staleScan !== null && (
         <div className="space-y-3">
           <div className="space-y-1 text-[11px] text-neutral-500">
-            <p>{t('cleanupStaleCurrentScope', String(checkedIds.size))}</p>
+            <p>{t('cleanupStaleCurrentScope', String(cleanupScan?.scopeRootIds.length ?? 0))}</p>
             <p>{t('cleanupStaleScannedAt', formatDate(staleScan.scannedAt))}</p>
             <p>
               {t('cleanupStaleCutoffs', formatDate(staleScan.cutoff3Months), formatDate(staleScan.cutoff6Months), formatDate(staleScan.cutoff12Months))}

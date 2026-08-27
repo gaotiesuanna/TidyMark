@@ -126,31 +126,57 @@ describe('长期未点击书签扫描状态', () => {
     expect(ensureHistoryPermission).not.toHaveBeenCalled()
   })
 
-  it('扫描动作才申请权限，并只发送当前勾选范围', async () => {
+  it('扫描动作才申请权限，并发送清理扫描的全库根', async () => {
     vi.mocked(ensureHistoryPermission).mockResolvedValue(true)
     vi.mocked(send).mockResolvedValue({
       ok: true, kind: 'cleanup_stale_scan', scan: staleResult,
     } as never)
+    useStore.setState({ checkedIds: new Set(['selected-root']) })
 
     await useStore.getState().runStaleScan()
 
     expect(ensureHistoryPermission).toHaveBeenCalledTimes(1)
     expect(send).toHaveBeenCalledWith({
       kind: 'cleanup_stale_scan',
-      scopeRootIds: ['selected-root'],
+      scopeRootIds: ['1'],
     })
     expect(useStore.getState().staleState).toBe('empty')
   })
 
-  it('没有勾选范围时保持 idle，既不申请权限也不发请求', async () => {
-    useStore.setState({ checkedIds: new Set(), staleState: 'ready', staleScan: staleResult })
+  it('清理页未勾选整理范围时仍按全库根申请权限并扫描', async () => {
+    vi.mocked(ensureHistoryPermission).mockResolvedValue(true)
+    vi.mocked(send).mockResolvedValue({
+      ok: true, kind: 'cleanup_stale_scan', scan: staleResult,
+    } as never)
+    useStore.setState({ checkedIds: new Set(), staleState: 'idle', staleScan: null })
 
     await useStore.getState().runStaleScan()
 
-    expect(ensureHistoryPermission).not.toHaveBeenCalled()
-    expect(send).not.toHaveBeenCalled()
-    expect(useStore.getState().staleState).toBe('idle')
+    expect(ensureHistoryPermission).toHaveBeenCalledTimes(1)
+    expect(send).toHaveBeenCalledWith({
+      kind: 'cleanup_stale_scan',
+      scopeRootIds: ['1'],
+    })
+    expect(useStore.getState().staleState).toBe('empty')
   })
+
+  it('点击允许按钮时即使没有整理勾选也会申请历史权限', async () => {
+    vi.mocked(ensureHistoryPermission).mockResolvedValue(true)
+    vi.mocked(send).mockResolvedValue({
+      ok: true, kind: 'cleanup_stale_scan', scan: staleResult,
+    } as never)
+    useStore.setState({ checkedIds: new Set() })
+    render(<CleanupStep />)
+
+    await userEvent.click(screen.getByRole('button', { name: /允许并扫描/ }))
+
+    expect(ensureHistoryPermission).toHaveBeenCalledTimes(1)
+    expect(send).toHaveBeenCalledWith({
+      kind: 'cleanup_stale_scan',
+      scopeRootIds: ['1'],
+    })
+  })
+
 
   it('权限拒绝与空结果是不同状态，且拒绝不发请求', async () => {
     vi.mocked(ensureHistoryPermission).mockResolvedValue(false)
@@ -172,7 +198,7 @@ describe('长期未点击书签扫描状态', () => {
     expect(useStore.getState().staleError).toBe('history unavailable')
   })
 
-  it('范围改变后忽略在途扫描响应', async () => {
+  it('清理范围改变后忽略在途扫描响应', async () => {
     vi.mocked(ensureHistoryPermission).mockResolvedValue(true)
     let resolveSend: ((value: unknown) => void) | undefined
     vi.mocked(send).mockImplementation(
@@ -182,8 +208,7 @@ describe('长期未点击书签扫描状态', () => {
     const pending = useStore.getState().runStaleScan()
     await Promise.resolve()
     expect(useStore.getState().staleState).toBe('loading')
-    useStore.setState({ checkedIds: new Set(['another-root']) })
-    expect([...useStore.getState().checkedIds]).toEqual(['another-root'])
+    useStore.setState({ cleanupScan: { ...scan, scopeRootIds: ['another-root'] } })
     resolveSend?.({ ok: true, kind: 'cleanup_stale_scan', scan: staleResult })
     await pending
 

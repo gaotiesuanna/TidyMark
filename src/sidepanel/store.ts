@@ -834,7 +834,9 @@ export const useStore = create<State>((set, get) => ({
     })
   },
   async runStaleScan() {
-    const scopeRootIds = [...get().checkedIds]
+    // 清理是全库扫描，没有整理页那套勾选。用 cleanupScan 的顶层根，不要读
+    // checkedIds：清理页看不见勾选，空集合会让「允许并扫描」点了毫无反应。
+    const scopeRootIds = [...(get().cleanupScan?.scopeRootIds ?? [])]
     if (scopeRootIds.length === 0) {
       set({ staleScan: null, staleState: 'idle', staleError: null })
       return
@@ -844,18 +846,20 @@ export const useStore = create<State>((set, get) => ({
     const scope = [...scopeRootIds].sort().join('\u0000')
     const currentScopeMatches = (): boolean =>
       get().runSeq === run
-      && [...get().checkedIds].sort().join('\u0000') === scope
-
-    set({ staleScan: null, staleState: 'loading', staleError: null })
+      && [...(get().cleanupScan?.scopeRootIds ?? [])].sort().join('\u0000') === scope
 
     try {
       // chrome.permissions.request() requires a user gesture; callers invoke this only from
-      // the explicit allow button, never from a mount/effect.
+      // the explicit allow button, never from a mount/effect. Must run before set() so a
+      // re-render does not drop the button (and the gesture) before the prompt.
       if (!await ensureHistoryPermission()) {
         if (!currentScopeMatches()) return
-        set({ staleState: 'denied' })
+        set({ staleScan: null, staleState: 'denied', staleError: null })
         return
       }
+      if (!currentScopeMatches()) return
+
+      set({ staleScan: null, staleState: 'loading', staleError: null })
 
       const res = await send({ kind: 'cleanup_stale_scan', scopeRootIds })
       if (!currentScopeMatches()) return
