@@ -103,6 +103,9 @@
   "transferIntro": {
     "message": "Search bookmarks, select folders to export, or import a file someone shared. This does not change your existing folder structure."
   },
+  "shellStepsLabel": {
+    "message": "Organize steps"
+  },
   "shellStepScope": {
     "message": "Scope"
   },

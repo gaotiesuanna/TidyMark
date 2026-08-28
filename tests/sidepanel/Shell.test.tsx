@@ -13,9 +13,9 @@ beforeEach(() => {
 })
 
 describe('Shell 设置入口', () => {
-  it('默认展示纵向步骤与当前内容，不展示设置页', () => {
+  it('默认展示横向步骤条与当前内容，不展示设置页', () => {
     render(<Shell organizeContent={<div>步骤内容</div>}>{null}</Shell>)
-    expect(screen.getByText('01 选范围')).toBeDefined()
+    expect(screen.getByLabelText('01 选范围')).toBeDefined()
     expect(screen.getByText('步骤内容')).toBeDefined()
   })
 
@@ -33,7 +33,7 @@ describe('Shell 设置入口', () => {
     render(<Shell organizeContent={<div>步骤内容</div>}>{null}</Shell>)
     await userEvent.click(screen.getByRole('button', { name: '设置' }))
     expect(screen.queryByText('步骤内容')).toBeNull()
-    expect(screen.queryByText('01 选范围')).toBeNull()
+    expect(screen.queryByLabelText('01 选范围')).toBeNull()
     expect(screen.getByRole('heading', { name: '设置' })).toBeDefined()
   })
 
@@ -52,7 +52,7 @@ describe('Shell 设置入口', () => {
     await userEvent.click(screen.getByRole('button', { name: '设置' }))
     await userEvent.click(screen.getByRole('button', { name: '返回' }))
     expect(screen.getByText('步骤内容')).toBeDefined()
-    expect(screen.getByText('01 选范围')).toBeDefined()
+    expect(screen.getByLabelText('01 选范围')).toBeDefined()
   })
 
   // 分析要跑好几分钟，中途想改设置是常事；关掉设置页后进度必须还在
@@ -73,15 +73,15 @@ describe('Shell 步骤条', () => {
   it('只有当前步骤带 aria-current', () => {
     useStore.setState({ step: 'review' })
     render(<Shell organizeContent={<div>步骤内容</div>}>{null}</Shell>)
-    expect(screen.getByText('04 预览').getAttribute('aria-current')).toBe('step')
-    expect(screen.getByText('01 选范围').getAttribute('aria-current')).toBeNull()
+    expect(screen.getByLabelText('04 预览').getAttribute('aria-current')).toBe('step')
+    expect(screen.getByLabelText('01 选范围').getAttribute('aria-current')).toBeNull()
   })
 
   it('完整呈现包含结构确认在内的五个实际步骤', () => {
     useStore.setState({ step: 'structure' })
     render(<Shell organizeContent={<div>结构编辑器</div>}>{null}</Shell>)
     expect(screen.getAllByRole('listitem')).toHaveLength(5)
-    expect(screen.getByText('03 确认结构').getAttribute('aria-current')).toBe('step')
+    expect(screen.getByLabelText('03 确认结构').getAttribute('aria-current')).toBe('step')
     expect(screen.getByText('结构编辑器')).toBeDefined()
   })
 })
@@ -142,7 +142,7 @@ describe('Shell 模式切换', () => {
     render(<Shell organizeContent={<div>步骤内容</div>}><div>清理内容</div></Shell>)
     await userEvent.click(screen.getByRole('tab', { name: '02 本地清理' }))
     expect(useStore.getState().mode).toBe('cleanup')
-    expect(screen.queryByText('01 选范围')).toBeNull()
+    expect(screen.queryByLabelText('01 选范围')).toBeNull()
     expect(screen.getByText('清理内容')).toBeDefined()
   })
 
@@ -150,34 +150,34 @@ describe('Shell 模式切换', () => {
     render(<Shell organizeContent={<div>步骤内容</div>}><div>浏览内容</div></Shell>)
     await userEvent.click(screen.getByRole('tab', { name: '03 浏览书签' }))
     expect(useStore.getState().mode).toBe('transfer')
-    expect(screen.queryByText('01 选范围')).toBeNull()
+    expect(screen.queryByLabelText('01 选范围')).toBeNull()
   })
 
   it('点看板切到看板模式，步骤条随之让位', async () => {
     render(<Shell organizeContent={<div>步骤内容</div>}><div>看板内容</div></Shell>)
     await userEvent.click(screen.getByRole('tab', { name: '04 看板' }))
     expect(useStore.getState().mode).toBe('dashboard')
-    expect(screen.queryByText('01 选范围')).toBeNull()
+    expect(screen.queryByLabelText('01 选范围')).toBeNull()
   })
 
   it('清理模式下不展示步骤条，但正文照常渲染', () => {
     useStore.setState({ mode: 'cleanup' })
     render(<Shell organizeContent={<div>步骤内容</div>}><div>清理内容</div></Shell>)
-    expect(screen.queryByText('01 选范围')).toBeNull()
+    expect(screen.queryByLabelText('01 选范围')).toBeNull()
     expect(screen.getByText('清理内容')).toBeDefined()
   })
 
   it('浏览书签模式下不展示步骤条，但正文照常渲染', () => {
     useStore.setState({ mode: 'transfer' })
     render(<Shell organizeContent={<div>步骤内容</div>}><div>浏览内容</div></Shell>)
-    expect(screen.queryByText('01 选范围')).toBeNull()
+    expect(screen.queryByLabelText('01 选范围')).toBeNull()
     expect(screen.getByText('浏览内容')).toBeDefined()
   })
 
   it('看板模式下不展示步骤条，但正文照常渲染', () => {
     useStore.setState({ mode: 'dashboard' })
     render(<Shell organizeContent={<div>步骤内容</div>}><div>看板内容</div></Shell>)
-    expect(screen.queryByText('01 选范围')).toBeNull()
+    expect(screen.queryByLabelText('01 选范围')).toBeNull()
     expect(screen.getByText('看板内容')).toBeDefined()
   })
 

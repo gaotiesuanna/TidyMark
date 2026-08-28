@@ -103,6 +103,9 @@
   "transferIntro": {
     "message": "搜索书签或文件夹，勾选后导出，也可以导入别人分享的文件。这里不会改你现有的目录结构。"
   },
+  "shellStepsLabel": {
+    "message": "整理步骤"
+  },
   "shellStepScope": {
     "message": "选范围"
   },
