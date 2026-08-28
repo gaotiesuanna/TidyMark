@@ -24,6 +24,26 @@ export default {
       caption: 'var(--line-height-caption)',
       body: 'var(--line-height-body)',
     },
+    extend: {
+      colors: {
+        index: {
+          canvas: 'var(--index-canvas)',
+          ink: 'var(--index-ink)',
+          muted: 'var(--index-muted)',
+          faint: 'var(--index-faint)',
+          line: 'var(--index-line)',
+          'line-strong': 'var(--index-line-strong)',
+          blue: 'var(--index-blue)',
+          'blue-soft': 'var(--index-blue-soft)',
+        },
+      },
+      borderRadius: {
+        index: 'var(--index-radius)',
+      },
+      minHeight: {
+        'index-row': 'var(--index-row-min-height)',
+      },
+    },
   },
   plugins: [],
 }

@@ -14,7 +14,7 @@ const originalHistory = chromeGlobal.chrome.history
 
 const contains = vi.fn(() => Promise.resolve(false))
 const request = vi.fn(() => Promise.resolve(false))
-const search = vi.fn(() => Promise.resolve([] as Array<{ url?: string; visitCount?: number }>))
+const search = vi.fn(() => Promise.resolve([] as Array<{ url?: string; title?: string; visitCount?: number }>))
 
 const tree: BookmarkNode[] = [
   { id: '0', title: '', children: [
@@ -150,6 +150,26 @@ describe('DashboardStep', () => {
     expect(screen.getByRole('button', { name: t('dashDomainCollapse', 'github.com') })).toBeTruthy()
   })
 
+  it('展开域名后按文件夹展示其中的书签标题和地址', async () => {
+    const user = userEvent.setup()
+    useStore.setState({
+      tree: [{ id: '0', title: '', children: [
+        { id: 'bar', title: 'Bookmarks Bar', children: [
+          { id: 'dev', title: 'Dev tools', children: [
+            { id: 'repo', title: 'The AI coding agent', url: 'https://github.com/sst/opencode' },
+          ]},
+        ]},
+      ]}],
+    })
+
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('button', { name: t('dashDomainExpand', 'github.com') }))
+
+    expect(screen.getByText('Bookmarks Bar / Dev tools')).toBeTruthy()
+    expect(screen.getByText('The AI coding agent')).toBeTruthy()
+    expect(screen.getByText('github.com/sst/opencode')).toBeTruthy()
+  })
+
   it('再点同一行收起分布', async () => {
     const user = userEvent.setup()
     render(<DashboardStep />)
@@ -170,19 +190,31 @@ describe('DashboardStep', () => {
     expect(screen.getByRole('button', { name: t('dashDomainCollapse', 'bilibili.com') })).toBeTruthy()
   })
 
-  it('访问栏的行点了不展开', async () => {
+  it('访问栏的域名可展开查看页面标题、地址和访问次数', async () => {
     const user = userEvent.setup()
     contains.mockResolvedValue(false)
     request.mockResolvedValue(true)
     search.mockResolvedValue([
-      { url: 'https://github.com/x', visitCount: 20 },
+      { url: 'https://github.com/sst/opencode', title: 'The AI coding agent', visitCount: 20 },
+      { url: 'https://github.com/openai/codex', title: 'Codex', visitCount: 8 },
     ])
 
     render(<DashboardStep />)
     await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
     await user.click(await screen.findByRole('button', { name: t('dashHistoryAllow') }))
     expect(await screen.findByText('github.com')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: t('dashDomainExpand', 'github.com') })).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: /github\.com/ }))
+    expect(screen.getByText('The AI coding agent')).toBeTruthy()
+    expect(screen.getByText('github.com/sst/opencode')).toBeTruthy()
+    expect(screen.getByText(t('dashVisitCount', '20'))).toBeTruthy()
+    expect(screen.getByText('Codex')).toBeTruthy()
+    expect(screen.getByText('github.com/openai/codex')).toBeTruthy()
+    expect(screen.getByText(t('dashVisitCount', '8'))).toBeTruthy()
+    expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
+      'https://github.com/sst/opencode',
+      'https://github.com/openai/codex',
+    ])
   })
 
   it('读取浏览记录时给骨架屏而不是空白', async () => {

@@ -59,6 +59,16 @@ beforeEach(() => {
 })
 
 describe('ResultStep', () => {
+  it('labels the screen and keeps its numbered result section and reset/undo actions', () => {
+    render(<ResultStep />)
+
+    expect(screen.getByRole('heading', { name: '结果' })).toBeTruthy()
+    expect(screen.getByTestId('result-section').getAttribute('data-index')).toBe('01')
+    expect(screen.getByRole('button', { name: '撤销本次整理' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '再整理一次' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '结束整理' })).toBeTruthy()
+  })
+
   it('按整理后的真实书签树展示结构与书签数', () => {
     render(<ResultStep />)
     const section = screen.getByText('整理后的结构').parentElement!

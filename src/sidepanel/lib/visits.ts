@@ -25,7 +25,7 @@ export async function visitUrls(): Promise<WeightedUrl[]> {
   const out: WeightedUrl[] = []
   for (const item of items) {
     if (item.url === undefined) continue
-    out.push({ url: item.url, weight: item.visitCount ?? 1 })
+    out.push({ url: item.url, weight: item.visitCount ?? 1, title: item.title })
   }
   return out
 }

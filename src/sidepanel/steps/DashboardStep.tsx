@@ -12,9 +12,10 @@ import {
   type WeightedUrl,
 } from '@/core/domains'
 import type { BookmarkNode } from '@/core/ports'
+import { sanitizeUrl } from '@/core/sanitize'
 import { faviconSrc } from '../lib/favicons'
 import { ensureHistoryPermission, hasHistoryPermission, visitUrls } from '../lib/visits'
-import { ChevronDownIcon, FolderIcon, TrendingUpIcon } from '../components/icons'
+import { ChevronDownIcon, FolderIcon, LinkIcon, TrendingUpIcon } from '../components/icons'
 import { useStore } from '../store'
 
 type Metric = 'bookmarked' | 'visited'
@@ -201,7 +202,7 @@ function VisitedBody({
   if (state.kind === 'empty') {
     return <EmptyLine text={t('dashEmptyVisits')} />
   }
-  return <DomainList rows={rankDomains(state.items, topN)} />
+  return <DomainList rows={rankDomains(state.items, topN)} visits={state.items} />
 }
 
 function VisitsSkeleton() {
@@ -222,7 +223,15 @@ function VisitsSkeleton() {
   )
 }
 
-function DomainList({ rows, tree }: { rows: DomainRank[]; tree?: BookmarkNode[] }) {
+function DomainList({
+  rows,
+  tree,
+  visits,
+}: {
+  rows: DomainRank[]
+  tree?: BookmarkNode[]
+  visits?: WeightedUrl[]
+}) {
   const [openDomain, setOpenDomain] = useState<string | null>(null)
   const grown = useGrow()
   const max = rows[0]?.count ?? 0
@@ -236,6 +245,7 @@ function DomainList({ rows, tree }: { rows: DomainRank[]; tree?: BookmarkNode[] 
           max={max}
           grown={grown}
           tree={tree}
+          visits={visits}
           open={openDomain === row.domain}
           onToggle={() => setOpenDomain((prev) => prev === row.domain ? null : row.domain)}
         />
@@ -250,6 +260,7 @@ function DomainRow({
   max,
   grown,
   tree,
+  visits,
   open,
   onToggle,
 }: {
@@ -258,13 +269,22 @@ function DomainRow({
   max: number
   grown: boolean
   tree?: BookmarkNode[]
+  visits?: WeightedUrl[]
   open: boolean
   onToggle: () => void
 }) {
   const pct = max === 0 ? 0 : (row.count / max) * 100
-  const expandable = tree !== undefined
+  const expandable = tree !== undefined || visits !== undefined
   const folders = open && tree !== undefined ? domainFolderTree(tree, row.domain) : []
   const leader = rank === 1
+  const visitedPages = open && visits !== undefined
+    ? visits
+      .filter((item) => {
+        const parsed = sanitizeUrl(item.url)
+        return parsed?.domain === row.domain && (item.weight ?? 1) > 0
+      })
+      .sort((a, b) => (b.weight ?? 1) - (a.weight ?? 1) || a.url.localeCompare(b.url))
+    : []
   const summary = (
     <>
       <span
@@ -306,7 +326,9 @@ function DomainRow({
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400',
           ].join(' ')}
           aria-expanded={open}
-          aria-label={t(open ? 'dashDomainCollapse' : 'dashDomainExpand', row.domain)}
+          aria-label={tree !== undefined
+            ? t(open ? 'dashDomainCollapse' : 'dashDomainExpand', row.domain)
+            : t(open ? 'dashVisitDomainCollapse' : 'dashVisitDomainExpand', row.domain)}
           onClick={onToggle}
         >
           {summary}
@@ -322,6 +344,34 @@ function DomainRow({
       )}
       {open && tree !== undefined && (
         <FolderTree nodes={folders} domain={row.domain} depth={0} />
+      )}
+      {open && visits !== undefined && (
+        <ol className="mt-3 space-y-2 pl-7">
+          {visitedPages.map((page) => {
+            const address = shortAddress(page.url)
+            return (
+              <li key={page.url} className="flex min-w-0 items-start gap-2 border-l-2 border-neutral-100 pl-3">
+                <LinkIcon className="mt-0.5 h-3 w-3 shrink-0 text-neutral-300" />
+                <a
+                  href={page.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
+                >
+                  <span className="block break-words text-sm leading-caption text-neutral-700">
+                    {page.title?.trim() || address}
+                  </span>
+                  <span className="mt-0.5 block break-all text-xs leading-caption text-neutral-400">
+                    {address}
+                  </span>
+                </a>
+                <span className="shrink-0 text-xs leading-caption tabular-nums text-neutral-500">
+                  {t('dashVisitCount', String(page.weight ?? 1))}
+                </span>
+              </li>
+            )
+          })}
+        </ol>
       )}
     </li>
   )
@@ -361,6 +411,31 @@ function FolderTree({
               {node.count}
             </span>
           </div>
+          {node.bookmarks.length > 0 && (
+            <ul className="mt-1 space-y-1 pl-5">
+              {node.bookmarks.map((bookmark) => {
+                const address = shortAddress(bookmark.url)
+                return (
+                  <li key={bookmark.id} className="flex min-w-0 items-start gap-2">
+                    <LinkIcon className="mt-0.5 h-3 w-3 shrink-0 text-neutral-300" />
+                    <a
+                      href={bookmark.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
+                    >
+                      <span className="block break-words text-sm leading-caption text-neutral-700">
+                        {bookmark.title.trim() || address}
+                      </span>
+                      <span className="mt-0.5 block break-all text-xs leading-caption text-neutral-400">
+                        {address}
+                      </span>
+                    </a>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
           {node.children.length > 0 && (
             <FolderTree nodes={node.children} domain={domain} depth={depth + 1} />
           )}
@@ -368,6 +443,11 @@ function FolderTree({
       ))}
     </ol>
   )
+}
+
+function shortAddress(raw: string): string {
+  const parsed = sanitizeUrl(raw)
+  return parsed === null ? raw : `${parsed.domain}${parsed.path === '/' ? '' : parsed.path}`
 }
 
 function DomainIcon({ domain, pageUrl }: { domain: string; pageUrl: string }) {

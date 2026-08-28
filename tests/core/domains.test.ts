@@ -165,12 +165,32 @@ describe('domainFolderTree', () => {
   it('按文件夹层级建树，子孙数汇总到父级，过道文件夹折叠', () => {
     expect(domainFolderTree(tree, 'github.com')).toEqual([
       {
-        id: 'bar', title: '书签栏', count: 3, directCount: 0, children: [
-          { id: 'gh', title: '开发 / GitHub', count: 2, directCount: 2, children: [] },
-          { id: 'tmp', title: '临时', count: 1, directCount: 1, children: [] },
+        id: 'bar', title: '书签栏', count: 3, directCount: 0, bookmarks: [], children: [
+          {
+            id: 'gh', title: '开发 / GitHub', count: 2, directCount: 2, children: [],
+            bookmarks: [
+              { id: 'a', title: 'a', url: 'https://github.com/a' },
+              { id: 'b', title: 'b', url: 'https://www.github.com/b' },
+            ],
+          },
+          {
+            id: 'tmp', title: '临时', count: 1, directCount: 1, children: [],
+            bookmarks: [{ id: 'c', title: 'c', url: 'https://github.com/c' }],
+          },
         ],
       },
-      { id: 'other', title: '其他书签', count: 1, directCount: 1, children: [] },
+      {
+        id: 'other', title: '其他书签', count: 1, directCount: 1, children: [],
+        bookmarks: [{ id: 'f', title: 'f', url: 'https://github.com/f' }],
+      },
+    ])
+  })
+
+  it('每个文件夹带上其中的书签标题和 URL，保持树内顺序', () => {
+    const gh = domainFolderTree(tree, 'github.com')[0]?.children.find((n) => n.id === 'gh')
+    expect(gh?.bookmarks).toEqual([
+      { id: 'a', title: 'a', url: 'https://github.com/a' },
+      { id: 'b', title: 'b', url: 'https://www.github.com/b' },
     ])
   })
 
@@ -181,7 +201,10 @@ describe('domainFolderTree', () => {
 
   it('根下书签落在根文件夹自己名下，空标题根不成行', () => {
     expect(domainFolderTree(tree, 'bilibili.com')).toEqual([
-      { id: 'bar', title: '书签栏', count: 1, directCount: 1, children: [] },
+      {
+        id: 'bar', title: '书签栏', count: 1, directCount: 1, children: [],
+        bookmarks: [{ id: 'd', title: 'd', url: 'https://bilibili.com/1' }],
+      },
     ])
   })
 
@@ -225,8 +248,13 @@ describe('domainFolderTree', () => {
     ]
     expect(domainFolderTree(mixed, 'x.com')).toEqual([
       {
-        id: 'p', title: '项目', count: 2, directCount: 1, children: [
-          { id: 'sub', title: '子', count: 1, directCount: 1, children: [] },
+        id: 'p', title: '项目', count: 2, directCount: 1,
+        bookmarks: [{ id: 'p1', title: 'p1', url: 'https://x.com/1' }],
+        children: [
+          {
+            id: 'sub', title: '子', count: 1, directCount: 1, children: [],
+            bookmarks: [{ id: 's1', title: 's1', url: 'https://x.com/2' }],
+          },
         ],
       },
     ])

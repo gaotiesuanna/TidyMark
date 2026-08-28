@@ -8,13 +8,25 @@
   "shellModeOrganize": {
     "message": "AI organize"
   },
+  "shellModeOrganizeShort": {
+    "message": "Organize"
+  },
   "shellModeCleanup": {
     "message": "Local cleanup"
+  },
+  "shellModeCleanupShort": {
+    "message": "Cleanup"
   },
   "shellModeTransfer": {
     "message": "Browse"
   },
+  "shellModeTransferShort": {
+    "message": "Browse"
+  },
   "shellModeDashboard": {
+    "message": "Stats"
+  },
+  "shellModeDashboardShort": {
     "message": "Stats"
   },
   "dashTopDomains": {
@@ -58,16 +70,35 @@
     "message": "Top domains"
   },
   "dashDomainExpand": {
-    "message": "Show folder distribution for $domain$",
+    "message": "Show folders and bookmark contents for $domain$",
     "placeholders": { "domain": { "content": "$1" } }
   },
   "dashDomainCollapse": {
-    "message": "Hide folder distribution for $domain$",
+    "message": "Hide folders and bookmark contents for $domain$",
     "placeholders": { "domain": { "content": "$1" } }
   },
   "dashDomainTreeLabel": {
     "message": "Folder breakdown for $domain$",
     "placeholders": { "domain": { "content": "$1" } }
+  },
+  "dashRootFolder": {
+    "message": "Root folder"
+  },
+  "dashFolderBookmarkCount": {
+    "message": "$count$ bookmarks",
+    "placeholders": { "count": { "content": "$1" } }
+  },
+  "dashVisitDomainExpand": {
+    "message": "Show visited pages for $domain$",
+    "placeholders": { "domain": { "content": "$1" } }
+  },
+  "dashVisitDomainCollapse": {
+    "message": "Hide visited pages for $domain$",
+    "placeholders": { "domain": { "content": "$1" } }
+  },
+  "dashVisitCount": {
+    "message": "Visits: $count$",
+    "placeholders": { "count": { "content": "$1" } }
   },
   "transferIntro": {
     "message": "Search bookmarks, select folders to export, or import a file someone shared. This does not change your existing folder structure."
@@ -77,6 +108,9 @@
   },
   "shellStepPreferences": {
     "message": "Preferences"
+  },
+  "shellStepStructure": {
+    "message": "Confirm structure"
   },
   "settingsGearLabel": {
     "message": "Settings"

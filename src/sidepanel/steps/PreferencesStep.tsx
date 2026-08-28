@@ -6,6 +6,11 @@ import { isLocalBaseUrl, isModelConfigured } from '@/llm/config'
 import { activeLlm, type Endpoint } from '@/storage/settings'
 import { useStore } from '../store'
 import { Detail, detailLabel } from '../components/Detail'
+import { IndexSection } from '../components/IndexSection'
+import { InlineStatus } from '../components/InlineStatus'
+import { PageHeader } from '../components/PageHeader'
+import { PrimaryButton, SecondaryButton, StickyActionBar } from '../components/IndexControls'
+import { choiceList, choiceRow, fieldClass } from '../components/buttonStyles'
 
 /**
  * 下拉里那一项「在设置页填别的…」的取值。用一个不可能撞上真实取值的样子：
@@ -69,87 +74,83 @@ export function PreferencesStep() {
   const needModel = !isModelConfigured(llm)
 
   return (
-    <div className="space-y-4">
-      <section className="rounded border p-3">
-        {scopePaths.length > 0 && (
-          <div className="mb-3">
-            <p className="text-sm leading-caption text-neutral-500">{t('prefsScanScope')}</p>
+    <div>
+      <PageHeader title={t('shellStepPreferences')} />
+
+      <div data-testid="preferences-section" data-index="01">
+        <IndexSection index="01" title={t('prefsScanScope')} count={scopePaths.length}>
+          {scopePaths.length > 0 && (
             <ul>
               {scopePaths.map((path) => (
-                <li key={path} className="break-all font-mono text-sm leading-caption">{path}</li>
+                <li key={path} className="break-words font-mono text-sm leading-caption [overflow-wrap:anywhere]">{path}</li>
               ))}
             </ul>
-          </div>
-        )}
-        <div className="space-y-1 text-base leading-body">
-          <p>{rebuild ? t('prefsModeRebuild') : t('prefsModeAdditive')}</p>
+          )}
+          <div className={`${scopePaths.length > 0 ? 'mt-3 border-t border-index-line pt-3' : ''} space-y-2 text-sm leading-body`}>
+            <p className="font-medium text-index-ink">{rebuild ? t('prefsModeRebuild') : t('prefsModeAdditive')}</p>
           {/* 摘要常驻、细节折叠：这一段讲的是「你现有的文件夹会被改名」，是对用户
               自己数据的后果，藏起来就不是知情的选择了（issues/22 的原则）。
               而编号规则的边角（名字本身以数字开头的怎么办）读一次就够。 */}
-          <p className="text-xs leading-relaxed text-neutral-400">
-            {rebuild ? t('prefsModeRebuildSummary') : t('prefsModeAdditiveBody')}
-          </p>
-          {rebuild && (
-            <Detail label={detailLabel()}>{t('prefsModeRebuildBody')}</Detail>
-          )}
+            <p className="text-xs leading-body text-index-muted">
+              {rebuild ? t('prefsModeRebuildSummary') : t('prefsModeAdditiveBody')}
+            </p>
+            {rebuild && (
+              <Detail label={detailLabel()}>{t('prefsModeRebuildBody')}</Detail>
+            )}
           {/* 推翻之后，那条理由讲的是已经被用户否掉的结论，再摆着只会跟上面那句打架 */}
-          <p className="text-xs leading-relaxed text-neutral-400">
-            {modeOverride === null ? decision.reason : t('prefsModeOverridden')}
-          </p>
-          {modeOverride === null ? (
+            <p className="text-xs leading-body text-index-muted">
+              {modeOverride === null ? decision.reason : t('prefsModeOverridden')}
+            </p>
+            {modeOverride === null ? (
             // 逃生口只为「误判成已整理」那一个方向存在，这是产品决定（issues/14 §5），
             // 不是因为反方向的误判在复核页拒得掉——事实上拒不掉：推翻模式下给范围内
             // 既有一级目录改名、加编号前缀，跟用户在复核页接受了几条书签建议无关
             // （见 core/plan.ts 的 participates，对每个既有一级目录恒真）。
             // 误判成 rebuild 时用户能做的是这一轮整个放弃（prefsBack）或者事后撤销。
-            decision.mode === 'additive' && (
-              <button
-                className="text-sm leading-caption text-neutral-500 underline hover:text-neutral-800"
-                onClick={() => setModeOverride('rebuild')}
-              >
+              decision.mode === 'additive' && (
+                <SecondaryButton onClick={() => setModeOverride('rebuild')}>
                 {t('prefsModeOverride')}
-              </button>
-            )
-          ) : (
-            <button
-              className="text-sm leading-caption text-neutral-500 underline hover:text-neutral-800"
-              onClick={() => setModeOverride(null)}
-            >
+                </SecondaryButton>
+              )
+            ) : (
+              <SecondaryButton onClick={() => setModeOverride(null)}>
               {t('prefsModeAuto')}
-            </button>
-          )}
-        </div>
+              </SecondaryButton>
+            )}
+          </div>
 
-        <label className="mt-3 flex items-start gap-2 text-base leading-body">
-          <input
-            type="checkbox"
-            className="mt-1 h-3.5 w-3.5"
-            checked={settings.removeEmptyFolders}
-            onChange={(e) => void setSettings({ ...settings, removeEmptyFolders: e.target.checked })}
-          />
-          <span>
-            {t('prefsCleanTitle')}
-            <span className="mt-0.5 block">
-              <Detail label={detailLabel()}>
-                {`${t('prefsCleanSummary')} ${t('prefsCleanBody')}`}
-              </Detail>
-            </span>
-          </span>
-        </label>
+          <div className={`mt-3 ${choiceList}`}>
+            <label className={`${choiceRow} items-start`}>
+              <input
+                type="checkbox"
+                className="mt-1 h-3.5 w-3.5 shrink-0"
+                checked={settings.removeEmptyFolders}
+                onChange={(e) => void setSettings({ ...settings, removeEmptyFolders: e.target.checked })}
+              />
+              <span className="min-w-0 flex-1">
+                {t('prefsCleanTitle')}
+                <span className="mt-1 block">
+                  <Detail label={detailLabel()}>
+                    {`${t('prefsCleanSummary')} ${t('prefsCleanBody')}`}
+                  </Detail>
+                </span>
+              </span>
+            </label>
+          </div>
+        </IndexSection>
+      </div>
 
-      </section>
-
-      <div className="space-y-2">
+      <IndexSection index="02" title={t('prefsModelLabel')}>
         {/* 模型状态放在按钮上方：设置藏在齿轮后面，点开始前得看见即将用哪一个；
             没配时也不只靠按钮上那几个字。权限预告仍在两种状态下都摆着。 */}
         {needModel ? (
-          <p className="text-sm leading-relaxed text-neutral-600">{t('prefsModelMissing')}</p>
+          <InlineStatus tone="neutral">{t('prefsModelMissing')}</InlineStatus>
         ) : (
-          <div className="flex items-center gap-2 text-sm leading-caption text-neutral-600">
+          <div className="text-sm leading-caption text-index-muted">
             <label htmlFor="model-pick">{t('prefsModelLabel')}</label>
             <select
               id="model-pick"
-              className="min-w-0 flex-1 rounded border px-1 py-0.5 text-sm leading-caption"
+              className={`mt-1 ${fieldClass}`}
               value={optionValue(settings.active.baseUrl, settings.active.model)}
               onChange={(e) => {
                 if (e.target.value === OPEN_SETTINGS) return openSettings()
@@ -166,33 +167,33 @@ export function PreferencesStep() {
             </select>
           </div>
         )}
+      </IndexSection>
+
         {/* 权限预告放在按钮上方：申请只发生在点下去的那一刻（chrome.permissions.request()
             要用户手势，设置页是 onChange 即存，放不了），提前说清楚它只要一个域名。
             两种按钮状态下都摆着——它讲的是这条动线接下来会发生什么，不依赖当前是哪个按钮。 */}
         {/* 试过折叠它，收回了：真会撞上浏览器那个权限弹窗的恰恰是已经配好模型的人
             （见本文件同名用例），藏起来弹窗就成了突袭。改成删掉不属于这一屏的那半句
             ——失效链接检查是本地清理里的功能、另一项权限，讲在这里只是把话拉长。 */}
-        <p className="text-xs leading-relaxed text-neutral-400">{t('prefsPermissionNotice')}</p>
+      <p className="mt-3 text-xs leading-body text-index-muted">{t('prefsPermissionNotice')}</p>
+      <StickyActionBar>
         <div className="flex gap-2">
-          <button className="rounded border px-3 py-2 text-base leading-body" onClick={reset}>{t('prefsBack')}</button>
+          <SecondaryButton onClick={reset}>{t('prefsBack')}</SecondaryButton>
           {needModel ? (
-            <button
-              className="flex-1 rounded border border-neutral-800 py-2 text-base leading-body text-neutral-800"
-              onClick={openSettings}
-            >
+            <PrimaryButton className="flex-1" onClick={openSettings}>
               {t('prefsGoConfigure')}
-            </button>
+            </PrimaryButton>
           ) : (
-            <button
-              className="flex-1 rounded bg-neutral-800 py-2 text-base leading-body text-white disabled:opacity-40"
+            <PrimaryButton
+              className="flex-1"
               disabled={busy !== null}
               onClick={() => void analyze()}
             >
               {t('prefsStart')}
-            </button>
+            </PrimaryButton>
           )}
         </div>
-      </div>
+      </StickyActionBar>
     </div>
   )
 }

@@ -14,19 +14,26 @@ import { t } from '@/i18n'
 export function Detail({ label, children }: { label: string; children: ReactNode }) {
   const [expanded, setExpanded] = useState(false)
   return (
-    <div>
-      <button
-        className="flex items-center gap-1 text-left text-xs text-neutral-500 hover:text-neutral-800"
-        aria-expanded={expanded}
-        onClick={() => setExpanded(!expanded)}
-      >
-        <span aria-hidden className="shrink-0">{expanded ? '▾' : '▸'}</span>
-        <span>{label}</span>
-      </button>
-      {expanded && (
-        <p className="mt-1 text-xs leading-relaxed text-neutral-400">{children}</p>
-      )}
-    </div>
+    <dl className="border-t border-index-line text-xs leading-body">
+      <div className="grid grid-cols-[5rem_minmax(0,1fr)] border-b border-index-line">
+        <dt>
+          <button
+            type="button"
+            className="flex min-h-8 w-full items-center gap-1 px-2 text-left font-medium text-index-muted hover:text-index-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-index-blue"
+            aria-expanded={expanded}
+            onClick={() => setExpanded(!expanded)}
+          >
+            <span aria-hidden className="shrink-0">{expanded ? '▾' : '▸'}</span>
+            <span>{label}</span>
+          </button>
+        </dt>
+        {expanded && (
+          <dd className="min-w-0 border-l border-index-line px-2 py-2 text-index-muted">
+            {children}
+          </dd>
+        )}
+      </div>
+    </dl>
   )
 }
 

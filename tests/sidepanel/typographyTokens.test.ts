@@ -1,4 +1,5 @@
 import { resolve } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import postcss from 'postcss'
 import tailwindcss from 'tailwindcss'
 import loadConfig from 'tailwindcss/loadConfig'
@@ -6,6 +7,15 @@ import loadConfig from 'tailwindcss/loadConfig'
 const tailwindConfig = loadConfig(resolve('tailwind.config.js'))
 
 describe('typography tokens', () => {
+  it('exposes white-index color and geometry tokens', async () => {
+    const css = await readFile(resolve('src/sidepanel/index.css'), 'utf8')
+
+    expect(css).toContain('--index-line:')
+    expect(css).toContain('--index-blue:')
+    expect(css).toContain('--index-radius:')
+    expect(css).toContain('--index-row-min-height: 42px')
+  })
+
   it('compiles the named typography tokens to the shared CSS variables', async () => {
     const config = {
       ...tailwindConfig,

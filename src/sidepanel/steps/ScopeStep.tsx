@@ -3,6 +3,10 @@ import { plural, t } from '@/i18n'
 import { countScopedBookmarks } from '@/core/export'
 import { scanTree, scopeFolderPaths } from '@/core/scan'
 import { BookmarkTree, topLevelNodes } from '../components/BookmarkTree'
+import { IndexSection } from '../components/IndexSection'
+import { InlineStatus } from '../components/InlineStatus'
+import { PageHeader } from '../components/PageHeader'
+import { PrimaryButton, SecondaryButton, StickyActionBar } from '../components/IndexControls'
 import { isModelConfigured } from '@/llm/config'
 import { activeLlm } from '@/storage/settings'
 import { collectAllFolderIds, useStore } from '../store'
@@ -51,77 +55,67 @@ export function ScopeStep() {
   }
 
   return (
-    // 操作区不能放进这个 space-y-3 里：它的 `margin-bottom: 0` 优先级高于 -mb-4，会把下面那条负外边距吃掉。
     <div>
-      <div className="space-y-3">
-        {/* 次要层级、不用红色告警：没配模型不是错误，勾选范围照常能走，这条只挡在视线里、不挡在路上。
-            也不做「不再提示」——真需要配置的人会因此永久失去入口，而配好之后它自己就消失了，没有需要关闭的场景。 */}
-        {needModel && (
-          <section className="space-y-2 rounded-md border border-neutral-200 bg-neutral-50 p-3">
-            <p className="text-sm leading-relaxed text-neutral-600">{t('scopeNeedModel')}</p>
-            <button
-              className="cursor-pointer rounded-md border border-neutral-300 bg-white px-2.5 py-1 text-sm leading-caption font-medium text-neutral-700 transition-colors duration-150 hover:border-neutral-400 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 motion-reduce:transition-none"
-              onClick={openSettings}
-            >
-              {t('scopeNeedModelAction')}
-            </button>
-          </section>
-        )}
-        <p className="text-sm leading-relaxed text-neutral-500">{t('scopeIntro')}</p>
-        <p className="text-sm font-medium leading-relaxed text-neutral-600">{t('scopeSafety')}</p>
+      <PageHeader title={t('shellStepScope')} description={t('scopeIntro')} />
 
-        <div className="flex gap-1 text-sm leading-caption">
-          <button
-            className="rounded border px-2 py-1 hover:bg-neutral-50"
-            onClick={() => setExpanded(new Set(allOpen ? [] : folderIds))}
+      {needModel && (
+        <div className="mt-3">
+          <InlineStatus
+            tone="neutral"
+            action={<SecondaryButton onClick={openSettings}>{t('scopeNeedModelAction')}</SecondaryButton>}
           >
-            {t(allOpen ? 'scopeCollapseAll' : 'scopeExpandAll')}
-          </button>
+            {t('scopeNeedModel')}
+          </InlineStatus>
         </div>
+      )}
 
-        <div className="rounded border">
-          <BookmarkTree
-            nodes={tree}
-            checkedIds={checkedIds}
-            onToggle={toggle}
-            expandedIds={expandedIds}
-            onToggleExpand={toggleExpand}
-          />
-        </div>
+      <div data-testid="scope-section" data-index="01">
+        <IndexSection index="01" title={t('prefsScanScope')} count={checkedIds.size}>
+          <p className="mb-3 text-sm font-medium leading-body text-index-muted">{t('scopeSafety')}</p>
+          <SecondaryButton onClick={() => setExpanded(new Set(allOpen ? [] : folderIds))}>
+            {t(allOpen ? 'scopeCollapseAll' : 'scopeExpandAll')}
+          </SecondaryButton>
+          <div className="mt-2 border border-index-line">
+            <BookmarkTree
+              nodes={tree}
+              checkedIds={checkedIds}
+              onToggle={toggle}
+              expandedIds={expandedIds}
+              onToggleExpand={toggleExpand}
+            />
+          </div>
+        </IndexSection>
       </div>
-      {/* 操作区钉在底部：书签上千条时目录树很长，扫描按钮不该被推到要滚半天才看得见的地方。
-          负的左右外边距抵掉 <main> 的 p-4，让顶边线和白底铺满整宽——否则树滚到下面会从两侧透出来。
-          底部同理：<main> 底下那 16px 内边距也在滚动区里，吸底位置得跟着往下挪 16px（-bottom-4）才盖得住，
-          否则目录树会从这条缝里滚过去露出来；-mb-4 则是把这 16px 从文档流里减回去，
-          免得滚到最底时操作区反被顶起来、底边又露出一条白缝。pb-4 把视觉内边距补回来。
-          范围统计跟按钮钉在一起：勾选时不必滚过整棵树才看见空文件夹、重名这些数。 */}
-      <div className="sticky -bottom-4 -mx-4 -mb-4 mt-3 space-y-3 border-t border-neutral-200 bg-white px-4 pb-4 pt-3">
-        {preview !== null && (
-          <section className="rounded border p-3 text-base leading-body">
-            <h2 className="mb-2 font-medium">{t('prefsScanTitle')}</h2>
+
+      {preview !== null && (
+        <IndexSection index="02" title={t('prefsScanTitle')} count={preview.stats.totalBookmarks}>
+          <div className="text-base leading-body">
             {preview.paths.length > 0 && (
               <div className="mb-2">
-                <p className="text-sm leading-caption text-neutral-500">{t('prefsScanScope')}</p>
+                <p className="text-sm leading-caption text-index-muted">{t('prefsScanScope')}</p>
                 <ul>
                   {preview.paths.map((path) => (
-                    <li key={path} className="break-all font-mono text-sm leading-caption">{path}</li>
+                    <li key={path} className="break-words font-mono text-sm leading-caption [overflow-wrap:anywhere]">{path}</li>
                   ))}
                 </ul>
               </div>
             )}
             <dl className="grid grid-cols-2 gap-y-1 text-sm leading-caption">
-              <dt className="text-neutral-500">{t('prefsStatBookmarks')}</dt><dd>{preview.stats.totalBookmarks}</dd>
-              <dt className="text-neutral-500">{t('prefsStatFolders')}</dt><dd>{preview.stats.totalFolders}</dd>
-              <dt className="text-neutral-500">{t('prefsStatEmpty')}</dt><dd>{preview.stats.emptyFolders}</dd>
-              <dt className="text-neutral-500">{t('prefsStatUntitled')}</dt><dd>{preview.stats.untitledBookmarks}</dd>
-              <dt className="text-neutral-500">{t('prefsStatDuplicates')}</dt><dd>{preview.stats.duplicateUrlGroups}</dd>
-              <dt className="text-neutral-500">{t('prefsStatDuplicateFolders')}</dt><dd>{preview.stats.duplicateFolderGroups}</dd>
-              <dt className="text-neutral-500">{t('prefsStatDepth')}</dt><dd>{preview.stats.maxDepth}</dd>
+              <dt className="text-index-muted">{t('prefsStatBookmarks')}</dt><dd>{preview.stats.totalBookmarks}</dd>
+              <dt className="text-index-muted">{t('prefsStatFolders')}</dt><dd>{preview.stats.totalFolders}</dd>
+              <dt className="text-index-muted">{t('prefsStatEmpty')}</dt><dd>{preview.stats.emptyFolders}</dd>
+              <dt className="text-index-muted">{t('prefsStatUntitled')}</dt><dd>{preview.stats.untitledBookmarks}</dd>
+              <dt className="text-index-muted">{t('prefsStatDuplicates')}</dt><dd>{preview.stats.duplicateUrlGroups}</dd>
+              <dt className="text-index-muted">{t('prefsStatDuplicateFolders')}</dt><dd>{preview.stats.duplicateFolderGroups}</dd>
+              <dt className="text-index-muted">{t('prefsStatDepth')}</dt><dd>{preview.stats.maxDepth}</dd>
             </dl>
-          </section>
-        )}
-        <button
-          className="w-full cursor-pointer rounded-md bg-neutral-800 py-2 text-base leading-body font-medium text-white transition-colors duration-150 hover:enabled:bg-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
+          </div>
+        </IndexSection>
+      )}
+
+      <StickyActionBar>
+        <PrimaryButton
+          className="w-full"
           disabled={checkedIds.size === 0 || busy !== null}
           onClick={() => void goScan()}
         >
@@ -139,9 +133,8 @@ export function ScopeStep() {
               String(checkedIds.size),
             ),
           )}
-        </button>
-      </div>
+        </PrimaryButton>
+      </StickyActionBar>
     </div>
   )
 }
-

@@ -4,6 +4,7 @@ import { sanitizeUrl } from './sanitize'
 export interface WeightedUrl {
   url: string
   weight?: number
+  title?: string
 }
 
 export interface DomainRank {
@@ -78,6 +79,11 @@ export interface DomainFolderNode {
   /** 该域名的书签直接躺在这个文件夹里的数量（不含子孙）。 */
   directCount: number
   children: DomainFolderNode[]
+  bookmarks: Array<{
+    id: string
+    title: string
+    url: string
+  }>
 }
 
 /**
@@ -109,6 +115,7 @@ export function domainFolderTree(
         count: only.count,
         directCount: only.directCount,
         children: only.children,
+        bookmarks: only.bookmarks,
       }
     }
     return node
@@ -127,9 +134,14 @@ export function domainFolderTree(
         (n, child) => n + (child.url !== undefined && matches(child.url) ? 1 : 0),
         0,
       )
+      const bookmarks = (node.children ?? []).flatMap((child) =>
+        child.url !== undefined && matches(child.url)
+          ? [{ id: child.id, title: child.title, url: child.url }]
+          : [],
+      )
       const count = directCount + kids.reduce((n, kid) => n + kid.count, 0)
       if (count === 0) continue
-      out.push(collapse({ id: node.id, title: node.title, count, directCount, children: kids }))
+      out.push(collapse({ id: node.id, title: node.title, count, directCount, children: kids, bookmarks }))
     }
     return sortLevel(out)
   }
