@@ -377,6 +377,9 @@ function DomainRow({
   )
 }
 
+/** Folders shallower than this open on their own; deeper ones wait for a click. */
+const FOLDER_AUTO_OPEN_DEPTH = 2
+
 function FolderTree({
   nodes,
   domain,
@@ -391,57 +394,97 @@ function FolderTree({
     <ol
       aria-label={depth === 0 ? t('dashDomainTreeLabel', domain) : undefined}
       className={[
-        'space-y-1 border-l border-neutral-200 pl-3',
+        'space-y-0.5 border-l border-neutral-200 pl-3',
         depth === 0 ? 'mt-2 ml-3' : 'mt-1',
-        depth === 0
-          ? `transition duration-200 ease-out motion-reduce:transition-none ${
-              shown ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1'
-            }`
-          : '',
+        'transition duration-200 ease-out motion-reduce:transition-none',
+        shown ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1',
       ].join(' ')}
     >
       {nodes.map((node) => (
-        <li key={node.id}>
-          <div className="flex items-center gap-2 py-0.5">
-            <FolderIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
-            <span className="min-w-0 flex-1 truncate text-sm text-neutral-500" title={node.title}>
-              {node.title}
-            </span>
-            <span className="shrink-0 text-sm tabular-nums text-neutral-600">
-              {node.count}
-            </span>
-          </div>
-          {node.bookmarks.length > 0 && (
-            <ul className="mt-1 space-y-1 pl-5">
-              {node.bookmarks.map((bookmark) => {
-                const address = shortAddress(bookmark.url)
-                return (
-                  <li key={bookmark.id} className="flex min-w-0 items-start gap-2">
-                    <LinkIcon className="mt-0.5 h-3 w-3 shrink-0 text-neutral-300" />
-                    <a
-                      href={bookmark.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
-                    >
-                      <span className="block break-words text-sm leading-caption text-neutral-700">
-                        {bookmark.title.trim() || address}
-                      </span>
-                      <span className="mt-0.5 block break-all text-xs leading-caption text-neutral-400">
-                        {address}
-                      </span>
-                    </a>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-          {node.children.length > 0 && (
-            <FolderTree nodes={node.children} domain={domain} depth={depth + 1} />
-          )}
-        </li>
+        <FolderNode key={node.id} node={node} domain={domain} depth={depth} />
       ))}
     </ol>
+  )
+}
+
+function FolderNode({
+  node,
+  domain,
+  depth,
+}: {
+  node: DomainFolderNode
+  domain: string
+  depth: number
+}) {
+  const expandable = node.children.length > 0
+  const [open, setOpen] = useState(depth < FOLDER_AUTO_OPEN_DEPTH)
+  const label = (
+    <>
+      {expandable ? (
+        <ChevronDownIcon
+          className={[
+            'h-3 w-3 shrink-0 text-neutral-400 transition-transform duration-150 motion-reduce:transition-none',
+            open ? '' : '-rotate-90',
+          ].join(' ')}
+        />
+      ) : (
+        <span aria-hidden="true" className="h-3 w-3 shrink-0" />
+      )}
+      <FolderIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+      <span className="min-w-0 flex-1 truncate text-sm text-neutral-500" title={node.title}>
+        {node.title}
+      </span>
+      <span className="shrink-0 text-sm tabular-nums text-neutral-600">{node.count}</span>
+    </>
+  )
+  return (
+    <li>
+      {expandable ? (
+        <button
+          type="button"
+          className={[
+            '-mx-1.5 flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-0.5 text-left',
+            'transition-colors duration-150 motion-reduce:transition-none',
+            'hover:bg-neutral-50 active:bg-neutral-100',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400',
+          ].join(' ')}
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          {label}
+        </button>
+      ) : (
+        <div className="flex items-center gap-2 py-0.5">{label}</div>
+      )}
+      {node.bookmarks.length > 0 && (!expandable || open) && (
+        <ul className="mt-1 space-y-1 pl-5">
+          {node.bookmarks.map((bookmark) => {
+            const address = shortAddress(bookmark.url)
+            return (
+              <li key={bookmark.id} className="flex min-w-0 items-start gap-2">
+                <LinkIcon className="mt-0.5 h-3 w-3 shrink-0 text-neutral-300" />
+                <a
+                  href={bookmark.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
+                >
+                  <span className="block break-words text-sm leading-caption text-neutral-700">
+                    {bookmark.title.trim() || address}
+                  </span>
+                  <span className="mt-0.5 block break-all text-xs leading-caption text-neutral-400">
+                    {address}
+                  </span>
+                </a>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      {expandable && open && (
+        <FolderTree nodes={node.children} domain={domain} depth={depth + 1} />
+      )}
+    </li>
   )
 }
 

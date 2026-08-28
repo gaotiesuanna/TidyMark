@@ -217,6 +217,42 @@ describe('DashboardStep', () => {
     ])
   })
 
+  it('文件夹树深层默认折叠，点父节点才继续展开', async () => {
+    const nested: BookmarkNode[] = [
+      { id: '0', title: '', children: [
+        { id: 'bar', title: 'Bar', children: [
+          { id: 'a', title: 'A', children: [
+            { id: 'a1', title: 'A1', children: [
+              { id: 'a1x', title: 'A1X', children: [
+                { id: 'p1', title: 'p1', url: 'https://github.com/1' },
+              ]},
+              { id: 'a1y', title: 'A1Y', children: [
+                { id: 'p2', title: 'p2', url: 'https://github.com/2' },
+              ]},
+            ]},
+            { id: 'a2', title: 'A2', children: [
+              { id: 'p3', title: 'p3', url: 'https://github.com/3' },
+            ]},
+          ]},
+          { id: 'z', title: 'Z', children: [
+            { id: 'p4', title: 'p4', url: 'https://github.com/4' },
+          ]},
+        ]},
+      ]},
+    ]
+    useStore.setState({ tree: nested })
+    const user = userEvent.setup()
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('button', { name: t('dashDomainExpand', 'github.com') }))
+
+    expect(screen.getByText('A1')).toBeTruthy()
+    expect(screen.queryByText('A1X')).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: /A1/ }))
+    expect(screen.getByText('A1X')).toBeTruthy()
+    expect(screen.getByText('A1Y')).toBeTruthy()
+  })
+
   it('读取浏览记录时给骨架屏而不是空白', async () => {
     const user = userEvent.setup()
     contains.mockResolvedValue(true)
