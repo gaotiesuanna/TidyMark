@@ -4,6 +4,7 @@ import { sanitizeUrl } from './sanitize'
 export interface WeightedUrl {
   url: string
   weight?: number
+  title?: string
 }
 
 export interface DomainRank {
@@ -74,6 +75,11 @@ export interface FolderShare {
   folderId: string
   path: string[]
   count: number
+  bookmarks: Array<{
+    id: string
+    title: string
+    url: string
+  }>
 }
 
 /**
@@ -92,9 +98,15 @@ export function folderDistribution(
         if (parsed === null || parsed.domain !== domain) continue
         const existing = byFolder.get(folderId)
         if (existing === undefined) {
-          byFolder.set(folderId, { folderId, path, count: 1 })
+          byFolder.set(folderId, {
+            folderId,
+            path,
+            count: 1,
+            bookmarks: [{ id: node.id, title: node.title, url: node.url }],
+          })
         } else {
           existing.count += 1
+          existing.bookmarks.push({ id: node.id, title: node.title, url: node.url })
         }
         continue
       }

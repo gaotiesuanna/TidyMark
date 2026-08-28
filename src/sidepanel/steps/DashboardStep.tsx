@@ -11,9 +11,10 @@ import {
   type WeightedUrl,
 } from '@/core/domains'
 import type { BookmarkNode } from '@/core/ports'
+import { sanitizeUrl } from '@/core/sanitize'
 import { faviconSrc } from '../lib/favicons'
 import { ensureHistoryPermission, hasHistoryPermission, visitUrls } from '../lib/visits'
-import { ChevronDownIcon, TrendingUpIcon } from '../components/icons'
+import { ChevronDownIcon, FolderIcon, LinkIcon, TrendingUpIcon } from '../components/icons'
 import { useStore } from '../store'
 
 type Metric = 'bookmarked' | 'visited'
@@ -174,10 +175,18 @@ function VisitedBody({
   if (state.kind === 'empty') {
     return <p className="text-sm leading-caption text-neutral-500">{t('dashEmptyVisits')}</p>
   }
-  return <DomainList rows={rankDomains(state.items, topN)} />
+  return <DomainList rows={rankDomains(state.items, topN)} visits={state.items} />
 }
 
-function DomainList({ rows, tree }: { rows: DomainRank[]; tree?: BookmarkNode[] }) {
+function DomainList({
+  rows,
+  tree,
+  visits,
+}: {
+  rows: DomainRank[]
+  tree?: BookmarkNode[]
+  visits?: WeightedUrl[]
+}) {
   const [openDomain, setOpenDomain] = useState<string | null>(null)
   const max = rows[0]?.count ?? 0
   return (
@@ -188,6 +197,7 @@ function DomainList({ rows, tree }: { rows: DomainRank[]; tree?: BookmarkNode[] 
           row={row}
           max={max}
           tree={tree}
+          visits={visits}
           open={openDomain === row.domain}
           onToggle={() => setOpenDomain((prev) => prev === row.domain ? null : row.domain)}
         />
@@ -200,19 +210,28 @@ function DomainRow({
   row,
   max,
   tree,
+  visits,
   open,
   onToggle,
 }: {
   row: DomainRank
   max: number
   tree?: BookmarkNode[]
+  visits?: WeightedUrl[]
   open: boolean
   onToggle: () => void
 }) {
   const pct = max === 0 ? 0 : (row.count / max) * 100
-  const expandable = tree !== undefined
+  const expandable = tree !== undefined || visits !== undefined
   const shares = open && tree !== undefined ? folderDistribution(tree, row.domain) : []
-  const shareMax = shares[0]?.count ?? 0
+  const visitedPages = open && visits !== undefined
+    ? visits
+      .filter((item) => {
+        const parsed = sanitizeUrl(item.url)
+        return parsed?.domain === row.domain && (item.weight ?? 1) > 0
+      })
+      .sort((a, b) => (b.weight ?? 1) - (a.weight ?? 1) || a.url.localeCompare(b.url))
+    : []
   const summary = (
     <>
       <DomainIcon domain={row.domain} pageUrl={row.sampleUrl} />
@@ -242,7 +261,9 @@ function DomainRow({
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400',
           ].join(' ')}
           aria-expanded={open}
-          aria-label={t(open ? 'dashDomainCollapse' : 'dashDomainExpand', row.domain)}
+          aria-label={tree !== undefined
+            ? t(open ? 'dashDomainCollapse' : 'dashDomainExpand', row.domain)
+            : t(open ? 'dashVisitDomainCollapse' : 'dashVisitDomainExpand', row.domain)}
           onClick={onToggle}
         >
           {summary}
@@ -256,24 +277,73 @@ function DomainRow({
       ) : (
         <div className="flex items-center gap-2.5">{summary}</div>
       )}
-      {open && (
-        <ol className="mt-2 space-y-2 pl-7">
+      {open && tree !== undefined && (
+        <ol className="mt-3 space-y-3 pl-7">
           {shares.map((share) => {
-            const sharePct = shareMax === 0 ? 0 : (share.count / shareMax) * 100
-            const label = share.path.join(' / ')
+            const label = share.path.join(' / ') || t('dashRootFolder')
             return (
-              <li key={share.folderId} className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 truncate text-sm text-neutral-500" title={label}>
-                  {label}
-                </span>
-                <div className="h-1.5 w-16 shrink-0 rounded-full bg-neutral-100">
-                  <div
-                    className="h-1.5 rounded-full bg-blue-400"
-                    style={{ width: `${sharePct}%`, minWidth: share.count > 0 ? 4 : 0 }}
-                  />
+              <li key={share.folderId} className="border-l-2 border-neutral-100 pl-3">
+                <div className="flex items-start gap-2">
+                  <FolderIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-neutral-400" />
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words text-sm font-medium leading-caption text-neutral-700">
+                      {label}
+                    </p>
+                    <p className="mt-0.5 text-xs leading-caption text-neutral-400">
+                      {t('dashFolderBookmarkCount', String(share.count))}
+                    </p>
+                  </div>
                 </div>
-                <span className="min-w-6 shrink-0 text-right text-sm tabular-nums text-neutral-600">
-                  {share.count}
+                <ul className="mt-2 space-y-2 pl-5">
+                  {share.bookmarks.map((bookmark) => {
+                    const address = shortAddress(bookmark.url)
+                    return (
+                      <li key={bookmark.id} className="flex min-w-0 items-start gap-2">
+                        <LinkIcon className="mt-0.5 h-3 w-3 shrink-0 text-neutral-300" />
+                        <a
+                          href={bookmark.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
+                        >
+                          <span className="block break-words text-sm leading-caption text-neutral-700">
+                            {bookmark.title.trim() || address}
+                          </span>
+                          <span className="mt-0.5 block break-all text-xs leading-caption text-neutral-400">
+                            {address}
+                          </span>
+                        </a>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </li>
+            )
+          })}
+        </ol>
+      )}
+      {open && visits !== undefined && (
+        <ol className="mt-3 space-y-2 pl-7">
+          {visitedPages.map((page) => {
+            const address = shortAddress(page.url)
+            return (
+              <li key={page.url} className="flex min-w-0 items-start gap-2 border-l-2 border-neutral-100 pl-3">
+                <LinkIcon className="mt-0.5 h-3 w-3 shrink-0 text-neutral-300" />
+                <a
+                  href={page.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
+                >
+                  <span className="block break-words text-sm leading-caption text-neutral-700">
+                    {page.title?.trim() || address}
+                  </span>
+                  <span className="mt-0.5 block break-all text-xs leading-caption text-neutral-400">
+                    {address}
+                  </span>
+                </a>
+                <span className="shrink-0 text-xs leading-caption tabular-nums text-neutral-500">
+                  {t('dashVisitCount', String(page.weight ?? 1))}
                 </span>
               </li>
             )
@@ -282,6 +352,11 @@ function DomainRow({
       )}
     </li>
   )
+}
+
+function shortAddress(raw: string): string {
+  const parsed = sanitizeUrl(raw)
+  return parsed === null ? raw : `${parsed.domain}${parsed.path === '/' ? '' : parsed.path}`
 }
 
 function DomainIcon({ domain, pageUrl }: { domain: string; pageUrl: string }) {

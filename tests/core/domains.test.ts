@@ -171,6 +171,14 @@ describe('folderDistribution', () => {
     ])
   })
 
+  it('每个文件夹带上其中的书签标题和 URL，保持树内顺序', () => {
+    const gh = folderDistribution(tree, 'github.com').find((s) => s.folderId === 'gh')
+    expect(gh?.bookmarks).toEqual([
+      { id: 'a', title: 'a', url: 'https://github.com/a' },
+      { id: 'b', title: 'b', url: 'https://www.github.com/b' },
+    ])
+  })
+
   it('www 与裸域计入同一 domain', () => {
     const gh = folderDistribution(tree, 'github.com').find((s) => s.folderId === 'gh')
     expect(gh?.count).toBe(2)
@@ -179,7 +187,12 @@ describe('folderDistribution', () => {
   it('根下书签路径是根文件夹名，空标题根不进路径', () => {
     const bili = folderDistribution(tree, 'bilibili.com')
     expect(bili).toEqual([
-      { folderId: 'bar', path: ['书签栏'], count: 1 },
+      {
+        folderId: 'bar',
+        path: ['书签栏'],
+        count: 1,
+        bookmarks: [{ id: 'd', title: 'd', url: 'https://bilibili.com/1' }],
+      },
     ])
   })
 
