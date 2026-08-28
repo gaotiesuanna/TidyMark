@@ -69,21 +69,18 @@ export function ScopeStep() {
       )}
 
       <div data-testid="scope-section">
-        <IndexSection title={t('prefsScanScope')} count={checkedIds.size}>
-          <p className="mb-3 text-sm font-medium leading-body text-index-muted">{t('scopeSafety')}</p>
-          <SecondaryButton onClick={() => setExpanded(new Set(allOpen ? [] : folderIds))}>
-            {t(allOpen ? 'scopeCollapseAll' : 'scopeExpandAll')}
-          </SecondaryButton>
-          <div className="mt-2 border border-index-line">
-            <BookmarkTree
-              nodes={tree}
-              checkedIds={checkedIds}
-              onToggle={toggle}
-              expandedIds={expandedIds}
-              onToggleExpand={toggleExpand}
-            />
-          </div>
-        </IndexSection>
+        <SecondaryButton onClick={() => setExpanded(new Set(allOpen ? [] : folderIds))}>
+          {t(allOpen ? 'scopeCollapseAll' : 'scopeExpandAll')}
+        </SecondaryButton>
+        <div className="mt-2 border border-index-line">
+          <BookmarkTree
+            nodes={tree}
+            checkedIds={checkedIds}
+            onToggle={toggle}
+            expandedIds={expandedIds}
+            onToggleExpand={toggleExpand}
+          />
+        </div>
       </div>
 
       {preview !== null && (
