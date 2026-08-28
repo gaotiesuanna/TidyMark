@@ -4,6 +4,17 @@
 
 @layer base {
   :root {
+    --index-canvas: #ffffff;
+    --index-ink: #18181b;
+    --index-muted: #71717a;
+    --index-faint: #a1a1aa;
+    --index-line: #e4e4e7;
+    --index-line-strong: #d4d4d8;
+    --index-blue: #2563eb;
+    --index-blue-soft: #eff6ff;
+    --index-radius: 9px;
+    --index-row-min-height: 42px;
+
     --font-family-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
     --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
