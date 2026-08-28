@@ -61,8 +61,8 @@ function setup(scan: ScanResult, modeOverride: OrganizeMode | null = null): void
   })
 }
 
-describe('PreferencesStep indexed presentation', () => {
-  it('labels the screen and keeps its numbered preferences section and navigation actions', () => {
+describe('PreferencesStep 主区与操作', () => {
+  it('渲染范围区，返回与「开始 AI 分析」都在', () => {
     setup(messyScan)
     useStore.setState({
       settings: {
@@ -72,8 +72,7 @@ describe('PreferencesStep indexed presentation', () => {
     })
     render(<PreferencesStep />)
 
-    expect(screen.getByRole('heading', { name: '偏好' })).toBeTruthy()
-    expect(screen.getByTestId('preferences-section').getAttribute('data-index')).toBe('01')
+    expect(screen.getByTestId('preferences-section')).toBeTruthy()
     expect(screen.getByRole('button', { name: '返回' })).toBeTruthy()
     expect((screen.getByRole('button', { name: '开始 AI 分析' }) as HTMLButtonElement).disabled).toBe(false)
   })

@@ -59,11 +59,10 @@ beforeEach(() => {
 })
 
 describe('ResultStep', () => {
-  it('labels the screen and keeps its numbered result section and reset/undo actions', () => {
+  it('渲染结果区，撤销/再整理/结束按钮都在', () => {
     render(<ResultStep />)
 
-    expect(screen.getByRole('heading', { name: '结果' })).toBeTruthy()
-    expect(screen.getByTestId('result-section').getAttribute('data-index')).toBe('01')
+    expect(screen.getByTestId('result-section')).toBeTruthy()
     expect(screen.getByRole('button', { name: '撤销本次整理' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '再整理一次' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '结束整理' })).toBeTruthy()

@@ -38,11 +38,10 @@ describe('StructureStep', () => {
     useStore.setState({ plan: makePlan(), structureEdits: EMPTY_EDITS, step: 'structure' })
   })
 
-  it('labels the screen and keeps its numbered folder section and navigation actions', () => {
+  it('渲染目录区，返回与查看清单按钮都在', () => {
     render(<StructureStep />)
 
-    expect(screen.getByRole('heading', { name: '确认结构' })).toBeTruthy()
-    expect(screen.getByTestId('structure-section').getAttribute('data-index')).toBe('01')
+    expect(screen.getByTestId('structure-section')).toBeTruthy()
     expect(screen.getByRole('button', { name: '返回' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /查看移动清单/ })).toBeTruthy()
   })

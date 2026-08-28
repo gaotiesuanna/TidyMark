@@ -47,12 +47,11 @@ beforeEach(() => {
   })
 })
 
-describe('ScopeStep indexed presentation', () => {
-  it('labels the screen and keeps its numbered scope section with the primary action', async () => {
+describe('ScopeStep 主区与操作', () => {
+  it('渲染范围区，勾选后主操作按钮可点', async () => {
     render(<ScopeStep />)
 
-    expect(screen.getByRole('heading', { name: '选范围' })).toBeTruthy()
-    expect(screen.getByTestId('scope-section').getAttribute('data-index')).toBe('01')
+    expect(screen.getByTestId('scope-section')).toBeTruthy()
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'react' }))
     expect((screen.getByRole('button', { name: /扫描选中的/ }) as HTMLButtonElement).disabled).toBe(false)

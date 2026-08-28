@@ -6,7 +6,6 @@ import { useStore } from '../store'
 import { IndexRow } from '../components/IndexRow'
 import { IndexSection } from '../components/IndexSection'
 import { InlineStatus } from '../components/InlineStatus'
-import { PageHeader } from '../components/PageHeader'
 import { PrimaryButton, SecondaryButton, StickyActionBar } from '../components/IndexControls'
 import { fieldClass } from '../components/buttonStyles'
 
@@ -23,7 +22,7 @@ export function StructureStep() {
 
   return (
     <div>
-      <PageHeader title={t('shellStepStructure')} description={description} />
+      <p className="mb-4 text-sm leading-body text-index-muted">{description}</p>
 
       {/* 合并根是容器不是分类，不进下面那份两层列表；它不可删除，也不带计数 */}
       {plan.mergeRoot !== null && (
@@ -48,8 +47,8 @@ export function StructureStep() {
         </div>
       )}
 
-      <div data-testid="structure-section" data-index="01">
-        <IndexSection index="01." title={t('shellStepStructure')} count={nodes.length}>
+      <div data-testid="structure-section">
+        <IndexSection title={t('shellStepStructure')} count={nodes.length}>
           <ol className="border-t border-index-line">
             {nodes.map((node, index) => {
               const prefix = String(index + 1).padStart(2, '0')

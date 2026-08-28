@@ -7,7 +7,6 @@ import { downloadJson } from '../lib/download'
 import { useStore } from '../store'
 import { IndexSection } from '../components/IndexSection'
 import { InlineStatus } from '../components/InlineStatus'
-import { PageHeader } from '../components/PageHeader'
 import { PrimaryButton, SecondaryButton, StickyActionBar } from '../components/IndexControls'
 import { fieldClass } from '../components/buttonStyles'
 
@@ -160,14 +159,12 @@ export function ReviewStep() {
 
   return (
     <div>
-      <PageHeader
-        title={t('shellStepReview')}
-        description={plural(plan.rows.length, 'reviewSummaryOne', 'reviewSummaryOther', String(plan.rows.length), String(accepted.size))}
-      />
+      <p className="mb-4 text-sm leading-body text-index-muted">
+        {plural(plan.rows.length, 'reviewSummaryOne', 'reviewSummaryOther', String(plan.rows.length), String(accepted.size))}
+      </p>
 
-      <div data-testid="review-section" data-index="01">
+      <div data-testid="review-section">
         <IndexSection
-          index="01"
           title={t('reviewGroupCount', String(plan.rows.length))}
           count={String(accepted.size)}
         >

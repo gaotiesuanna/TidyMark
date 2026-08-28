@@ -8,7 +8,6 @@ import { useStore } from '../store'
 import { Detail, detailLabel } from '../components/Detail'
 import { IndexSection } from '../components/IndexSection'
 import { InlineStatus } from '../components/InlineStatus'
-import { PageHeader } from '../components/PageHeader'
 import { PrimaryButton, SecondaryButton, StickyActionBar } from '../components/IndexControls'
 import { choiceList, choiceRow, fieldClass } from '../components/buttonStyles'
 
@@ -75,10 +74,8 @@ export function PreferencesStep() {
 
   return (
     <div>
-      <PageHeader title={t('shellStepPreferences')} />
-
-      <div data-testid="preferences-section" data-index="01">
-        <IndexSection index="01" title={t('prefsScanScope')} count={scopePaths.length}>
+      <div data-testid="preferences-section">
+        <IndexSection title={t('prefsScanScope')} count={scopePaths.length}>
           {scopePaths.length > 0 && (
             <ul>
               {scopePaths.map((path) => (
@@ -140,7 +137,7 @@ export function PreferencesStep() {
         </IndexSection>
       </div>
 
-      <IndexSection index="02" title={t('prefsModelLabel')}>
+      <IndexSection title={t('prefsModelLabel')}>
         {/* 模型状态放在按钮上方：设置藏在齿轮后面，点开始前得看见即将用哪一个；
             没配时也不只靠按钮上那几个字。权限预告仍在两种状态下都摆着。 */}
         {needModel ? (

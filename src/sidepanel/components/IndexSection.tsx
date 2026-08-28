@@ -1,14 +1,12 @@
 import { useId, type ReactNode } from 'react'
 
 export function IndexSection({
-  index,
   title,
   count,
   expanded = false,
   onToggle,
   children,
 }: {
-  index: string
   title: string
   count?: ReactNode
   expanded?: boolean
@@ -18,22 +16,16 @@ export function IndexSection({
   const detailId = useId()
   const hasToggle = onToggle !== undefined
   const showDetails = !hasToggle || expanded
-  const content = (
-    <>
-      <span className="font-mono text-xs text-neutral-400">{index}</span>
-      <span className="min-w-0">{title}</span>
-      {count !== undefined && <span className="shrink-0 text-xs text-index-muted">{count}</span>}
-    </>
-  )
 
   return (
     <section className="border-b border-index-line">
-      <h3 className="grid min-h-index-row grid-cols-[2rem_minmax(0,1fr)_auto_1rem] items-center gap-x-2 px-3 py-2 text-sm font-medium text-index-ink">
-        {content}
-        {hasToggle ? (
+      <h3 className="flex min-h-index-row items-center gap-2 px-3 py-2 text-sm font-medium text-index-ink">
+        <span className="min-w-0 flex-1 truncate">{title}</span>
+        {count !== undefined && <span className="shrink-0 text-xs text-index-muted">{count}</span>}
+        {hasToggle && (
           <button
             type="button"
-            className="col-start-4 justify-self-end text-index-faint hover:text-index-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-index-blue"
+            className="shrink-0 text-index-faint hover:text-index-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-index-blue"
             aria-expanded={expanded}
             aria-controls={detailId}
             aria-label={title}
@@ -41,12 +33,10 @@ export function IndexSection({
           >
             <span aria-hidden>{expanded ? '▾' : '▸'}</span>
           </button>
-        ) : (
-          <span aria-hidden className="col-start-4" />
         )}
       </h3>
       {showDetails && children !== undefined && (
-        <div id={detailId} className="ml-8 border-l border-index-line py-2 pl-3">
+        <div id={detailId} className="px-3 pb-3">
           {children}
         </div>
       )}

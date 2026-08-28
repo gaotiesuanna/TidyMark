@@ -4,21 +4,12 @@ import userEvent from '@testing-library/user-event'
 import { IndexRow } from '@/sidepanel/components/IndexRow'
 import { IndexSection } from '@/sidepanel/components/IndexSection'
 import { InlineStatus } from '@/sidepanel/components/InlineStatus'
-import { PageHeader } from '@/sidepanel/components/PageHeader'
 
 describe('indexed layout primitives', () => {
-  it('renders page header metadata beneath its feature-owned heading', () => {
-    render(<PageHeader title="书签" description="整理你的收藏" meta={<span>12 项</span>} />)
-
-    expect(screen.getByRole('heading', { level: 2, name: '书签' })).toBeTruthy()
-    expect(screen.getByText('整理你的收藏')).toBeTruthy()
-    expect(screen.getByText('12 项')).toBeTruthy()
-  })
-
   it('renders an expandable index section with a connected direct detail region', async () => {
     const onToggle = vi.fn()
     render(
-      <IndexSection index="A" title="来源" count="2" expanded onToggle={onToggle}>
+      <IndexSection title="来源" count="2" expanded onToggle={onToggle}>
         <p>来源详情</p>
       </IndexSection>,
     )

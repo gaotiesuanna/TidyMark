@@ -5,7 +5,6 @@ import { scanTree, scopeFolderPaths } from '@/core/scan'
 import { BookmarkTree, topLevelNodes } from '../components/BookmarkTree'
 import { IndexSection } from '../components/IndexSection'
 import { InlineStatus } from '../components/InlineStatus'
-import { PageHeader } from '../components/PageHeader'
 import { PrimaryButton, SecondaryButton, StickyActionBar } from '../components/IndexControls'
 import { isModelConfigured } from '@/llm/config'
 import { activeLlm } from '@/storage/settings'
@@ -56,10 +55,10 @@ export function ScopeStep() {
 
   return (
     <div>
-      <PageHeader title={t('shellStepScope')} description={t('scopeIntro')} />
+      <p className="mb-4 text-sm leading-body text-index-muted">{t('scopeIntro')}</p>
 
       {needModel && (
-        <div className="mt-3">
+        <div className="mb-4">
           <InlineStatus
             tone="neutral"
             action={<SecondaryButton onClick={openSettings}>{t('scopeNeedModelAction')}</SecondaryButton>}
@@ -69,8 +68,8 @@ export function ScopeStep() {
         </div>
       )}
 
-      <div data-testid="scope-section" data-index="01">
-        <IndexSection index="01" title={t('prefsScanScope')} count={checkedIds.size}>
+      <div data-testid="scope-section">
+        <IndexSection title={t('prefsScanScope')} count={checkedIds.size}>
           <p className="mb-3 text-sm font-medium leading-body text-index-muted">{t('scopeSafety')}</p>
           <SecondaryButton onClick={() => setExpanded(new Set(allOpen ? [] : folderIds))}>
             {t(allOpen ? 'scopeCollapseAll' : 'scopeExpandAll')}
@@ -88,7 +87,7 @@ export function ScopeStep() {
       </div>
 
       {preview !== null && (
-        <IndexSection index="02" title={t('prefsScanTitle')} count={preview.stats.totalBookmarks}>
+        <IndexSection title={t('prefsScanTitle')} count={preview.stats.totalBookmarks}>
           <div className="text-base leading-body">
             {preview.paths.length > 0 && (
               <div className="mb-2">

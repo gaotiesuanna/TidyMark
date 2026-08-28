@@ -29,11 +29,10 @@ beforeEach(() => {
 })
 
 describe('ReviewStep', () => {
-  it('labels the screen and keeps its numbered review section and confirmation actions', () => {
+  it('渲染预览区，放弃与应用按钮都在', () => {
     render(<ReviewStep />)
 
-    expect(screen.getByRole('heading', { name: '预览' })).toBeTruthy()
-    expect(screen.getByTestId('review-section').getAttribute('data-index')).toBe('01')
+    expect(screen.getByTestId('review-section')).toBeTruthy()
     expect(screen.getByRole('button', { name: '放弃' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /应用 1 项修改/ })).toBeTruthy()
   })

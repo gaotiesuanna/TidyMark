@@ -6,7 +6,6 @@ import { joinTitles } from '../lib/listText'
 import { useStore } from '../store'
 import { IndexSection } from '../components/IndexSection'
 import { InlineStatus } from '../components/InlineStatus'
-import { PageHeader } from '../components/PageHeader'
 import { DangerButton, PrimaryButton, SecondaryButton, StickyActionBar } from '../components/IndexControls'
 
 export function ResultStep() {
@@ -45,16 +44,14 @@ export function ResultStep() {
 
   return (
     <div className="text-base leading-body">
-      <PageHeader title={t('shellStepResult')} />
-
-      <div className="mt-3">
+      <div className="mb-4">
         <InlineStatus tone={applyResult.status === 'completed' ? 'success' : 'warning'}>
           {applyResult.status === 'completed' ? t('resultCompleted') : t('resultInterrupted')}
         </InlineStatus>
       </div>
 
-      <div data-testid="result-section" data-index="01">
-        <IndexSection index="01" title={t('resultStatExecuted')} count={applyResult.executed}>
+      <div data-testid="result-section">
+        <IndexSection title={t('resultStatExecuted')} count={applyResult.executed}>
         <dl className="grid grid-cols-2 gap-y-1 text-sm leading-caption">
           <dt className="text-index-muted">{t('resultStatExecuted')}</dt><dd>{applyResult.executed}</dd>
           <dt className="text-index-muted">{t('resultStatCreated')}</dt><dd>{applyResult.createdFolderIds.length}</dd>
