@@ -9,10 +9,10 @@ import { StepIndex, type StepIndexItem } from './StepIndex'
 
 function navigationItems(): readonly IndexNavigationItem<AppMode>[] {
   return [
-    { key: 'organize', index: '01', label: t('shellModeOrganize'), shortLabel: t('shellModeOrganizeShort') },
-    { key: 'cleanup', index: '02', label: t('shellModeCleanup'), shortLabel: t('shellModeCleanupShort') },
-    { key: 'transfer', index: '03', label: t('shellModeTransfer'), shortLabel: t('shellModeTransferShort') },
-    { key: 'dashboard', index: '04', label: t('shellModeDashboard'), shortLabel: t('shellModeDashboardShort') },
+    { key: 'organize', label: t('shellModeOrganize'), shortLabel: t('shellModeOrganizeShort') },
+    { key: 'cleanup', label: t('shellModeCleanup'), shortLabel: t('shellModeCleanupShort') },
+    { key: 'transfer', label: t('shellModeTransfer'), shortLabel: t('shellModeTransferShort') },
+    { key: 'dashboard', label: t('shellModeDashboard'), shortLabel: t('shellModeDashboardShort') },
   ]
 }
 

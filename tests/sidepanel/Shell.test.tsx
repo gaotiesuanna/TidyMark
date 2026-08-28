@@ -132,15 +132,15 @@ describe('Shell 的错误条', () => {
 describe('Shell 模式切换', () => {
   it('默认停在 AI 整理，四个按钮都在', () => {
     render(<Shell organizeContent={<div>步骤内容</div>}>{null}</Shell>)
-    expect(screen.getByRole('tab', { name: '01 AI 整理' }).getAttribute('aria-selected')).toBe('true')
-    expect((screen.getByRole('tab', { name: '02 本地清理' }) as HTMLButtonElement).disabled).toBe(false)
-    expect((screen.getByRole('tab', { name: '03 浏览书签' }) as HTMLButtonElement).disabled).toBe(false)
-    expect((screen.getByRole('tab', { name: '04 看板' }) as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.getByRole('tab', { name: 'AI 整理' }).getAttribute('aria-selected')).toBe('true')
+    expect((screen.getByRole('tab', { name: '本地清理' }) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByRole('tab', { name: '浏览书签' }) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByRole('tab', { name: '看板' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('点本地清理切到清理模式，步骤条随之让位', async () => {
     render(<Shell organizeContent={<div>步骤内容</div>}><div>清理内容</div></Shell>)
-    await userEvent.click(screen.getByRole('tab', { name: '02 本地清理' }))
+    await userEvent.click(screen.getByRole('tab', { name: '本地清理' }))
     expect(useStore.getState().mode).toBe('cleanup')
     expect(screen.queryByLabelText('01 选范围')).toBeNull()
     expect(screen.getByText('清理内容')).toBeDefined()
@@ -148,14 +148,14 @@ describe('Shell 模式切换', () => {
 
   it('点浏览书签切到浏览模式，步骤条随之让位', async () => {
     render(<Shell organizeContent={<div>步骤内容</div>}><div>浏览内容</div></Shell>)
-    await userEvent.click(screen.getByRole('tab', { name: '03 浏览书签' }))
+    await userEvent.click(screen.getByRole('tab', { name: '浏览书签' }))
     expect(useStore.getState().mode).toBe('transfer')
     expect(screen.queryByLabelText('01 选范围')).toBeNull()
   })
 
   it('点看板切到看板模式，步骤条随之让位', async () => {
     render(<Shell organizeContent={<div>步骤内容</div>}><div>看板内容</div></Shell>)
-    await userEvent.click(screen.getByRole('tab', { name: '04 看板' }))
+    await userEvent.click(screen.getByRole('tab', { name: '看板' }))
     expect(useStore.getState().mode).toBe('dashboard')
     expect(screen.queryByLabelText('01 选范围')).toBeNull()
   })
@@ -185,16 +185,16 @@ describe('Shell 模式切换', () => {
   it('忙的时候四个模式按钮都禁用', () => {
     useStore.setState({ busy: '正在分析…', busyKind: 'analyze' })
     render(<Shell organizeContent={<div>步骤内容</div>}>{null}</Shell>)
-    expect((screen.getByRole('tab', { name: '01 AI 整理' }) as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByRole('tab', { name: '02 本地清理' }) as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByRole('tab', { name: '03 浏览书签' }) as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByRole('tab', { name: '04 看板' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('tab', { name: 'AI 整理' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('tab', { name: '本地清理' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('tab', { name: '浏览书签' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('tab', { name: '看板' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('设置页打开时模式按钮不显示——那时整个正文是设置', async () => {
     render(<Shell organizeContent={<div>步骤内容</div>}>{null}</Shell>)
     await userEvent.click(screen.getByRole('button', { name: '设置' }))
-    expect(screen.queryByRole('tab', { name: '01 AI 整理' })).toBeNull()
+    expect(screen.queryByRole('tab', { name: 'AI 整理' })).toBeNull()
   })
 
   // 齿轮和返回同占头部右/左两端，设置页里齿轮点了没反应——留着只会让人怀疑自己没点中

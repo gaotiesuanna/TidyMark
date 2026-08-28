@@ -2,7 +2,6 @@ import { SettingsIcon } from './icons'
 
 export type IndexNavigationItem<K extends string> = {
   key: K
-  index: string
   label: string
   shortLabel: string
 }
@@ -32,7 +31,7 @@ export function IndexNavigation<K extends string>({
               key={item.key}
               type="button"
               role="tab"
-              aria-label={`${item.index} ${item.label}`}
+              aria-label={item.label}
               aria-selected={active}
               disabled={disabled}
               className={[
@@ -46,7 +45,6 @@ export function IndexNavigation<K extends string>({
               ].join(' ')}
               onClick={() => onSelect(item.key)}
             >
-              <span className="shrink-0 font-mono text-2xs" aria-hidden>{item.index}</span>
               <span className="hidden min-w-0 truncate min-[400px]:inline" aria-hidden>{item.label}</span>
               <span className="min-w-0 truncate min-[400px]:hidden" aria-hidden>{item.shortLabel}</span>
             </button>
