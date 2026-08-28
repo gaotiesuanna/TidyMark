@@ -44,7 +44,7 @@ const countInput = [
   'focus-visible:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400',
 ].join(' ')
 
-/** Animates the bars from zero on first paint (and on every remount). */
+/** Flips false→true one frame after mount, driving CSS enter transitions. */
 function useGrow() {
   const [grown, setGrown] = useState(false)
   useEffect(() => {
@@ -196,12 +196,30 @@ function VisitedBody({
     return <p className="text-xs leading-relaxed text-neutral-500">{t('dashHistoryDenied')}</p>
   }
   if (state.kind === 'loading' || state.kind === 'idle') {
-    return <EmptyLine text={t('dashHistoryLoading')} />
+    return <VisitsSkeleton />
   }
   if (state.kind === 'empty') {
     return <EmptyLine text={t('dashEmptyVisits')} />
   }
   return <DomainList rows={rankDomains(state.items, topN)} />
+}
+
+function VisitsSkeleton() {
+  return (
+    <div role="status" aria-label={t('dashHistoryLoading')}>
+      <ol className="space-y-0.5 animate-pulse motion-reduce:animate-none" aria-hidden="true">
+        {Array.from({ length: 6 }, (_, i) => (
+          <li key={i} className="-mx-1.5 flex items-center gap-2.5 px-1.5 py-1.5">
+            <span className="h-2.5 w-5 shrink-0 rounded-sm bg-neutral-100" />
+            <span className="h-5 w-5 shrink-0 rounded-md bg-neutral-100" />
+            <span className="h-3 w-[34%] shrink-0 rounded-sm bg-neutral-100" />
+            <span className="h-2 min-w-0 flex-1 rounded-full bg-neutral-100" />
+            <span className="h-3 w-8 shrink-0 rounded-sm bg-neutral-100" />
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
 }
 
 function DomainList({ rows, tree }: { rows: DomainRank[]; tree?: BookmarkNode[] }) {
@@ -253,7 +271,7 @@ function DomainRow({
         aria-hidden="true"
         className={[
           'w-5 shrink-0 text-right text-2xs leading-none tabular-nums',
-          rank <= 3 ? 'font-semibold text-neutral-500' : 'text-neutral-400',
+          rank <= 3 ? 'font-semibold text-neutral-700' : 'text-neutral-500',
         ].join(' ')}
       >
         {String(rank).padStart(2, '0')}
@@ -318,12 +336,18 @@ function FolderTree({
   domain: string
   depth: number
 }) {
+  const shown = useGrow()
   return (
     <ol
       aria-label={depth === 0 ? t('dashDomainTreeLabel', domain) : undefined}
       className={[
         'space-y-1 border-l border-neutral-200 pl-3',
         depth === 0 ? 'mt-2 ml-3' : 'mt-1',
+        depth === 0
+          ? `transition duration-200 ease-out motion-reduce:transition-none ${
+              shown ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1'
+            }`
+          : '',
       ].join(' ')}
     >
       {nodes.map((node) => (

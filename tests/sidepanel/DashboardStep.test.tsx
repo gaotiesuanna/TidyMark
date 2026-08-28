@@ -185,4 +185,19 @@ describe('DashboardStep', () => {
     expect(screen.queryByRole('button', { name: t('dashDomainExpand', 'github.com') })).toBeNull()
   })
 
+  it('读取浏览记录时给骨架屏而不是空白', async () => {
+    const user = userEvent.setup()
+    contains.mockResolvedValue(true)
+    let release: (items: Array<{ url?: string; visitCount?: number }>) => void = () => {}
+    search.mockReturnValue(new Promise((resolve) => { release = resolve }))
+
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
+    expect(await screen.findByRole('status', { name: t('dashHistoryLoading') })).toBeTruthy()
+
+    release([{ url: 'https://github.com/x', visitCount: 3 }])
+    expect(await screen.findByText('github.com')).toBeTruthy()
+    expect(screen.queryByRole('status', { name: t('dashHistoryLoading') })).toBeNull()
+  })
+
 })
