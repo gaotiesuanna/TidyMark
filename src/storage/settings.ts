@@ -49,7 +49,6 @@ export interface Endpoint {
   /** 这个端点下存着的模型名，用户在设置页手工维护，顺序即显示顺序。 */
   models: string[]
 }
-
 export interface Settings {
   endpoints: Endpoint[]
   /**
