@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { t } from '@/i18n'
 import {
   bookmarkUrls,
@@ -8,6 +8,7 @@ import {
   TOP_DOMAIN_MAX,
   TOP_DOMAIN_MIN,
   type DomainRank,
+  type FolderShare,
   type WeightedUrl,
 } from '@/core/domains'
 import type { BookmarkNode } from '@/core/ports'
@@ -35,6 +36,23 @@ const toggleBase = [
 ].join(' ')
 const toggleOn = `${toggleBase} bg-white text-blue-600 shadow-sm`
 const toggleOff = `${toggleBase} text-neutral-500 hover:text-neutral-800`
+
+const countInput = [
+  'h-6 w-11 rounded-md border border-transparent bg-neutral-100 px-1 text-center',
+  'text-base leading-body font-semibold tabular-nums text-neutral-900',
+  'transition-colors duration-150 hover:bg-neutral-200 motion-reduce:transition-none',
+  'focus-visible:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400',
+].join(' ')
+
+/** Animates the bars from zero on first paint (and on every remount). */
+function useGrow() {
+  const [grown, setGrown] = useState(false)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setGrown(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
+  return grown
+}
 
 export function DashboardStep() {
   const tree = useStore((s) => s.tree)
@@ -85,7 +103,7 @@ export function DashboardStep() {
   }
 
   return (
-    <section className="rounded-2xl border border-neutral-200 bg-white p-4">
+    <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
       <header className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="flex items-center gap-1.5 text-base leading-body font-semibold text-neutral-900">
@@ -99,7 +117,7 @@ export function DashboardStep() {
                 inputMode="numeric"
                 aria-label={t('dashTopCountLabel')}
                 value={draft ?? String(topN)}
-                className="h-6 w-11 rounded-md border border-neutral-200 bg-white px-1 text-center text-base leading-body font-semibold tabular-nums text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
+                className={countInput}
                 onChange={(e) => setDraft(e.target.value)}
                 onBlur={(e) => commitTopN(e.target.value)}
                 onKeyDown={(e) => {
@@ -133,12 +151,21 @@ export function DashboardStep() {
       </header>
       {metric === 'bookmarked' ? (
         bookmarked.length === 0
-          ? <p className="text-sm leading-caption text-neutral-500">{t('dashEmptyBookmarks')}</p>
+          ? <EmptyLine text={t('dashEmptyBookmarks')} />
           : <DomainList key={String(topN)} rows={bookmarked} tree={tree} />
       ) : (
         <VisitedBody state={visits} topN={topN} onAllow={() => void allowHistory()} />
       )}
     </section>
+  )
+}
+
+function EmptyLine({ text }: { text: string }) {
+  return (
+    <p className="flex items-center gap-1.5 text-sm leading-caption text-neutral-500">
+      <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-neutral-300" />
+      {text}
+    </p>
   )
 }
 
@@ -169,24 +196,27 @@ function VisitedBody({
     return <p className="text-xs leading-relaxed text-neutral-500">{t('dashHistoryDenied')}</p>
   }
   if (state.kind === 'loading' || state.kind === 'idle') {
-    return <p className="text-sm leading-caption text-neutral-500">{t('dashHistoryLoading')}</p>
+    return <EmptyLine text={t('dashHistoryLoading')} />
   }
   if (state.kind === 'empty') {
-    return <p className="text-sm leading-caption text-neutral-500">{t('dashEmptyVisits')}</p>
+    return <EmptyLine text={t('dashEmptyVisits')} />
   }
   return <DomainList rows={rankDomains(state.items, topN)} />
 }
 
 function DomainList({ rows, tree }: { rows: DomainRank[]; tree?: BookmarkNode[] }) {
   const [openDomain, setOpenDomain] = useState<string | null>(null)
+  const grown = useGrow()
   const max = rows[0]?.count ?? 0
   return (
-    <ol className="space-y-3" aria-label={t('dashListLabel')}>
-      {rows.map((row) => (
+    <ol className="space-y-0.5" aria-label={t('dashListLabel')}>
+      {rows.map((row, i) => (
         <DomainRow
           key={row.domain}
           row={row}
+          rank={i + 1}
           max={max}
+          grown={grown}
           tree={tree}
           open={openDomain === row.domain}
           onToggle={() => setOpenDomain((prev) => prev === row.domain ? null : row.domain)}
@@ -198,13 +228,17 @@ function DomainList({ rows, tree }: { rows: DomainRank[]; tree?: BookmarkNode[] 
 
 function DomainRow({
   row,
+  rank,
   max,
+  grown,
   tree,
   open,
   onToggle,
 }: {
   row: DomainRank
+  rank: number
   max: number
+  grown: boolean
   tree?: BookmarkNode[]
   open: boolean
   onToggle: () => void
@@ -212,20 +246,32 @@ function DomainRow({
   const pct = max === 0 ? 0 : (row.count / max) * 100
   const expandable = tree !== undefined
   const shares = open && tree !== undefined ? folderDistribution(tree, row.domain) : []
-  const shareMax = shares[0]?.count ?? 0
+  const leader = rank === 1
   const summary = (
     <>
+      <span
+        aria-hidden="true"
+        className={[
+          'w-5 shrink-0 text-right text-2xs leading-none tabular-nums',
+          rank <= 3 ? 'font-semibold text-neutral-500' : 'text-neutral-400',
+        ].join(' ')}
+      >
+        {String(rank).padStart(2, '0')}
+      </span>
       <DomainIcon domain={row.domain} pageUrl={row.sampleUrl} />
-      <span className="w-[38%] min-w-0 truncate text-md text-neutral-700" title={row.domain}>
+      <span className="w-[34%] min-w-0 truncate text-md text-neutral-700" title={row.domain}>
         {row.domain}
       </span>
       <div className="h-2 min-w-0 flex-1 rounded-full bg-neutral-100">
         <div
-          className="h-2 rounded-full bg-blue-500"
-          style={{ width: `${pct}%`, minWidth: row.count > 0 ? 6 : 0 }}
+          className={[
+            'h-2 rounded-full bg-gradient-to-r transition-[width] duration-500 ease-out motion-reduce:transition-none',
+            leader ? 'from-blue-500 to-blue-600' : 'from-blue-400 to-blue-500',
+          ].join(' ')}
+          style={{ width: `${grown ? pct : 0}%`, minWidth: grown && row.count > 0 ? 6 : 0 }}
         />
       </div>
-      <span className="min-w-8 shrink-0 text-right text-md tabular-nums text-neutral-800">
+      <span className="min-w-8 shrink-0 text-right text-md font-semibold tabular-nums text-neutral-900">
         {row.count}
       </span>
     </>
@@ -236,7 +282,7 @@ function DomainRow({
         <button
           type="button"
           className={[
-            'flex w-full cursor-pointer items-center gap-2.5 rounded-md px-1 py-1 -mx-1 text-left',
+            'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-1.5 py-1.5 -mx-1.5 text-left',
             'transition-colors duration-150 motion-reduce:transition-none',
             'hover:bg-neutral-50 active:bg-neutral-100',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400',
@@ -254,33 +300,39 @@ function DomainRow({
           />
         </button>
       ) : (
-        <div className="flex items-center gap-2.5">{summary}</div>
+        <div className="-mx-1.5 flex items-center gap-2.5 px-1.5 py-1.5">{summary}</div>
       )}
-      {open && (
-        <ol className="mt-2 space-y-2 pl-7">
-          {shares.map((share) => {
-            const sharePct = shareMax === 0 ? 0 : (share.count / shareMax) * 100
-            const label = share.path.join(' / ')
-            return (
-              <li key={share.folderId} className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 truncate text-sm text-neutral-500" title={label}>
-                  {label}
-                </span>
-                <div className="h-1.5 w-16 shrink-0 rounded-full bg-neutral-100">
-                  <div
-                    className="h-1.5 rounded-full bg-blue-400"
-                    style={{ width: `${sharePct}%`, minWidth: share.count > 0 ? 4 : 0 }}
-                  />
-                </div>
-                <span className="min-w-6 shrink-0 text-right text-sm tabular-nums text-neutral-600">
-                  {share.count}
-                </span>
-              </li>
-            )
-          })}
-        </ol>
-      )}
+      {open && tree !== undefined && <FolderShares shares={shares} />}
     </li>
+  )
+}
+
+function FolderShares({ shares }: { shares: FolderShare[] }) {
+  const grown = useGrow()
+  const shareMax = shares[0]?.count ?? 0
+  return (
+    <ol className="mt-1.5 ml-3 space-y-2 border-l border-neutral-200 pl-4">
+      {shares.map((share) => {
+        const sharePct = shareMax === 0 ? 0 : (share.count / shareMax) * 100
+        const label = share.path.join(' / ')
+        return (
+          <li key={share.folderId} className="flex items-center gap-2">
+            <span className="min-w-0 flex-1 truncate text-sm text-neutral-500" title={label}>
+              {label}
+            </span>
+            <div className="h-1.5 w-16 shrink-0 rounded-full bg-neutral-100">
+              <div
+                className="h-1.5 rounded-full bg-gradient-to-r from-blue-300 to-blue-400 transition-[width] duration-500 ease-out motion-reduce:transition-none"
+                style={{ width: `${grown ? sharePct : 0}%`, minWidth: grown && share.count > 0 ? 4 : 0 }}
+              />
+            </div>
+            <span className="min-w-6 shrink-0 text-right text-sm tabular-nums text-neutral-600">
+              {share.count}
+            </span>
+          </li>
+        )
+      })}
+    </ol>
   )
 }
 
@@ -290,20 +342,22 @@ function DomainIcon({ domain, pageUrl }: { domain: string; pageUrl: string }) {
     return (
       <span
         aria-hidden="true"
-        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-neutral-100 text-2xs font-medium text-neutral-500"
+        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-white text-2xs font-medium text-neutral-500 ring-1 ring-neutral-200/70"
       >
         {domain.charAt(0).toUpperCase()}
       </span>
     )
   }
   return (
-    <img
-      src={faviconSrc(pageUrl)}
-      alt=""
-      width={20}
-      height={20}
-      className="h-5 w-5 shrink-0 rounded"
-      onError={() => setBroken(true)}
-    />
+    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-white ring-1 ring-neutral-200/70">
+      <img
+        src={faviconSrc(pageUrl)}
+        alt=""
+        width={16}
+        height={16}
+        className="h-4 w-4 rounded-sm"
+        onError={() => setBroken(true)}
+      />
+    </span>
   )
 }
