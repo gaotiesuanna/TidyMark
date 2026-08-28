@@ -303,7 +303,7 @@ function DomainRow({
         <div className="-mx-1.5 flex items-center gap-2.5 px-1.5 py-1.5">{summary}</div>
       )}
       {open && tree !== undefined && (
-        <FolderTree nodes={folders} total={row.count} domain={row.domain} depth={0} />
+        <FolderTree nodes={folders} domain={row.domain} depth={0} />
       )}
     </li>
   )
@@ -311,51 +311,37 @@ function DomainRow({
 
 function FolderTree({
   nodes,
-  total,
   domain,
   depth,
 }: {
   nodes: DomainFolderNode[]
-  total: number
   domain: string
   depth: number
 }) {
-  const grown = useGrow()
   return (
     <ol
       aria-label={depth === 0 ? t('dashDomainTreeLabel', domain) : undefined}
       className={[
-        'space-y-1.5 border-l border-neutral-200 pl-3',
-        depth === 0 ? 'mt-2 ml-3' : 'mt-1.5',
+        'space-y-1 border-l border-neutral-200 pl-3',
+        depth === 0 ? 'mt-2 ml-3' : 'mt-1',
       ].join(' ')}
     >
-      {nodes.map((node) => {
-        const pct = total === 0 ? 0 : (node.count / total) * 100
-        const mixed = node.directCount > 0 && node.children.length > 0
-        return (
-          <li key={node.id}>
-            <div className="flex items-center gap-2">
-              <FolderIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
-              <span className="min-w-0 flex-1 truncate text-sm text-neutral-500" title={node.title}>
-                {node.title}
-              </span>
-              <div className="h-1.5 w-16 shrink-0 rounded-full bg-neutral-100">
-                <div
-                  className="h-1.5 rounded-full bg-gradient-to-r from-blue-300 to-blue-400 transition-[width] duration-500 ease-out motion-reduce:transition-none"
-                  style={{ width: `${grown ? pct : 0}%`, minWidth: grown && node.count > 0 ? 4 : 0 }}
-                />
-              </div>
-              <span className="min-w-12 shrink-0 text-right text-sm tabular-nums text-neutral-600">
-                {mixed && <span className="mr-0.5 text-neutral-400">·{node.directCount}</span>}
-                {node.count}
-              </span>
-            </div>
-            {node.children.length > 0 && (
-              <FolderTree nodes={node.children} total={total} domain={domain} depth={depth + 1} />
-            )}
-          </li>
-        )
-      })}
+      {nodes.map((node) => (
+        <li key={node.id}>
+          <div className="flex items-center gap-2 py-0.5">
+            <FolderIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+            <span className="min-w-0 flex-1 truncate text-sm text-neutral-500" title={node.title}>
+              {node.title}
+            </span>
+            <span className="shrink-0 text-sm tabular-nums text-neutral-600">
+              {node.count}
+            </span>
+          </div>
+          {node.children.length > 0 && (
+            <FolderTree nodes={node.children} domain={domain} depth={depth + 1} />
+          )}
+        </li>
+      ))}
     </ol>
   )
 }
