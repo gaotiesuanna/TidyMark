@@ -8,13 +8,25 @@
   "shellModeOrganize": {
     "message": "AI 整理"
   },
+  "shellModeOrganizeShort": {
+    "message": "整理"
+  },
   "shellModeCleanup": {
     "message": "本地清理"
+  },
+  "shellModeCleanupShort": {
+    "message": "清理"
   },
   "shellModeTransfer": {
     "message": "浏览书签"
   },
+  "shellModeTransferShort": {
+    "message": "浏览"
+  },
   "shellModeDashboard": {
+    "message": "看板"
+  },
+  "shellModeDashboardShort": {
     "message": "看板"
   },
   "dashTopDomains": {
@@ -73,6 +85,9 @@
   },
   "shellStepPreferences": {
     "message": "偏好"
+  },
+  "shellStepStructure": {
+    "message": "确认结构"
   },
   "settingsGearLabel": {
     "message": "设置"

@@ -8,13 +8,25 @@
   "shellModeOrganize": {
     "message": "AI organize"
   },
+  "shellModeOrganizeShort": {
+    "message": "Organize"
+  },
   "shellModeCleanup": {
     "message": "Local cleanup"
+  },
+  "shellModeCleanupShort": {
+    "message": "Cleanup"
   },
   "shellModeTransfer": {
     "message": "Browse"
   },
+  "shellModeTransferShort": {
+    "message": "Browse"
+  },
   "shellModeDashboard": {
+    "message": "Stats"
+  },
+  "shellModeDashboardShort": {
     "message": "Stats"
   },
   "dashTopDomains": {
@@ -73,6 +85,9 @@
   },
   "shellStepPreferences": {
     "message": "Preferences"
+  },
+  "shellStepStructure": {
+    "message": "Confirm structure"
   },
   "settingsGearLabel": {
     "message": "Settings"

@@ -20,17 +20,16 @@ export default function App() {
    * 代价是组件内部状态会重置（范围页的展开状态等），切语言是低频操作，可以接受。
    * settingsOpen 存在 store 里、不受重挂载影响，切完语言仍停在设置页。
    */
+  const organizeContent =
+    step === 'scope' ? <ScopeStep /> :
+    step === 'preferences' ? <PreferencesStep /> :
+    step === 'structure' ? <StructureStep /> :
+    step === 'review' ? <ReviewStep /> :
+    <ResultStep />
+
   return (
-    <Shell key={locale}>
-      {mode === 'cleanup' ? <CleanupStep /> : mode === 'transfer' ? <TransferStep /> : mode === 'dashboard' ? <DashboardStep /> : (
-        <>
-          {step === 'scope' && <ScopeStep />}
-          {step === 'preferences' && <PreferencesStep />}
-          {step === 'structure' && <StructureStep />}
-          {step === 'review' && <ReviewStep />}
-          {step === 'result' && <ResultStep />}
-        </>
-      )}
+    <Shell key={locale} organizeContent={organizeContent}>
+      {mode === 'cleanup' ? <CleanupStep /> : mode === 'transfer' ? <TransferStep /> : <DashboardStep />}
     </Shell>
   )
 }

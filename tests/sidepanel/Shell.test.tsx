@@ -13,28 +13,32 @@ beforeEach(() => {
 })
 
 describe('Shell 设置入口', () => {
-  it('默认展示步骤条与步骤内容，不展示设置页', () => {
-    render(<Shell><div>步骤内容</div></Shell>)
-    expect(screen.getByText('1. 选范围')).toBeDefined()
+  it('默认展示纵向步骤与当前内容，不展示设置页', () => {
+    render(<Shell organizeContent={<div>步骤内容</div>}>{null}</Shell>)
+    expect(screen.getByText('01 选范围')).toBeDefined()
     expect(screen.getByText('步骤内容')).toBeDefined()
   })
 
-  it('分隔线位于步骤条上方，而不是步骤条下方', () => {
-    render(<Shell><div>步骤内容</div></Shell>)
-    expect(screen.getByRole('banner').className).not.toContain('border-b')
-    expect(screen.getByRole('list').className).toContain('border-t')
+  it('设置用线框返回标题替换整条主导航', async () => {
+    render(<Shell organizeContent={<div>步骤内容</div>}>{null}</Shell>)
+    await userEvent.click(screen.getByRole('button', { name: '设置' }))
+    const banner = screen.getByRole('banner')
+    expect(banner.className).toContain('border-index-line')
+    expect(within(banner).queryByRole('tablist')).toBeNull()
+    expect(within(banner).getByRole('button', { name: '返回' })).toBeDefined()
+    expect(within(banner).getByRole('heading', { name: '设置' })).toBeDefined()
   })
 
   it('点齿轮打开设置页，步骤条与步骤内容都让位', async () => {
-    render(<Shell><div>步骤内容</div></Shell>)
+    render(<Shell organizeContent={<div>步骤内容</div>}>{null}</Shell>)
     await userEvent.click(screen.getByRole('button', { name: '设置' }))
     expect(screen.queryByText('步骤内容')).toBeNull()
-    expect(screen.queryByText('1. 选范围')).toBeNull()
+    expect(screen.queryByText('01 选范围')).toBeNull()
     expect(screen.getByRole('heading', { name: '设置' })).toBeDefined()
   })
 
   it('设置页标题跟返回同一行，不另起一个孤零零的「设置」', async () => {
-    render(<Shell><div>步骤内容</div></Shell>)
+    render(<Shell organizeContent={<div>步骤内容</div>}>{null}</Shell>)
     await userEvent.click(screen.getByRole('button', { name: '设置' }))
     const banner = screen.getByRole('banner')
     expect(within(banner).getByRole('heading', { name: '设置' })).toBeTruthy()
@@ -44,17 +48,17 @@ describe('Shell 设置入口', () => {
 
 
   it('点返回回到原来的步骤，步骤内容原样回来', async () => {
-    render(<Shell><div>步骤内容</div></Shell>)
+    render(<Shell organizeContent={<div>步骤内容</div>}>{null}</Shell>)
     await userEvent.click(screen.getByRole('button', { name: '设置' }))
     await userEvent.click(screen.getByRole('button', { name: '返回' }))
     expect(screen.getByText('步骤内容')).toBeDefined()
-    expect(screen.getByText('1. 选范围')).toBeDefined()
+    expect(screen.getByText('01 选范围')).toBeDefined()
   })
 
   // 分析要跑好几分钟，中途想改设置是常事；关掉设置页后进度必须还在
   it('整理进行中也能开设置，busy 状态不受影响', async () => {
     useStore.setState({ busy: '正在分析…', busyKind: 'analyze' })
-    render(<Shell><div>步骤内容</div></Shell>)
+    render(<Shell organizeContent={<div>步骤内容</div>}>{null}</Shell>)
     await userEvent.click(screen.getByRole('button', { name: '设置' }))
     expect(useStore.getState().busy).toBe('正在分析…')
   })
@@ -62,26 +66,23 @@ describe('Shell 设置入口', () => {
 
 /**
  * 步骤条是只读的进度指示，不是导航——所以它刻意不长成按钮的样子。
- * 代价是「现在在第几步」只剩字重与轨道在传达，读屏那边什么都收不到，
+ * 代价是「现在在第几步」只剩字重、颜色与展开内容在传达，读屏那边什么都收不到，
  * aria-current 是唯一能被程序读到的载体，得有测试守着。
  */
 describe('Shell 步骤条', () => {
   it('只有当前步骤带 aria-current', () => {
     useStore.setState({ step: 'review' })
-    render(<Shell><div>步骤内容</div></Shell>)
-    expect(screen.getByText('3. 预览').getAttribute('aria-current')).toBe('step')
-    expect(screen.getByText('1. 选范围').getAttribute('aria-current')).toBeNull()
+    render(<Shell organizeContent={<div>步骤内容</div>}>{null}</Shell>)
+    expect(screen.getByText('04 预览').getAttribute('aria-current')).toBe('step')
+    expect(screen.getByText('01 选范围').getAttribute('aria-current')).toBeNull()
   })
 
-  it('步骤变了 aria-current 跟着走，不会留在原地', () => {
-    useStore.setState({ step: 'scope' })
-    const { rerender } = render(<Shell><div>步骤内容</div></Shell>)
-    expect(screen.getByText('1. 选范围').getAttribute('aria-current')).toBe('step')
-
-    useStore.setState({ step: 'result' })
-    rerender(<Shell><div>步骤内容</div></Shell>)
-    expect(screen.getByText('1. 选范围').getAttribute('aria-current')).toBeNull()
-    expect(screen.getByText('4. 结果').getAttribute('aria-current')).toBe('step')
+  it('完整呈现包含结构确认在内的五个实际步骤', () => {
+    useStore.setState({ step: 'structure' })
+    render(<Shell organizeContent={<div>结构编辑器</div>}>{null}</Shell>)
+    expect(screen.getAllByRole('listitem')).toHaveLength(5)
+    expect(screen.getByText('03 确认结构').getAttribute('aria-current')).toBe('step')
+    expect(screen.getByText('结构编辑器')).toBeDefined()
   })
 })
 
@@ -93,7 +94,7 @@ describe('Shell 的错误条', () => {
   it('可重试时给出按钮，点了就重跑', async () => {
     const retry = vi.fn()
     useStore.setState({ error: '后台被中断', retryable: 'analyze', retry, busy: null })
-    render(<Shell>{null}</Shell>)
+    render(<Shell organizeContent={null}>{null}</Shell>)
     await userEvent.click(screen.getByRole('button', { name: '重试' }))
     expect(retry).toHaveBeenCalled()
   })
@@ -105,7 +106,7 @@ describe('Shell 的错误条', () => {
    */
   it('设置页里红条让位，返回后原样回来', async () => {
     useStore.setState({ error: '后台被中断', retryable: 'analyze', busy: null })
-    render(<Shell>{null}</Shell>)
+    render(<Shell organizeContent={null}>{null}</Shell>)
     expect(screen.getByText('后台被中断')).toBeTruthy()
 
     await userEvent.click(screen.getByRole('button', { name: '设置' }))
@@ -119,7 +120,7 @@ describe('Shell 的错误条', () => {
 
   it('不可重试的错误只显示文字，没有按钮', () => {
     useStore.setState({ error: '请先填 API Key', retryable: null, busy: null })
-    render(<Shell>{null}</Shell>)
+    render(<Shell organizeContent={null}>{null}</Shell>)
     expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
   })
 })
@@ -130,74 +131,75 @@ describe('Shell 的错误条', () => {
  */
 describe('Shell 模式切换', () => {
   it('默认停在 AI 整理，四个按钮都在', () => {
-    render(<Shell><div>步骤内容</div></Shell>)
-    expect(screen.getByRole('tab', { name: 'AI 整理' }).getAttribute('aria-selected')).toBe('true')
-    expect(screen.getByRole('tab', { name: '本地清理' }).getAttribute('aria-selected')).toBe('false')
-    expect(screen.getByRole('tab', { name: '浏览书签' }).getAttribute('aria-selected')).toBe('false')
-    expect(screen.getByRole('tab', { name: '看板' }).getAttribute('aria-selected')).toBe('false')
+    render(<Shell organizeContent={<div>步骤内容</div>}>{null}</Shell>)
+    expect(screen.getByRole('tab', { name: '01 AI 整理' }).getAttribute('aria-selected')).toBe('true')
+    expect((screen.getByRole('tab', { name: '02 本地清理' }) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByRole('tab', { name: '03 浏览书签' }) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByRole('tab', { name: '04 看板' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('点本地清理切到清理模式，步骤条随之让位', async () => {
-    render(<Shell><div>步骤内容</div></Shell>)
-    await userEvent.click(screen.getByRole('tab', { name: '本地清理' }))
+    render(<Shell organizeContent={<div>步骤内容</div>}><div>清理内容</div></Shell>)
+    await userEvent.click(screen.getByRole('tab', { name: '02 本地清理' }))
     expect(useStore.getState().mode).toBe('cleanup')
-    expect(screen.queryByText('1. 选范围')).toBeNull()
+    expect(screen.queryByText('01 选范围')).toBeNull()
+    expect(screen.getByText('清理内容')).toBeDefined()
   })
 
   it('点浏览书签切到浏览模式，步骤条随之让位', async () => {
-    render(<Shell><div>步骤内容</div></Shell>)
-    await userEvent.click(screen.getByRole('tab', { name: '浏览书签' }))
+    render(<Shell organizeContent={<div>步骤内容</div>}><div>浏览内容</div></Shell>)
+    await userEvent.click(screen.getByRole('tab', { name: '03 浏览书签' }))
     expect(useStore.getState().mode).toBe('transfer')
-    expect(screen.queryByText('1. 选范围')).toBeNull()
+    expect(screen.queryByText('01 选范围')).toBeNull()
   })
 
   it('点看板切到看板模式，步骤条随之让位', async () => {
-    render(<Shell><div>步骤内容</div></Shell>)
-    await userEvent.click(screen.getByRole('tab', { name: '看板' }))
+    render(<Shell organizeContent={<div>步骤内容</div>}><div>看板内容</div></Shell>)
+    await userEvent.click(screen.getByRole('tab', { name: '04 看板' }))
     expect(useStore.getState().mode).toBe('dashboard')
-    expect(screen.queryByText('1. 选范围')).toBeNull()
+    expect(screen.queryByText('01 选范围')).toBeNull()
   })
 
   it('清理模式下不展示步骤条，但正文照常渲染', () => {
     useStore.setState({ mode: 'cleanup' })
-    render(<Shell><div>步骤内容</div></Shell>)
-    expect(screen.queryByText('1. 选范围')).toBeNull()
-    expect(screen.getByText('步骤内容')).toBeDefined()
+    render(<Shell organizeContent={<div>步骤内容</div>}><div>清理内容</div></Shell>)
+    expect(screen.queryByText('01 选范围')).toBeNull()
+    expect(screen.getByText('清理内容')).toBeDefined()
   })
 
   it('浏览书签模式下不展示步骤条，但正文照常渲染', () => {
     useStore.setState({ mode: 'transfer' })
-    render(<Shell><div>步骤内容</div></Shell>)
-    expect(screen.queryByText('1. 选范围')).toBeNull()
-    expect(screen.getByText('步骤内容')).toBeDefined()
+    render(<Shell organizeContent={<div>步骤内容</div>}><div>浏览内容</div></Shell>)
+    expect(screen.queryByText('01 选范围')).toBeNull()
+    expect(screen.getByText('浏览内容')).toBeDefined()
   })
 
   it('看板模式下不展示步骤条，但正文照常渲染', () => {
     useStore.setState({ mode: 'dashboard' })
-    render(<Shell><div>步骤内容</div></Shell>)
-    expect(screen.queryByText('1. 选范围')).toBeNull()
-    expect(screen.getByText('步骤内容')).toBeDefined()
+    render(<Shell organizeContent={<div>步骤内容</div>}><div>看板内容</div></Shell>)
+    expect(screen.queryByText('01 选范围')).toBeNull()
+    expect(screen.getByText('看板内容')).toBeDefined()
   })
 
   // busy 是单槽，切过去也什么都干不了，还会让人以为切换失灵，所以忙的时候禁用
   it('忙的时候四个模式按钮都禁用', () => {
     useStore.setState({ busy: '正在分析…', busyKind: 'analyze' })
-    render(<Shell><div>步骤内容</div></Shell>)
-    expect((screen.getByRole('tab', { name: 'AI 整理' }) as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByRole('tab', { name: '本地清理' }) as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByRole('tab', { name: '浏览书签' }) as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByRole('tab', { name: '看板' }) as HTMLButtonElement).disabled).toBe(true)
+    render(<Shell organizeContent={<div>步骤内容</div>}>{null}</Shell>)
+    expect((screen.getByRole('tab', { name: '01 AI 整理' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('tab', { name: '02 本地清理' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('tab', { name: '03 浏览书签' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('tab', { name: '04 看板' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('设置页打开时模式按钮不显示——那时整个正文是设置', async () => {
-    render(<Shell><div>步骤内容</div></Shell>)
+    render(<Shell organizeContent={<div>步骤内容</div>}>{null}</Shell>)
     await userEvent.click(screen.getByRole('button', { name: '设置' }))
-    expect(screen.queryByRole('tab', { name: 'AI 整理' })).toBeNull()
+    expect(screen.queryByRole('tab', { name: '01 AI 整理' })).toBeNull()
   })
 
   // 齿轮和返回同占头部右/左两端，设置页里齿轮点了没反应——留着只会让人怀疑自己没点中
   it('设置页里齿轮收起来，只剩返回', async () => {
-    render(<Shell><div>步骤内容</div></Shell>)
+    render(<Shell organizeContent={<div>步骤内容</div>}>{null}</Shell>)
     await userEvent.click(screen.getByRole('button', { name: '设置' }))
     expect(screen.queryByRole('button', { name: '设置' })).toBeNull()
     expect(screen.getByRole('button', { name: '返回' })).toBeTruthy()
