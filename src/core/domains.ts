@@ -70,41 +70,69 @@ export function bookmarkUrls(tree: BookmarkNode[]): WeightedUrl[] {
   return out
 }
 
-export interface FolderShare {
-  folderId: string
-  path: string[]
+export interface DomainFolderNode {
+  id: string
+  title: string
+  /** 该域名的书签在这个文件夹里 + 所有子孙里的总数。 */
   count: number
+  /** 该域名的书签直接躺在这个文件夹里的数量（不含子孙）。 */
+  directCount: number
+  children: DomainFolderNode[]
 }
 
 /**
- * 某域名的书签按父文件夹聚合。路径是从根到该文件夹的标题，跳过空标题。
+ * 某域名的书签在文件夹树上的分布结构。
+ *
+ * 返回修剪过的森林：只留含该域名书签（或子孙含）的文件夹，count 为 0 的剪掉。
+ * 空标题的根节点不成行，其合格子节点上浮到本层。每层按 count 降序、同数按标题稳定。
+ * 自己没有直接书签、又只有一个子文件夹的「过道文件夹」折叠成 `甲 / 乙` 一行，
+ * 免得单链一路缩进。
  */
-export function folderDistribution(
+export function domainFolderTree(
   tree: BookmarkNode[],
   domain: string,
-): FolderShare[] {
-  const byFolder = new Map<string, FolderShare>()
-
-  const walk = (nodes: BookmarkNode[], path: string[], folderId: string): void => {
-    for (const node of nodes) {
-      if (node.url !== undefined) {
-        const parsed = sanitizeUrl(node.url)
-        if (parsed === null || parsed.domain !== domain) continue
-        const existing = byFolder.get(folderId)
-        if (existing === undefined) {
-          byFolder.set(folderId, { folderId, path, count: 1 })
-        } else {
-          existing.count += 1
-        }
-        continue
-      }
-      const nextPath = node.title === '' ? path : [...path, node.title]
-      walk(node.children ?? [], nextPath, node.id)
-    }
+): DomainFolderNode[] {
+  const matches = (url: string): boolean => {
+    const parsed = sanitizeUrl(url)
+    return parsed !== null && parsed.domain === domain
   }
 
-  walk(tree, [], '')
-  return [...byFolder.values()].sort(
-    (a, b) => b.count - a.count || a.path.join('\0').localeCompare(b.path.join('\0')),
-  )
+  const sortLevel = (nodes: DomainFolderNode[]): DomainFolderNode[] =>
+    [...nodes].sort((a, b) => b.count - a.count || a.title.localeCompare(b.title))
+
+  const collapse = (node: DomainFolderNode): DomainFolderNode => {
+    const only = node.children.length === 1 ? node.children[0] : undefined
+    if (node.directCount === 0 && only !== undefined) {
+      return {
+        id: only.id,
+        title: `${node.title} / ${only.title}`,
+        count: only.count,
+        directCount: only.directCount,
+        children: only.children,
+      }
+    }
+    return node
+  }
+
+  const forest = (nodes: BookmarkNode[]): DomainFolderNode[] => {
+    const out: DomainFolderNode[] = []
+    for (const node of nodes) {
+      if (node.url !== undefined) continue
+      const kids = forest(node.children ?? [])
+      if (node.title === '') {
+        out.push(...kids)
+        continue
+      }
+      const directCount = (node.children ?? []).reduce(
+        (n, child) => n + (child.url !== undefined && matches(child.url) ? 1 : 0),
+        0,
+      )
+      const count = directCount + kids.reduce((n, kid) => n + kid.count, 0)
+      if (count === 0) continue
+      out.push(collapse({ id: node.id, title: node.title, count, directCount, children: kids }))
+    }
+    return sortLevel(out)
+  }
+
+  return forest(tree)
 }

@@ -3,18 +3,18 @@ import { t } from '@/i18n'
 import {
   bookmarkUrls,
   clampTopDomainCount,
-  folderDistribution,
+  domainFolderTree,
   rankDomains,
   TOP_DOMAIN_MAX,
   TOP_DOMAIN_MIN,
+  type DomainFolderNode,
   type DomainRank,
-  type FolderShare,
   type WeightedUrl,
 } from '@/core/domains'
 import type { BookmarkNode } from '@/core/ports'
 import { faviconSrc } from '../lib/favicons'
 import { ensureHistoryPermission, hasHistoryPermission, visitUrls } from '../lib/visits'
-import { ChevronDownIcon, TrendingUpIcon } from '../components/icons'
+import { ChevronDownIcon, FolderIcon, TrendingUpIcon } from '../components/icons'
 import { useStore } from '../store'
 
 type Metric = 'bookmarked' | 'visited'
@@ -245,7 +245,7 @@ function DomainRow({
 }) {
   const pct = max === 0 ? 0 : (row.count / max) * 100
   const expandable = tree !== undefined
-  const shares = open && tree !== undefined ? folderDistribution(tree, row.domain) : []
+  const folders = open && tree !== undefined ? domainFolderTree(tree, row.domain) : []
   const leader = rank === 1
   const summary = (
     <>
@@ -302,33 +302,57 @@ function DomainRow({
       ) : (
         <div className="-mx-1.5 flex items-center gap-2.5 px-1.5 py-1.5">{summary}</div>
       )}
-      {open && tree !== undefined && <FolderShares shares={shares} />}
+      {open && tree !== undefined && (
+        <FolderTree nodes={folders} total={row.count} domain={row.domain} depth={0} />
+      )}
     </li>
   )
 }
 
-function FolderShares({ shares }: { shares: FolderShare[] }) {
+function FolderTree({
+  nodes,
+  total,
+  domain,
+  depth,
+}: {
+  nodes: DomainFolderNode[]
+  total: number
+  domain: string
+  depth: number
+}) {
   const grown = useGrow()
-  const shareMax = shares[0]?.count ?? 0
   return (
-    <ol className="mt-1.5 ml-3 space-y-2 border-l border-neutral-200 pl-4">
-      {shares.map((share) => {
-        const sharePct = shareMax === 0 ? 0 : (share.count / shareMax) * 100
-        const label = share.path.join(' / ')
+    <ol
+      aria-label={depth === 0 ? t('dashDomainTreeLabel', domain) : undefined}
+      className={[
+        'space-y-1.5 border-l border-neutral-200 pl-3',
+        depth === 0 ? 'mt-2 ml-3' : 'mt-1.5',
+      ].join(' ')}
+    >
+      {nodes.map((node) => {
+        const pct = total === 0 ? 0 : (node.count / total) * 100
+        const mixed = node.directCount > 0 && node.children.length > 0
         return (
-          <li key={share.folderId} className="flex items-center gap-2">
-            <span className="min-w-0 flex-1 truncate text-sm text-neutral-500" title={label}>
-              {label}
-            </span>
-            <div className="h-1.5 w-16 shrink-0 rounded-full bg-neutral-100">
-              <div
-                className="h-1.5 rounded-full bg-gradient-to-r from-blue-300 to-blue-400 transition-[width] duration-500 ease-out motion-reduce:transition-none"
-                style={{ width: `${grown ? sharePct : 0}%`, minWidth: grown && share.count > 0 ? 4 : 0 }}
-              />
+          <li key={node.id}>
+            <div className="flex items-center gap-2">
+              <FolderIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+              <span className="min-w-0 flex-1 truncate text-sm text-neutral-500" title={node.title}>
+                {node.title}
+              </span>
+              <div className="h-1.5 w-16 shrink-0 rounded-full bg-neutral-100">
+                <div
+                  className="h-1.5 rounded-full bg-gradient-to-r from-blue-300 to-blue-400 transition-[width] duration-500 ease-out motion-reduce:transition-none"
+                  style={{ width: `${grown ? pct : 0}%`, minWidth: grown && node.count > 0 ? 4 : 0 }}
+                />
+              </div>
+              <span className="min-w-12 shrink-0 text-right text-sm tabular-nums text-neutral-600">
+                {mixed && <span className="mr-0.5 text-neutral-400">·{node.directCount}</span>}
+                {node.count}
+              </span>
             </div>
-            <span className="min-w-6 shrink-0 text-right text-sm tabular-nums text-neutral-600">
-              {share.count}
-            </span>
+            {node.children.length > 0 && (
+              <FolderTree nodes={node.children} total={total} domain={domain} depth={depth + 1} />
+            )}
           </li>
         )
       })}

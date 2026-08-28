@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { bookmarkUrls, clampTopDomainCount, folderDistribution, rankDomains } from '@/core/domains'
+import { bookmarkUrls, clampTopDomainCount, domainFolderTree, rankDomains } from '@/core/domains'
 import type { BookmarkNode } from '@/core/ports'
 
 describe('rankDomains', () => {
@@ -140,7 +140,7 @@ describe('bookmarkUrls', () => {
   })
 })
 
-describe('folderDistribution', () => {
+describe('domainFolderTree', () => {
   const tree: BookmarkNode[] = [
     { id: '0', title: '', children: [
       { id: 'bar', title: '书签栏', children: [
@@ -162,28 +162,30 @@ describe('folderDistribution', () => {
     ]},
   ]
 
-  it('同一域名、两个路径分成两行，路径完整', () => {
-    const shares = folderDistribution(tree, 'github.com')
-    expect(shares.map((s) => [s.folderId, s.path, s.count])).toEqual([
-      ['gh', ['书签栏', '开发', 'GitHub'], 2],
-      ['tmp', ['书签栏', '临时'], 1],
-      ['other', ['其他书签'], 1],
+  it('按文件夹层级建树，子孙数汇总到父级，过道文件夹折叠', () => {
+    expect(domainFolderTree(tree, 'github.com')).toEqual([
+      {
+        id: 'bar', title: '书签栏', count: 3, directCount: 0, children: [
+          { id: 'gh', title: '开发 / GitHub', count: 2, directCount: 2, children: [] },
+          { id: 'tmp', title: '临时', count: 1, directCount: 1, children: [] },
+        ],
+      },
+      { id: 'other', title: '其他书签', count: 1, directCount: 1, children: [] },
     ])
   })
 
   it('www 与裸域计入同一 domain', () => {
-    const gh = folderDistribution(tree, 'github.com').find((s) => s.folderId === 'gh')
-    expect(gh?.count).toBe(2)
+    const [bar] = domainFolderTree(tree, 'github.com')
+    expect(bar?.children[0]?.count).toBe(2)
   })
 
-  it('根下书签路径是根文件夹名，空标题根不进路径', () => {
-    const bili = folderDistribution(tree, 'bilibili.com')
-    expect(bili).toEqual([
-      { folderId: 'bar', path: ['书签栏'], count: 1 },
+  it('根下书签落在根文件夹自己名下，空标题根不成行', () => {
+    expect(domainFolderTree(tree, 'bilibili.com')).toEqual([
+      { id: 'bar', title: '书签栏', count: 1, directCount: 1, children: [] },
     ])
   })
 
-  it('按条数降序，同数按路径稳定', () => {
+  it('同层按 count 降序，同数按标题稳定', () => {
     const tied: BookmarkNode[] = [
       { id: '0', title: '', children: [
         { id: 'z', title: 'zeta', children: [
@@ -194,19 +196,39 @@ describe('folderDistribution', () => {
         ]},
       ]},
     ]
-    expect(folderDistribution(tied, 'x.com').map((s) => s.path)).toEqual([
-      ['alpha'],
-      ['zeta'],
+    expect(domainFolderTree(tied, 'x.com').map((n) => n.title)).toEqual([
+      'alpha',
+      'zeta',
     ])
   })
 
   it('无关域名和非 http(s) 不进结果', () => {
-    expect(folderDistribution(tree, 'example.com')).toEqual([])
-    expect(folderDistribution(tree, 'javascript:alert(1)')).toEqual([])
+    expect(domainFolderTree(tree, 'example.com')).toEqual([])
+    expect(domainFolderTree(tree, 'javascript:alert(1)')).toEqual([])
   })
 
-  it('各行 count 之和等于该域名在树上的书签数', () => {
-    const shares = folderDistribution(tree, 'github.com')
-    expect(shares.reduce((n, s) => n + s.count, 0)).toBe(4)
+  it('根节点 count 等于该域名在树上的书签总数', () => {
+    const total = domainFolderTree(tree, 'github.com').reduce((n, node) => n + node.count, 0)
+    expect(total).toBe(4)
+  })
+
+  it('自己有书签又有子文件夹的分支不折叠，directCount 反映直接书签', () => {
+    const mixed: BookmarkNode[] = [
+      { id: '0', title: '', children: [
+        { id: 'p', title: '项目', children: [
+          { id: 'p1', title: 'p1', url: 'https://x.com/1' },
+          { id: 'sub', title: '子', children: [
+            { id: 's1', title: 's1', url: 'https://x.com/2' },
+          ]},
+        ]},
+      ]},
+    ]
+    expect(domainFolderTree(mixed, 'x.com')).toEqual([
+      {
+        id: 'p', title: '项目', count: 2, directCount: 1, children: [
+          { id: 'sub', title: '子', count: 1, directCount: 1, children: [] },
+        ],
+      },
+    ])
   })
 })
