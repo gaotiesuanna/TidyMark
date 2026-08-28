@@ -61,6 +61,24 @@ function setup(scan: ScanResult, modeOverride: OrganizeMode | null = null): void
   })
 }
 
+describe('PreferencesStep indexed presentation', () => {
+  it('labels the screen and keeps its numbered preferences section and navigation actions', () => {
+    setup(messyScan)
+    useStore.setState({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        ...withLlm({ ...activeLlm(DEFAULT_SETTINGS), apiKey: 'sk-configured' }),
+      },
+    })
+    render(<PreferencesStep />)
+
+    expect(screen.getByRole('heading', { name: '偏好' })).toBeTruthy()
+    expect(screen.getByTestId('preferences-section').getAttribute('data-index')).toBe('01')
+    expect(screen.getByRole('button', { name: '返回' })).toBeTruthy()
+    expect((screen.getByRole('button', { name: '开始 AI 分析' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+})
+
 // 域名聚合那一组勾选框随 issues/38-source-vs-topic.md 的 D4 删掉了。
 // 留一条反向断言：它不该以任何形式再出现在偏好页上。
 describe('PreferencesStep 不再有域名聚合', () => {

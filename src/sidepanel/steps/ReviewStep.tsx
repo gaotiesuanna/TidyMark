@@ -5,6 +5,11 @@ import type { PlanRow, UnchangedRow } from '@/core/types'
 import { plural, t } from '@/i18n'
 import { downloadJson } from '../lib/download'
 import { useStore } from '../store'
+import { IndexSection } from '../components/IndexSection'
+import { InlineStatus } from '../components/InlineStatus'
+import { PageHeader } from '../components/PageHeader'
+import { PrimaryButton, SecondaryButton, StickyActionBar } from '../components/IndexControls'
+import { fieldClass } from '../components/buttonStyles'
 
 /**
  * 一组：目标目录相同的建议。allRule 决定要不要给组级「全部来自域名规则」标记与默认折叠。
@@ -154,13 +159,21 @@ export function ReviewStep() {
   }
 
   return (
-    <div className="space-y-3">
-      <p className="text-sm leading-caption text-neutral-500">
-        {plural(plan.rows.length, 'reviewSummaryOne', 'reviewSummaryOther', String(plan.rows.length), String(accepted.size))}
-      </p>
+    <div>
+      <PageHeader
+        title={t('shellStepReview')}
+        description={plural(plan.rows.length, 'reviewSummaryOne', 'reviewSummaryOther', String(plan.rows.length), String(accepted.size))}
+      />
+
+      <div data-testid="review-section" data-index="01">
+        <IndexSection
+          index="01"
+          title={t('reviewGroupCount', String(plan.rows.length))}
+          count={String(accepted.size)}
+        >
 
       {(summary.createdFolders > 0 || summary.renamedFolders > 0) && (
-        <p className="text-sm leading-caption text-neutral-500">
+        <p className="text-sm leading-caption text-index-muted">
           {plural(summary.createdFolders, 'reviewCreateFoldersOne', 'reviewCreateFoldersOther', String(summary.createdFolders))}
           {summary.renamedFolders > 0 && plural(summary.renamedFolders, 'reviewRenameFoldersOne', 'reviewRenameFoldersOther', String(summary.renamedFolders))}
           {t('reviewSummaryPeriod')}
@@ -168,53 +181,57 @@ export function ReviewStep() {
       )}
 
       {summary.renamedBookmarks > 0 && (
-        <p className="text-sm leading-caption text-neutral-500">
+        <p className="mt-1 text-sm leading-caption text-index-muted">
           {plural(summary.renamedBookmarks, 'reviewRenameBookmarksOne', 'reviewRenameBookmarksOther', String(summary.renamedBookmarks))}
         </p>
       )}
 
       {settings.removeEmptyFolders && (
-        <p className="text-sm leading-caption text-neutral-500">{t('reviewCleanNote')}</p>
+        <p className="mt-1 text-sm leading-caption text-index-muted">{t('reviewCleanNote')}</p>
       )}
 
       {plan.warnings.length > 0 && (
-        <ul className="space-y-1 rounded border border-amber-200 bg-amber-50 p-2 text-sm leading-caption text-amber-800">
-          {plan.warnings.map((warning) => (
-            <li key={warning}>{warning}</li>
-          ))}
-        </ul>
+        <div className="mt-2">
+          <InlineStatus tone="warning">
+            <ul className="space-y-1">
+              {plan.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          </InlineStatus>
+        </div>
       )}
 
       {plan.rows.length === 0 && (
-        <p className="rounded border bg-neutral-50 p-3 text-sm leading-relaxed text-neutral-500">
-          {t('reviewEmpty')}
-        </p>
+        <div className="mt-2">
+          <InlineStatus tone="neutral">{t('reviewEmpty')}</InlineStatus>
+        </div>
       )}
 
-      <div className="flex gap-1 text-sm leading-caption">
-        <button className="rounded border px-2 py-1 hover:bg-neutral-50" onClick={acceptAll}>{t('reviewAcceptAll')}</button>
-        <button className="rounded border px-2 py-1 hover:bg-neutral-50" onClick={rejectAll}>{t('reviewRejectAll')}</button>
+      <div className="mt-3 flex flex-wrap gap-1 text-sm leading-caption">
+        <SecondaryButton onClick={acceptAll}>{t('reviewAcceptAll')}</SecondaryButton>
+        <SecondaryButton onClick={rejectAll}>{t('reviewRejectAll')}</SecondaryButton>
         {/* 两个筛选开关：只管看得见看不见，不碰 accepted，可以叠加 */}
-        <button
+        <SecondaryButton
           type="button"
           aria-pressed={modelOnly}
-          className={`rounded border px-2 py-1 hover:bg-neutral-50 ${modelOnly ? 'border-neutral-800 bg-neutral-800 text-white' : ''}`}
+          className={modelOnly ? 'border-index-ink bg-index-ink text-index-canvas' : ''}
           onClick={() => setModelOnly((prev) => !prev)}
         >
           {t('reviewFilterModelOnly')}
-        </button>
-        <button
+        </SecondaryButton>
+        <SecondaryButton
           type="button"
           aria-pressed={markedOnly}
-          className={`rounded border px-2 py-1 hover:bg-neutral-50 ${markedOnly ? 'border-neutral-800 bg-neutral-800 text-white' : ''}`}
+          className={markedOnly ? 'border-index-ink bg-index-ink text-index-canvas' : ''}
           onClick={() => setMarkedOnly((prev) => !prev)}
         >
           {t('reviewFilterMarkedOnly')}
-        </button>
+        </SecondaryButton>
         {/* 勾选无关的一项，靠 ml-auto 推到另一头，不跟左边几个混成一排 */}
-        <button className="ml-auto rounded border px-2 py-1 text-neutral-500 hover:bg-neutral-50" onClick={exportPlan}>
+        <SecondaryButton className="ml-auto" onClick={exportPlan}>
           {t('reviewExportPlan')}
-        </button>
+        </SecondaryButton>
       </div>
 
       {/* 两个筛选开关叠加把所有行筛没时不能直接留白——那读起来像「一条建议都没有」，
@@ -223,43 +240,50 @@ export function ReviewStep() {
           没有任何筛选时也成立，这句只在筛选把本来存在的行藏起来时才成立，不能混。
           不把「筛掉了多少」写进来——按钮已经把话说完了，没必要让用户自己做减法。 */}
       {plan.rows.length > 0 && visibleGroups.length === 0 && (
-        <div className="rounded border bg-neutral-50 p-3 text-sm leading-relaxed text-neutral-500">
-          <p>{t('reviewFilterEmpty')}</p>
-          <button
-            type="button"
-            className="mt-2 rounded border px-2 py-1 hover:bg-white"
-            onClick={() => {
-              setModelOnly(false)
-              setMarkedOnly(false)
-            }}
+        <div className="mt-2">
+          <InlineStatus
+            tone="neutral"
+            action={<SecondaryButton
+              onClick={() => {
+                setModelOnly(false)
+                setMarkedOnly(false)
+              }}
+            >
+              {t('reviewFilterClear')}
+            </SecondaryButton>}
           >
-            {t('reviewFilterClear')}
-          </button>
+            {t('reviewFilterEmpty')}
+          </InlineStatus>
         </div>
       )}
 
-      <div className="space-y-2">
-        {visibleGroups.map((group) => {
+      <div className="mt-3 border-t border-index-line">
+        {visibleGroups.map((group, groupIndex) => {
           const collapsed = collapsedOverride[group.key] ?? group.allRule
           return (
-            <div key={group.key} className="space-y-1">
+            <div key={group.key}>
               <button
                 type="button"
-                className="flex w-full items-center gap-2 rounded bg-neutral-100 px-2 py-1 text-left text-sm leading-caption font-medium hover:bg-neutral-200"
+                aria-expanded={!collapsed}
+                className="grid min-h-index-row w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-2 border-b border-index-line px-2 py-2 text-left text-sm leading-caption font-medium text-index-ink hover:bg-index-blue-soft"
                 onClick={() => toggleGroup(group)}
               >
-                <span className="truncate">{group.label}</span>
-                <span className="shrink-0 text-neutral-400">{t('reviewGroupCount', String(group.rows.length))}</span>
-                {group.allRule && (
-                  <span className="shrink-0 rounded bg-emerald-100 px-1 text-2xs text-emerald-700">{t('reviewGroupAllRule')}</span>
-                )}
+                <span className="font-mono text-xs text-neutral-400">{String(groupIndex + 1).padStart(2, '0')}</span>
+                <span className="min-w-0 break-words [overflow-wrap:anywhere]">{group.label}</span>
+                <span className="shrink-0 text-right text-xs text-index-muted">
+                  {t('reviewGroupCount', String(group.rows.length))}
+                  {group.allRule && (
+                    <span className="mt-0.5 block text-2xs text-emerald-700">{t('reviewGroupAllRule')}</span>
+                  )}
+                </span>
               </button>
 
               {!collapsed && (
-                <ul className="space-y-1">
-                  {group.rows.map((row) => (
-                    <li key={row.bookmarkId} className="rounded border p-2 text-sm leading-caption">
-                      <div className="flex items-start gap-2">
+                <ul className="ml-5 border-l border-index-line pl-2">
+                  {group.rows.map((row, rowIndex) => (
+                    <li key={row.bookmarkId} className="border-b border-index-line px-2 py-2 text-sm leading-caption">
+                      <div className="grid grid-cols-[2rem_minmax(0,1fr)] items-start gap-2">
+                        <span className="font-mono text-xs text-neutral-400">{String(rowIndex + 1).padStart(2, '0')}</span>
                         <label className="flex flex-1 cursor-pointer items-start gap-2">
                           <input
                             type="checkbox"
@@ -269,8 +293,8 @@ export function ReviewStep() {
                             onChange={() => toggleAccepted(row.bookmarkId)}
                           />
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="truncate font-medium">{row.title}</span>
+                            <div className="flex items-start gap-2">
+                              <span className="min-w-0 flex-1 break-words font-medium [overflow-wrap:anywhere]">{row.title}</span>
                               {row.confidence < MARK_CONFIDENCE && (
                                 <span className="shrink-0 rounded bg-amber-100 px-1 text-2xs text-amber-700">{t('reviewMarked')}</span>
                               )}
@@ -278,7 +302,7 @@ export function ReviewStep() {
                             </div>
                             {/* 目标路径已经是组标题，组内每条只用再交代它原来在哪，不重复目标——
                                 重复的话会跟组标题撞出同一段文字，人扫起来也是噪音。 */}
-                            <div className="mt-1 text-neutral-500">
+                            <div className="mt-1 break-words text-index-muted [overflow-wrap:anywhere]">
                               <span className="line-through">{row.fromPath.join(' / ')}</span>
                             </div>
                             <div className="mt-0.5 text-neutral-400">{row.reason}</div>
@@ -300,7 +324,7 @@ export function ReviewStep() {
                           可以当场改投到另一个候选目录——选了即改方案、自动勾上（见 setRowTarget）。 */}
                       <select
                         aria-label={t('reviewRetarget', row.title)}
-                        className="mt-1 w-full rounded border px-1 py-0.5 text-neutral-700"
+                        className={`mt-2 ${fieldClass} min-h-0 py-1`}
                         // 直接用 row.toCategoryId，不拿 toPath 反查候选——反查在推翻模式下
                         // 部分取消勾选、以及合并模式两种常见状态下都会落空，落空后浏览器会
                         // 退回第一个 option，下拉就会理直气壮地显示成另一个目录（见 I2）。
@@ -325,13 +349,14 @@ export function ReviewStep() {
           「没找到合适目录」与「这次没能分类」是两种完全不同的问题，不能混在同一条路上。
           这里的书签不带勾选框：给个勾选框会让用户以为能对它们做什么。 */}
       {plan.unchanged.length > 0 && (
-        <div className="space-y-1">
+        <div className="mt-3 border-t border-index-line">
           <button
             type="button"
-            className="flex w-full items-center gap-2 rounded bg-neutral-100 px-2 py-1 text-left text-sm leading-caption font-medium hover:bg-neutral-200"
+            aria-expanded={!unchangedCollapsed}
+            className="flex min-h-index-row w-full items-center gap-2 border-b border-index-line px-2 py-2 text-left text-sm leading-caption font-medium text-index-ink hover:bg-index-blue-soft"
             onClick={() => setUnchangedCollapsed((prev) => !prev)}
           >
-            <span className="truncate">{t('reviewUnchangedTitle', String(plan.unchanged.length))}</span>
+            <span className="break-words">{t('reviewUnchangedTitle', String(plan.unchanged.length))}</span>
           </button>
 
           {!unchangedCollapsed && (
@@ -341,12 +366,12 @@ export function ReviewStep() {
                 if (rows.length === 0) return null
                 return (
                   <div key={kind} className="space-y-1">
-                    <p className="text-2xs font-medium text-neutral-500">{unchangedKindLabel(kind)}</p>
-                    <ul className="space-y-1">
+                    <p className="px-2 pt-2 text-2xs font-medium text-index-muted">{unchangedKindLabel(kind)}</p>
+                    <ul>
                       {rows.map((row) => (
-                        <li key={row.bookmarkId} className="rounded border p-2 text-sm leading-caption">
-                          <div className="truncate font-medium">{row.title}</div>
-                          <div className="mt-1 text-neutral-500">{row.currentPath.join(' / ')}</div>
+                        <li key={row.bookmarkId} className="border-b border-index-line px-2 py-2 text-sm leading-caption">
+                          <div className="break-words font-medium [overflow-wrap:anywhere]">{row.title}</div>
+                          <div className="mt-1 break-words text-index-muted [overflow-wrap:anywhere]">{row.currentPath.join(' / ')}</div>
                           {row.reason !== '' && <div className="mt-0.5 text-neutral-400">{row.reason}</div>}
                         </li>
                       ))}
@@ -359,16 +384,21 @@ export function ReviewStep() {
         </div>
       )}
 
-      <div className="sticky bottom-0 flex gap-2 bg-white pt-2">
-        <button className="rounded border px-3 py-2 text-base leading-body" onClick={reset}>{t('reviewDiscard')}</button>
-        <button
-          className="flex-1 rounded bg-neutral-800 py-2 text-base leading-body text-white disabled:opacity-40"
-          disabled={accepted.size === 0 || busy !== null}
-          onClick={() => void apply()}
-        >
-          {plural(accepted.size, 'reviewApplyOne', 'reviewApplyOther', String(accepted.size))}
-        </button>
+        </IndexSection>
       </div>
+
+      <StickyActionBar>
+        <div className="flex gap-2">
+          <SecondaryButton onClick={reset}>{t('reviewDiscard')}</SecondaryButton>
+          <PrimaryButton
+            className="flex-1"
+            disabled={accepted.size === 0 || busy !== null}
+            onClick={() => void apply()}
+          >
+            {plural(accepted.size, 'reviewApplyOne', 'reviewApplyOther', String(accepted.size))}
+          </PrimaryButton>
+        </div>
+      </StickyActionBar>
     </div>
   )
 }

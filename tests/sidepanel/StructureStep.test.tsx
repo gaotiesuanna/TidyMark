@@ -38,6 +38,15 @@ describe('StructureStep', () => {
     useStore.setState({ plan: makePlan(), structureEdits: EMPTY_EDITS, step: 'structure' })
   })
 
+  it('labels the screen and keeps its numbered folder section and navigation actions', () => {
+    render(<StructureStep />)
+
+    expect(screen.getByRole('heading', { name: '确认结构' })).toBeTruthy()
+    expect(screen.getByTestId('structure-section').getAttribute('data-index')).toBe('01')
+    expect(screen.getByRole('button', { name: '返回' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /查看移动清单/ })).toBeTruthy()
+  })
+
   it('按层级展示目录，编号由位置算出', () => {
     render(<StructureStep />)
     expect(screen.getAllByText('01')).toHaveLength(3) // 01 GitHub、其下 01 AI 工具、02 前端 下的 01 React

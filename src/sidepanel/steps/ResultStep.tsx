@@ -4,6 +4,10 @@ import { currentLocale, plural, t } from '@/i18n'
 import { ResultTree } from '../components/ResultTree'
 import { joinTitles } from '../lib/listText'
 import { useStore } from '../store'
+import { IndexSection } from '../components/IndexSection'
+import { InlineStatus } from '../components/InlineStatus'
+import { PageHeader } from '../components/PageHeader'
+import { DangerButton, PrimaryButton, SecondaryButton, StickyActionBar } from '../components/IndexControls'
 
 export function ResultStep() {
   const { applyResult, undoResult, undoAvailable, undo, reset, busy, plan, tree: bookmarks } = useStore()
@@ -40,24 +44,30 @@ export function ResultStep() {
   const finish = (): void => window.close()
 
   return (
-    <div className="space-y-4 text-base leading-body">
-      <section className="rounded border p-3">
-        <h2 className="mb-2 font-medium">
+    <div className="text-base leading-body">
+      <PageHeader title={t('shellStepResult')} />
+
+      <div className="mt-3">
+        <InlineStatus tone={applyResult.status === 'completed' ? 'success' : 'warning'}>
           {applyResult.status === 'completed' ? t('resultCompleted') : t('resultInterrupted')}
-        </h2>
+        </InlineStatus>
+      </div>
+
+      <div data-testid="result-section" data-index="01">
+        <IndexSection index="01" title={t('resultStatExecuted')} count={applyResult.executed}>
         <dl className="grid grid-cols-2 gap-y-1 text-sm leading-caption">
-          <dt className="text-neutral-500">{t('resultStatExecuted')}</dt><dd>{applyResult.executed}</dd>
-          <dt className="text-neutral-500">{t('resultStatCreated')}</dt><dd>{applyResult.createdFolderIds.length}</dd>
-          <dt className="text-neutral-500">{t('resultStatRemoved')}</dt><dd>{cleanedEmptyFolders.length}</dd>
-          <dt className="text-neutral-500">{t('resultStatRenamed')}</dt><dd>{applyResult.renamedBookmarkIds.length}</dd>
-          <dt className="text-neutral-500">{t('resultStatSkipped')}</dt><dd>{applyResult.skipped.length}</dd>
+          <dt className="text-index-muted">{t('resultStatExecuted')}</dt><dd>{applyResult.executed}</dd>
+          <dt className="text-index-muted">{t('resultStatCreated')}</dt><dd>{applyResult.createdFolderIds.length}</dd>
+          <dt className="text-index-muted">{t('resultStatRemoved')}</dt><dd>{cleanedEmptyFolders.length}</dd>
+          <dt className="text-index-muted">{t('resultStatRenamed')}</dt><dd>{applyResult.renamedBookmarkIds.length}</dd>
+          <dt className="text-index-muted">{t('resultStatSkipped')}</dt><dd>{applyResult.skipped.length}</dd>
         </dl>
         {cleanedEmptyFolders.length > 0 && (
-          <details className="mt-2 text-sm leading-caption text-neutral-500">
-            <summary className="cursor-pointer">{t('resultRemovedDetails')}</summary>
-            <ul className="mt-1 space-y-0.5">
+          <details className="mt-2 border-t border-index-line pt-2 text-sm leading-caption text-index-muted">
+            <summary className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-index-blue">{t('resultRemovedDetails')}</summary>
+            <ul className="mt-1 border-l border-index-line pl-3">
               {cleanedEmptyFolders.map((folder) => (
-                <li key={folder.id}>{[...folder.path, folder.title].join(' / ')}</li>
+                <li key={folder.id} className="break-words [overflow-wrap:anywhere]">{[...folder.path, folder.title].join(' / ')}</li>
               ))}
             </ul>
           </details>
@@ -66,7 +76,7 @@ export function ResultStep() {
            撤销结果区（undoResult !== null）接管了叙事，这里整段让路，
            与下面结果树标题按 undoResult 切换标题的做法是同一个道理。 */}
         {undoResult === null && plan !== null && plan.mergeRoot !== null && applyResult.mergeRootId !== null && (
-          <div className="mt-2 text-sm leading-caption text-neutral-500">
+          <div className="mt-2 border-t border-index-line pt-2 text-sm leading-caption text-index-muted">
             {/* 个数取 sourceTitles.length，不用 scopeRootIds.length——后者是级联勾选的全集，会把子目录也算进去。
                这句说的是"这次合并涉及几个源目录"，是合并操作本身的规模，不是"删了几个"，
                所以哪怕下面那行一个源目录都没删掉，这个数字也不用跟着变。 */}
@@ -87,26 +97,32 @@ export function ResultStep() {
           </div>
         )}
         {applyResult.error !== null && (
-          <p className="mt-2 rounded bg-red-50 p-2 text-sm leading-caption text-red-700">
-            {t('resultFailedAt', String((applyResult.failedAt ?? 0) + 1), applyResult.error ?? '')}
-            <br />{t('resultFailedHint')}
-          </p>
+          <div className="mt-2">
+            <InlineStatus tone="error" live="assertive" title={t('resultFailedAt', String((applyResult.failedAt ?? 0) + 1), applyResult.error ?? '')}>
+              {t('resultFailedHint')}
+            </InlineStatus>
+          </div>
         )}
         {applyResult.skipped.length > 0 && (
-          <ul className="mt-2 space-y-0.5 text-sm leading-caption text-neutral-500">
-            {applyResult.skipped.map((each) => (
-              <li key={each.bookmarkId}>{t('resultSkippedItem', each.bookmarkId, each.reason)}</li>
-            ))}
-          </ul>
+          <div className="mt-2">
+            <InlineStatus tone="warning">
+              <ul className="space-y-0.5">
+                {applyResult.skipped.map((each) => (
+                  <li key={each.bookmarkId}>{t('resultSkippedItem', each.bookmarkId, each.reason)}</li>
+                ))}
+              </ul>
+            </InlineStatus>
+          </div>
         )}
-      </section>
+        </IndexSection>
+      </div>
 
       {showTree && (
-        <section className="rounded border p-3">
-          <h2 className="mb-1 font-medium">
+        <section className="border-b border-index-line py-3">
+          <h2 className="font-medium text-index-ink">
             {undoResult === null ? t('resultTreeAfterApply') : t('resultTreeAfterUndo')}
           </h2>
-          <p className="mb-2 text-sm leading-caption text-neutral-500">
+          <p className="mb-2 mt-1 text-sm leading-caption text-index-muted">
             {t('resultTreeHint')}
           </p>
           <ResultTree nodes={tree} />
@@ -114,41 +130,39 @@ export function ResultStep() {
       )}
 
       {undoResult !== null && (
-        <section className="rounded border border-green-200 bg-green-50 p-3 text-sm leading-caption">
-          <p>{plural(undoResult.restored, 'resultUndoneOne', 'resultUndoneOther', String(undoResult.restored), String(undoResult.removedFolders))}</p>
-          {undoResult.skipped.length > 0 && (
-            <ul className="mt-1 space-y-0.5 text-neutral-600">
-              {undoResult.skipped.map((each) => (
-                <li key={each.id}>{t('resultUndoneSkippedItem', each.title, each.reason)}</li>
-              ))}
-            </ul>
-          )}
-        </section>
+        <div className="mt-3">
+          <InlineStatus tone="success">
+            <p>{plural(undoResult.restored, 'resultUndoneOne', 'resultUndoneOther', String(undoResult.restored), String(undoResult.removedFolders))}</p>
+            {undoResult.skipped.length > 0 && (
+              <ul className="mt-1 space-y-0.5">
+                {undoResult.skipped.map((each) => (
+                  <li key={each.id}>{t('resultUndoneSkippedItem', each.title, each.reason)}</li>
+                ))}
+              </ul>
+            )}
+          </InlineStatus>
+        </div>
       )}
 
-      <div className="space-y-2">
+      <StickyActionBar>
+        <div className="space-y-2">
         <div className="flex gap-2">
-          <button
-            className="flex-1 rounded border border-red-300 py-2 text-base leading-body text-red-700 disabled:opacity-40"
+          <DangerButton
+            className="flex-1"
             disabled={!undoAvailable || busy !== null}
             onClick={() => void undo()}
           >
             {t('resultUndoButton')}
-          </button>
-          <button
-            className="flex-1 rounded border py-2 text-base leading-body hover:bg-neutral-50"
-            onClick={reset}
-          >
+          </DangerButton>
+          <SecondaryButton className="flex-1" onClick={reset}>
             {t('resultAgain')}
-          </button>
+          </SecondaryButton>
         </div>
-        <button
-          className="w-full rounded bg-neutral-800 py-2 text-base leading-body text-white"
-          onClick={finish}
-        >
+        <PrimaryButton className="w-full" onClick={finish}>
           {t('resultFinish')}
-        </button>
-      </div>
+        </PrimaryButton>
+        </div>
+      </StickyActionBar>
     </div>
   )
 }
