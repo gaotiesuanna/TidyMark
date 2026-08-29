@@ -2,13 +2,29 @@ import { isLocalBaseUrl } from '@/llm/config'
 
 /**
  * 把 baseUrl 拼成 Chrome 的 match pattern。地址填得不成形（还在敲一半）时返回 null。
+ *
+ * **端口必须丢掉，不能用 URL.origin。** Chrome 的 match pattern 里 host 那一段没有
+ * 端口语法，`https://proxy.example.com:8443/*` 是个非法模式，
+ * `chrome.permissions.contains/request` 拿到它当场抛 Invalid value for origins[0]。
+ * 而 README 明确把「自建代理」列为支持的路径，自建代理十有八九带端口——
+ * 用 origin 拼，这条路径是必炸的，而且炸得不响：见下面两个函数的 catch。
+ *
+ * 丢掉端口的代价是拿到的权限比「就这一个 origin」宽——是这个主机上**所有端口**的
+ * 访问权。这不是我们挑的粒度，是 Chrome 能表达的最细粒度，要么这样要么申请不了。
+ * 域名仍旧只有用户填的那一个，README 那句「只申请你填的那个域名」一字不改。
  */
 function hostPattern(baseUrl: string): string | null {
+  let url: URL
   try {
-    return `${new URL(baseUrl).origin}/*`
+    url = new URL(baseUrl)
   } catch {
     return null
   }
+  // 只有 http/https 有对应的 match pattern。别的协议（file:、chrome-extension: …）
+  // 拼出来同样非法，在这里答 null 比留给 chrome 去抛干净。
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+  if (url.hostname === '') return null
+  return `${url.protocol}//${url.hostname}/*`
 }
 
 /**
@@ -25,7 +41,19 @@ export async function hasHostPermission(baseUrl: string): Promise<boolean> {
   const origin = hostPattern(baseUrl)
   if (origin === null) return false
   if (isLocalBaseUrl(baseUrl)) return true
-  return chrome.permissions.contains({ origins: [origin] })
+  // contains 抛出来一律当「没这个权限」。它实际只有一种失败原因——模式非法
+  // （hostPattern 已经挡掉了已知的那几种，剩下的是 IPv6 字面量这类没预料到的），
+  // 而那一刻「拿不到这个权限」就是正确答案。
+  //
+  // 关键是**不能让它穿出去**：analyze() 里这一步在 set({ busy }) 之前，异常穿出去
+  // 的结果是点了「开始 AI 分析」界面一动不动；testModel() 里它在
+  // settle({ state: 'running' }) 之后，结果是测试按钮永远转下去。答 false 的话，
+  // 两处各自现成的分支会给出「授权失败，可重试」，用户至少知道发生了什么。
+  try {
+    return await chrome.permissions.contains({ origins: [origin] })
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -37,19 +65,26 @@ export async function ensureHostPermission(baseUrl: string): Promise<boolean> {
   if (origin === null) return false
   // 本地模型服务器（Ollama、LM Studio）直接放行，这一步在 hasHostPermission 里。
   //
-  // 不是因为 manifest 没覆盖它——optional_host_permissions 里明明写着
-  // 'http://localhost/*' 与 'http://127.0.0.1/*'（见 manifest.config.ts）。真实理由在
-  // 上面拼出来的 origin 上：本地服务器都跑在 11434、1234 这类非默认端口上，拼出来的
-  // 是 'http://localhost:11434/*'，而 Chrome 的 match pattern 里 host 这一段没有端口语法，
-  // 这个模式非法，chrome.permissions.contains/request 拿到它会当场报错——而 analyze()
-  // 那条路上没人接这个异常。
+  // 曾经的第一条理由是「本地服务器跑在 11434 这类非默认端口上，拼出来的模式非法」——
+  // 那条理由已经不成立了：hostPattern 现在丢端口，拼出的是 'http://localhost/*'，
+  // 与 manifest 的 optional_host_permissions 里写的那条一字不差，完全合法。
   //
-  // 不要把这句读成「没有别的东西可申请」：申请 manifest 里那条 'http://localhost/*'
-  // 本身完全合法。这里不申请它，是因为那等于把 localhost 上**所有端口**的访问权一次要走，
-  // 而用户只填了一个端点。带端口的地址该怎么申请是同一个坑的通用形态（自建端点
-  // https://host:8443 会真的崩在上面那行），单独记在票 35 里，不在这里就地解决。
+  // 留着这个短路是为了剩下的那条理由：申请它等于把 localhost 上**所有端口**的访问权
+  // 一次要走，而用户只填了一个端点。远端主机现在也是这个粒度（见 hostPattern），
+  // 差别在于 localhost 上跑着的东西比某个远端主机上的多得多，那一次弹窗要的也就更多。
+  //
+  // 未解的一半：短路意味着本地端点**永远拿不到 host 权限**，后台 worker 那次
+  // fetch 于是只能靠模型服务器自己的 CORS 头放行（Ollama 要 OLLAMA_ORIGINS 配上
+  // chrome-extension:// 才认）。这条与本次「带端口的端点会静默炸掉」是两件事，
+  // 不在这里顺手改——改了会动到今天能用的那批本地用户。
   if (await hasHostPermission(baseUrl)) return true
-  return chrome.permissions.request({ origins: [origin] })
+  // request 与 contains 同理：模式非法时抛出来，而这里答 false 正好落在调用方
+  // 现成的「用户拒绝了」分支上，文案与真被拒绝时一致，都是「授权失败，可重试」。
+  try {
+    return await chrome.permissions.request({ origins: [origin] })
+  } catch {
+    return false
+  }
 }
 
 /**
