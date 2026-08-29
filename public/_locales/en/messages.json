@@ -1230,6 +1230,9 @@
   "errRetry": {
     "message": "Retry"
   },
+  "errAnotherWindowBusy": {
+    "message": "Another window's side panel is already running TidyMark. Wait for it to finish, or cancel it there, then try again."
+  },
   "errBackgroundRecycled": {
     "message": "The browser suspended the background and interrupted this run."
   },

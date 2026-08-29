@@ -1,5 +1,6 @@
-import type { Request, Response } from '@/background/messages'
+import type { IncomingMessage, Request, Response } from '@/background/messages'
 import { t } from '@/i18n'
+import { CLIENT_ID } from './clientId'
 
 /**
  * 把 Chrome 的原始通信错误翻译成能指导下一步的话。
@@ -19,8 +20,11 @@ export function describeSendError(raw: string): string {
 }
 
 export async function send(request: Request): Promise<Response> {
+  // 身份统一在这里贴上，三十来个调用点一个都不用改，也不会有谁漏贴——
+  // 漏了的那条消息在后台会退成匿名客户端，进度就推不回这个窗口了。
+  const message: IncomingMessage = { ...request, clientId: CLIENT_ID }
   try {
-    const response = (await chrome.runtime.sendMessage(request)) as Response | undefined
+    const response = (await chrome.runtime.sendMessage(message)) as Response | undefined
     // service worker 中途被回收时，Chrome 会以 undefined 结束这次调用
     return response ?? { ok: false, error: t('sendErrNoResponse') }
   } catch (error) {

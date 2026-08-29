@@ -1230,6 +1230,9 @@
   "errRetry": {
     "message": "重试"
   },
+  "errAnotherWindowBusy": {
+    "message": "另一个窗口的侧栏正在跑 TidyMark。等它跑完，或者去那边取消，然后再试一次。"
+  },
   "errBackgroundRecycled": {
     "message": "后台已被浏览器回收，本次操作中断。"
   },
