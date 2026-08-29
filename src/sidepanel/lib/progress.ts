@@ -1,4 +1,5 @@
-import { PROGRESS_PORT, type ProgressEvent } from '@/background/events'
+import { progressPortName, type ProgressEvent } from '@/background/events'
+import { CLIENT_ID } from './clientId'
 
 export interface ProgressHandlers {
   onEvent: (event: ProgressEvent) => void
@@ -17,7 +18,8 @@ export interface ProgressConnection {
  */
 export function connectProgress(handlers: ProgressHandlers): ProgressConnection | null {
   if (typeof chrome === 'undefined' || chrome.runtime?.connect === undefined) return null
-  const port = chrome.runtime.connect({ name: PROGRESS_PORT })
+  // 连接名里带上本侧栏的身份，后台据此只把属于这个窗口的进度推回来
+  const port = chrome.runtime.connect({ name: progressPortName(CLIENT_ID) })
   port.onMessage.addListener((event) => handlers.onEvent(event as ProgressEvent))
   port.onDisconnect.addListener(() => handlers.onDisconnect())
   return {

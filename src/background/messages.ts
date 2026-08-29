@@ -63,6 +63,18 @@ export type Request =
    */
   | { kind: 'check_links'; targets: LinkTarget[] }
 
+/**
+ * 侧栏发过来的原始消息：请求本体，外加发信那个侧栏的身份。
+ *
+ * clientId 刻意**不进 Request**：它是传输层的事（后台要分清进度推给哪个窗口、
+ * 取消该掐哪一轮，见 background/sessions.ts），而 handle() 处理的是业务请求，
+ * 不该知道自己是被哪个窗口叫起来的。分成两个类型，这条边界就由类型系统看着。
+ *
+ * 可选是为了扩展刚更新、旧侧栏还没重载那一小段时间——那时的消息不带 clientId，
+ * 后台退回 ANONYMOUS_CLIENT，行为与改造前的单槽一致，不至于整个不响应。
+ */
+export type IncomingMessage = Request & { clientId?: string }
+
 export type Response =
   | { ok: true; kind: 'get_tree'; tree: BookmarkNode[] }
   | { ok: true; kind: 'scan'; scan: ScanResult }
