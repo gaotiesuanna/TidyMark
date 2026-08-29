@@ -85,6 +85,12 @@ export interface DomainFolderNode {
     url: string
     weight?: number
   }>
+  /**
+   * 这一段路径底下只有一个页面、再没有别的分支，界面直接画成页面行，不摆目录。
+   * 只有访问记录那棵树会打这个标：段名就是 URL 里的那一截，和页面地址一字不差，
+   * 单独成行等于把每条记录抄两遍。书签树的目录名是用户自己起的，吞掉就丢信息了。
+   */
+  pageOnly?: boolean
 }
 
 /**
@@ -208,19 +214,29 @@ export function visitFolderTree(pages: readonly WeightedUrl[], domain: string): 
     return node
   }
 
+  /**
+   * 只裹着一个页面的路径段不值得单独成行。标记而不是就地摊平：节点留在 children 里，
+   * 才能继续跟同层的目录一起按次数排序——摊进父节点的 bookmarks 就会被顶到所有目录前面，
+   * 排出一串忽大忽小的数字。
+   */
+  const markPageOnly = (node: DomainFolderNode): DomainFolderNode =>
+    node.title !== '' && node.children.length === 0 && node.bookmarks.length === 1
+      ? { ...node, pageOnly: true }
+      : node
+
   function freeze(node: MutableVisitFolder): DomainFolderNode {
     const children = [...node.children.values()].map(freeze)
     const bookmarks = mergeVisitPages(node.bookmarks)
     const directWeight = bookmarks.reduce((n, bookmark) => n + (bookmark.weight ?? 1), 0)
     const count = directWeight + children.reduce((n, child) => n + child.count, 0)
-    return collapse({
+    return markPageOnly(collapse({
       id: node.id,
       title: node.title,
       count,
       directCount: bookmarks.length,
       children: sortLevel(children),
       bookmarks,
-    })
+    }))
   }
 
   const frozen = freeze(root)

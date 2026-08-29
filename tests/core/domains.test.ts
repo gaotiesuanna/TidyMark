@@ -291,6 +291,7 @@ describe('visitFolderTree', () => {
         count: 155,
         directCount: 1,
         children: [],
+        pageOnly: true,
         bookmarks: [
           { id: 'https://localhost/analysis/library/5', title: 'Lib5', url: 'https://localhost/analysis/library/5', weight: 155 },
         ],
@@ -320,6 +321,7 @@ describe('visitFolderTree', () => {
             count: 210,
             directCount: 1,
             children: [],
+            pageOnly: true,
             bookmarks: [
               { id: 'https://localhost/settings/tasks', title: 'Tasks', url: 'https://localhost/settings/tasks', weight: 210 },
             ],
@@ -373,6 +375,55 @@ describe('visitFolderTree', () => {
         weight: 449,
       },
     ])
+  })
+})
+
+describe('visitFolderTree 单页目录', () => {
+  it('路径段底下只有一个页面、再没别的分支时标成 pageOnly', () => {
+    const tree = visitFolderTree([
+      { url: 'https://192.168.5.39/task', title: 'PalClaw', weight: 741 },
+      { url: 'https://192.168.5.39/', title: 'PalClaw', weight: 343 },
+      { url: 'https://192.168.5.39/mailbox', title: 'PalClaw', weight: 1 },
+      { url: 'https://192.168.5.39/mailbox/inbox', title: 'PalClaw', weight: 124 },
+      { url: 'https://192.168.5.39/mailbox/all', title: 'PalClaw', weight: 24 },
+    ], '192.168.5.39')
+
+    const task = tree.find((node) => node.title === 'task')
+    expect(task?.pageOnly).toBe(true)
+    expect(task?.bookmarks.map((b) => b.url)).toEqual(['https://192.168.5.39/task'])
+
+    // mailbox 底下有别的分支，仍然是个目录
+    const mailbox = tree.find((node) => node.title === 'mailbox')
+    expect(mailbox?.pageOnly).toBeUndefined()
+    expect(mailbox?.children.map((child) => [child.title, child.pageOnly])).toEqual([
+      ['inbox', true],
+      ['all', true],
+    ])
+  })
+
+  it('pageOnly 的节点仍按次数排在同层里，不被提到页面堆里', () => {
+    const tree = visitFolderTree([
+      { url: 'https://localhost/a', title: 'A', weight: 10 },
+      { url: 'https://localhost/b', title: 'B', weight: 30 },
+      { url: 'https://localhost/c/1', title: 'C1', weight: 20 },
+      { url: 'https://localhost/c/2', title: 'C2', weight: 1 },
+    ], 'localhost')
+
+    expect(tree.map((node) => [node.title, node.count])).toEqual([
+      ['c', 21],
+      ['b', 30],
+      ['a', 10],
+    ].sort((x, y) => (y[1] as number) - (x[1] as number)))
+  })
+
+  it('过道折叠出来的单页节点也算 pageOnly', () => {
+    const tree = visitFolderTree([
+      { url: 'https://localhost/a/b/c', title: 'ABC', weight: 5 },
+    ], 'localhost')
+
+    expect(tree).toHaveLength(1)
+    expect(tree[0]?.title).toBe('a / b / c')
+    expect(tree[0]?.pageOnly).toBe(true)
   })
 })
 

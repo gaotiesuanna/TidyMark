@@ -562,7 +562,7 @@ function FolderTree({
       ].join(' ')}
     >
       {nodes.map((node) =>
-        node.title === '' ? (
+        node.title === '' || node.pageOnly === true ? (
           <FolderBookmarks key={node.id} bookmarks={node.bookmarks} />
         ) : (
           <FolderNode key={node.id} node={node} domain={domain} depth={depth} />

@@ -234,9 +234,11 @@ describe('DashboardStep', () => {
 
     await user.click(screen.getByRole('button', { name: /localhost/ }))
     expect(screen.getByText('analysis / library')).toBeTruthy()
-    expect(screen.getByText('home')).toBeTruthy()
     expect(screen.getByText('Lib')).toBeTruthy()
+    // /home 底下没有别的分支，只出页面行，不摆一行叫 home 的目录
     expect(screen.getByText('Home')).toBeTruthy()
+    expect(screen.getByText('localhost/home')).toBeTruthy()
+    expect(screen.queryByText('home')).toBeNull()
   })
 
   it('文件夹树深层默认折叠，点父节点才继续展开', async () => {
@@ -422,6 +424,49 @@ describe('DashboardStep', () => {
     expect(screen.getByText(t('dashVisitNoneSaved'))).toBeTruthy()
     expect(screen.queryByRole('button', { name: new RegExp(t('dashVisitSaved')) })).toBeNull()
     expect(screen.getByRole('button', { name: new RegExp(t('dashVisitUnsaved')) })).toBeTruthy()
+  })
+
+  it('访问栏不给只裹着一个页面的路径段单独摆一行目录', async () => {
+    const user = userEvent.setup()
+    contains.mockResolvedValue(true)
+    search.mockResolvedValue([
+      { url: 'https://192.168.5.39/task', title: 'PalClaw', visitCount: 741 },
+      { url: 'https://192.168.5.39/', title: 'PalClaw', visitCount: 343 },
+      { url: 'https://192.168.5.39/mailbox', title: 'PalClaw', visitCount: 1 },
+      { url: 'https://192.168.5.39/mailbox/inbox', title: 'PalClaw', visitCount: 124 },
+    ])
+
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
+    expect(await screen.findByText('192.168.5.39')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /192\.168\.5\.39/ }))
+
+    // 页面本身还在
+    expect(screen.getByText('192.168.5.39/task')).toBeTruthy()
+    expect(screen.getByText('192.168.5.39/mailbox/inbox')).toBeTruthy()
+    // 但 task、inbox 不再各自占一行目录
+    expect(screen.queryByText('task')).toBeNull()
+    expect(screen.queryByText('inbox')).toBeNull()
+    // mailbox 底下有别的分支，还是个目录
+    expect(screen.getByText('mailbox')).toBeTruthy()
+  })
+
+  it('书签栏的单书签文件夹照样成行——那是真的目录名，不能吞', async () => {
+    const user = userEvent.setup()
+    useStore.setState({
+      tree: [{ id: '0', title: '', children: [
+        { id: 'bar', title: 'Bookmarks Bar', children: [
+          { id: 'dev', title: 'Dev tools', children: [
+            { id: 'repo', title: 'opencode', url: 'https://github.com/sst/opencode' },
+          ]},
+        ]},
+      ]}],
+    })
+
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('button', { name: t('dashDomainExpand', 'github.com') }))
+
+    expect(screen.getByText('Bookmarks Bar / Dev tools')).toBeTruthy()
   })
 
   it('读取浏览记录时给骨架屏而不是空白', async () => {
