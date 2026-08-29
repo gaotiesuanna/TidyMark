@@ -13,6 +13,18 @@ import type { CleanupResult } from '@/engine/cleanup'
 vi.mock('@/sidepanel/lib/send', () => ({ send: vi.fn() }))
 
 /**
+ * 一个永远不 settle 的 promise：这两处要的只是「请求发出去了、还没回来」这个状态，
+ * 拿不到 resolver 也无所谓。
+ *
+ * 不要换回 Promise.withResolvers——它要 lib ES2024，而 tsconfig 的 lib 钉在 ES2022，
+ * 用了它 `npm run build` 会整个失败（tsc 报 TS2550），而 vitest 不走 tsc、本地全绿，
+ * 于是这个坑只在构建时才炸出来。
+ */
+function neverSettles(): Promise<never> {
+  return new Promise<never>(() => {})
+}
+
+/**
  * 目录丙只有一条书签，而那条是重复项——勾上它，目录丙就该在「空文件夹」一节
  * 里冒出来。这是本组测试要验的核心联动。
  */
@@ -126,7 +138,7 @@ async function openCleanupTab(name: string): Promise<void> {
 
 describe('长期未点击书签扫描状态', () => {
   it('页面说明扫描不读取浏览历史', () => {
-    vi.mocked(send).mockImplementation(() => Promise.withResolvers<never>().promise as never)
+    vi.mocked(send).mockImplementation(() => neverSettles() as never)
     render(<CleanupStep />)
     expect(screen.getByText(/不读取浏览历史/)).toBeDefined()
   })
@@ -284,7 +296,7 @@ describe('长期未点击书签扫描状态', () => {
 })
 describe('CleanupStep 长期未点击书签一节', () => {
   it('进入清理页不展示扫描按钮', () => {
-    vi.mocked(send).mockImplementation(() => Promise.withResolvers<never>().promise as never)
+    vi.mocked(send).mockImplementation(() => neverSettles() as never)
     render(<CleanupStep />)
     expect(screen.getByText(/不读取浏览历史/)).toBeDefined()
     expect(screen.queryByRole('button', { name: /扫描长期未点击书签/ })).toBeNull()
