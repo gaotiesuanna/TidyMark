@@ -2,7 +2,6 @@ import { t } from '@/i18n'
 
 export type StepIndexItem<K extends string> = {
   key: K
-  index: string
   label: string
 }
 
@@ -25,11 +24,12 @@ export function StepIndex<K extends string>({
           const completed = currentIndex >= 0 && index < currentIndex
           return (
             <li key={item.key}>
+              {/* 只读进度，不是导航——刻意不长成按钮。当前步靠字重和底色给视觉，
+                  aria-current 给读屏，序号和标题都是真文本，两边读到的是同一句。 */}
               <span
-                aria-label={`${item.index} ${item.label}`}
                 {...(current ? { 'aria-current': 'step' as const } : {})}
                 className={[
-                  'flex items-center gap-1 rounded-md px-2 py-1 text-xs leading-none',
+                  'block rounded-md px-2 py-1 text-xs leading-none tabular-nums',
                   current
                     ? 'bg-index-ink font-semibold text-white'
                     : completed
@@ -37,10 +37,7 @@ export function StepIndex<K extends string>({
                       : 'bg-neutral-100 font-medium text-index-faint',
                 ].join(' ')}
               >
-                <span aria-hidden className="font-mono tabular-nums">
-                  {String(Number(item.index))}.
-                </span>
-                <span aria-hidden>{item.label}</span>
+                {index + 1}. {item.label}
               </span>
             </li>
           )

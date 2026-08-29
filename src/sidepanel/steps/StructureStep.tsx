@@ -4,7 +4,6 @@ import { currentLocale, plural, t } from '@/i18n'
 import { joinTitles } from '../lib/listText'
 import { useStore } from '../store'
 import { IndexRow } from '../components/IndexRow'
-import { IndexSection } from '../components/IndexSection'
 import { InlineStatus } from '../components/InlineStatus'
 import { PrimaryButton, SecondaryButton, StickyActionBar } from '../components/IndexControls'
 import { fieldClass } from '../components/buttonStyles'
@@ -47,9 +46,9 @@ export function StructureStep() {
         </div>
       )}
 
+      {/* 标题不重复顶上的步骤条（那里已经写着「确认结构」），目标目录数在开头那句里也说了 */}
       <div data-testid="structure-section">
-        <IndexSection title={t('shellStepStructure')} count={nodes.length}>
-          <ol className="border-t border-index-line">
+        <ol className="border-y border-index-line">
             {nodes.map((node, index) => {
               const prefix = String(index + 1).padStart(2, '0')
               const actions = node.removable ? (
@@ -71,7 +70,7 @@ export function StructureStep() {
                   </select>
                   <SecondaryButton
                     aria-label={t('structureDelete', node.title)}
-                    className="min-h-0 px-2 py-1"
+                    size="sm"
                     onClick={() => removeNode(node.id)}
                   >
                     ✕
@@ -129,7 +128,7 @@ export function StructureStep() {
                                   </select>
                                   <SecondaryButton
                                     aria-label={t('structureDelete', child.title)}
-                                    className="min-h-0 px-2 py-1"
+                                    size="sm"
                                     onClick={() => removeNode(child.id)}
                                   >
                                     ✕
@@ -145,8 +144,7 @@ export function StructureStep() {
                 </li>
               )
             })}
-          </ol>
-        </IndexSection>
+        </ol>
       </div>
 
       <div className="mt-3">

@@ -18,11 +18,11 @@ function navigationItems(): readonly IndexNavigationItem<AppMode>[] {
 
 function stepItems(): readonly StepIndexItem<Step>[] {
   return [
-    { key: 'scope', index: '01', label: t('shellStepScope') },
-    { key: 'preferences', index: '02', label: t('shellStepPreferences') },
-    { key: 'structure', index: '03', label: t('shellStepStructure') },
-    { key: 'review', index: '04', label: t('shellStepReview') },
-    { key: 'result', index: '05', label: t('shellStepResult') },
+    { key: 'scope', label: t('shellStepScope') },
+    { key: 'preferences', label: t('shellStepPreferences') },
+    { key: 'structure', label: t('shellStepStructure') },
+    { key: 'review', label: t('shellStepReview') },
+    { key: 'result', label: t('shellStepResult') },
   ]
 }
 

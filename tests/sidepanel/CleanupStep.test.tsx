@@ -380,6 +380,69 @@ describe('CleanupStep 长期未点击书签一节', () => {
     expect(screen.queryByText('没有记录的文章')).toBeNull()
     expect(screen.getByText('旧文章')).toBeDefined()
   })
+
+  it('跨多个文件夹时按文件夹分组，折叠起来，点开才见条目', async () => {
+    useStore.setState({
+      staleScan: {
+        ...staleReadyResult,
+        items: [
+          ...staleReadyResult.items,
+          {
+            item: item({
+              id: 'stale-other',
+              title: '另一个目录的旧书签',
+              url: 'https://example.com/other',
+              parentId: '11',
+              currentPath: ['书签栏', '目录乙'],
+            }),
+            bucket: 'overTwoYears',
+            lastUsedAt: new Date(2023, 0, 1).getTime(),
+          },
+        ],
+      },
+      staleState: 'ready',
+      cleanupChecked: new Set(),
+      cleanupStaleMove: new Set(),
+    })
+    render(<CleanupStep />)
+
+    // 两个文件夹头都在，条目默认收起
+    const jiaToggle = screen.getByRole('button', { name: /展开 \/书签栏\/目录甲\/，共 2 条/ })
+    expect(screen.getByRole('button', { name: /展开 \/书签栏\/目录乙\/，共 1 条/ })).toBeDefined()
+    expect(screen.queryByText('旧文章')).toBeNull()
+    expect(screen.queryByText('另一个目录的旧书签')).toBeNull()
+
+    await userEvent.click(jiaToggle)
+    expect(screen.getByText('旧文章')).toBeDefined()
+    expect(screen.queryByText('另一个目录的旧书签')).toBeNull()
+    await userEvent.click(screen.getByRole('checkbox', { name: '删除 旧文章' }))
+    expect(useStore.getState().cleanupChecked.has('stale-old')).toBe(true)
+
+    // 勾选数在折叠态也看得见
+    await userEvent.click(screen.getByRole('button', { name: /收起 \/书签栏\/目录甲\// }))
+    expect(screen.getByText('已选 1')).toBeDefined()
+  })
+
+  it('文件夹行的删除按钮一次勾选整组，再点清空', async () => {
+    useStore.setState({
+      staleScan: staleReadyResult,
+      staleState: 'ready',
+      cleanupChecked: new Set(),
+      cleanupStaleMove: new Set(['stale-old']),
+    })
+    render(<CleanupStep />)
+
+    const deleteAll = screen.getByRole('button', { name: /勾选 \/书签栏\/目录甲\/ 里的全部书签待删除/ })
+    await userEvent.click(deleteAll)
+    expect(useStore.getState().cleanupChecked.has('stale-old')).toBe(true)
+    expect(useStore.getState().cleanupChecked.has('stale-unknown')).toBe(true)
+    // 开启删除时把原来「移走」的挪出来，两者互斥
+    expect(useStore.getState().cleanupStaleMove.has('stale-old')).toBe(false)
+
+    const clearAll = screen.getByRole('button', { name: /取消 \/书签栏\/目录甲\/ 里书签的删除勾选/ })
+    await userEvent.click(clearAll)
+    expect(useStore.getState().cleanupChecked.size).toBe(0)
+  })
 })
 
 describe('CleanupStep 功能小 tab', () => {

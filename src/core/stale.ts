@@ -28,6 +28,33 @@ export interface StaleBookmark {
   lastUsedAt?: number
 }
 
+export interface StaleFolderGroup {
+  /** currentPath 拼成的稳定键，也是展开状态的标识 */
+  key: string
+  path: string[]
+  items: StaleBookmark[]
+}
+
+/**
+ * 按所在文件夹归堆：同一目录下的一批闲置书签只写一次路径，省掉逐行重复。
+ * 条数多的排前面（triage 先看大头），条数相同按路径字典序，保证顺序稳定。
+ */
+export function groupStaleByFolder(items: readonly StaleBookmark[]): StaleFolderGroup[] {
+  const groups = new Map<string, StaleFolderGroup>()
+  for (const entry of items) {
+    const key = entry.item.currentPath.join('/')
+    let group = groups.get(key)
+    if (group === undefined) {
+      group = { key, path: entry.item.currentPath, items: [] }
+      groups.set(key, group)
+    }
+    group.items.push(entry)
+  }
+  return [...groups.values()].sort(
+    (a, b) => b.items.length - a.items.length || a.key.localeCompare(b.key),
+  )
+}
+
 export interface StaleScanResult {
   items: StaleBookmark[]
   scannedAt: number

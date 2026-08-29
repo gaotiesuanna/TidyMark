@@ -405,6 +405,8 @@ interface State {
   toggleCleanupMove(id: string): void
   toggleCleanupStaleMove(id: string): void
   toggleStaleDelete(id: string): void
+  /** 整个文件夹一次性勾/清「删除」；开启时同互斥规则，把这些书签从「移走」里挪出来。 */
+  setStaleDeleteMany(ids: readonly string[], on: boolean): void
   toggleStaleMove(id: string): void
   toggleCleanupFolder(id: string): void
   /**
@@ -971,6 +973,20 @@ export const useStore = create<State>((set, get) => ({
     else {
       checked.add(id)
       staleMove.delete(id)
+    }
+    set({ cleanupChecked: checked, cleanupStaleMove: staleMove })
+  },
+
+  setStaleDeleteMany: (ids, on) => {
+    const checked = new Set(get().cleanupChecked)
+    const staleMove = new Set(get().cleanupStaleMove)
+    for (const id of ids) {
+      if (on) {
+        checked.add(id)
+        staleMove.delete(id)
+      } else {
+        checked.delete(id)
+      }
     }
     set({ cleanupChecked: checked, cleanupStaleMove: staleMove })
   },

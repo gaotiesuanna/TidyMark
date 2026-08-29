@@ -1,8 +1,14 @@
 import { useMemo, useState } from 'react'
 import { currentLocale, t } from '@/i18n'
 import { toHtmlLang } from '@/core/locale'
-import { matchesStaleFilter, type StaleBucket } from '@/core/stale'
+import {
+  groupStaleByFolder,
+  matchesStaleFilter,
+  type StaleBucket,
+  type StaleFolderGroup,
+} from '@/core/stale'
 import { useStore } from '../store'
+import { ChevronDownIcon, FolderIcon, TrashIcon } from './icons'
 
 type StaleFilter = 'all' | StaleBucket
 
@@ -28,25 +34,174 @@ function formatDate(timestamp: number): string {
   return new Intl.DateTimeFormat(toHtmlLang(currentLocale()), { dateStyle: 'medium' }).format(timestamp)
 }
 
+/**
+ * 一堆同目录的闲置书签共用一个可展开的文件夹头，路径只写一次。
+ * 折叠态只留文件夹名 + 条数 +（有勾选时）已选数；URL、日期、删除/移动都收进展开区。
+ * 只有一个组时没有折叠的意义，直接摊开。
+ */
+function StaleFolderRow({
+  group,
+  open,
+  onToggle,
+}: {
+  group: StaleFolderGroup
+  open: boolean
+  onToggle: () => void
+}) {
+  const { cleanupChecked, cleanupStaleMove, toggleStaleDelete, toggleStaleMove, setStaleDeleteMany } = useStore()
+  const fullPath = `/${group.key}/`
+  const leaf = group.path[group.path.length - 1] ?? fullPath
+  const ids = group.items.map(({ item }) => item.id)
+  const selectedCount = group.items.filter(
+    ({ item }) => cleanupChecked.has(item.id) || cleanupStaleMove.has(item.id),
+  ).length
+  const allDeleting = ids.every((id) => cleanupChecked.has(id))
+
+  return (
+    <li>
+      <div
+        className={[
+          '-mx-1.5 flex items-center rounded-md',
+          'transition-colors duration-150 motion-reduce:transition-none hover:bg-neutral-50',
+        ].join(' ')}
+      >
+        <button
+          type="button"
+          className={[
+            'flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1.5 py-1.5 text-left',
+            'active:bg-neutral-100',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400',
+          ].join(' ')}
+          aria-expanded={open}
+          aria-label={t(
+            open ? 'cleanupStaleGroupCollapse' : 'cleanupStaleGroupExpand',
+            fullPath,
+            String(group.items.length),
+          )}
+          onClick={onToggle}
+        >
+          <FolderIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+          <span className="min-w-0 flex-1 truncate text-sm text-neutral-700" title={fullPath}>
+            {leaf}
+            {group.path.length > 1 && (
+              <span className="ml-1 text-xs text-neutral-400">{fullPath}</span>
+            )}
+          </span>
+          {selectedCount > 0 && (
+            <span className="shrink-0 text-xs tabular-nums text-blue-600">
+              {t('cleanupStaleGroupSelected', String(selectedCount))}
+            </span>
+          )}
+          <span className="shrink-0 text-sm tabular-nums text-neutral-500">{group.items.length}</span>
+          <ChevronDownIcon
+            className={[
+              'h-3.5 w-3.5 shrink-0 text-neutral-400 transition-transform duration-150 motion-reduce:transition-none',
+              open ? 'rotate-180' : '',
+            ].join(' ')}
+          />
+        </button>
+        <button
+          type="button"
+          className={[
+            'ml-0.5 mr-1 shrink-0 cursor-pointer rounded-md p-1.5',
+            'transition-colors duration-150 motion-reduce:transition-none',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400',
+            allDeleting
+              ? 'bg-red-50 text-red-600 hover:bg-red-100'
+              : 'text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700',
+          ].join(' ')}
+          aria-pressed={allDeleting}
+          aria-label={t(
+            allDeleting ? 'cleanupStaleGroupDeleteClear' : 'cleanupStaleGroupDeleteAll',
+            fullPath,
+          )}
+          onClick={() => setStaleDeleteMany(ids, !allDeleting)}
+        >
+          <TrashIcon className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {open && (
+        <ul className="ml-3 mt-1 space-y-3 border-l border-neutral-200 pl-3">
+          {group.items.map(({ item, bucket, lastUsedAt }) => (
+            <li key={item.id} className="min-w-0">
+              <div className="break-words text-sm leading-caption text-neutral-800">
+                {item.title.trim() === '' ? item.url : item.title}
+              </div>
+              <a
+                href={item.url}
+                title={item.url}
+                target="_blank"
+                rel="noreferrer"
+                className="block break-all text-xs leading-snug text-neutral-500 underline decoration-neutral-300 underline-offset-2"
+              >
+                {item.url}
+              </a>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-neutral-400">
+                <span>
+                  {lastUsedAt === undefined
+                    ? t('cleanupStaleNoLastUsed')
+                    : t('cleanupStaleLastVisit', formatDate(lastUsedAt))}
+                </span>
+                <span aria-hidden="true">·</span>
+                <span>{t(BUCKET_LABELS[bucket])}</span>
+              </div>
+              {bucket === 'unknown' && (
+                <div className="text-xs leading-snug text-neutral-400">{t('cleanupStaleUnknownHint')}</div>
+              )}
+              <div className="mt-1 flex gap-4">
+                <label className="flex items-center gap-1 text-xs leading-caption text-neutral-600">
+                  <input
+                    type="checkbox"
+                    checked={cleanupChecked.has(item.id)}
+                    aria-label={`${t('cleanupStaleActionDelete')} ${item.title}`}
+                    onChange={() => toggleStaleDelete(item.id)}
+                  />
+                  {t('cleanupStaleActionDelete')}
+                </label>
+                <label className="flex items-center gap-1 text-xs leading-caption text-neutral-600">
+                  <input
+                    type="checkbox"
+                    checked={cleanupStaleMove.has(item.id)}
+                    aria-label={`${t('cleanupStaleActionMove')} ${item.title}`}
+                    onChange={() => toggleStaleMove(item.id)}
+                  />
+                  {t('cleanupStaleActionMove')}
+                </label>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
+  )
+}
+
 export function StaleCleanupSection({ showHeading = true }: { showHeading?: boolean } = {}) {
   const {
     staleScan,
     staleState,
     staleError,
     cleanupScan,
-    cleanupChecked,
-    cleanupStaleMove,
     busy,
     runStaleScan,
-    toggleStaleDelete,
-    toggleStaleMove,
   } = useStore()
   const [filter, setFilter] = useState<StaleFilter>('all')
+  const [openKeys, setOpenKeys] = useState<Set<string>>(new Set())
 
-  const visibleItems = useMemo(
-    () => staleScan?.items.filter(({ bucket }) => matchesStaleFilter(bucket, filter)) ?? [],
-    [filter, staleScan],
-  )
+  const groups = useMemo(() => {
+    const visible = staleScan?.items.filter(({ bucket }) => matchesStaleFilter(bucket, filter)) ?? []
+    return groupStaleByFolder(visible)
+  }, [filter, staleScan])
+
+  function toggleGroup(key: string): void {
+    setOpenKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   return (
     <section className="space-y-2" aria-labelledby={showHeading ? 'cleanup-stale-heading' : undefined}>
@@ -124,66 +279,20 @@ export function StaleCleanupSection({ showHeading = true }: { showHeading?: bool
             ))}
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs" aria-label={t('cleanupStaleTableLabel')}>
-              <caption className="sr-only">{t('cleanupStaleTableLabel')}</caption>
-              <thead className="text-neutral-500">
-                <tr>
-                  <th scope="col" className="pb-1 pr-2 font-medium">{t('cleanupStaleColumnBookmark')}</th>
-                  <th scope="col" className="pb-1 pr-2 font-medium">{t('cleanupStaleColumnLastVisit')}</th>
-                  <th scope="col" className="pb-1 pr-2 font-medium">{t('cleanupStaleColumnBucket')}</th>
-                  <th scope="col" className="pb-1 font-medium">{t('cleanupStaleColumnActions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleItems.map(({ item, bucket, lastUsedAt }) => (
-                  <tr key={item.id} className="border-t border-neutral-100 align-top">
-                    <th scope="row" className="max-w-[16rem] py-2 pr-2 font-regular text-neutral-800">
-                      <div>{item.title}</div>
-                      <a
-                        href={item.url}
-                        title={item.url}
-                        className="block break-all text-neutral-500 underline decoration-neutral-300 underline-offset-2"
-                      >
-                        {item.url}
-                      </a>
-                      <div className="break-all text-neutral-400">/{item.currentPath.join('/')}/</div>
-                      {bucket === 'unknown' && (
-                        <div className="mt-1 text-neutral-400">{t('cleanupStaleUnknownHint')}</div>
-                      )}
-                    </th>
-                    <td className="whitespace-nowrap py-2 pr-2 text-neutral-500">
-                      {lastUsedAt === undefined ? t('cleanupStaleNoLastUsed') : formatDate(lastUsedAt)}
-                    </td>
-                    <td className="whitespace-nowrap py-2 pr-2 text-neutral-500">{t(BUCKET_LABELS[bucket])}</td>
-                    <td className="py-2">
-                      <div className="flex flex-col gap-1">
-                        <label className="flex items-center gap-1 whitespace-nowrap">
-                          <input
-                            type="checkbox"
-                            checked={cleanupChecked.has(item.id)}
-                            aria-label={`${t('cleanupStaleActionDelete')} ${item.title}`}
-                            onChange={() => toggleStaleDelete(item.id)}
-                          />
-                          {t('cleanupStaleActionDelete')}
-                        </label>
-                        <label className="flex items-center gap-1 whitespace-nowrap">
-                          <input
-                            type="checkbox"
-                            checked={cleanupStaleMove.has(item.id)}
-                            aria-label={`${t('cleanupStaleActionMove')} ${item.title}`}
-                            onChange={() => toggleStaleMove(item.id)}
-                          />
-                          {t('cleanupStaleActionMove')}
-                        </label>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {visibleItems.length === 0 && <p className="text-xs text-neutral-500">{t('cleanupStaleFilterEmpty')}</p>}
+          {groups.length === 0 ? (
+            <p className="text-xs text-neutral-500">{t('cleanupStaleFilterEmpty')}</p>
+          ) : (
+            <ul className="space-y-0.5" aria-label={t('cleanupStaleTableLabel')}>
+              {groups.map((group) => (
+                <StaleFolderRow
+                  key={group.key}
+                  group={group}
+                  open={groups.length === 1 || openKeys.has(group.key)}
+                  onToggle={() => toggleGroup(group.key)}
+                />
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </section>

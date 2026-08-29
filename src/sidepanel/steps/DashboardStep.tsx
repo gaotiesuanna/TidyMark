@@ -45,6 +45,9 @@ const countInput = [
   'focus-visible:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400',
 ].join(' ')
 
+/** 域名活跃度那排小圆点的格数。 */
+const METER_SEGMENTS = 7
+
 /** Flips false→true one frame after mount, driving CSS enter transitions. */
 function useGrow() {
   const [grown, setGrown] = useState(false)
@@ -213,8 +216,12 @@ function VisitsSkeleton() {
           <li key={i} className="-mx-1.5 flex items-center gap-2.5 px-1.5 py-1.5">
             <span className="h-2.5 w-5 shrink-0 rounded-sm bg-neutral-100" />
             <span className="h-5 w-5 shrink-0 rounded-md bg-neutral-100" />
-            <span className="h-3 w-[34%] shrink-0 rounded-sm bg-neutral-100" />
-            <span className="h-2 min-w-0 flex-1 rounded-full bg-neutral-100" />
+            <span className="h-3 min-w-0 flex-1 rounded-sm bg-neutral-100" />
+            <span className="flex shrink-0 items-center gap-[3px]">
+              {Array.from({ length: METER_SEGMENTS }, (_, j) => (
+                <span key={j} className="h-1.5 w-1.5 rounded-full bg-neutral-100" />
+              ))}
+            </span>
             <span className="h-3 w-8 shrink-0 rounded-sm bg-neutral-100" />
           </li>
         ))}
@@ -273,10 +280,11 @@ function DomainRow({
   open: boolean
   onToggle: () => void
 }) {
-  const pct = max === 0 ? 0 : (row.count / max) * 100
+  const filled = row.count > 0 && max > 0
+    ? Math.max(1, Math.round(Math.sqrt(row.count / max) * METER_SEGMENTS))
+    : 0
   const expandable = tree !== undefined || visits !== undefined
   const folders = open && tree !== undefined ? domainFolderTree(tree, row.domain) : []
-  const leader = rank === 1
   const visitedPages = open && visits !== undefined
     ? visits
       .filter((item) => {
@@ -297,18 +305,21 @@ function DomainRow({
         {String(rank).padStart(2, '0')}
       </span>
       <DomainIcon domain={row.domain} pageUrl={row.sampleUrl} />
-      <span className="w-[34%] min-w-0 truncate text-md text-neutral-700" title={row.domain}>
+      <span className="min-w-0 flex-1 truncate text-md text-neutral-700" title={row.domain}>
         {row.domain}
       </span>
-      <div className="h-2 min-w-0 flex-1 rounded-full bg-neutral-100">
-        <div
-          className={[
-            'h-2 rounded-full bg-gradient-to-r transition-[width] duration-500 ease-out motion-reduce:transition-none',
-            leader ? 'from-blue-500 to-blue-600' : 'from-blue-400 to-blue-500',
-          ].join(' ')}
-          style={{ width: `${grown ? pct : 0}%`, minWidth: grown && row.count > 0 ? 6 : 0 }}
-        />
-      </div>
+      <span className="flex shrink-0 items-center gap-[3px]" aria-hidden="true">
+        {Array.from({ length: METER_SEGMENTS }, (_, i) => (
+          <span
+            key={i}
+            className={[
+              'h-1.5 w-1.5 rounded-full transition-colors duration-300 motion-reduce:transition-none',
+              grown && i < filled ? 'bg-blue-500' : 'bg-neutral-200',
+            ].join(' ')}
+            style={{ transitionDelay: grown ? `${i * 40}ms` : '0ms' }}
+          />
+        ))}
+      </span>
       <span className="min-w-8 shrink-0 text-right text-md font-semibold tabular-nums text-neutral-900">
         {row.count}
       </span>

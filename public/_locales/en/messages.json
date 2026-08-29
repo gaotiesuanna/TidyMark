@@ -173,9 +173,6 @@
   "scopeIntro": {
     "message": "Check the folders you want TidyMark to reorganize."
   },
-  "scopeSafety": {
-    "message": "Unchecked folders are never read and never modified — no bookmark moves out of them, and none moves in."
-  },
   "scopeExpandAll": {
     "message": "Expand all"
   },
@@ -354,17 +351,29 @@
   "cleanupStaleTableLabel": {
     "message": "Long-unvisited bookmarks list"
   },
-  "cleanupStaleColumnBookmark": {
-    "message": "Bookmark"
+  "cleanupStaleGroupExpand": {
+    "message": "Expand $folder$, $count$ bookmarks",
+    "placeholders": { "folder": { "content": "$1" }, "count": { "content": "$2" } }
   },
-  "cleanupStaleColumnLastVisit": {
-    "message": "Last opened"
+  "cleanupStaleGroupCollapse": {
+    "message": "Collapse $folder$, $count$ bookmarks",
+    "placeholders": { "folder": { "content": "$1" }, "count": { "content": "$2" } }
   },
-  "cleanupStaleColumnBucket": {
-    "message": "Bucket"
+  "cleanupStaleGroupSelected": {
+    "message": "$count$ selected",
+    "placeholders": { "count": { "content": "$1" } }
   },
-  "cleanupStaleColumnActions": {
-    "message": "Actions"
+  "cleanupStaleGroupDeleteAll": {
+    "message": "Mark every bookmark in $folder$ for deletion",
+    "placeholders": { "folder": { "content": "$1" } }
+  },
+  "cleanupStaleGroupDeleteClear": {
+    "message": "Clear deletion for bookmarks in $folder$",
+    "placeholders": { "folder": { "content": "$1" } }
+  },
+  "cleanupStaleLastVisit": {
+    "message": "Last opened $date$",
+    "placeholders": { "date": { "content": "$1" } }
   },
   "cleanupStaleNoLastUsed": {
     "message": "No last-opened time"

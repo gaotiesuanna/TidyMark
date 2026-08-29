@@ -69,7 +69,10 @@ export function ScopeStep() {
       )}
 
       <div data-testid="scope-section">
-        <SecondaryButton onClick={() => setExpanded(new Set(allOpen ? [] : folderIds))}>
+        <SecondaryButton
+          size="sm"
+          onClick={() => setExpanded(new Set(allOpen ? [] : folderIds))}
+        >
           {t(allOpen ? 'scopeCollapseAll' : 'scopeExpandAll')}
         </SecondaryButton>
         <div className="mt-2 border border-index-line">

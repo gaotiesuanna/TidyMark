@@ -1,5 +1,7 @@
 import type * as React from 'react'
 import {
+  buttonSizeMd,
+  buttonSizeSm,
   dangerButton,
   primaryButton,
   secondaryButton,
@@ -9,18 +11,20 @@ import {
   stickyActionBar,
 } from './buttonStyles'
 
-type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement>
+type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { size?: 'sm' | 'md' }
 
-export function PrimaryButton({ className = '', ...props }: ButtonProps): React.JSX.Element {
-  return <button className={`${primaryButton} ${className}`} {...props} />
+const sizeClass = (size: 'sm' | 'md'): string => (size === 'sm' ? buttonSizeSm : buttonSizeMd)
+
+export function PrimaryButton({ className = '', size = 'md', ...props }: ButtonProps): React.JSX.Element {
+  return <button className={`${primaryButton} ${sizeClass(size)} ${className}`} {...props} />
 }
 
-export function SecondaryButton({ className = '', ...props }: ButtonProps): React.JSX.Element {
-  return <button className={`${secondaryButton} ${className}`} {...props} />
+export function SecondaryButton({ className = '', size = 'md', ...props }: ButtonProps): React.JSX.Element {
+  return <button className={`${secondaryButton} ${sizeClass(size)} ${className}`} {...props} />
 }
 
-export function DangerButton({ className = '', ...props }: ButtonProps): React.JSX.Element {
-  return <button className={`${dangerButton} ${className}`} {...props} />
+export function DangerButton({ className = '', size = 'md', ...props }: ButtonProps): React.JSX.Element {
+  return <button className={`${dangerButton} ${sizeClass(size)} ${className}`} {...props} />
 }
 
 type SegmentedChoiceProps<T extends string> = {

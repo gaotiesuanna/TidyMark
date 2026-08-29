@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifyStaleBookmarks, matchesStaleFilter, type StaleBucket } from '@/core/stale'
+import { classifyStaleBookmarks, groupStaleByFolder, matchesStaleFilter, type StaleBucket, type StaleBookmark } from '@/core/stale'
 import type { BookmarkItem } from '@/core/types'
 
 const scanDate = new Date(2026, 7, 26, 12).getTime()
@@ -49,6 +49,38 @@ describe('matchesStaleFilter', () => {
     expect(matchesStaleFilter('unknown', 'all')).toBe(true)
     expect(matchesStaleFilter('unknown', 'unknown')).toBe(true)
     expect(matchesStaleFilter('overTwoYears', 'unknown')).toBe(false)
+  })
+})
+
+describe('groupStaleByFolder', () => {
+  const staleAt = (id: string, path: string[]): StaleBookmark => ({
+    item: { ...item(id, new Date(2025, 0, 1).getTime()), currentPath: path },
+    bucket: 'oneToTwoYears',
+    lastUsedAt: new Date(2025, 0, 1).getTime(),
+  })
+
+  it('groups by full folder path and keeps the path array', () => {
+    const groups = groupStaleByFolder([
+      staleAt('a', ['书签栏', '甲']),
+      staleAt('b', ['书签栏', '乙']),
+      staleAt('c', ['书签栏', '甲']),
+    ])
+
+    expect(groups.map((g) => [g.key, g.items.length])).toEqual([
+      ['书签栏/甲', 2],
+      ['书签栏/乙', 1],
+    ])
+    expect(groups[0]?.path).toEqual(['书签栏', '甲'])
+  })
+
+  it('orders bigger groups first, then by path for ties', () => {
+    const groups = groupStaleByFolder([
+      staleAt('a', ['b']),
+      staleAt('b', ['a']),
+      staleAt('c', ['c']),
+    ])
+
+    expect(groups.map((g) => g.key)).toEqual(['a', 'b', 'c'])
   })
 })
 

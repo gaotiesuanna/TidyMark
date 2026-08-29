@@ -77,14 +77,17 @@ const CLEANUP_TABS: Array<{ key: CleanupTab; labelKey: Parameters<typeof t>[0] }
   { key: 'links', labelKey: 'cleanupTabLinks' },
 ]
 
-/** 比顶栏模式切换小一号：同一种白片槽，高度和字号都收一档，避免两排分段控件抢视觉。 */
+/**
+ * 一段灰底，选中那格抬成白片——和看板里的书签/访问切换同一套（DashboardStep 的 toggleOn）。
+ * 选中态只靠白底加一点投影，不再套 ring：小控件上白片描边会跟灰槽内沿叠成一圈重影。
+ */
 const subTabGroup = 'flex min-w-0 rounded-md bg-neutral-100 p-0.5 text-xs'
 const subTabBase = [
   'inline-flex h-6 min-w-0 flex-1 cursor-pointer items-center justify-center rounded px-1 font-medium',
   'transition-colors duration-150 motion-reduce:transition-none',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400',
 ].join(' ')
-const subTabOn = `${subTabBase} bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-200`
+const subTabOn = `${subTabBase} bg-white text-neutral-900 shadow-sm`
 const subTabOff = `${subTabBase} text-neutral-600 hover:text-neutral-800`
 
 export function CleanupStep() {

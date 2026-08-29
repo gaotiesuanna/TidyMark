@@ -5,11 +5,11 @@ import { StepIndex, type StepIndexItem } from '@/sidepanel/components/StepIndex'
 type StepKey = 'scope' | 'preferences' | 'structure' | 'review' | 'result'
 
 const items: readonly StepIndexItem<StepKey>[] = [
-  { key: 'scope', index: '01', label: '选择范围' },
-  { key: 'preferences', index: '02', label: '设置偏好' },
-  { key: 'structure', index: '03', label: '确认结构' },
-  { key: 'review', index: '04', label: '预览修改' },
-  { key: 'result', index: '05', label: '完成整理' },
+  { key: 'scope', label: '选择范围' },
+  { key: 'preferences', label: '设置偏好' },
+  { key: 'structure', label: '确认结构' },
+  { key: 'review', label: '预览修改' },
+  { key: 'result', label: '完成整理' },
 ]
 
 describe('StepIndex', () => {
@@ -21,8 +21,19 @@ describe('StepIndex', () => {
     )
 
     expect(screen.getByText('结构编辑器')).toBeDefined()
-    expect(screen.getByLabelText('03 确认结构').getAttribute('aria-current')).toBe('step')
-    expect(screen.getByLabelText('01 选择范围').getAttribute('aria-current')).toBeNull()
+    expect(screen.getByText(/确认结构/).getAttribute('aria-current')).toBe('step')
+    expect(screen.getByText(/选择范围/).getAttribute('aria-current')).toBeNull()
+  })
+
+  it('序号跟着位置走，从 1 开始', () => {
+    render(
+      <StepIndex items={items} currentKey="scope">
+        <div>范围编辑器</div>
+      </StepIndex>,
+    )
+
+    expect(screen.getByText(/选择范围/).textContent).toBe('1. 选择范围')
+    expect(screen.getByText(/完成整理/).textContent).toBe('5. 完成整理')
   })
 
   it('五个步骤都列出来，标题可见', () => {
@@ -34,7 +45,7 @@ describe('StepIndex', () => {
 
     expect(screen.getAllByRole('listitem')).toHaveLength(5)
     for (const item of items) {
-      expect(screen.getByText(item.label)).toBeDefined()
+      expect(screen.getByText(new RegExp(item.label))).toBeDefined()
     }
   })
 

@@ -8,11 +8,18 @@ export const focusRing = [
 ].join(' ')
 
 const base = [
-  'inline-flex min-h-index-row cursor-pointer items-center justify-center gap-1.5 rounded-index px-3',
-  'text-sm leading-caption font-medium transition-colors duration-150 motion-reduce:transition-none',
+  'inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-index',
+  'font-medium transition-colors duration-150 motion-reduce:transition-none',
   focusRing,
   'disabled:cursor-not-allowed disabled:opacity-40',
 ].join(' ')
+
+/**
+ * 尺寸和外观分开：Tailwind 优先级看生成顺序，md 和 sm 的 px 同时出现时小的压不过大的，
+ * 所以包装组件只能二选一拼上，不能靠调用点加 utility 去盖。
+ */
+export const buttonSizeMd = 'min-h-index-row px-3 text-sm leading-caption'
+export const buttonSizeSm = 'min-h-0 px-2 py-1 text-xs leading-none'
 
 /** 白底描边按钮：坐在浅灰分组底色上，靠底色差把可点区域衬出来。 */
 export const secondaryButton = [
@@ -50,6 +57,7 @@ export const stickyActionBar = 'sticky -bottom-4 -mx-4 -mb-4 mt-3 border-t borde
 /** 虚线边框，暗示「这里要放一个文件」，同时和上方导出组的实线按钮拉开区别。 */
 export const filePickerButton = [
   base,
+  buttonSizeMd,
   'w-full border border-dashed border-index-line-strong bg-index-canvas text-index-muted',
   'hover:enabled:border-index-ink hover:enabled:bg-index-blue-soft hover:enabled:text-index-ink',
 ].join(' ')

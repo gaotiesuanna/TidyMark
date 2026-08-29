@@ -173,9 +173,6 @@
   "scopeIntro": {
     "message": "勾选你想让 TidyMark 重构的文件夹。"
   },
-  "scopeSafety": {
-    "message": "未勾选的部分不会被读取，也不会被修改——其中的书签不会移出，也不会有书签移入。"
-  },
   "scopeExpandAll": {
     "message": "全部展开"
   },
@@ -354,17 +351,29 @@
   "cleanupStaleTableLabel": {
     "message": "长期未点击书签列表"
   },
-  "cleanupStaleColumnBookmark": {
-    "message": "书签"
+  "cleanupStaleGroupExpand": {
+    "message": "展开 $folder$，共 $count$ 条",
+    "placeholders": { "folder": { "content": "$1" }, "count": { "content": "$2" } }
   },
-  "cleanupStaleColumnLastVisit": {
-    "message": "上次打开"
+  "cleanupStaleGroupCollapse": {
+    "message": "收起 $folder$，共 $count$ 条",
+    "placeholders": { "folder": { "content": "$1" }, "count": { "content": "$2" } }
   },
-  "cleanupStaleColumnBucket": {
-    "message": "分档"
+  "cleanupStaleGroupSelected": {
+    "message": "已选 $count$",
+    "placeholders": { "count": { "content": "$1" } }
   },
-  "cleanupStaleColumnActions": {
-    "message": "操作"
+  "cleanupStaleGroupDeleteAll": {
+    "message": "勾选 $folder$ 里的全部书签待删除",
+    "placeholders": { "folder": { "content": "$1" } }
+  },
+  "cleanupStaleGroupDeleteClear": {
+    "message": "取消 $folder$ 里书签的删除勾选",
+    "placeholders": { "folder": { "content": "$1" } }
+  },
+  "cleanupStaleLastVisit": {
+    "message": "上次打开 $date$",
+    "placeholders": { "date": { "content": "$1" } }
   },
   "cleanupStaleNoLastUsed": {
     "message": "无上次打开时间"

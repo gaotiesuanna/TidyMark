@@ -2,7 +2,7 @@ import { useRef, type ChangeEvent } from 'react'
 import type { ExportNode } from '@/core/export'
 import { plural, t } from '@/i18n'
 import { useStore } from '../store'
-import { filePickerButton, primaryButton, secondaryButton } from './buttonStyles'
+import { buttonSizeMd, filePickerButton, primaryButton, secondaryButton } from './buttonStyles'
 import { AlertIcon, CheckCircleIcon, FileIcon, FolderIcon, LinkIcon, UploadIcon } from './icons'
 
 /** 直接用 'url' in node 分支返回，不要抬成布尔别名——JSX 的 && 里收窄不住 node.children。 */
@@ -92,7 +92,7 @@ export function ImportPanel() {
           </div>
         )}
         <p className="leading-relaxed text-neutral-500">{t('importDeleteHint')}</p>
-        <button className={`${secondaryButton} w-full`} onClick={resetImport}>
+        <button className={`${secondaryButton} ${buttonSizeMd} w-full`} onClick={resetImport}>
           {t('importFinish')}
         </button>
       </div>
@@ -107,7 +107,7 @@ export function ImportPanel() {
           <AlertIcon className="mt-px h-3.5 w-3.5 shrink-0" />
           {importError}
         </p>
-        <button className={`${secondaryButton} w-full`} onClick={resetImport}>
+        <button className={`${secondaryButton} ${buttonSizeMd} w-full`} onClick={resetImport}>
           {t('importRetry')}
         </button>
       </div>
@@ -145,13 +145,13 @@ export function ImportPanel() {
         </div>
         <div className="flex gap-2">
           <button
-            className={`${primaryButton} flex-1`}
+            className={`${primaryButton} ${buttonSizeMd} flex-1`}
             disabled={(preview.bookmarkCount === 0 && preview.folderCount === 0) || busy !== null}
             onClick={() => void confirmImport()}
           >
             {t('importConfirm')}
           </button>
-          <button className={`${secondaryButton} flex-1`} disabled={busy !== null} onClick={resetImport}>
+          <button className={`${secondaryButton} ${buttonSizeMd} flex-1`} disabled={busy !== null} onClick={resetImport}>
             {t('importCancel')}
           </button>
         </div>
