@@ -1,7 +1,6 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import { handle, deepenBudget } from '@/background/handlers'
 import { createFakeBookmarks, type TreeSpec } from '../fakes/fake-bookmarks'
-import { createFakeHistory } from '../fakes/fake-history'
 import { createFakeStorage } from '../fakes/fake-storage'
 import { DEFAULT_SETTINGS, SETTINGS_KEY, activeLlm, loadCache, saveSettings, type Settings } from '@/storage/settings'
 import { currentLocale, setLocale } from '@/i18n'
@@ -3127,7 +3126,12 @@ describe('cleanup_stale_scan', () => {
     expect(response.scan.scopeRootIdByBookmarkId).toEqual({ '100': '1' })
   })
 
-  it('ignores History API failures because stale scanning uses bookmark metadata', async () => {
+  /**
+   * 清理页写着「不读取浏览历史」。这条以前靠「给后台一个 history 端口、断言它没被调用」
+   * 来守；现在后台**根本没有那个端口**（见 core/ports.ts 的 Ports），改由结构守，
+   * 这里只留下判断依据本身：档位来自书签自己的 dateLastUsed。
+   */
+  it('长期未点击的判断只用书签元数据，不碰浏览历史', async () => {
     const bookmarks = createFakeBookmarks([
       { id: '0', title: '', children: [
         { id: '1', title: '书签栏', children: [
@@ -3135,13 +3139,7 @@ describe('cleanup_stale_scan', () => {
         ] },
       ] },
     ])
-    const history = createFakeHistory()
-    history.api.search = vi.fn().mockRejectedValue(new Error('history unavailable'))
-    const ports = {
-      bookmarks: bookmarks.api,
-      history: history.api,
-      storage: createFakeStorage(),
-    }
+    const ports = { bookmarks: bookmarks.api, storage: createFakeStorage() }
 
     const response = await handle(ports, {
       kind: 'cleanup_stale_scan',
@@ -3151,7 +3149,6 @@ describe('cleanup_stale_scan', () => {
     expect(response.ok).toBe(true)
     if (!response.ok || response.kind !== 'cleanup_stale_scan') throw new Error('unexpected')
     expect(response.scan.items[0]?.lastUsedAt).toBe(1)
-    expect(history.api.search).not.toHaveBeenCalled()
   })
 })
 

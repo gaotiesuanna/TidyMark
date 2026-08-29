@@ -1,4 +1,4 @@
-import type { BookmarkNode, BookmarksApi, HistoryApi, Ports, StorageApi } from '@/core/ports'
+import type { BookmarkNode, BookmarksApi, Ports, StorageApi } from '@/core/ports'
 
 function toNode(raw: chrome.bookmarks.BookmarkTreeNode): BookmarkNode {
   const node: BookmarkNode = {
@@ -40,17 +40,6 @@ const bookmarks: BookmarksApi = {
   },
 }
 
-const history: HistoryApi = {
-  async search() {
-    const entries = await chrome.history.search({ text: '', maxResults: 10000, startTime: 0 })
-    return entries.flatMap((entry) => (
-      entry.url === undefined
-        ? []
-        : [{ url: entry.url, lastVisitTime: entry.lastVisitTime }]
-    ))
-  },
-}
-
 const storage: StorageApi = {
   async get<T>(key: string): Promise<T | null> {
     const result = await chrome.storage.local.get(key)
@@ -65,5 +54,5 @@ const storage: StorageApi = {
 }
 
 export function createChromePorts(): Ports {
-  return { bookmarks, history, storage }
+  return { bookmarks, storage }
 }

@@ -1,8 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { scanStaleBookmarks } from '@/engine/stale'
 import type { Ports } from '@/core/ports'
 import { createFakeBookmarks, type TreeSpec } from '../fakes/fake-bookmarks'
-import { createFakeHistory } from '../fakes/fake-history'
 import { createFakeStorage } from '../fakes/fake-storage'
 
 const scannedAt = new Date(2026, 7, 26, 12).getTime()
@@ -51,19 +50,6 @@ describe('scanStaleBookmarks', () => {
 
     expect(result.items.map(({ item }) => item.id)).toEqual(['100'])
     expect(result.scopeRootIdByBookmarkId).toEqual({ '100': '1' })
-  })
-
-  it('does not read History API when classifying long-unused bookmarks', async () => {
-    const ports = portsWithBookmarks([
-      { id: '100', title: '旧书签', url: 'https://old.example', dateLastUsed: 1 },
-    ])
-    const history = createFakeHistory()
-    const search = vi.spyOn(history.api, 'search')
-    ports.history = history.api
-
-    await scanStaleBookmarks(ports, ['1'], scannedAt)
-
-    expect(search).not.toHaveBeenCalled()
   })
 
   it('keeps missing dateLastUsed as unknown and omits recently opened bookmarks', async () => {
