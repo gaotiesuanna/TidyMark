@@ -33,9 +33,11 @@ TidyMark 没有服务器。你把它指向你自己的接口：
 |---|---|
 | URL 在发送前会被裁剪——查询参数、锚点和内嵌凭据都会被剥掉，只留下域名和路径 | [`src/core/sanitize.ts`](src/core/sanitize.ts) |
 | 安装时不申请任何主机访问权限；运行时只申请你填写的那一个域名 | [`src/sidepanel/lib/permissions.ts`](src/sidepanel/lib/permissions.ts) |
-| 整个代码库里只有一处对外网络请求——就是调用你的接口。没有埋点、遥测或追踪 | [`src/llm/client.ts`](src/llm/client.ts) |
+| 整个代码库里只有两处对外网络请求，而且都由你亲手触发：调用你的接口，以及——仅当你真的跑了失效链接检查时——向每条书签自己的站点发一次 HEAD（服务器不认 HEAD 时回退成 GET）。没有埋点、遥测或追踪 | [`src/llm/client.ts`](src/llm/client.ts)、[`src/engine/linkCheck.ts`](src/engine/linkCheck.ts) |
 
-`optional_host_permissions` 里之所以有通配符，是因为接口地址由你自己选，没法提前一一列举。它是一个*可选*权限：安装时不会被授予，`chrome.permissions.request()` 每次也只申请你输入的那一个源。
+搜 `fetch(` 会搜出第三处，在 [`src/sidepanel/lib/favicons.ts`](src/sidepanel/lib/favicons.ts)。那一处不是对外请求：它读的是 `chrome-extension://<id>/_favicon/`，也就是 Chrome 自己的本地图标缓存，用来给 HTML 导出补上图标。没有任何东西离开你的机器。
+
+`optional_host_permissions` 里之所以有通配符，是两件事叠在一起：接口地址由你自己选，没法提前一一列举；失效链接检查又得够得着你书签指向的任何站点。两者都是*可选*权限，安装时一个都不会被授予。端点那条，`chrome.permissions.request()` 每次只申请你填的那一个域名；「访问所有网站」那条只在你按下失效链接检查的按钮时才申请，在那之前永远不会。
 
 完整政策：[Privacy Policy / 隐私权政策](https://gist.github.com/gaotiesuanna/239c067efd9cc7d98f25ed5daa4c3ef7)
 
@@ -51,7 +53,7 @@ TidyMark 没有服务器。你把它指向你自己的接口：
 ```bash
 npm install
 npm run build     # 先类型检查，再构建到 dist/
-npm test          # 49 个文件、708 个测试
+npm test          # 86 个文件、1677 个测试
 npm run dev       # 带 HMR 的开发服务器
 ```
 

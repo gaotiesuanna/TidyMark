@@ -42,11 +42,19 @@ Claims worth checking rather than taking on faith:
 |---|---|
 | URLs are trimmed before being sent — query parameters, anchors and embedded credentials are stripped, leaving only domain and path | [`src/core/sanitize.ts`](src/core/sanitize.ts) |
 | Host access is never requested at install time; at runtime only the single domain you entered is requested | [`src/sidepanel/lib/permissions.ts`](src/sidepanel/lib/permissions.ts) |
-| Exactly one outbound network request exists in the codebase — the call to your endpoint. No analytics, telemetry, or tracking | [`src/llm/client.ts`](src/llm/client.ts) |
+| Two outbound network requests exist in the codebase, and you start both: the call to your endpoint, and — only once you run the dead-link check — a HEAD request to each bookmark's own site (falling back to GET when a server rejects HEAD). No analytics, telemetry, or tracking | [`src/llm/client.ts`](src/llm/client.ts), [`src/engine/linkCheck.ts`](src/engine/linkCheck.ts) |
 
-The wildcard in `optional_host_permissions` exists because the endpoint is yours to choose
-and cannot be enumerated in advance. It is an *optional* permission: it is not granted at
-install time, and `chrome.permissions.request()` only ever asks for the one origin you typed.
+Grepping for `fetch(` turns up a third hit, in
+[`src/sidepanel/lib/favicons.ts`](src/sidepanel/lib/favicons.ts). That one is not outbound:
+it reads `chrome-extension://<id>/_favicon/`, Chrome's own local icon cache, so that HTML
+exports can carry icons. Nothing leaves your machine.
+
+The wildcards in `optional_host_permissions` exist for two reasons: the endpoint is yours to
+choose and cannot be enumerated in advance, and the dead-link check has to be able to reach
+whatever your bookmarks point at. Both are *optional* permissions — neither is granted at
+install time. For the endpoint, `chrome.permissions.request()` only ever asks for the one
+domain you typed. The all-sites permission is asked for only when you press the dead-link
+check button, and never before.
 
 Full policy: [Privacy Policy / 隐私权政策](https://gist.github.com/gaotiesuanna/239c067efd9cc7d98f25ed5daa4c3ef7)
 
@@ -65,7 +73,7 @@ you're running, or hack on it:
 ```bash
 npm install
 npm run build     # type-check, then build to dist/
-npm test          # 708 tests across 49 files
+npm test          # 1677 tests across 86 files
 npm run dev       # dev server with HMR
 ```
 
