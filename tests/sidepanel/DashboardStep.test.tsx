@@ -351,6 +351,79 @@ describe('DashboardStep', () => {
     expect(unsaved.textContent).toContain(t('dashVisitNoneUnsaved'))
   })
 
+  it('点未收藏那行的标题把整棵路径树收起来，再点展开', async () => {
+    const user = userEvent.setup()
+    contains.mockResolvedValue(true)
+    search.mockResolvedValue([
+      { url: 'https://localhost/analysis/library', title: 'Lib', visitCount: 502 },
+      { url: 'https://localhost/home', title: 'Home', visitCount: 8 },
+    ])
+
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
+    expect(await screen.findByText('localhost')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /localhost/ }))
+    expect(screen.getByText('Lib')).toBeTruthy()
+
+    const toggle = screen.getByRole('button', { name: new RegExp(t('dashVisitUnsaved')) })
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+
+    await user.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByText('Lib')).toBeNull()
+    expect(screen.queryByText('Home')).toBeNull()
+    // 标题本身还在，数字也还在，收起来的只是树
+    expect(screen.getByText(t('dashVisitUnsaved'))).toBeTruthy()
+    expect(screen.getByText(t('dashVisitCount', '510'))).toBeTruthy()
+
+    await user.click(toggle)
+    expect(screen.getByText('Lib')).toBeTruthy()
+  })
+
+  it('已收藏那段也能单独收起', async () => {
+    const user = userEvent.setup()
+    useStore.setState({
+      tree: [{ id: '0', title: '', children: [
+        { id: 'bar', title: 'Bookmarks Bar', children: [
+          { id: 'h', title: '首页', url: 'https://localhost/home' },
+        ]},
+      ]}],
+    })
+    contains.mockResolvedValue(true)
+    search.mockResolvedValue([
+      { url: 'https://localhost/home', title: 'Home', visitCount: 8 },
+      { url: 'https://localhost/other', title: 'Other', visitCount: 3 },
+    ])
+
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
+    expect(await screen.findByText('localhost')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /localhost/ }))
+    expect(screen.getByText('首页')).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: new RegExp(t('dashVisitSaved')) }))
+    expect(screen.queryByText('首页')).toBeNull()
+    // 未收藏那段不受影响
+    expect(screen.getByText('Other')).toBeTruthy()
+  })
+
+  it('空的那段没有收起按钮', async () => {
+    const user = userEvent.setup()
+    contains.mockResolvedValue(true)
+    search.mockResolvedValue([
+      { url: 'https://localhost/home', title: 'Home', visitCount: 8 },
+    ])
+
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
+    expect(await screen.findByText('localhost')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /localhost/ }))
+
+    expect(screen.getByText(t('dashVisitNoneSaved'))).toBeTruthy()
+    expect(screen.queryByRole('button', { name: new RegExp(t('dashVisitSaved')) })).toBeNull()
+    expect(screen.getByRole('button', { name: new RegExp(t('dashVisitUnsaved')) })).toBeTruthy()
+  })
+
   it('读取浏览记录时给骨架屏而不是空白', async () => {
     const user = userEvent.setup()
     contains.mockResolvedValue(true)

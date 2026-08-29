@@ -399,62 +399,99 @@ function VisitBreakdown({
         shown ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1',
       ].join(' ')}
     >
-      <section aria-label={t('dashVisitSavedLabel', domain)}>
-        <SectionHead
-          icon={<BookmarkIcon className="h-3.5 w-3.5 shrink-0 text-blue-500" />}
-          title={t('dashVisitSaved')}
-          note={split.saved.length === 0 ? undefined : t('dashVisitCount', String(savedVisits))}
-        />
-        {split.saved.length === 0 ? (
-          <SectionEmpty text={t('dashVisitNoneSaved')} />
-        ) : (
-          <ul className="mt-1 space-y-1.5 border-l border-neutral-200 pl-3">
-            {split.saved.map((page) => <SavedVisitRow key={page.id} page={page} />)}
-          </ul>
-        )}
-      </section>
-      <section aria-label={t('dashVisitUnsavedLabel', domain)}>
-        <SectionHead
-          icon={<FolderIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />}
-          title={t('dashVisitUnsaved')}
-          note={split.unsaved.length === 0 ? undefined : t('dashVisitCount', String(unsavedVisits))}
-        />
-        {split.unsaved.length === 0 ? (
-          <SectionEmpty text={t('dashVisitNoneUnsaved')} />
-        ) : (
-          <FolderTree nodes={split.unsaved} domain={domain} depth={0} margin="mt-1" />
-        )}
-      </section>
+      <VisitSection
+        label={t('dashVisitSavedLabel', domain)}
+        icon={<BookmarkIcon className="h-3.5 w-3.5 shrink-0 text-blue-500" />}
+        title={t('dashVisitSaved')}
+        note={t('dashVisitCount', String(savedVisits))}
+        emptyText={split.saved.length === 0 ? t('dashVisitNoneSaved') : undefined}
+      >
+        <ul className="mt-1 space-y-1.5 border-l border-neutral-200 pl-3">
+          {split.saved.map((page) => <SavedVisitRow key={page.id} page={page} />)}
+        </ul>
+      </VisitSection>
+      <VisitSection
+        label={t('dashVisitUnsavedLabel', domain)}
+        icon={<FolderIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />}
+        title={t('dashVisitUnsaved')}
+        note={t('dashVisitCount', String(unsavedVisits))}
+        emptyText={split.unsaved.length === 0 ? t('dashVisitNoneUnsaved') : undefined}
+      >
+        <FolderTree nodes={split.unsaved} domain={domain} depth={0} margin="mt-1" />
+      </VisitSection>
     </div>
   )
 }
 
-function SectionEmpty({ text }: { text: string }) {
-  return (
-    <p className="mt-1 border-l border-neutral-200 pl-3 text-xs leading-caption text-neutral-400">
-      {text}
-    </p>
-  )
-}
-
-function SectionHead({
+/**
+ * 「已收藏」「未收藏」各自一段，标题那一行就是收起/展开的按钮。
+ *
+ * 未收藏那半在开发机上动辄几十行路径树，一路顶出卡片，得能一键折上。
+ * 空的那段没东西可折，标题退回不可点的一行——摆个按不动的按钮只会骗手。
+ */
+function VisitSection({
+  label,
   icon,
   title,
   note,
+  emptyText,
+  children,
 }: {
+  label: string
   icon: ReactNode
   title: string
-  /** 该段的访问次数。空段不给——「访问 0 次」不如让空状态自己说话。 */
-  note?: string
+  /** 该段的访问次数。空段不显示——「访问 0 次」不如让空状态自己说话。 */
+  note: string
+  /** 给了就表示这段是空的：标题不可点，正文换成这句话。 */
+  emptyText?: string
+  children: ReactNode
 }) {
-  return (
-    <div className="flex items-center gap-1.5">
+  const [open, setOpen] = useState(true)
+  const empty = emptyText !== undefined
+  const head = (
+    <>
+      {empty ? (
+        <span aria-hidden="true" className="h-3 w-3 shrink-0" />
+      ) : (
+        <ChevronDownIcon
+          className={[
+            'h-3 w-3 shrink-0 text-neutral-400 transition-transform duration-150 motion-reduce:transition-none',
+            open ? '' : '-rotate-90',
+          ].join(' ')}
+        />
+      )}
       {icon}
       <span className="text-sm leading-caption font-semibold text-neutral-700">{title}</span>
-      {note !== undefined && (
+      {!empty && (
         <span className="text-xs leading-caption tabular-nums text-neutral-400">{note}</span>
       )}
-    </div>
+    </>
+  )
+  return (
+    <section aria-label={label}>
+      {empty ? (
+        <div className="flex items-center gap-1.5">{head}</div>
+      ) : (
+        <button
+          type="button"
+          className={[
+            '-mx-1.5 flex w-full cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left',
+            'transition-colors duration-150 motion-reduce:transition-none',
+            'hover:bg-neutral-50 active:bg-neutral-100',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400',
+          ].join(' ')}
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          {head}
+        </button>
+      )}
+      {empty ? (
+        <p className="mt-1 pl-4 text-xs leading-caption text-neutral-400">{emptyText}</p>
+      ) : (
+        open && children
+      )}
+    </section>
   )
 }
 
