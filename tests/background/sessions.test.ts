@@ -62,7 +62,7 @@ describe('取消只掐自己那一轮', () => {
     // 原来的事故：cancelled 与 controller 都是全局单份，在 A 点取消
     // 掐掉的是 B 那轮已经花了钱、跑了几分钟的分析。
     const { sessions } = twoWindows()
-    expect(sessions.beginRun('win-b')).toBe(true)
+    expect(sessions.beginRun('win-b', true)).toBe(true)
     const bSignal = sessions.signal('win-b')
 
     expect(sessions.cancel('win-a')).toBe(false)
@@ -73,7 +73,7 @@ describe('取消只掐自己那一轮', () => {
 
   it('持有者点取消会置位并 abort 自己的信号', () => {
     const { sessions } = twoWindows()
-    sessions.beginRun('win-a')
+    sessions.beginRun('win-a', true)
     const signal = sessions.signal('win-a')
 
     expect(sessions.cancel('win-a')).toBe(true)
@@ -92,49 +92,95 @@ describe('取消只掐自己那一轮', () => {
 describe('一次只放一轮长任务', () => {
   it('别的窗口占着时认领失败', () => {
     const { sessions } = twoWindows()
-    expect(sessions.beginRun('win-a')).toBe(true)
+    expect(sessions.beginRun('win-a', true)).toBe(true)
 
-    expect(sessions.beginRun('win-b')).toBe(false)
+    expect(sessions.beginRun('win-b', true)).toBe(false)
   })
 
   it('持有者收工之后别人才能认领', () => {
     const { sessions } = twoWindows()
-    sessions.beginRun('win-a')
+    sessions.beginRun('win-a', true)
     sessions.endRun('win-a')
 
-    expect(sessions.beginRun('win-b')).toBe(true)
+    expect(sessions.beginRun('win-b', true)).toBe(true)
   })
 
   it('同一个窗口再次认领算重开一轮，换一个没被 abort 过的信号', () => {
     // 上一轮取消过的 controller 已经 aborted，沿用它会让新一轮第一个请求当场断掉
     const { sessions } = twoWindows()
-    sessions.beginRun('win-a')
+    sessions.beginRun('win-a', true)
     sessions.cancel('win-a')
 
-    expect(sessions.beginRun('win-a')).toBe(true)
+    expect(sessions.beginRun('win-a', true)).toBe(true)
     expect(sessions.isCancelled('win-a')).toBe(false)
     expect(sessions.signal('win-a')?.aborted).toBe(false)
   })
 
   it('非持有者的收尾不会把别人刚开的那轮抹掉', () => {
     const { sessions } = twoWindows()
-    sessions.beginRun('win-a')
+    sessions.beginRun('win-a', true)
 
     sessions.endRun('win-b')
 
-    expect(sessions.beginRun('win-b')).toBe(false)
+    expect(sessions.beginRun('win-b', true)).toBe(false)
   })
 
   it('窗口关掉不中止已经在跑的那一轮，但那一轮结束后后台不会被永久占住', () => {
     const { sessions } = twoWindows()
-    sessions.beginRun('win-a')
+    sessions.beginRun('win-a', true)
 
     sessions.detach('win-a')
     expect(sessions.signal('win-a')?.aborted).toBe(false)
-    expect(sessions.beginRun('win-b')).toBe(false)
+    expect(sessions.beginRun('win-b', true)).toBe(false)
 
     sessions.endRun('win-a')
-    expect(sessions.beginRun('win-b')).toBe(true)
+    expect(sessions.beginRun('win-b', true)).toBe(true)
+  })
+})
+
+/**
+ * 「独占后台」与「吃取消信号」是两件事。apply / undo / import / apply_cleanup
+ * 必须独占（它们在改同一棵书签树、共用同一个撤销快照键），但它们不可取消。
+ */
+describe('不可取消的独占任务', () => {
+  it('照样独占：别人开不了新的一轮', () => {
+    const { sessions } = twoWindows()
+    expect(sessions.beginRun('win-a', false)).toBe(true)
+
+    expect(sessions.beginRun('win-b', true)).toBe(false)
+  })
+
+  it('拿不到取消信号——没有 controller 可给', () => {
+    const { sessions } = twoWindows()
+    sessions.beginRun('win-a', false)
+
+    expect(sessions.signal('win-a')).toBeUndefined()
+  })
+
+  it('连自己点取消都不受理，免得日志说一句做不到的话', () => {
+    const { sessions } = twoWindows()
+    sessions.beginRun('win-a', false)
+
+    expect(sessions.cancel('win-a')).toBe(false)
+    expect(sessions.isCancelled('win-a')).toBe(false)
+  })
+
+  it('收工之后位子照常放开', () => {
+    const { sessions } = twoWindows()
+    sessions.beginRun('win-a', false)
+    sessions.endRun('win-a')
+
+    expect(sessions.beginRun('win-b', true)).toBe(true)
+  })
+
+  it('同一个窗口从不可取消换成可取消，信号就有了', () => {
+    const { sessions } = twoWindows()
+    sessions.beginRun('win-a', false)
+
+    sessions.beginRun('win-a', true)
+
+    expect(sessions.signal('win-a')?.aborted).toBe(false)
+    expect(sessions.cancel('win-a')).toBe(true)
   })
 })
 

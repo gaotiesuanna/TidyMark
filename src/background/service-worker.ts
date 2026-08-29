@@ -29,10 +29,32 @@ chrome.runtime.onInstalled.addListener(() => {
  */
 const sessions = createSessions()
 
-/** 这一轮里必须独占后台的请求：都要跑几十秒到几分钟，都吃取消信号。 */
-function isLongRun(request: Request): boolean {
-  return request.kind === 'analyze' || request.kind === 'check_links'
-}
+/**
+ * 必须独占后台的请求。判准是「会不会动全局单例」，不是「跑得久不久」。
+ *
+ * analyze / check_links 是长任务，这好理解。真正容易漏的是后面四个：apply、undo、
+ * import、apply_cleanup 全都在改**同一棵书签树**，而 apply 与 undo 还共用
+ * engine/snapshot.ts 里唯一那个 SNAPSHOT_KEY——两个窗口同时落地，后写的快照会把
+ * 先写的整个盖掉，于是先落地那一次**再也撤销不回去**。这比进度串台严重得多。
+ *
+ * analyze 也必须挡住 apply：分析产出的方案是对着某一刻的书签树算的，
+ * 另一个窗口在这中间把树改了，那份方案落地时指向的 id 已经不是原来那个东西。
+ *
+ * 没进来的都是只读或瞬时的（get_tree、scan、cleanup_scan、test_model、list_models…），
+ * 并发跑没有互相破坏的余地，挡住它们只会让另一个窗口连书签树都读不了。
+ */
+const EXCLUSIVE: ReadonlySet<Request['kind']> = new Set([
+  'analyze', 'check_links', 'apply', 'undo', 'import', 'apply_cleanup',
+])
+
+/**
+ * 独占任务里**吃取消信号**的那几种。
+ *
+ * 与 EXCLUSIVE 分开是必须的：apply / undo / import / apply_cleanup 从不读
+ * isCancelled、不收 signal，界面也不给它们取消按钮。把它们一并当成可取消，
+ * 换来的是「点了取消 → 日志说正在取消 → 它照样跑完」这种骗人的三连。
+ */
+const CANCELLABLE: ReadonlySet<Request['kind']> = new Set(['analyze', 'check_links'])
 
 chrome.runtime.onConnect.addListener((port) => {
   const clientId = clientIdFromPortName(port.name)
@@ -62,16 +84,19 @@ chrome.runtime.onMessage.addListener((message: IncomingMessage, _sender, sendRes
     return false
   }
 
-  if (isLongRun(request) && !sessions.beginRun(id)) {
-    // 后台的撤销快照、分类缓存、i18n 语言都是单例，放第二轮并发进来会互相覆盖。
+  const exclusive = EXCLUSIVE.has(request.kind)
+  if (exclusive && !sessions.beginRun(id, CANCELLABLE.has(request.kind))) {
     // 说清楚比静默排队强：用户看得见是「另一个窗口占着」，而不是自己这边没反应。
+    // 这一步是**在动手之前**回绝的，一个书签都没碰，所以再点一次是安全的——
+    // 与 apply/undo 那几处「失败了不给重试入口」不是一回事，那些是可能已经改了一半。
     sendResponse({ ok: false, error: t('errAnotherWindowBusy') })
     return false
   }
 
-  // 取消信号只给长任务。短请求（get_tree、save_settings 之类）一来一回就结束，
-  // 把正在跑的那一轮的 signal 递给它们，只会让它们在用户点取消时莫名其妙地断掉。
-  const signal = isLongRun(request) ? sessions.signal(id) : undefined
+  // 两道闸都要：sessions.signal 只回答「这个窗口那一轮可不可取消」，回答不了
+  // 「眼下这条请求**是不是**那一轮」。少了 exclusive 这一道，同一个窗口在分析途中
+  // 发的 get_settings 会拿到分析那一轮的 signal，用户点取消时它跟着莫名其妙地断掉。
+  const signal = exclusive ? sessions.signal(id) : undefined
 
   handle(createChromePorts(), request, {
     // 进度只回发起这次请求的那个侧栏。apply、undo、import、cleanup 同样在报进度，
@@ -83,7 +108,7 @@ chrome.runtime.onMessage.addListener((message: IncomingMessage, _sender, sendRes
     .then(sendResponse)
     .catch((error: unknown) => sendResponse({ ok: false, error: String(error) }))
     .finally(() => {
-      if (isLongRun(request)) sessions.endRun(id)
+      if (exclusive) sessions.endRun(id)
     })
   return true // 保持消息通道开启以支持异步响应
 })

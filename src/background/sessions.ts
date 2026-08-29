@@ -27,7 +27,15 @@ export const ANONYMOUS_CLIENT = 'anonymous'
 interface Run {
   clientId: string
   cancelled: boolean
-  controller: AbortController
+  /**
+   * 只有可取消的那几种请求才有 controller。
+   *
+   * 「独占后台」与「吃取消信号」是两件事，不能并成一件：apply / undo / import /
+   * apply_cleanup 都必须独占（它们在动书签树与撤销快照），但它们从头到尾不读
+   * isCancelled、也不收 signal，界面上压根不给取消按钮——真给它们发一个信号，
+   * 只会造出「点了取消、日志说正在取消、然后它照样跑完」这种假象。
+   */
+  controller: AbortController | null
 }
 
 export interface Sessions {
@@ -37,16 +45,22 @@ export interface Sessions {
   /** 把事件推给指定侧栏。对方不在（窗口关了）就丢掉——一次广播都不该发生。 */
   emit(clientId: string, event: ProgressEvent): void
   /**
-   * 认领「当前唯一那一轮长任务」。别的侧栏正占着时返回 false，调用方据此回绝。
+   * 认领「当前唯一那一轮独占任务」。别的侧栏正占着时返回 false，调用方据此回绝。
    * 同一个侧栏再次认领算重开一轮（换新的 controller），与改造前逐轮新建的行为一致。
+   *
+   * cancellable 没有默认值，是有意的：漏传会让 analyze 悄悄失去取消能力，
+   * 那种 bug 编译器抓不到，必须由调用方每次显式回答。
    */
-  beginRun(clientId: string): boolean
+  beginRun(clientId: string, cancellable: boolean): boolean
   /** 收工。只有持有者能清，晚到的收尾不会把别人刚开的那轮抹掉。 */
   endRun(clientId: string): void
-  /** 取消自己那一轮。没有自己的那一轮时返回 false，调用方据此决定要不要打日志。 */
+  /**
+   * 取消自己那一轮。没有自己的那一轮、或那一轮本就不可取消时返回 false，
+   * 调用方据此决定要不要打「正在取消」的日志——对不可取消的任务打了就是骗人。
+   */
   cancel(clientId: string): boolean
   isCancelled(clientId: string): boolean
-  /** 自己那一轮的取消信号；不持有当前这轮时为 undefined。 */
+  /** 自己那一轮的取消信号；不持有当前这轮、或那一轮不可取消时为 undefined。 */
   signal(clientId: string): AbortSignal | undefined
 }
 
@@ -81,9 +95,9 @@ export function createSessions(): Sessions {
       }
     },
 
-    beginRun(clientId) {
+    beginRun(clientId, cancellable) {
       if (run !== null && run.clientId !== clientId) return false
-      run = { clientId, cancelled: false, controller: new AbortController() }
+      run = { clientId, cancelled: false, controller: cancellable ? new AbortController() : null }
       return true
     },
 
@@ -92,7 +106,7 @@ export function createSessions(): Sessions {
     },
 
     cancel(clientId) {
-      if (!owns(clientId)) return false
+      if (!owns(clientId) || run!.controller === null) return false
       run!.cancelled = true
       run!.controller.abort()
       return true
@@ -103,7 +117,7 @@ export function createSessions(): Sessions {
     },
 
     signal(clientId) {
-      return owns(clientId) ? run!.controller.signal : undefined
+      return owns(clientId) ? (run!.controller?.signal ?? undefined) : undefined
     },
   }
 }

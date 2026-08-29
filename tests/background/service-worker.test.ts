@@ -197,6 +197,70 @@ describe('一次只放一轮长任务', () => {
     })
   })
 
+  /**
+   * apply 与 undo 共用 engine/snapshot.ts 里唯一那个 SNAPSHOT_KEY：两个窗口同时落地，
+   * 后写的快照会把先写的整个盖掉，先落地那一次再也撤销不回去。所以它们必须独占。
+   */
+  it('A 在落地时，B 的落地被挡下来，一个书签都不碰', () => {
+    onConnect(fakePort('win-a'))
+    onConnect(fakePort('win-b'))
+    send({ kind: 'apply', plan: {} as never, accepted: [], clientId: 'win-a' })
+    expect(handle).toHaveBeenCalledTimes(1)
+
+    const response = send({ kind: 'apply', plan: {} as never, accepted: [], clientId: 'win-b' })
+
+    expect(response?.ok).toBe(false)
+    expect(handle).toHaveBeenCalledTimes(1)
+  })
+
+  it('A 在落地时，B 的撤销也被挡下来', () => {
+    onConnect(fakePort('win-a'))
+    onConnect(fakePort('win-b'))
+    send({ kind: 'apply', plan: {} as never, accepted: [], clientId: 'win-a' })
+
+    expect(send({ kind: 'undo', clientId: 'win-b' })?.ok).toBe(false)
+  })
+
+  it('A 在分析时，B 的落地被挡下来——方案是对着改之前那棵树算的', () => {
+    onConnect(fakePort('win-a'))
+    onConnect(fakePort('win-b'))
+    send({ kind: 'analyze', scopeRootIds: ['1'], clientId: 'win-a' })
+
+    expect(send({ kind: 'apply', plan: {} as never, accepted: [], clientId: 'win-b' })?.ok).toBe(false)
+  })
+
+  it('导入与清理落地同样独占', () => {
+    onConnect(fakePort('win-a'))
+    onConnect(fakePort('win-b'))
+    send({ kind: 'import', nodes: [], targetName: 'x', clientId: 'win-a' })
+
+    expect(send({ kind: 'apply_cleanup', input: {} as never, clientId: 'win-b' })?.ok).toBe(false)
+  })
+
+  it('落地跑完之后位子放开', async () => {
+    onConnect(fakePort('win-a'))
+    onConnect(fakePort('win-b'))
+    send({ kind: 'apply', plan: {} as never, accepted: [], clientId: 'win-a' })
+
+    calls[0]!.resolve({ ok: false, error: 'done' })
+    await new Promise((resolve) => { setTimeout(resolve, 0) })
+
+    expect(send({ kind: 'undo', clientId: 'win-b' })).toBeNull()
+  })
+
+  it('落地不吃取消信号，点取消也不受理', () => {
+    const a = fakePort('win-a')
+    onConnect(a)
+    send({ kind: 'apply', plan: {} as never, accepted: [], clientId: 'win-a' })
+
+    send({ kind: 'cancel', clientId: 'win-a' })
+
+    // 没有信号可给，也不该打一句「正在取消」——它取消不了
+    expect(calls[0]!.deps.signal).toBeUndefined()
+    expect(calls[0]!.deps.isCancelled?.()).toBe(false)
+    expect(a.received).toEqual([])
+  })
+
   it('短请求不占用这个位子', () => {
     onConnect(fakePort('win-a'))
     onConnect(fakePort('win-b'))
