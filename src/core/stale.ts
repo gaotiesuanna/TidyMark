@@ -28,31 +28,66 @@ export interface StaleBookmark {
   lastUsedAt?: number
 }
 
-export interface StaleFolderGroup {
+export interface StaleFolderNode {
   /** currentPath 拼成的稳定键，也是展开状态的标识 */
   key: string
+  title: string
+  path: string[]
+  /** 这个文件夹里 + 所有子孙里的闲置书签总数。 */
+  count: number
+  /** 直接躺在这个文件夹里的闲置书签（不含子孙）。 */
+  items: StaleBookmark[]
+  children: StaleFolderNode[]
+}
+
+interface MutableFolder {
+  key: string
+  title: string
   path: string[]
   items: StaleBookmark[]
+  children: Map<string, MutableFolder>
 }
 
 /**
- * 按所在文件夹归堆：同一目录下的一批闲置书签只写一次路径，省掉逐行重复。
- * 条数多的排前面（triage 先看大头），条数相同按路径字典序，保证顺序稳定。
+ * 按 currentPath 搭成文件夹树。共享祖先只出现一次，count 含子孙。
+ * 空标题（Chrome 无名根）不占一层。每层按 count 降序、同数按标题稳定。
+ * 过道文件夹不折叠——清理页要看见层级，不能再缩成一条路径。
  */
-export function groupStaleByFolder(items: readonly StaleBookmark[]): StaleFolderGroup[] {
-  const groups = new Map<string, StaleFolderGroup>()
+export function staleFolderTree(items: readonly StaleBookmark[]): StaleFolderNode[] {
+  const root: MutableFolder = { key: '', title: '', path: [], items: [], children: new Map() }
+
   for (const entry of items) {
-    const key = entry.item.currentPath.join('/')
-    let group = groups.get(key)
-    if (group === undefined) {
-      group = { key, path: entry.item.currentPath, items: [] }
-      groups.set(key, group)
+    const path = entry.item.currentPath.filter((segment) => segment !== '')
+    let node = root
+    for (let i = 0; i < path.length; i++) {
+      const title = path[i]!
+      const childPath = path.slice(0, i + 1)
+      const key = childPath.join('/')
+      let child = node.children.get(title)
+      if (child === undefined) {
+        child = { key, title, path: childPath, items: [], children: new Map() }
+        node.children.set(title, child)
+      }
+      node = child
     }
-    group.items.push(entry)
+    node.items.push(entry)
   }
-  return [...groups.values()].sort(
-    (a, b) => b.items.length - a.items.length || a.key.localeCompare(b.key),
-  )
+
+  function freeze(node: MutableFolder): StaleFolderNode {
+    const children = [...node.children.values()].map(freeze).sort(
+      (a, b) => b.count - a.count || a.title.localeCompare(b.title),
+    )
+    return {
+      key: node.key,
+      title: node.title,
+      path: node.path,
+      items: node.items,
+      children,
+      count: node.items.length + children.reduce((n, child) => n + child.count, 0),
+    }
+  }
+
+  return freeze(root).children
 }
 
 export interface StaleScanResult {

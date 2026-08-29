@@ -367,10 +367,6 @@
     "message": "勾选 $folder$ 里的全部书签待删除",
     "placeholders": { "folder": { "content": "$1" } }
   },
-  "cleanupStaleGroupDeleteClear": {
-    "message": "取消 $folder$ 里书签的删除勾选",
-    "placeholders": { "folder": { "content": "$1" } }
-  },
   "cleanupStaleLastVisit": {
     "message": "上次打开 $date$",
     "placeholders": { "date": { "content": "$1" } }

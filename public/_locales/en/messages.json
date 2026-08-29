@@ -367,10 +367,6 @@
     "message": "Mark every bookmark in $folder$ for deletion",
     "placeholders": { "folder": { "content": "$1" } }
   },
-  "cleanupStaleGroupDeleteClear": {
-    "message": "Clear deletion for bookmarks in $folder$",
-    "placeholders": { "folder": { "content": "$1" } }
-  },
   "cleanupStaleLastVisit": {
     "message": "Last opened $date$",
     "placeholders": { "date": { "content": "$1" } }

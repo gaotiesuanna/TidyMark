@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifyStaleBookmarks, groupStaleByFolder, matchesStaleFilter, type StaleBucket, type StaleBookmark } from '@/core/stale'
+import { classifyStaleBookmarks, matchesStaleFilter, staleFolderTree, type StaleBucket, type StaleBookmark } from '@/core/stale'
 import type { BookmarkItem } from '@/core/types'
 
 const scanDate = new Date(2026, 7, 26, 12).getTime()
@@ -52,35 +52,64 @@ describe('matchesStaleFilter', () => {
   })
 })
 
-describe('groupStaleByFolder', () => {
+describe('staleFolderTree', () => {
   const staleAt = (id: string, path: string[]): StaleBookmark => ({
     item: { ...item(id, new Date(2025, 0, 1).getTime()), currentPath: path },
     bucket: 'oneToTwoYears',
     lastUsedAt: new Date(2025, 0, 1).getTime(),
   })
 
-  it('groups by full folder path and keeps the path array', () => {
-    const groups = groupStaleByFolder([
+  it('nests shared ancestors and counts the whole subtree', () => {
+    const tree = staleFolderTree([
       staleAt('a', ['书签栏', '甲']),
       staleAt('b', ['书签栏', '乙']),
       staleAt('c', ['书签栏', '甲']),
     ])
 
-    expect(groups.map((g) => [g.key, g.items.length])).toEqual([
-      ['书签栏/甲', 2],
-      ['书签栏/乙', 1],
+    expect(tree).toHaveLength(1)
+    expect(tree[0]?.title).toBe('书签栏')
+    expect(tree[0]?.count).toBe(3)
+    expect(tree[0]?.items).toEqual([])
+    expect(tree[0]?.children.map((node) => [node.title, node.count, node.key])).toEqual([
+      ['甲', 2, '书签栏/甲'],
+      ['乙', 1, '书签栏/乙'],
     ])
-    expect(groups[0]?.path).toEqual(['书签栏', '甲'])
+    expect(tree[0]?.children[0]?.path).toEqual(['书签栏', '甲'])
   })
 
-  it('orders bigger groups first, then by path for ties', () => {
-    const groups = groupStaleByFolder([
+  it('orders siblings by subtree size then title', () => {
+    const tree = staleFolderTree([
       staleAt('a', ['b']),
       staleAt('b', ['a']),
       staleAt('c', ['c']),
     ])
+    expect(tree.map((node) => node.title)).toEqual(['a', 'b', 'c'])
+  })
 
-    expect(groups.map((g) => g.key)).toEqual(['a', 'b', 'c'])
+  it('keeps hallway folders as separate levels instead of one path string', () => {
+    const tree = staleFolderTree([
+      staleAt('x', ['Bookmarks Bar', 'LLMStudy', '10 其他']),
+    ])
+    expect(tree[0]?.title).toBe('Bookmarks Bar')
+    expect(tree[0]?.children[0]?.title).toBe('LLMStudy')
+    expect(tree[0]?.children[0]?.children[0]?.title).toBe('10 其他')
+    expect(tree[0]?.children[0]?.children[0]?.count).toBe(1)
+  })
+
+  it('skips empty path segments from the unnamed Chrome root', () => {
+    const tree = staleFolderTree([staleAt('a', ['', '书签栏', '甲'])])
+    expect(tree[0]?.title).toBe('书签栏')
+    expect(tree[0]?.children[0]?.title).toBe('甲')
+  })
+
+  it('puts bookmarks on the folder they live in, not the ancestor', () => {
+    const tree = staleFolderTree([
+      staleAt('root-item', ['书签栏']),
+      staleAt('child-item', ['书签栏', '甲']),
+    ])
+    expect(tree[0]?.items.map((entry) => entry.item.id)).toEqual(['root-item'])
+    expect(tree[0]?.children[0]?.items.map((entry) => entry.item.id)).toEqual(['child-item'])
+    expect(tree[0]?.count).toBe(2)
   })
 })
 

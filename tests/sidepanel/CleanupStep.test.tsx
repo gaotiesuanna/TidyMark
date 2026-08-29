@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CleanupStep } from '@/sidepanel/steps/CleanupStep'
 import { Shell } from '@/sidepanel/components/Shell'
@@ -126,6 +126,7 @@ async function openCleanupTab(name: string): Promise<void> {
 
 describe('长期未点击书签扫描状态', () => {
   it('页面说明扫描不读取浏览历史', () => {
+    vi.mocked(send).mockImplementation(() => Promise.withResolvers<never>().promise as never)
     render(<CleanupStep />)
     expect(screen.getByText(/不读取浏览历史/)).toBeDefined()
   })
@@ -160,18 +161,19 @@ describe('长期未点击书签扫描状态', () => {
     expect(useStore.getState().staleState).toBe('empty')
   })
 
-  it('点击扫描按钮时即使没有整理勾选也会按全库根扫描', async () => {
+  it('进入清理页自动按全库根扫描，不展示扫描按钮', async () => {
     vi.mocked(send).mockResolvedValue({
       ok: true, kind: 'cleanup_stale_scan', scan: staleResult,
     } as never)
     useStore.setState({ checkedIds: new Set() })
     render(<CleanupStep />)
 
-    await userEvent.click(screen.getByRole('button', { name: /扫描长期未点击书签/ }))
-
-    expect(send).toHaveBeenCalledWith({
-      kind: 'cleanup_stale_scan',
-      scopeRootIds: ['1'],
+    expect(screen.queryByRole('button', { name: /扫描长期未点击书签/ })).toBeNull()
+    await waitFor(() => {
+      expect(send).toHaveBeenCalledWith({
+        kind: 'cleanup_stale_scan',
+        scopeRootIds: ['1'],
+      })
     })
   })
 
@@ -281,10 +283,11 @@ describe('长期未点击书签扫描状态', () => {
 
 })
 describe('CleanupStep 长期未点击书签一节', () => {
-  it('授权前只展示说明和允许按钮，不在挂载时申请历史权限', () => {
+  it('进入清理页不展示扫描按钮', () => {
+    vi.mocked(send).mockImplementation(() => Promise.withResolvers<never>().promise as never)
     render(<CleanupStep />)
     expect(screen.getByText(/不读取浏览历史/)).toBeDefined()
-    expect(screen.getByRole('button', { name: /扫描长期未点击书签/ })).toBeDefined()
+    expect(screen.queryByRole('button', { name: /扫描长期未点击书签/ })).toBeNull()
   })
 
   it('准备完成后显示六个筛选档位、截止日期和书签详情', () => {
@@ -301,7 +304,9 @@ describe('CleanupStep 长期未点击书签一节', () => {
     }
     expect(screen.getByText('旧文章')).toBeDefined()
     expect(screen.getByText('https://example.com/old')).toBeDefined()
-    expect(screen.getAllByText('/书签栏/目录甲/').length).toBeGreaterThan(0)
+    expect(screen.getByText('书签栏')).toBeDefined()
+    expect(screen.getByText('目录甲')).toBeDefined()
+    expect(screen.queryByText('/书签栏/目录甲/')).toBeNull()
     expect(screen.getAllByText(/上次打开|无上次打开时间/).length).toBeGreaterThan(0)
     expect(screen.getByText(/上次打开早于/)).toBeDefined()
   })
@@ -381,7 +386,7 @@ describe('CleanupStep 长期未点击书签一节', () => {
     expect(screen.getByText('旧文章')).toBeDefined()
   })
 
-  it('跨多个文件夹时按文件夹分组，折叠起来，点开才见条目', async () => {
+  it('跨多个文件夹时按祖先嵌套，不把完整路径写在同一行', async () => {
     useStore.setState({
       staleScan: {
         ...staleReadyResult,
@@ -406,24 +411,59 @@ describe('CleanupStep 长期未点击书签一节', () => {
     })
     render(<CleanupStep />)
 
-    // 两个文件夹头都在，条目默认收起
-    const jiaToggle = screen.getByRole('button', { name: /展开 \/书签栏\/目录甲\/，共 2 条/ })
-    expect(screen.getByRole('button', { name: /展开 \/书签栏\/目录乙\/，共 1 条/ })).toBeDefined()
-    expect(screen.queryByText('旧文章')).toBeNull()
-    expect(screen.queryByText('另一个目录的旧书签')).toBeNull()
+    expect(screen.getByText('书签栏')).toBeDefined()
+    expect(screen.getByText('目录甲')).toBeDefined()
+    expect(screen.getByText('目录乙')).toBeDefined()
+    expect(screen.queryByText('/书签栏/目录甲/')).toBeNull()
+    expect(screen.queryByText('/书签栏/目录乙/')).toBeNull()
 
-    await userEvent.click(jiaToggle)
+    await userEvent.click(screen.getByRole('button', { name: /收起 \/书签栏\/目录甲\/，共 2 条/ }))
+    expect(screen.queryByText('旧文章')).toBeNull()
+    expect(screen.getByText('另一个目录的旧书签')).toBeDefined()
+
+    await userEvent.click(screen.getByRole('button', { name: /展开 \/书签栏\/目录甲\/，共 2 条/ }))
     expect(screen.getByText('旧文章')).toBeDefined()
-    expect(screen.queryByText('另一个目录的旧书签')).toBeNull()
     await userEvent.click(screen.getByRole('checkbox', { name: '删除 旧文章' }))
     expect(useStore.getState().cleanupChecked.has('stale-old')).toBe(true)
 
-    // 勾选数在折叠态也看得见
     await userEvent.click(screen.getByRole('button', { name: /收起 \/书签栏\/目录甲\// }))
-    expect(screen.getByText('已选 1')).toBeDefined()
+    expect(screen.getAllByText('已选 1')).toHaveLength(2)
   })
 
-  it('文件夹行的删除按钮一次勾选整组，再点清空', async () => {
+  it('第三层文件夹默认折叠，点开才见条目', async () => {
+    useStore.setState({
+      staleScan: {
+        ...staleReadyResult,
+        items: [
+          {
+            item: item({
+              id: 'stale-deep',
+              title: '深层旧书签',
+              url: 'https://example.com/deep',
+              parentId: '99',
+              currentPath: ['书签栏', 'LLMStudy', '10 其他'],
+            }),
+            bucket: 'overTwoYears',
+            lastUsedAt: new Date(2023, 0, 1).getTime(),
+          },
+        ],
+      },
+      staleState: 'ready',
+      cleanupChecked: new Set(),
+      cleanupStaleMove: new Set(),
+    })
+    render(<CleanupStep />)
+
+    expect(screen.getByText('书签栏')).toBeDefined()
+    expect(screen.getByText('LLMStudy')).toBeDefined()
+    expect(screen.getByText('10 其他')).toBeDefined()
+    expect(screen.queryByText('深层旧书签')).toBeNull()
+
+    await userEvent.click(screen.getByRole('button', { name: /展开 \/书签栏\/LLMStudy\/10 其他\// }))
+    expect(screen.getByText('深层旧书签')).toBeDefined()
+  })
+
+  it('文件夹行的全选框一次勾选整组，再点清空', async () => {
     useStore.setState({
       staleScan: staleReadyResult,
       staleState: 'ready',
@@ -432,16 +472,32 @@ describe('CleanupStep 长期未点击书签一节', () => {
     })
     render(<CleanupStep />)
 
-    const deleteAll = screen.getByRole('button', { name: /勾选 \/书签栏\/目录甲\/ 里的全部书签待删除/ })
-    await userEvent.click(deleteAll)
+    const selectAll = screen.getByRole('checkbox', { name: /勾选 \/书签栏\/目录甲\/ 里的全部书签待删除/ }) as HTMLInputElement
+    expect(selectAll.checked).toBe(false)
+    expect(selectAll.indeterminate).toBe(false)
+    await userEvent.click(selectAll)
     expect(useStore.getState().cleanupChecked.has('stale-old')).toBe(true)
     expect(useStore.getState().cleanupChecked.has('stale-unknown')).toBe(true)
-    // 开启删除时把原来「移走」的挪出来，两者互斥
     expect(useStore.getState().cleanupStaleMove.has('stale-old')).toBe(false)
+    expect(selectAll.checked).toBe(true)
 
-    const clearAll = screen.getByRole('button', { name: /取消 \/书签栏\/目录甲\/ 里书签的删除勾选/ })
-    await userEvent.click(clearAll)
+    await userEvent.click(selectAll)
     expect(useStore.getState().cleanupChecked.size).toBe(0)
+    expect(selectAll.checked).toBe(false)
+  })
+
+  it('部分勾选时文件夹全选框为不确定态', () => {
+    useStore.setState({
+      staleScan: staleReadyResult,
+      staleState: 'ready',
+      cleanupChecked: new Set(['stale-old']),
+      cleanupStaleMove: new Set(),
+    })
+    render(<CleanupStep />)
+
+    const selectAll = screen.getByRole('checkbox', { name: /勾选 \/书签栏\/目录甲\/ 里的全部书签待删除/ }) as HTMLInputElement
+    expect(selectAll.checked).toBe(false)
+    expect(selectAll.indeterminate).toBe(true)
   })
 })
 
