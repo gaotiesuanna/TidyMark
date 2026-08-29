@@ -96,6 +96,20 @@
     "message": "Hide visited pages for $domain$",
     "placeholders": { "domain": { "content": "$1" } }
   },
+  "dashVisitSaved": {
+    "message": "In bookmarks"
+  },
+  "dashVisitUnsaved": {
+    "message": "Not bookmarked"
+  },
+  "dashVisitSavedLabel": {
+    "message": "Visited pages of $domain$ that are bookmarked",
+    "placeholders": { "domain": { "content": "$1" } }
+  },
+  "dashVisitUnsavedLabel": {
+    "message": "Visited pages of $domain$ that are not bookmarked",
+    "placeholders": { "domain": { "content": "$1" } }
+  },
   "dashVisitCount": {
     "message": "Visits: $count$",
     "placeholders": { "count": { "content": "$1" } }

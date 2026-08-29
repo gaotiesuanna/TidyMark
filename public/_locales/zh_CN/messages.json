@@ -96,6 +96,20 @@
     "message": "收起 $domain$ 的访问页面",
     "placeholders": { "domain": { "content": "$1" } }
   },
+  "dashVisitSaved": {
+    "message": "已收藏"
+  },
+  "dashVisitUnsaved": {
+    "message": "未收藏"
+  },
+  "dashVisitSavedLabel": {
+    "message": "$domain$ 已收藏的访问页面",
+    "placeholders": { "domain": { "content": "$1" } }
+  },
+  "dashVisitUnsavedLabel": {
+    "message": "$domain$ 未收藏的访问页面",
+    "placeholders": { "domain": { "content": "$1" } }
+  },
   "dashVisitCount": {
     "message": "访问 $count$ 次",
     "placeholders": { "count": { "content": "$1" } }

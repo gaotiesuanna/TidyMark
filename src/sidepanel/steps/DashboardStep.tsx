@@ -1,22 +1,23 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { t } from '@/i18n'
 import {
   bookmarkUrls,
   clampTopDomainCount,
   domainFolderTree,
-  visitFolderTree,
+  visitSplitTree,
   rankDomains,
   TOP_DOMAIN_MAX,
   TOP_DOMAIN_MIN,
   type DomainFolderNode,
   type DomainRank,
+  type SavedVisit,
   type WeightedUrl,
 } from '@/core/domains'
 import type { BookmarkNode } from '@/core/ports'
 import { sanitizeUrl } from '@/core/sanitize'
 import { faviconSrc } from '../lib/favicons'
 import { ensureHistoryPermission, hasHistoryPermission, visitUrls } from '../lib/visits'
-import { ChevronDownIcon, FolderIcon, LinkIcon, TrendingUpIcon } from '../components/icons'
+import { BookmarkIcon, ChevronDownIcon, FolderIcon, LinkIcon, TrendingUpIcon } from '../components/icons'
 import { useStore } from '../store'
 
 type Metric = 'bookmarked' | 'visited'
@@ -159,7 +160,12 @@ export function DashboardStep() {
           ? <EmptyLine text={t('dashEmptyBookmarks')} />
           : <DomainList key={String(topN)} rows={bookmarked} tree={tree} />
       ) : (
-        <VisitedBody state={visits} topN={topN} onAllow={() => void allowHistory()} />
+        <VisitedBody
+          state={visits}
+          topN={topN}
+          tree={tree}
+          onAllow={() => void allowHistory()}
+        />
       )}
     </section>
   )
@@ -177,10 +183,12 @@ function EmptyLine({ text }: { text: string }) {
 function VisitedBody({
   state,
   topN,
+  tree,
   onAllow,
 }: {
   state: VisitState
   topN: number
+  tree: BookmarkNode[]
   onAllow: () => void
 }) {
   if (state.kind === 'need') {
@@ -206,7 +214,7 @@ function VisitedBody({
   if (state.kind === 'empty') {
     return <EmptyLine text={t('dashEmptyVisits')} />
   }
-  return <DomainList rows={rankDomains(state.items, topN)} visits={state.items} />
+  return <DomainList rows={rankDomains(state.items, topN)} tree={tree} visits={state.items} />
 }
 
 function VisitsSkeleton() {
@@ -285,11 +293,9 @@ function DomainRow({
     ? Math.max(1, Math.round(Math.sqrt(row.count / max) * METER_SEGMENTS))
     : 0
   const expandable = tree !== undefined || visits !== undefined
-  const folders = open && tree !== undefined
+  const folders = open && visits === undefined && tree !== undefined
     ? domainFolderTree(tree, row.domain)
-    : open && visits !== undefined
-      ? visitFolderTree(visits, row.domain)
-      : []
+    : []
   const summary = (
     <>
       <span
@@ -334,7 +340,7 @@ function DomainRow({
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400',
           ].join(' ')}
           aria-expanded={open}
-          aria-label={tree !== undefined
+          aria-label={visits === undefined
             ? t(open ? 'dashDomainCollapse' : 'dashDomainExpand', row.domain)
             : t(open ? 'dashVisitDomainCollapse' : 'dashVisitDomainExpand', row.domain)}
           onClick={onToggle}
@@ -350,9 +356,128 @@ function DomainRow({
       ) : (
         <div className="-mx-1.5 flex items-center gap-2.5 px-1.5 py-1.5">{summary}</div>
       )}
-      {open && folders.length > 0 && (
-        <FolderTree nodes={folders} domain={row.domain} depth={0} />
+      {open && visits !== undefined && (
+        <VisitBreakdown pages={visits} tree={tree ?? []} domain={row.domain} />
       )}
+      {open && folders.length > 0 && (
+        <FolderTree
+          nodes={folders}
+          domain={row.domain}
+          depth={0}
+          label={t('dashDomainTreeLabel', row.domain)}
+        />
+      )}
+    </li>
+  )
+}
+
+/**
+ * 「访问」栏展开后的两段式内容：先是已经收进书签的页面（带文件夹路径），
+ * 再是没收藏的页面（按 URL 路径搭树）。
+ *
+ * 一条都没收藏时不摆标题，直接给路径树——那时候分区只是噪音。
+ */
+function VisitBreakdown({
+  pages,
+  tree,
+  domain,
+}: {
+  pages: WeightedUrl[]
+  tree: BookmarkNode[]
+  domain: string
+}) {
+  const split = useMemo(() => visitSplitTree(pages, tree, domain), [pages, tree, domain])
+  const shown = useGrow()
+  if (split.saved.length === 0) {
+    return split.unsaved.length === 0
+      ? null
+      : <FolderTree nodes={split.unsaved} domain={domain} depth={0} />
+  }
+  const savedVisits = split.saved.reduce((n, page) => n + page.weight, 0)
+  const unsavedVisits = split.unsaved.reduce((n, node) => n + node.count, 0)
+  return (
+    <div
+      className={[
+        'mt-2 ml-3 space-y-3',
+        'transition duration-200 ease-out motion-reduce:transition-none',
+        shown ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1',
+      ].join(' ')}
+    >
+      <section aria-label={t('dashVisitSavedLabel', domain)}>
+        <SectionHead
+          icon={<BookmarkIcon className="h-3.5 w-3.5 shrink-0 text-blue-500" />}
+          title={t('dashVisitSaved')}
+          note={t('dashVisitCount', String(savedVisits))}
+        />
+        <ul className="mt-1 space-y-1.5 border-l border-neutral-200 pl-3">
+          {split.saved.map((page) => <SavedVisitRow key={page.id} page={page} />)}
+        </ul>
+      </section>
+      {split.unsaved.length > 0 && (
+        <section aria-label={t('dashVisitUnsavedLabel', domain)}>
+          <SectionHead
+            icon={<FolderIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />}
+            title={t('dashVisitUnsaved')}
+            note={t('dashVisitCount', String(unsavedVisits))}
+          />
+          <FolderTree nodes={split.unsaved} domain={domain} depth={0} margin="mt-1" />
+        </section>
+      )}
+    </div>
+  )
+}
+
+function SectionHead({
+  icon,
+  title,
+  note,
+}: {
+  icon: ReactNode
+  title: string
+  note: string
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      {icon}
+      <span className="text-sm leading-caption font-semibold text-neutral-700">{title}</span>
+      <span className="text-xs leading-caption tabular-nums text-neutral-400">{note}</span>
+    </div>
+  )
+}
+
+/** 已收藏那半的一行：页面本身 + 它躺在哪个书签文件夹里。 */
+function SavedVisitRow({ page }: { page: SavedVisit }) {
+  const address = shortAddress(page.url)
+  const folder = page.folderPath.length === 0
+    ? t('dashRootFolder')
+    : page.folderPath.join(' / ')
+  return (
+    <li className="min-w-0">
+      <div className="flex min-w-0 items-start gap-2">
+        <LinkIcon className="mt-0.5 h-3 w-3 shrink-0 text-neutral-300" />
+        <a
+          href={page.url}
+          target="_blank"
+          rel="noreferrer"
+          className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
+        >
+          <span className="block break-words text-sm leading-caption text-neutral-700">
+            {page.title.trim() || address}
+          </span>
+          <span className="mt-0.5 block break-all text-xs leading-caption text-neutral-400">
+            {address}
+          </span>
+        </a>
+        <span className="shrink-0 text-xs leading-caption tabular-nums text-neutral-500">
+          {t('dashVisitCount', String(page.weight))}
+        </span>
+      </div>
+      <div className="mt-0.5 flex min-w-0 items-center gap-1 pl-5">
+        <FolderIcon className="h-3 w-3 shrink-0 text-neutral-300" />
+        <span className="min-w-0 truncate text-xs leading-caption text-neutral-400" title={folder}>
+          {folder}
+        </span>
+      </div>
     </li>
   )
 }
@@ -364,18 +489,24 @@ function FolderTree({
   nodes,
   domain,
   depth,
+  label,
+  margin = depth === 0 ? 'mt-2 ml-3' : 'mt-1',
 }: {
   nodes: DomainFolderNode[]
   domain: string
   depth: number
+  /** 读屏抬头。只有自己单独成块的最外层给，分区标题下的树不用重复。 */
+  label?: string
+  /** 最外层的外边距。分区里的树已经缩进过一次，只留 mt-1。 */
+  margin?: string
 }) {
   const shown = useGrow()
   return (
     <ol
-      aria-label={depth === 0 ? t('dashDomainTreeLabel', domain) : undefined}
+      aria-label={label}
       className={[
         'space-y-0.5 border-l border-neutral-200 pl-3',
-        depth === 0 ? 'mt-2 ml-3' : 'mt-1',
+        margin,
         'transition duration-200 ease-out motion-reduce:transition-none',
         shown ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1',
       ].join(' ')}

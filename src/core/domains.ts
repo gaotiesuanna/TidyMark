@@ -277,3 +277,89 @@ function mergeVisitPages(pages: DomainFolderNode['bookmarks']): DomainFolderNode
     .map((entry) => entry.page)
     .sort((a, b) => (b.weight ?? 1) - (a.weight ?? 1) || a.url.localeCompare(b.url))
 }
+
+export interface SavedVisit {
+  /** 去掉 query/hash 后的展示地址，同时充当列表 key。 */
+  id: string
+  title: string
+  url: string
+  weight: number
+  /** 书签所在的文件夹路径，从根往下。空数组表示直接躺在根目录。 */
+  folderPath: string[]
+}
+
+export interface VisitSplit {
+  /** 访问过、并且已经收进书签的页面，按访问次数降序。 */
+  saved: SavedVisit[]
+  /** 访问过但没收藏的页面，仍按 URL 路径搭树。 */
+  unsaved: DomainFolderNode[]
+}
+
+/**
+ * 某域名的访问记录劈成「已收藏」「未收藏」两半。
+ *
+ * 收没收藏按 `域名+路径` 判断，和 mergeVisitPages 的合并口径一致：
+ * 带 query/hash 的访问算命中同一条书签，不然同一个页面会两边各出现一次。
+ * 已收藏那半不再按路径搭树——用户要的是「它躺在哪个文件夹」，直接给路径就够了；
+ * 未收藏那半没有文件夹可言，继续走 visitFolderTree 的路径树。
+ */
+export function visitSplitTree(
+  pages: readonly WeightedUrl[],
+  tree: BookmarkNode[],
+  domain: string,
+): VisitSplit {
+  const index = domainBookmarkIndex(tree, domain)
+  const savedPages: DomainFolderNode['bookmarks'] = []
+  const unsavedPages: WeightedUrl[] = []
+  for (const page of pages) {
+    const weight = page.weight ?? 1
+    if (weight <= 0) continue
+    const parsed = sanitizeUrl(page.url)
+    if (parsed === null || parsed.domain !== domain) continue
+    if (index.has(`${parsed.domain}${parsed.path}`)) {
+      savedPages.push({ id: page.url, title: page.title ?? '', url: page.url, weight })
+    } else {
+      unsavedPages.push(page)
+    }
+  }
+
+  const saved = mergeVisitPages(savedPages).map((page) => {
+    const parsed = sanitizeUrl(page.url)
+    const entry = parsed === null ? undefined : index.get(`${parsed.domain}${parsed.path}`)
+    const bookmarkTitle = (entry?.title ?? '').trim()
+    return {
+      id: page.id,
+      title: bookmarkTitle === '' ? page.title : bookmarkTitle,
+      url: page.url,
+      weight: page.weight ?? 1,
+      folderPath: entry?.folderPath ?? [],
+    }
+  })
+
+  return { saved, unsaved: visitFolderTree(unsavedPages, domain) }
+}
+
+/**
+ * 该域名的书签按 `域名+路径` 建索引，顺带记下所在文件夹路径。
+ * 同一个地址收藏了多份时留深度优先遇到的第一条——排行榜不做去重仲裁。
+ * 空标题的节点（书签树的根）不进路径。
+ */
+function domainBookmarkIndex(
+  tree: BookmarkNode[],
+  domain: string,
+): Map<string, { title: string; folderPath: string[] }> {
+  const index = new Map<string, { title: string; folderPath: string[] }>()
+  const walk = (node: BookmarkNode, path: string[]): void => {
+    if (node.url !== undefined) {
+      const parsed = sanitizeUrl(node.url)
+      if (parsed === null || parsed.domain !== domain) return
+      const key = `${parsed.domain}${parsed.path}`
+      if (!index.has(key)) index.set(key, { title: node.title, folderPath: path })
+      return
+    }
+    const next = node.title === '' ? path : [...path, node.title]
+    for (const child of node.children ?? []) walk(child, next)
+  }
+  for (const node of tree) walk(node, [])
+  return index
+}

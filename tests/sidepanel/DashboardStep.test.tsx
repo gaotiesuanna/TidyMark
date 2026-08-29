@@ -275,6 +275,57 @@ describe('DashboardStep', () => {
     expect(screen.getByText('A1Y')).toBeTruthy()
   })
 
+  it('访问栏把已收藏的页面单列一段并标出文件夹路径', async () => {
+    const user = userEvent.setup()
+    useStore.setState({
+      tree: [{ id: '0', title: '', children: [
+        { id: 'bar', title: 'Bookmarks Bar', children: [
+          { id: 'dev', title: 'Dev tools', children: [
+            { id: 'repo', title: 'The AI coding agent', url: 'https://github.com/sst/opencode' },
+          ]},
+        ]},
+      ]}],
+    })
+    contains.mockResolvedValue(true)
+    search.mockResolvedValue([
+      { url: 'https://github.com/sst/opencode', title: 'opencode', visitCount: 20 },
+      { url: 'https://github.com/openai/codex', title: 'Codex', visitCount: 8 },
+    ])
+
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
+    expect(await screen.findByText('github.com')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /github\.com/ }))
+
+    const saved = screen.getByRole('region', { name: t('dashVisitSavedLabel', 'github.com') })
+    expect(saved.textContent).toContain('The AI coding agent')
+    expect(saved.textContent).toContain('Bookmarks Bar / Dev tools')
+    expect(saved.textContent).toContain(t('dashVisitCount', '20'))
+    expect(saved.textContent).not.toContain('Codex')
+
+    const unsaved = screen.getByRole('region', { name: t('dashVisitUnsavedLabel', 'github.com') })
+    expect(unsaved.textContent).toContain('Codex')
+    expect(unsaved.textContent).toContain(t('dashVisitCount', '8'))
+    expect(unsaved.textContent).not.toContain('opencode')
+  })
+
+  it('访问栏一条都没收藏时不摆分区标题', async () => {
+    const user = userEvent.setup()
+    contains.mockResolvedValue(true)
+    search.mockResolvedValue([
+      { url: 'https://localhost/home', title: 'Home', visitCount: 8 },
+    ])
+
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
+    expect(await screen.findByText('localhost')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /localhost/ }))
+
+    expect(screen.getByText('Home')).toBeTruthy()
+    expect(screen.queryByText(t('dashVisitSaved'))).toBeNull()
+    expect(screen.queryByText(t('dashVisitUnsaved'))).toBeNull()
+  })
+
   it('读取浏览记录时给骨架屏而不是空白', async () => {
     const user = userEvent.setup()
     contains.mockResolvedValue(true)

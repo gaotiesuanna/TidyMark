@@ -69,6 +69,14 @@ export function LinkIcon({ className }: { className?: string }) {
   )
 }
 
+export function BookmarkIcon({ className }: { className?: string }) {
+  return (
+    <Icon {...(className === undefined ? {} : { className })}>
+      <path d="M6 4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v16l-6-4-6 4z" />
+    </Icon>
+  )
+}
+
 export function CheckCircleIcon({ className }: { className?: string }) {
   return (
     <Icon {...(className === undefined ? {} : { className })}>
