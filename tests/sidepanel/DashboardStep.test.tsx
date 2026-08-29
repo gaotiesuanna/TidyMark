@@ -217,6 +217,28 @@ describe('DashboardStep', () => {
     ])
   })
 
+  it('访问栏按 URL 路径展开文件夹', async () => {
+    const user = userEvent.setup()
+    contains.mockResolvedValue(false)
+    request.mockResolvedValue(true)
+    search.mockResolvedValue([
+      { url: 'https://localhost/analysis/library', title: 'Lib', visitCount: 10 },
+      { url: 'https://localhost/analysis/library/5', title: 'Lib5', visitCount: 5 },
+      { url: 'https://localhost/home', title: 'Home', visitCount: 8 },
+    ])
+
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
+    await user.click(await screen.findByRole('button', { name: t('dashHistoryAllow') }))
+    expect(await screen.findByText('localhost')).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: /localhost/ }))
+    expect(screen.getByText('analysis / library')).toBeTruthy()
+    expect(screen.getByText('home')).toBeTruthy()
+    expect(screen.getByText('Lib')).toBeTruthy()
+    expect(screen.getByText('Home')).toBeTruthy()
+  })
+
   it('文件夹树深层默认折叠，点父节点才继续展开', async () => {
     const nested: BookmarkNode[] = [
       { id: '0', title: '', children: [

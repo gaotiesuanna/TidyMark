@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { bookmarkUrls, clampTopDomainCount, domainFolderTree, rankDomains } from '@/core/domains'
+import { bookmarkUrls, clampTopDomainCount, domainFolderTree, rankDomains, visitFolderTree } from '@/core/domains'
 import type { BookmarkNode } from '@/core/ports'
 
 describe('rankDomains', () => {
@@ -256,6 +256,114 @@ describe('domainFolderTree', () => {
             bookmarks: [{ id: 's1', title: 's1', url: 'https://x.com/2' }],
           },
         ],
+      },
+    ])
+  })
+})
+
+describe('visitFolderTree', () => {
+  it('nests pages by URL path and sums visit weights on each folder', () => {
+    const tree = visitFolderTree([
+      { url: 'https://localhost/analysis/library', title: 'Lib', weight: 315 },
+      { url: 'https://localhost/analysis/library/5', title: 'Lib5', weight: 155 },
+      { url: 'https://localhost/home', title: 'Home', weight: 242 },
+    ], 'localhost')
+
+    expect(tree.map((node) => [node.title, node.count])).toEqual([
+      ['analysis / library', 470],
+      ['home', 242],
+    ])
+    const library = tree[0]
+    expect(library?.bookmarks).toEqual([
+      { id: 'https://localhost/analysis/library', title: 'Lib', url: 'https://localhost/analysis/library', weight: 315 },
+    ])
+    expect(library?.children).toEqual([
+      {
+        id: 'analysis/library/5',
+        title: '5',
+        count: 155,
+        directCount: 1,
+        children: [],
+        bookmarks: [
+          { id: 'https://localhost/analysis/library/5', title: 'Lib5', url: 'https://localhost/analysis/library/5', weight: 155 },
+        ],
+      },
+    ])
+  })
+
+  it('keeps a folder that has both a page and children', () => {
+    const tree = visitFolderTree([
+      { url: 'https://localhost/settings', title: 'Settings', weight: 121 },
+      { url: 'https://localhost/settings/tasks', title: 'Tasks', weight: 210 },
+    ], 'localhost')
+
+    expect(tree).toEqual([
+      {
+        id: 'settings',
+        title: 'settings',
+        count: 331,
+        directCount: 1,
+        bookmarks: [
+          { id: 'https://localhost/settings', title: 'Settings', url: 'https://localhost/settings', weight: 121 },
+        ],
+        children: [
+          {
+            id: 'settings/tasks',
+            title: 'tasks',
+            count: 210,
+            directCount: 1,
+            children: [],
+            bookmarks: [
+              { id: 'https://localhost/settings/tasks', title: 'Tasks', url: 'https://localhost/settings/tasks', weight: 210 },
+            ],
+          },
+        ],
+      },
+    ])
+  })
+
+  it('keeps the domain root page on a nameless node', () => {
+    const tree = visitFolderTree([
+      { url: 'https://localhost/', title: 'Root', weight: 213 },
+    ], 'localhost')
+
+    expect(tree).toEqual([
+      {
+        id: '/',
+        title: '',
+        count: 213,
+        directCount: 1,
+        children: [],
+        bookmarks: [
+          { id: 'https://localhost/', title: 'Root', url: 'https://localhost/', weight: 213 },
+        ],
+      },
+    ])
+  })
+
+  it('ignores other domains and non-positive weights', () => {
+    expect(visitFolderTree([
+      { url: 'https://github.com/a', title: 'A', weight: 9 },
+      { url: 'https://localhost/x', title: 'X', weight: 0 },
+    ], 'localhost')).toEqual([])
+  })
+
+  it('merges query variants of the same path and sums visits', () => {
+    const tree = visitFolderTree([
+      { url: 'https://localhost/analysis/library?tab=a', title: '短标题', weight: 40 },
+      { url: 'https://localhost/analysis/library', title: '墨析 · 小说拆解工作台', weight: 315 },
+      { url: 'https://localhost/analysis/library?x=1#h', title: 'Other', weight: 94 },
+    ], 'localhost')
+
+    expect(tree).toHaveLength(1)
+    expect(tree[0]?.count).toBe(449)
+    expect(tree[0]?.directCount).toBe(1)
+    expect(tree[0]?.bookmarks).toEqual([
+      {
+        id: 'https://localhost/analysis/library',
+        title: '墨析 · 小说拆解工作台',
+        url: 'https://localhost/analysis/library',
+        weight: 449,
       },
     ])
   })

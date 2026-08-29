@@ -4,6 +4,7 @@ import {
   bookmarkUrls,
   clampTopDomainCount,
   domainFolderTree,
+  visitFolderTree,
   rankDomains,
   TOP_DOMAIN_MAX,
   TOP_DOMAIN_MIN,
@@ -284,15 +285,11 @@ function DomainRow({
     ? Math.max(1, Math.round(Math.sqrt(row.count / max) * METER_SEGMENTS))
     : 0
   const expandable = tree !== undefined || visits !== undefined
-  const folders = open && tree !== undefined ? domainFolderTree(tree, row.domain) : []
-  const visitedPages = open && visits !== undefined
-    ? visits
-      .filter((item) => {
-        const parsed = sanitizeUrl(item.url)
-        return parsed?.domain === row.domain && (item.weight ?? 1) > 0
-      })
-      .sort((a, b) => (b.weight ?? 1) - (a.weight ?? 1) || a.url.localeCompare(b.url))
-    : []
+  const folders = open && tree !== undefined
+    ? domainFolderTree(tree, row.domain)
+    : open && visits !== undefined
+      ? visitFolderTree(visits, row.domain)
+      : []
   const summary = (
     <>
       <span
@@ -353,36 +350,8 @@ function DomainRow({
       ) : (
         <div className="-mx-1.5 flex items-center gap-2.5 px-1.5 py-1.5">{summary}</div>
       )}
-      {open && tree !== undefined && (
+      {open && folders.length > 0 && (
         <FolderTree nodes={folders} domain={row.domain} depth={0} />
-      )}
-      {open && visits !== undefined && (
-        <ol className="mt-3 space-y-2 pl-7">
-          {visitedPages.map((page) => {
-            const address = shortAddress(page.url)
-            return (
-              <li key={page.url} className="flex min-w-0 items-start gap-2 border-l-2 border-neutral-100 pl-3">
-                <LinkIcon className="mt-0.5 h-3 w-3 shrink-0 text-neutral-300" />
-                <a
-                  href={page.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
-                >
-                  <span className="block break-words text-sm leading-caption text-neutral-700">
-                    {page.title?.trim() || address}
-                  </span>
-                  <span className="mt-0.5 block break-all text-xs leading-caption text-neutral-400">
-                    {address}
-                  </span>
-                </a>
-                <span className="shrink-0 text-xs leading-caption tabular-nums text-neutral-500">
-                  {t('dashVisitCount', String(page.weight ?? 1))}
-                </span>
-              </li>
-            )
-          })}
-        </ol>
       )}
     </li>
   )
@@ -411,9 +380,13 @@ function FolderTree({
         shown ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1',
       ].join(' ')}
     >
-      {nodes.map((node) => (
-        <FolderNode key={node.id} node={node} domain={domain} depth={depth} />
-      ))}
+      {nodes.map((node) =>
+        node.title === '' ? (
+          <FolderBookmarks key={node.id} bookmarks={node.bookmarks} />
+        ) : (
+          <FolderNode key={node.id} node={node} domain={domain} depth={depth} />
+        ),
+      )}
     </ol>
   )
 }
@@ -469,33 +442,46 @@ function FolderNode({
       )}
       {node.bookmarks.length > 0 && (!expandable || open) && (
         <ul className="mt-1 space-y-1 pl-5">
-          {node.bookmarks.map((bookmark) => {
-            const address = shortAddress(bookmark.url)
-            return (
-              <li key={bookmark.id} className="flex min-w-0 items-start gap-2">
-                <LinkIcon className="mt-0.5 h-3 w-3 shrink-0 text-neutral-300" />
-                <a
-                  href={bookmark.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
-                >
-                  <span className="block break-words text-sm leading-caption text-neutral-700">
-                    {bookmark.title.trim() || address}
-                  </span>
-                  <span className="mt-0.5 block break-all text-xs leading-caption text-neutral-400">
-                    {address}
-                  </span>
-                </a>
-              </li>
-            )
-          })}
+          <FolderBookmarks bookmarks={node.bookmarks} />
         </ul>
       )}
       {expandable && open && (
         <FolderTree nodes={node.children} domain={domain} depth={depth + 1} />
       )}
     </li>
+  )
+}
+
+function FolderBookmarks({ bookmarks }: { bookmarks: DomainFolderNode['bookmarks'] }) {
+  return (
+    <>
+      {bookmarks.map((bookmark) => {
+        const address = shortAddress(bookmark.url)
+        return (
+          <li key={bookmark.id} className="flex min-w-0 items-start gap-2">
+            <LinkIcon className="mt-0.5 h-3 w-3 shrink-0 text-neutral-300" />
+            <a
+              href={bookmark.url}
+              target="_blank"
+              rel="noreferrer"
+              className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
+            >
+              <span className="block break-words text-sm leading-caption text-neutral-700">
+                {bookmark.title.trim() || address}
+              </span>
+              <span className="mt-0.5 block break-all text-xs leading-caption text-neutral-400">
+                {address}
+              </span>
+            </a>
+            {bookmark.weight !== undefined && (
+              <span className="shrink-0 text-xs leading-caption tabular-nums text-neutral-500">
+                {t('dashVisitCount', String(bookmark.weight))}
+              </span>
+            )}
+          </li>
+        )
+      })}
+    </>
   )
 }
 
