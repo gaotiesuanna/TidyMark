@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { bookmarkUrls, clampTopDomainCount, domainFolderTree, rankDomains, visitFolderTree } from '@/core/domains'
+import {
+  bookmarkUrls,
+  clampTopDomainCount,
+  domainFolderTree,
+  rankDomains,
+  visitFolderTree,
+  visitSplitTree,
+} from '@/core/domains'
 import type { BookmarkNode } from '@/core/ports'
 
 describe('rankDomains', () => {
@@ -366,5 +373,110 @@ describe('visitFolderTree', () => {
         weight: 449,
       },
     ])
+  })
+})
+
+describe('visitSplitTree', () => {
+  const tree: BookmarkNode[] = [
+    { id: '0', title: '', children: [
+      { id: 'bar', title: '书签栏', children: [
+        { id: 'dev', title: '开发', children: [
+          { id: 'lib', title: '墨析 · 小说拆解工作台', url: 'https://localhost/analysis/library' },
+        ]},
+        { id: 'home', title: '首页', url: 'https://localhost/home' },
+      ]},
+    ]},
+  ]
+
+  it('已收藏的页面单列一段，带上所在文件夹路径', () => {
+    const split = visitSplitTree([
+      { url: 'https://localhost/analysis/library', title: 'Lib', weight: 502 },
+      { url: 'https://localhost/home', title: 'Home', weight: 90 },
+      { url: 'https://localhost/analysis/upload', title: 'Upload', weight: 62 },
+    ], tree, 'localhost')
+
+    expect(split.saved).toEqual([
+      {
+        id: 'https://localhost/analysis/library',
+        title: '墨析 · 小说拆解工作台',
+        url: 'https://localhost/analysis/library',
+        weight: 502,
+        folderPath: ['书签栏', '开发'],
+      },
+      {
+        id: 'https://localhost/home',
+        title: '首页',
+        url: 'https://localhost/home',
+        weight: 90,
+        folderPath: ['书签栏'],
+      },
+    ])
+  })
+
+  it('没收藏的页面还是按 URL 路径搭树，且不含已收藏的那些', () => {
+    const split = visitSplitTree([
+      { url: 'https://localhost/analysis/library', title: 'Lib', weight: 502 },
+      { url: 'https://localhost/analysis/upload', title: 'Upload', weight: 62 },
+      { url: 'https://localhost/analysis/single', title: 'Single', weight: 13 },
+    ], tree, 'localhost')
+
+    expect(split.unsaved).toHaveLength(1)
+    expect(split.unsaved[0]?.title).toBe('analysis')
+    expect(split.unsaved[0]?.count).toBe(75)
+    expect(split.unsaved[0]?.children.map((child) => child.title)).toEqual(['upload', 'single'])
+    expect(split.unsaved[0]?.children.flatMap((child) => child.bookmarks.map((b) => b.url))).toEqual([
+      'https://localhost/analysis/upload',
+      'https://localhost/analysis/single',
+    ])
+  })
+
+  it('带 query/hash 的访问算命中同一条书签，次数合并', () => {
+    const split = visitSplitTree([
+      { url: 'https://localhost/analysis/library?tab=a', title: 'A', weight: 40 },
+      { url: 'https://localhost/analysis/library', title: 'B', weight: 315 },
+    ], tree, 'localhost')
+
+    expect(split.saved).toHaveLength(1)
+    expect(split.saved[0]?.weight).toBe(355)
+    expect(split.unsaved).toEqual([])
+  })
+
+  it('躺在根目录的书签给空路径，其它域名和 0 次访问都丢掉', () => {
+    const flat: BookmarkNode[] = [
+      { id: '0', title: '', children: [
+        { id: 'x', title: '首页', url: 'https://localhost/home' },
+      ]},
+    ]
+    const split = visitSplitTree([
+      { url: 'https://localhost/home', title: 'Home', weight: 9 },
+      { url: 'https://github.com/a', title: 'A', weight: 99 },
+      { url: 'https://localhost/dead', title: 'Dead', weight: 0 },
+    ], flat, 'localhost')
+
+    expect(split.saved).toEqual([
+      {
+        id: 'https://localhost/home',
+        title: '首页',
+        url: 'https://localhost/home',
+        weight: 9,
+        folderPath: [],
+      },
+    ])
+    expect(split.unsaved).toEqual([])
+  })
+
+  it('书签标题为空时退回访问记录里的页面标题', () => {
+    const untitled: BookmarkNode[] = [
+      { id: '0', title: '', children: [
+        { id: 'x', title: '   ', url: 'https://localhost/home' },
+      ]},
+    ]
+    const split = visitSplitTree(
+      [{ url: 'https://localhost/home', title: 'Home', weight: 4 }],
+      untitled,
+      'localhost',
+    )
+
+    expect(split.saved[0]?.title).toBe('Home')
   })
 })
