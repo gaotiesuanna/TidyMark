@@ -12,7 +12,21 @@ import {
 } from './messages'
 import { captureSnapshot, saveSnapshot } from './snapshot'
 
-export const PROGRESS_KEY = 'tidymark:apply-progress'
+/**
+ * 这里曾经每执行一步就往 storage 写一次 `tidymark:apply-progress`
+ * （`{ planId, executed, total }`），注释说是「供 service worker 休眠后恢复」。整套删掉了，
+ * 三条理由，最后一条是决定性的：
+ *
+ * 1. **没有人读它。** 全代码库唯一的读者是它自己的测试。断点续做从没实现过。
+ * 2. **它按操作计费。** 一千条书签的整理就是一千次额外的 chrome.storage.local 写，
+ *    与真正在干活的 bookmarks.move 一比一交错。这不是常数开销，是跟着库规模长的。
+ * 3. **它记的东西根本续不了做。** 要接着做，得知道「还剩哪些操作」；operations 来自
+ *    filterAccepted(plan, accepted)，而 plan 与 accepted 都没落盘——快照存的是改动前的
+ *    书签树，不是这次要做的事。只剩一个 executed 计数，指向一份已经不存在的清单。
+ *
+ * 将来真要做断点续做，要落盘的是 operations 本身（或 plan + accepted），
+ * 而且该在开工前写一次，不是每步写一次。届时这一段是它的起点，不是它的遗产。
+ */
 
 export interface SkipRecord {
   bookmarkId: string
@@ -148,7 +162,6 @@ export async function applyPlan(
   const skipped: SkipRecord[] = []
   let executed = 0
 
-  await ports.storage.set(PROGRESS_KEY, { planId: plan.id, executed: 0, total: operations.length })
   onProgress?.(0, operations.length)
 
   for (let i = 0; i < operations.length; i++) {
@@ -193,7 +206,6 @@ export async function applyPlan(
         renamedBookmarkIds.push(operation.bookmarkId)
       }
       executed++
-      await ports.storage.set(PROGRESS_KEY, { planId: plan.id, executed, total: operations.length })
       onProgress?.(executed, operations.length)
     } catch (error) {
       await saveSnapshot(ports, { ...snapshot, createdFolderIds, renamedBookmarkIds })
@@ -239,7 +251,6 @@ export async function applyPlan(
     : 0
 
   await saveSnapshot(ports, { ...snapshot, createdFolderIds, renamedBookmarkIds })
-  await ports.storage.remove(PROGRESS_KEY)
   return {
     status: 'completed', executed, skipped, createdFolderIds, removedFolders, sortedFolders,
     renamedBookmarkIds, mergeRootId, failedAt: null, error: null,
