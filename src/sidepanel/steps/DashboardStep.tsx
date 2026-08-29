@@ -375,7 +375,8 @@ function DomainRow({
  * 「访问」栏展开后的两段式内容：先是已经收进书签的页面（带文件夹路径），
  * 再是没收藏的页面（按 URL 路径搭树）。
  *
- * 一条都没收藏时不摆标题，直接给路径树——那时候分区只是噪音。
+ * 两段无论空不空都摆出来。空的那半自己就是答案——「这个域名我天天开、一条都没存」
+ * 正是这张卡片最该说出口的话；把它藏起来，界面看着就跟没分段一样。
  */
 function VisitBreakdown({
   pages,
@@ -388,11 +389,6 @@ function VisitBreakdown({
 }) {
   const split = useMemo(() => visitSplitTree(pages, tree, domain), [pages, tree, domain])
   const shown = useGrow()
-  if (split.saved.length === 0) {
-    return split.unsaved.length === 0
-      ? null
-      : <FolderTree nodes={split.unsaved} domain={domain} depth={0} />
-  }
   const savedVisits = split.saved.reduce((n, page) => n + page.weight, 0)
   const unsavedVisits = split.unsaved.reduce((n, node) => n + node.count, 0)
   return (
@@ -407,23 +403,37 @@ function VisitBreakdown({
         <SectionHead
           icon={<BookmarkIcon className="h-3.5 w-3.5 shrink-0 text-blue-500" />}
           title={t('dashVisitSaved')}
-          note={t('dashVisitCount', String(savedVisits))}
+          note={split.saved.length === 0 ? undefined : t('dashVisitCount', String(savedVisits))}
         />
-        <ul className="mt-1 space-y-1.5 border-l border-neutral-200 pl-3">
-          {split.saved.map((page) => <SavedVisitRow key={page.id} page={page} />)}
-        </ul>
+        {split.saved.length === 0 ? (
+          <SectionEmpty text={t('dashVisitNoneSaved')} />
+        ) : (
+          <ul className="mt-1 space-y-1.5 border-l border-neutral-200 pl-3">
+            {split.saved.map((page) => <SavedVisitRow key={page.id} page={page} />)}
+          </ul>
+        )}
       </section>
-      {split.unsaved.length > 0 && (
-        <section aria-label={t('dashVisitUnsavedLabel', domain)}>
-          <SectionHead
-            icon={<FolderIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />}
-            title={t('dashVisitUnsaved')}
-            note={t('dashVisitCount', String(unsavedVisits))}
-          />
+      <section aria-label={t('dashVisitUnsavedLabel', domain)}>
+        <SectionHead
+          icon={<FolderIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />}
+          title={t('dashVisitUnsaved')}
+          note={split.unsaved.length === 0 ? undefined : t('dashVisitCount', String(unsavedVisits))}
+        />
+        {split.unsaved.length === 0 ? (
+          <SectionEmpty text={t('dashVisitNoneUnsaved')} />
+        ) : (
           <FolderTree nodes={split.unsaved} domain={domain} depth={0} margin="mt-1" />
-        </section>
-      )}
+        )}
+      </section>
     </div>
+  )
+}
+
+function SectionEmpty({ text }: { text: string }) {
+  return (
+    <p className="mt-1 border-l border-neutral-200 pl-3 text-xs leading-caption text-neutral-400">
+      {text}
+    </p>
   )
 }
 
@@ -434,13 +444,16 @@ function SectionHead({
 }: {
   icon: ReactNode
   title: string
-  note: string
+  /** 该段的访问次数。空段不给——「访问 0 次」不如让空状态自己说话。 */
+  note?: string
 }) {
   return (
     <div className="flex items-center gap-1.5">
       {icon}
       <span className="text-sm leading-caption font-semibold text-neutral-700">{title}</span>
-      <span className="text-xs leading-caption tabular-nums text-neutral-400">{note}</span>
+      {note !== undefined && (
+        <span className="text-xs leading-caption tabular-nums text-neutral-400">{note}</span>
+      )}
     </div>
   )
 }

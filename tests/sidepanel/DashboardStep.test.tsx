@@ -309,7 +309,7 @@ describe('DashboardStep', () => {
     expect(unsaved.textContent).not.toContain('opencode')
   })
 
-  it('访问栏一条都没收藏时不摆分区标题', async () => {
+  it('访问栏一条都没收藏时仍摆出两段，已收藏那段给空状态', async () => {
     const user = userEvent.setup()
     contains.mockResolvedValue(true)
     search.mockResolvedValue([
@@ -321,9 +321,34 @@ describe('DashboardStep', () => {
     expect(await screen.findByText('localhost')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: /localhost/ }))
 
-    expect(screen.getByText('Home')).toBeTruthy()
-    expect(screen.queryByText(t('dashVisitSaved'))).toBeNull()
-    expect(screen.queryByText(t('dashVisitUnsaved'))).toBeNull()
+    const saved = screen.getByRole('region', { name: t('dashVisitSavedLabel', 'localhost') })
+    expect(saved.textContent).toContain(t('dashVisitNoneSaved'))
+
+    const unsaved = screen.getByRole('region', { name: t('dashVisitUnsavedLabel', 'localhost') })
+    expect(unsaved.textContent).toContain('Home')
+  })
+
+  it('访问栏全都收藏了时未收藏那段给空状态', async () => {
+    const user = userEvent.setup()
+    useStore.setState({
+      tree: [{ id: '0', title: '', children: [
+        { id: 'bar', title: 'Bookmarks Bar', children: [
+          { id: 'h', title: '首页', url: 'https://localhost/home' },
+        ]},
+      ]}],
+    })
+    contains.mockResolvedValue(true)
+    search.mockResolvedValue([
+      { url: 'https://localhost/home', title: 'Home', visitCount: 8 },
+    ])
+
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
+    expect(await screen.findByText('localhost')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /localhost/ }))
+
+    const unsaved = screen.getByRole('region', { name: t('dashVisitUnsavedLabel', 'localhost') })
+    expect(unsaved.textContent).toContain(t('dashVisitNoneUnsaved'))
   })
 
   it('读取浏览记录时给骨架屏而不是空白', async () => {

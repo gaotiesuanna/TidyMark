@@ -110,6 +110,12 @@
     "message": "Visited pages of $domain$ that are not bookmarked",
     "placeholders": { "domain": { "content": "$1" } }
   },
+  "dashVisitNoneSaved": {
+    "message": "None of the visited pages are in your bookmarks."
+  },
+  "dashVisitNoneUnsaved": {
+    "message": "Every visited page is already bookmarked."
+  },
   "dashVisitCount": {
     "message": "Visits: $count$",
     "placeholders": { "count": { "content": "$1" } }

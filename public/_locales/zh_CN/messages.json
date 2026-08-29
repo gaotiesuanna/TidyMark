@@ -110,6 +110,12 @@
     "message": "$domain$ 未收藏的访问页面",
     "placeholders": { "domain": { "content": "$1" } }
   },
+  "dashVisitNoneSaved": {
+    "message": "访问过的页面一条都不在书签里。"
+  },
+  "dashVisitNoneUnsaved": {
+    "message": "访问过的页面都已经收进书签了。"
+  },
   "dashVisitCount": {
     "message": "访问 $count$ 次",
     "placeholders": { "count": { "content": "$1" } }
