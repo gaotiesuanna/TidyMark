@@ -409,6 +409,53 @@ describe('DashboardStep', () => {
     expect(screen.getByText('Other')).toBeTruthy()
   })
 
+  it('同形 ID 段并成一行，默认收起，点开才露出每个页面', async () => {
+    const user = userEvent.setup()
+    contains.mockResolvedValue(true)
+    search.mockResolvedValue([
+      { url: 'https://192.168.5.39/tasks/019fb349-e6f2-7407-a254-1919171a8d4a', title: 'PalClaw 7x24', visitCount: 9 },
+      { url: 'https://192.168.5.39/tasks/c69350df521240909ec967c712200cfa', title: 'PalClaw 7x24', visitCount: 8 },
+      { url: 'https://192.168.5.39/tasks/bd8c838b055c45dc984b0f28bef6684b', title: 'PalClaw 7x24', visitCount: 7 },
+      { url: 'https://192.168.5.39/documents', title: 'PalClaw 7x24', visitCount: 190 },
+    ])
+
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
+    expect(await screen.findByText('192.168.5.39')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /192\.168\.5\.39/ }))
+
+    // 三个 ID 一行都不占，合并行报出页面数；documents 这种读得懂的照旧成行
+    expect(screen.queryByText(/019fb349/)).toBeNull()
+    expect(screen.getByText(/documents/)).toBeTruthy()
+    expect(screen.getByText(t('dashVisitGroupPages', '3'))).toBeTruthy()
+
+    const group = screen.getByRole('button', { name: new RegExp(t('dashVisitGroupPages', '3')) })
+    expect(group.getAttribute('aria-expanded')).toBe('false')
+
+    await user.click(group)
+    expect(group.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByText(/019fb349/)).toBeTruthy()
+    expect(screen.getByText(/c69350df/)).toBeTruthy()
+    expect(screen.getByText(/bd8c838b/)).toBeTruthy()
+  })
+
+  it('合并行标题取这批页面共有的那个，各不相同时用占位名', async () => {
+    const user = userEvent.setup()
+    contains.mockResolvedValue(true)
+    search.mockResolvedValue([
+      { url: 'https://192.168.5.39/tasks/019fb349-e6f2-7407-a254-1919171a8d4a', title: '任务甲', visitCount: 9 },
+      { url: 'https://192.168.5.39/tasks/c69350df521240909ec967c712200cfa', title: '任务乙', visitCount: 8 },
+      { url: 'https://192.168.5.39/tasks/bd8c838b055c45dc984b0f28bef6684b', title: '任务丙', visitCount: 7 },
+    ])
+
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
+    expect(await screen.findByText('192.168.5.39')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /192\.168\.5\.39/ }))
+
+    expect(screen.getByText(t('dashVisitGroupUnnamed'))).toBeTruthy()
+  })
+
   it('空的那段没有收起按钮', async () => {
     const user = userEvent.setup()
     contains.mockResolvedValue(true)

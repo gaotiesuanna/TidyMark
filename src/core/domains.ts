@@ -91,6 +91,11 @@ export interface DomainFolderNode {
    * 单独成行等于把每条记录抄两遍。书签树的目录名是用户自己起的，吞掉就丢信息了。
    */
   pageOnly?: boolean
+  /**
+   * 这一行是同层的 ID 段并出来的，自己不是路径上真有的一段：点开才露出被并起来的页面。
+   * title 是这批页面共有的标题，各不相同时留空，由界面拿占位符顶上。
+   */
+  grouped?: true
 }
 
 /**
@@ -156,6 +161,53 @@ export function domainFolderTree(
   return forest(tree)
 }
 
+/** 同层里长得一样的 ID 段至少这么多个才值得并成一行；两三个还看得过来。 */
+const MIN_ID_SIBLINGS = 3
+
+/** UUID、够长的 hex、够长的纯数字——机器编号常见的三种形状。 */
+const ID_SEGMENT_SHAPES = [
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  /^[0-9a-f]{24,}$/i,
+  /^\d{6,}$/,
+]
+
+function isIdSegment(segment: string): boolean {
+  return ID_SEGMENT_SHAPES.some((shape) => shape.test(segment))
+}
+
+/**
+ * 同层的 ID 段并成一行。
+ *
+ * 判定不看单独一段长什么样，看同层有没有一批长得一样的：一个 `tasks/abc123` 可能是人起的名字，
+ * 四十个 UUID 只可能是机器编的号。够不上 MIN_ID_SIBLINGS 就原样留着，宁可多几行也别吞掉真名字。
+ *
+ * 只并叶子。底下还有分支的段并进来，子结构会拌成一锅——四十个 `<id>/edit` 挤在一起谁也读不出。
+ * 标题不参与判定：SPA 常常整站一个标题，那时它对该并的和不该并的一视同仁，什么也区分不了；
+ * 它只用来给并出来的那行起名。
+ */
+function groupIdSiblings(parentId: string, children: DomainFolderNode[]): DomainFolderNode[] {
+  const ids = children.filter((child) => child.children.length === 0 && isIdSegment(child.title))
+  if (ids.length < MIN_ID_SIBLINGS) return children
+
+  const merged = new Set(ids)
+  const bookmarks = ids
+    .flatMap((child) => child.bookmarks)
+    .sort((a, b) => (b.weight ?? 1) - (a.weight ?? 1) || a.url.localeCompare(b.url))
+  const titles = new Set(bookmarks.map((bookmark) => bookmark.title.trim()))
+  return [
+    ...children.filter((child) => !merged.has(child)),
+    {
+      id: `${parentId === '/' ? '' : parentId}/*`,
+      title: titles.size === 1 ? [...titles][0]! : '',
+      grouped: true,
+      count: ids.reduce((n, child) => n + child.count, 0),
+      directCount: bookmarks.length,
+      children: [],
+      bookmarks,
+    },
+  ]
+}
+
 interface MutableVisitFolder {
   id: string
   title: string
@@ -201,7 +253,8 @@ export function visitFolderTree(pages: readonly WeightedUrl[], domain: string): 
 
   const collapse = (node: DomainFolderNode): DomainFolderNode => {
     const only = node.children.length === 1 ? node.children[0] : undefined
-    if (node.directCount === 0 && only !== undefined && node.title !== '') {
+    const swallowable = only !== undefined && only.grouped !== true
+    if (node.directCount === 0 && swallowable && node.title !== '') {
       return {
         id: only.id,
         title: `${node.title} / ${only.title}`,
@@ -225,7 +278,7 @@ export function visitFolderTree(pages: readonly WeightedUrl[], domain: string): 
       : node
 
   function freeze(node: MutableVisitFolder): DomainFolderNode {
-    const children = [...node.children.values()].map(freeze)
+    const children = groupIdSiblings(node.id, [...node.children.values()].map(freeze))
     const bookmarks = mergeVisitPages(node.bookmarks)
     const directWeight = bookmarks.reduce((n, bookmark) => n + (bookmark.weight ?? 1), 0)
     const count = directWeight + children.reduce((n, child) => n + child.count, 0)
