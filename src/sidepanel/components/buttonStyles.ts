@@ -62,12 +62,15 @@ export const filePickerButton = [
   'hover:enabled:border-index-ink hover:enabled:bg-index-blue-soft hover:enabled:text-index-ink',
 ].join(' ')
 
-/** 导出/导入切换槽：一段灰底，选中那格抬成白片。 */
+/**
+ * 局部切换槽，不是索引行也不是主操作。42px 会跟下面那些真按钮抢视线，
+ * 也比顶部的模式标签还高；32px 够点，看起来才是在换一组下面的选项。
+ */
 export const segmentTrack = 'flex rounded-index border border-index-line bg-index-canvas p-0.5'
 
 export const segmentButton = [
-  'inline-flex min-h-index-row flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-index px-3',
-  'text-sm leading-caption font-medium text-index-muted',
+  'inline-flex min-h-8 flex-1 cursor-pointer items-center justify-center gap-1 rounded-index px-2',
+  'text-xs leading-none font-medium text-index-muted',
   'transition-colors duration-150 motion-reduce:transition-none',
   'hover:text-index-ink',
   focusRing,

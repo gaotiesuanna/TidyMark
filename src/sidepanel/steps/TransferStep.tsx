@@ -4,6 +4,7 @@ import { BookmarkTree, filterBookmarkTree, topLevelNodes } from '../components/B
 import { ExportPanel } from '../components/ExportPanel'
 import { ImportPanel } from '../components/ImportPanel'
 import { segmentActive, segmentButton, segmentTrack } from '../components/buttonStyles'
+import { StickyActionBar } from '../components/IndexControls'
 import { DownloadIcon, UploadIcon } from '../components/icons'
 import { collectAllFolderIds, useStore } from '../store'
 
@@ -103,38 +104,37 @@ export function TransferStep() {
         </div>
       </div>
       {/* 操作区钉在底部：书签上千条时目录树很长，导入导出不该被推到要滚半天才看得见的地方。
-          负的左右外边距抵掉 <main> 的 p-4，让顶边线和白底铺满整宽。 */}
-      <div className="sticky -bottom-4 -mx-4 -mb-4 mt-3 border-t border-neutral-200 bg-white px-4 pb-4 pt-3">
-        <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-1.5">
-          <div className={segmentTrack} role="group">
-            <button
-              type="button"
-              className={`${segmentButton} ${transfer === 'export' ? segmentActive : ''}`}
-              aria-expanded={transfer === 'export'}
-              aria-pressed={transfer === 'export'}
-              disabled={busy !== null && transfer !== 'export'}
-              onClick={() => setTransfer('export')}
-            >
-              <DownloadIcon className={`h-3.5 w-3.5 shrink-0 ${transfer === 'export' ? 'text-neutral-700' : 'text-neutral-400'}`} />
-              {t('exportToggle')}
-            </button>
-            <button
-              type="button"
-              className={`${segmentButton} ${transfer === 'import' ? segmentActive : ''}`}
-              aria-expanded={transfer === 'import'}
-              aria-pressed={transfer === 'import'}
-              disabled={busy !== null && transfer !== 'import'}
-              onClick={() => setTransfer('import')}
-            >
-              <UploadIcon className={`h-3.5 w-3.5 shrink-0 ${transfer === 'import' ? 'text-neutral-700' : 'text-neutral-400'}`} />
-              {t('importToggle')}
-            </button>
-          </div>
-          <div className="mt-1.5 rounded-lg bg-white p-2.5 shadow-sm ring-1 ring-black/5">
-            {transfer === 'export' ? <ExportPanel /> : <ImportPanel />}
-          </div>
-        </section>
-      </div>
+          切换条和选项组直接铺在 sticky 栏里，不再套一层灰底卡片——那层 padding
+          会把「导出 / 导入」撑得比真按钮还壮。 */}
+      <StickyActionBar>
+        <div className={segmentTrack} role="group">
+          <button
+            type="button"
+            className={`${segmentButton} ${transfer === 'export' ? segmentActive : ''}`}
+            aria-expanded={transfer === 'export'}
+            aria-pressed={transfer === 'export'}
+            disabled={busy !== null && transfer !== 'export'}
+            onClick={() => setTransfer('export')}
+          >
+            <DownloadIcon className={`h-3.5 w-3.5 shrink-0 ${transfer === 'export' ? 'text-index-ink' : 'text-index-faint'}`} />
+            {t('exportToggle')}
+          </button>
+          <button
+            type="button"
+            className={`${segmentButton} ${transfer === 'import' ? segmentActive : ''}`}
+            aria-expanded={transfer === 'import'}
+            aria-pressed={transfer === 'import'}
+            disabled={busy !== null && transfer !== 'import'}
+            onClick={() => setTransfer('import')}
+          >
+            <UploadIcon className={`h-3.5 w-3.5 shrink-0 ${transfer === 'import' ? 'text-index-ink' : 'text-index-faint'}`} />
+            {t('importToggle')}
+          </button>
+        </div>
+        <div className="mt-2">
+          {transfer === 'export' ? <ExportPanel /> : <ImportPanel />}
+        </div>
+      </StickyActionBar>
     </div>
   )
 }
