@@ -1336,6 +1336,9 @@
       }
     }
   },
+  "logAnalyzeStart": {
+    "message": "Analysis started: reading the bookmark tree"
+  },
   "logScanDone": {
     "message": "Scan complete: $bookmarks$ bookmarks, $folders$ folders",
     "placeholders": {

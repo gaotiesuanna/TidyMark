@@ -1336,6 +1336,9 @@
       }
     }
   },
+  "logAnalyzeStart": {
+    "message": "开始分析：正在读取书签树"
+  },
   "logScanDone": {
     "message": "扫描完成：$bookmarks$ 个书签、$folders$ 个文件夹",
     "placeholders": {

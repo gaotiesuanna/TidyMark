@@ -367,6 +367,24 @@ describe('放弃这一轮之后，在途结果不再落地', () => {
     })
   })
 
+  // 点下「开始 AI 分析」到后台推来第一条日志之间隔着一次 service worker 冷启动加
+  // 一整棵书签树的读取，那几百毫秒里界面上只有一个转圈的「正在分析…」，点下去像没反应。
+  // 第一行由侧栏自己写，所以「点了就有日志」不依赖后台醒得多快。
+  it('分析一发出就有日志，不等后台推第一条', async () => {
+    vi.mocked(send).mockImplementation((req: { kind: string }) =>
+      req.kind === 'analyze'
+        ? (new Promise(() => {}) as never)
+        : (Promise.resolve({ ok: true }) as never))
+
+    void useStore.getState().analyze()
+    // 先让开头那次 host 权限询问跑完；日志要断言的是「请求一发出就有」，不是「等后台回来才有」
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(useStore.getState().busy).toBe('正在分析…')
+    expect(useStore.getState().logs).toHaveLength(1)
+    expect(useStore.getState().logs[0]!.message).toMatch(/开始分析/)
+  })
+
   it('分析在途时 reset，分析回来不改步骤也不写 plan', async () => {
     let finish: (v: unknown) => void = () => {}
     vi.mocked(send).mockImplementation((req: { kind: string }) =>

@@ -576,7 +576,19 @@ export const useStore = create<State>((set, get) => ({
       // 重试有意义：ensureHostPermission 会重新弹一次权限请求，不是配置类错误
       return fail(set, t('errHostPermission'), 'analyze')
     }
-    set({ busy: t('busyAnalyzing'), busyKind: 'analyze', retryable: null, error: null, progress: null, logs: [] })
+    /**
+     * 日志不从空的开起，第一行由侧栏自己写。
+     *
+     * 后面每一行都是后台推过来的，而第一行要等 service worker 被唤醒、读完整棵书签树
+     * 才发得出——冷启动那几百毫秒里界面上只有一个「正在分析…」在转，点下去像没反应。
+     * 这一行侧栏此刻就说得准：请求已经发出去了，后台的第一件事就是读书签树。
+     */
+    const logSeq = get().logSeq
+    set({
+      busy: t('busyAnalyzing'), busyKind: 'analyze', retryable: null, error: null, progress: null,
+      logs: appendLog([], { phase: 'scan', message: t('logAnalyzeStart') }, logSeq),
+      logSeq: logSeq + 1,
+    })
     // 分析可能跑好几分钟，期间持续 ping，别让后台因空闲被回收
     const stopKeepalive = startKeepalive(connection)
     const res = await send({
