@@ -653,6 +653,19 @@ describe('visitFolderTree 同形 ID 段合并', () => {
     ])
   })
 
+  it('编号段不被过道折叠拼进子段名里——拼完就不像编号，会躲过聚合', () => {
+    const tree = visitFolderTree([
+      { url: 'http://localhost/settings/019fb349-e6f2-7407-a254-1919171a8d4a/edit', title: '墨析', weight: 40 },
+      { url: 'http://localhost/settings/c69350df521240909ec967c712200cfa/edit', title: '墨析', weight: 30 },
+      { url: 'http://localhost/settings/bd8c838b055c45dc984b0f28bef6684b/edit', title: '墨析', weight: 20 },
+    ], 'localhost')
+
+    expect(tree.map((node) => [node.title, node.count])).toEqual([['settings', 90]])
+    const group = tree[0]?.children[0]
+    expect([group?.id, group?.grouped, group?.count]).toEqual(['settings/*', true, 90])
+    expect(group?.children.map((node) => [node.title, node.count])).toEqual([['edit', 90]])
+  })
+
   it('顶层的 ID 段一样并成一行', () => {
     const tree = visitFolderTree([
       palclaw('/019fb349-e6f2-7407-a254-1919171a8d4a', 9),

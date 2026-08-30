@@ -304,7 +304,9 @@ export function visitFolderTree(pages: readonly WeightedUrl[], domain: string): 
   const collapse = (node: DomainFolderNode): DomainFolderNode => {
     const only = node.children.length === 1 ? node.children[0] : undefined
     const swallowable = only !== undefined && only.grouped !== true
-    if (node.directCount === 0 && swallowable && node.title !== '') {
+    // 编号段不参与过道折叠：拼成 `019fb349… / edit` 之后它就不像编号了，
+    // 会从同层的聚合里漏出去，反倒多留一行读不懂的名字。
+    if (node.directCount === 0 && swallowable && node.title !== '' && !isIdSegment(node.title)) {
       return {
         id: only.id,
         title: `${node.title} / ${only.title}`,
