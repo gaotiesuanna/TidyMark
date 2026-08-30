@@ -139,6 +139,12 @@
   "dashWindow6m": {
     "message": "近半年"
   },
+  "dashWindow1m": {
+    "message": "近一个月"
+  },
+  "dashWindow2m": {
+    "message": "近两个月"
+  },
   "dashWindow3m": {
     "message": "近三个月"
   },

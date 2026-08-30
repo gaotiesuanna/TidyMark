@@ -139,6 +139,12 @@
   "dashWindow6m": {
     "message": "Past 6 months"
   },
+  "dashWindow1m": {
+    "message": "Past month"
+  },
+  "dashWindow2m": {
+    "message": "Past 2 months"
+  },
   "dashWindow3m": {
     "message": "Past 3 months"
   },
