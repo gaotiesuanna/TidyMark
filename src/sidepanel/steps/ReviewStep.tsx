@@ -117,23 +117,35 @@ export function ReviewStep() {
    */
   const [unchangedCollapsed, setUnchangedCollapsed] = useState(true)
   /**
-   * 两个纯展示态的筛选开关：只看模型判的（排除规则命中）、只看被标记的（排除高置信度）。
+   * 纯展示态的筛选开关：只留下被标记的行（置信度低于阈值的那些）。
    * 不进 store——跟折叠态一样，没有别的地方需要知道它。筛掉的行只是不渲染，
    * 不碰 accepted，也不影响上面「换组自动展开」的判断（那个判断看的是未筛选的 groups）。
+   *
+   * 这里曾经还有第二个开关「只看模型判的」（排除规则命中）。它和这个不是两条轴：
+   * 规则命中的 confidence 恒为 1（core/map.ts），必然在标记阈值之上，所以这个开关
+   * 本来就把规则命中全挡在外面了，两个一起开跟只开这一个是同一个结果。而它单独的
+   * 那点作用（混合组里藏掉规则行）又已经由「全规则组默认折叠」覆盖掉了大半。
    */
-  const [modelOnly, setModelOnly] = useState(false)
   const [markedOnly, setMarkedOnly] = useState(false)
+  /**
+   * 待审条数。写在开关上，这个开关才算说清了自己是干什么的——
+   * 0 就是「这轮不用逐条审，直接应用」，非 0 就是「点一下，只看这几条」。
+   * 不用 summary.lowConfidenceItems：那个只数勾着的，而取消勾选并不会让一条
+   * 不再值得看一眼，数字跟着勾选跳反而像在闪。
+   */
+  const markedCount = useMemo(
+    () => (plan === null ? 0 : plan.rows.filter((row) => row.confidence < MARK_CONFIDENCE).length),
+    [plan],
+  )
   const visibleGroups = useMemo<ReviewGroup[]>(
     () =>
       groups
         .map((group) => ({
           ...group,
-          rows: group.rows.filter(
-            (row) => (!modelOnly || row.source !== 'rule') && (!markedOnly || row.confidence < MARK_CONFIDENCE),
-          ),
+          rows: group.rows.filter((row) => !markedOnly || row.confidence < MARK_CONFIDENCE),
         }))
         .filter((group) => group.rows.length > 0),
-    [groups, modelOnly, markedOnly],
+    [groups, markedOnly],
   )
   if (plan === null || summary === null) return null
 
@@ -211,57 +223,32 @@ export function ReviewStep() {
         </div>
       )}
 
-      {/* 两个改勾选的动作 vs 两个只改可见性的筛选：排成一样的按钮就是在说「这四个平级」。
-          动作是描边按钮，筛选是坐在槽里的开关。导出不改方案也不改视图，不跟它们坐一起。 */}
+      {/* 两个改勾选的动作 vs 一个只改可见性的筛选：排成一样的按钮就是在说「这三个平级」。
+          动作是描边按钮，筛选是坐在槽里的开关。导出既不改方案也不改视图，
+          它跟放弃/应用同属「对这份方案做什么」，已经挪到底部操作条去了。 */}
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
         <SecondaryButton onClick={acceptAll}>{t('reviewAcceptAll')}</SecondaryButton>
         <SecondaryButton onClick={rejectAll}>{t('reviewRejectAll')}</SecondaryButton>
       </div>
 
-      {/* 两个筛选开关：只管看得见看不见，不碰 accepted，可以同时按下 */}
+      {/* 筛选开关：只管看得见看不见，不碰 accepted。
+          一条都没标记时它自己点不动——按下去只会得到一片空白，
+          而那片空白还得再配一句「是筛没的不是没有」外加一个恢复出口才不算骗人；
+          禁用掉，右边那个 0 已经把话说完了。 */}
       <div className="mt-2 flex">
         <div className={filterTrack}>
           <button
             type="button"
-            aria-pressed={modelOnly}
-            className={filterToggle}
-            onClick={() => setModelOnly((prev) => !prev)}
-          >
-            {t('reviewFilterModelOnly')}
-          </button>
-          <button
-            type="button"
             aria-pressed={markedOnly}
+            disabled={markedCount === 0}
             className={filterToggle}
             onClick={() => setMarkedOnly((prev) => !prev)}
           >
-            {t('reviewFilterMarkedOnly')}
+            <span>{t('reviewFilterMarkedOnly')}</span>
+            <span className="tabular-nums opacity-60">{markedCount}</span>
           </button>
         </div>
       </div>
-
-      {/* 两个筛选开关叠加把所有行筛没时不能直接留白——那读起来像「一条建议都没有」，
-          而顶部摘要仍是非零总数，等于用沉默说了一件不成立的事。plan.rows.length > 0
-          这个前置条件把它跟上面「这次真的没有建议」的 reviewEmpty 分开：那句话在
-          没有任何筛选时也成立，这句只在筛选把本来存在的行藏起来时才成立，不能混。
-          不把「筛掉了多少」写进来——按钮已经把话说完了，没必要让用户自己做减法。 */}
-      {plan.rows.length > 0 && visibleGroups.length === 0 && (
-        <div className="mt-3">
-          <InlineStatus
-            tone="neutral"
-            action={<SecondaryButton
-              onClick={() => {
-                setModelOnly(false)
-                setMarkedOnly(false)
-              }}
-            >
-              {t('reviewFilterClear')}
-            </SecondaryButton>}
-          >
-            {t('reviewFilterEmpty')}
-          </InlineStatus>
-        </div>
-      )}
 
       {/* 整份清单收进一张描边卡片里，组与组之间只留一条分隔线：
           原来靠每行自带 border-b 拼出来的横线会一路漏到卡片外面，
@@ -416,11 +403,6 @@ export function ReviewStep() {
 
       <StickyActionBar>
         <div className="flex gap-2">
-          {/* 只是把这一轮倒出去存档，跟放弃/应用同属「对这份方案做什么」，不是勾选或筛选 */}
-          <GhostButton className="shrink-0" onClick={exportPlan}>
-            <DownloadIcon />
-            {t('reviewExportPlan')}
-          </GhostButton>
           <SecondaryButton className="shrink-0" onClick={reset}>{t('reviewDiscard')}</SecondaryButton>
           <PrimaryButton
             className="flex-1"
@@ -429,6 +411,13 @@ export function ReviewStep() {
           >
             {plural(accepted.size, 'reviewApplyOne', 'reviewApplyOther', String(accepted.size))}
           </PrimaryButton>
+          {/* 只是把这一轮倒出去存档，跟放弃/应用同属「对这份方案做什么」，不是勾选或筛选。
+              甩到最右头：这一行从左到右是「不要了 → 就这样办」，导出不在这条线上，
+              夹在中间会把那两步切断。 */}
+          <GhostButton className="shrink-0" onClick={exportPlan}>
+            <DownloadIcon />
+            {t('reviewExportPlan')}
+          </GhostButton>
         </div>
       </StickyActionBar>
     </div>

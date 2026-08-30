@@ -263,22 +263,10 @@ describe('ReviewStep 的分组', () => {
 })
 
 describe('ReviewStep 的筛选开关', () => {
-  it('只看模型判的：筛掉规则命中的行，不影响勾选状态', async () => {
-    setupPlan([row('a', ['01 前端'], 'llm'), row('b', ['01 GitHub'], 'rule')])
-    render(<ReviewStep />)
-    // 「01 GitHub」整组规则命中，默认折叠着，先展开才看得到成员
-    await userEvent.click(screen.getByText(/全部来自域名规则/))
-    expect(screen.getByText('书签 b')).toBeTruthy()
-
-    await userEvent.click(screen.getByText('只看模型判的'))
-
-    expect(screen.getByText('书签 a')).toBeTruthy()
-    expect(screen.queryByText('书签 b')).toBeNull()
-    // 筛选只管看得见看不见，不碰 accepted
-    expect(useStore.getState().accepted.has('b')).toBe(true)
-  })
-
-  it('只看被标记的：筛掉高置信度的行，两个开关可以叠加', async () => {
+  // 规则命中的 confidence 恒为 1（core/map.ts），必然在标记阈值之上——所以这一个开关
+  // 顺带就把「域名规则判的」全挡在外面了。曾经并排还有一个「只看模型判的」，
+  // 它和这个不是两条轴，两个一起开与只开这个是同一个结果，已删。
+  it('只看被标记的：只留下低于阈值的行，规则命中的也一并筛掉，不碰勾选', async () => {
     setupPlan([
       row('a', ['01 前端'], 'llm', 0.5),
       row('b', ['01 前端'], 'llm', 0.95),
@@ -287,51 +275,50 @@ describe('ReviewStep 的筛选开关', () => {
     render(<ReviewStep />)
 
     await userEvent.click(screen.getByText('只看被标记的'))
-    expect(screen.getByText('书签 a')).toBeTruthy()
-    expect(screen.queryByText('书签 b')).toBeNull()
-    expect(screen.queryByText('书签 c')).toBeNull()
 
-    // 叠加「只看模型判的」不改变结果——c 已经被置信度筛掉了，规则命中与否不再重要
-    await userEvent.click(screen.getByText('只看模型判的'))
     expect(screen.getByText('书签 a')).toBeTruthy()
     expect(screen.queryByText('书签 b')).toBeNull()
     expect(screen.queryByText('书签 c')).toBeNull()
+    // 筛选只管看得见看不见，不碰 accepted
     expect(useStore.getState().accepted.size).toBe(3)
   })
 
-  // 两个开关叠加把所有行筛光时，界面不能直接空白——那读起来像「一条建议都没有」，
-  // 而顶部摘要仍显示非零总数，等于用沉默说了一件不成立的事（清单第五档「别说谎」）。
-  it('筛光之后要说明白是筛没的，不是没有建议', async () => {
-    setupPlan([row('a', ['01 GitHub'], 'rule')])
+  it('再点一次就全放回来——出口就是这个开关本身', async () => {
+    setupPlan([row('a', ['01 前端'], 'llm', 0.5), row('b', ['01 前端'], 'llm', 0.95)])
     render(<ReviewStep />)
-    // 只看模型判的 —— 这条是规则命中，会被筛掉
-    await userEvent.click(screen.getByText(/只看模型判的/))
 
-    expect(screen.getByText(/当前筛选下没有建议/)).toBeTruthy()
+    await userEvent.click(screen.getByText('只看被标记的'))
+    expect(screen.queryByText('书签 b')).toBeNull()
+
+    await userEvent.click(screen.getByText('只看被标记的'))
+    expect(screen.getByText('书签 b')).toBeTruthy()
   })
 
-  // 票 24 的教训：叫人做某件事，就得给他一个能点的东西。用户未必意识到是自己
-  // 开的筛选把列表清空了，所以空态不能只提示，还得给一个恢复的出口。
-  // 两个开关都要开着点「清除筛选」：样本 row('a', ['01 GitHub'], 'rule') 的
-  // confidence 是 1，modelOnly 和 markedOnly 各自单独就能把它筛掉，只开一个
-  // 会让另一个 setter 变成空操作，测不出按钮是不是真的把两个开关都关了。
-  it('空态给一个能点的出口，点了就恢复（两个筛选都要真的解除）', async () => {
-    setupPlan([row('a', ['01 GitHub'], 'rule')])
+  // 开关不说有几条待审的话，用户点之前根本不知道值不值得点——它就是那个「没啥用」的观感来源
+  it('开关上写着有几条待审', () => {
+    setupPlan([
+      row('a', ['01 前端'], 'llm', 0.5),
+      row('b', ['01 前端'], 'llm', 0.4),
+      row('c', ['01 前端'], 'llm', 0.95),
+    ])
     render(<ReviewStep />)
-    await userEvent.click(screen.getByText(/只看模型判的/))
-    await userEvent.click(screen.getByText(/只看被标记的/))
-    await userEvent.click(screen.getByRole('button', { name: '清除筛选' }))
-
-    expect(screen.queryByText(/当前筛选下没有建议/)).toBeNull()
-    expect(screen.getByText('01 GitHub')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /只看被标记的\s*2/ })).toBeTruthy()
   })
 
-  // 「这次没有建议」（plan.rows.length === 0）与「筛没了」是两件不同的事，
-  // 混成一句就等于又说了一次谎——所以本来就空的方案得继续走原来那条 reviewEmpty。
-  it('本来就一条建议都没有时，显示的是原来那句空方案文案，不是筛选空态', () => {
+  // 一条都没标记时按下去只会得到一片空白，那片空白还得再配一句「是筛没的不是没有建议」
+  // 外加一个恢复出口才不算骗人（票 24）。禁用掉，那个 0 已经把话说完了，
+  // 「筛选把列表清空」这个状态从此不可达，对应的空态文案与出口也一并删了。
+  it('一条都没标记时开关点不动', () => {
+    setupPlan([row('a', ['01 前端'], 'llm', 0.95), row('b', ['02 GitHub'], 'rule', 1)])
+    render(<ReviewStep />)
+    const toggle = screen.getByRole('button', { name: /只看被标记的/ })
+    expect(toggle.hasAttribute('disabled')).toBe(true)
+    expect(screen.getByRole('button', { name: /只看被标记的\s*0/ })).toBeTruthy()
+  })
+
+  it('本来就一条建议都没有时，走的是空方案文案', () => {
     setupPlan([])
     render(<ReviewStep />)
-    expect(screen.queryByText(/当前筛选下没有建议/)).toBeNull()
     expect(screen.getByText(/都已在合适的位置/)).toBeTruthy()
   })
 })

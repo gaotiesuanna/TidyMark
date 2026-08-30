@@ -61,12 +61,13 @@ export const filterTrack = 'inline-flex items-center gap-0.5 rounded-index borde
  * 「你现在没在看全部」这件事得说得足够响。
  */
 export const filterToggle = [
-  'inline-flex min-h-8 cursor-pointer items-center justify-center rounded-index px-2.5',
+  'inline-flex min-h-8 cursor-pointer items-center justify-center gap-1.5 rounded-index px-2.5',
   'text-xs leading-none font-medium text-index-muted',
   'transition-colors duration-150 motion-reduce:transition-none',
-  'hover:text-index-ink',
+  'hover:enabled:text-index-ink',
   'aria-pressed:bg-index-ink aria-pressed:text-index-canvas aria-pressed:hover:bg-zinc-800',
   focusRing,
+  'disabled:cursor-not-allowed disabled:opacity-40',
 ].join(' ')
 
 /** 深色实心按钮，一个分组里只留一个，用来标出该组的主操作。 */
