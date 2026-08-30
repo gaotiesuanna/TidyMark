@@ -98,16 +98,40 @@ describe('拼不出模式的地址', () => {
   })
 })
 
+/**
+ * 本机模型服务器**不再短路**。以前对 localhost 直接答 true、一次权限都不申请，
+ * 结果是后台那次 fetch 退化成普通跨源请求，落到 Ollama 的 CORS 上——而它默认
+ * 不放行扩展源（实测 chrome-extension:// 的预检 403）。于是 README 承诺支持的
+ * 本机模型这条路整个打不开，用户只看得到一句 Failed to fetch。
+ */
 describe('本地模型服务器', () => {
-  it('localhost 直接放行，一次都不问 permissions API', async () => {
+  it('localhost 照常申请权限，拼出的模式与 manifest 里那条一致', async () => {
+    await ensureHostPermission('http://localhost:11434/v1')
+
+    expect(asked).toEqual([
+      ['http://localhost/*'],
+      ['http://localhost/*'],
+    ])
+  })
+
+  it('127.0.0.1 同样要申请', async () => {
+    await hasHostPermission('http://127.0.0.1:1234/v1')
+
+    expect(asked).toEqual([['http://127.0.0.1/*']])
+  })
+
+  it('已经授权过的本机端点不再重复弹窗', async () => {
+    contains.mockResolvedValue(true)
+
     expect(await ensureHostPermission('http://localhost:11434/v1')).toBe(true)
-    expect(contains).not.toHaveBeenCalled()
     expect(request).not.toHaveBeenCalled()
   })
 
-  it('127.0.0.1 同上', async () => {
-    expect(await hasHostPermission('http://127.0.0.1:1234/v1')).toBe(true)
-    expect(contains).not.toHaveBeenCalled()
+  it('用户拒绝时如实答 false，而不是假装本机不用授权', async () => {
+    contains.mockResolvedValue(false)
+    request.mockResolvedValue(false)
+
+    expect(await ensureHostPermission('http://localhost:11434/v1')).toBe(false)
   })
 })
 

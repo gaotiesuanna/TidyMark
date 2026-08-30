@@ -1,5 +1,3 @@
-import { isLocalBaseUrl } from '@/llm/config'
-
 /**
  * 把 baseUrl 拼成 Chrome 的 match pattern。地址填得不成形（还在敲一半）时返回 null。
  *
@@ -35,12 +33,11 @@ function hostPattern(baseUrl: string): string | null {
  * 失败后的复查是 llm 层答不了的那一半——那一层零浏览器依赖，只能说「请求没发出去」，
  * 说不出「因为没授权」。
  *
- * 本地模型服务器直接答 true，理由与 ensureHostPermission 里那一大段完全相同。
+ * 本地地址不再特殊对待，理由见 ensureHostPermission。
  */
 export async function hasHostPermission(baseUrl: string): Promise<boolean> {
   const origin = hostPattern(baseUrl)
   if (origin === null) return false
-  if (isLocalBaseUrl(baseUrl)) return true
   // contains 抛出来一律当「没这个权限」。它实际只有一种失败原因——模式非法
   // （hostPattern 已经挡掉了已知的那几种，剩下的是 IPv6 字面量这类没预料到的），
   // 而那一刻「拿不到这个权限」就是正确答案。
@@ -63,20 +60,24 @@ export async function hasHostPermission(baseUrl: string): Promise<boolean> {
 export async function ensureHostPermission(baseUrl: string): Promise<boolean> {
   const origin = hostPattern(baseUrl)
   if (origin === null) return false
-  // 本地模型服务器（Ollama、LM Studio）直接放行，这一步在 hasHostPermission 里。
+  // 本地地址（Ollama、LM Studio）与远端走同一条路，**没有短路**。
   //
-  // 曾经的第一条理由是「本地服务器跑在 11434 这类非默认端口上，拼出来的模式非法」——
-  // 那条理由已经不成立了：hostPattern 现在丢端口，拼出的是 'http://localhost/*'，
-  // 与 manifest 的 optional_host_permissions 里写的那条一字不差，完全合法。
+  // 这里曾经对 localhost / 127.0.0.1 直接答 true、一次权限都不申请。那条短路让
+  // 本机模型这条路整个不通，而且是静默不通：
   //
-  // 留着这个短路是为了剩下的那条理由：申请它等于把 localhost 上**所有端口**的访问权
-  // 一次要走，而用户只填了一个端点。远端主机现在也是这个粒度（见 hostPattern），
-  // 差别在于 localhost 上跑着的东西比某个远端主机上的多得多，那一次弹窗要的也就更多。
+  //   不申请 host 权限 ⇒ 后台 worker 那次 fetch 退化成一次普通的跨源请求 ⇒ 由
+  //   模型服务器的 CORS 说了算。而 Ollama 默认放行的是网页源，不含扩展源——
+  //   实测 `Origin: chrome-extension://…` 的预检直接 **403**（同一时刻
+  //   `Origin: http://localhost:3000` 拿到 204 + 完整 CORS 头）。用户那边看到的是
+  //   「网络请求失败（耗时 2ms）：TypeError: Failed to fetch」，一句都指不到真因。
   //
-  // 未解的一半：短路意味着本地端点**永远拿不到 host 权限**，后台 worker 那次
-  // fetch 于是只能靠模型服务器自己的 CORS 头放行（Ollama 要 OLLAMA_ORIGINS 配上
-  // chrome-extension:// 才认）。这条与本次「带端口的端点会静默炸掉」是两件事，
-  // 不在这里顺手改——改了会动到今天能用的那批本地用户。
+  // 申请它是能过的：hostPattern 丢掉端口后拼出 'http://localhost/*'，与 manifest
+  // 的 optional_host_permissions 里那条一字不差；拿到 host 权限之后 MV3 的 worker
+  // 请求不再受 CORS 约束，那次 403 预检根本不会发生，用户什么都不用配。
+  //
+  // 代价是本机用户会多一次授权弹窗，而且因为 match pattern 没有端口语法，要到的是
+  // localhost 上**所有端口**的访问权。这个粒度不是我们挑的，是 Chrome 能表达的极限。
+  // 拿它换掉「README 承诺支持、实际打不开」，值。
   if (await hasHostPermission(baseUrl)) return true
   // request 与 contains 同理：模式非法时抛出来，而这里答 false 正好落在调用方
   // 现成的「用户拒绝了」分支上，文案与真被拒绝时一致，都是「授权失败，可重试」。
