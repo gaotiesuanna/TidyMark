@@ -222,7 +222,7 @@ async function runBatch(
       lastError = String(error)
       truncated = (error as { truncated?: boolean }).truncated === true
       // 只进开发者控制台，不进侧栏日志，不必双语。
-      console.error('[TidyMark] 分类请求失败：', error)
+      console.error('[Reshelve] 分类请求失败：', error)
       // 取消之后一个新请求都不再发：那三次注定失败，用户却要眼看着「正在取消」
       // 多等三个请求加 1.5 秒的退避。
       if (hooks.isCancelled?.() === true) break
@@ -367,7 +367,7 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
         locale, index, batches.length, size, ok, Date.now() - startedAt, batch.length,
       )
       // 只进开发者控制台，不必双语。
-      console.log(`[TidyMark] ${summary}`)
+      console.log(`[Reshelve] ${summary}`)
       // 取消之后这一批的成败没有意义：它是被喊停打断的，不是失败。照常打会在侧栏
       // 刷出 concurrency 条「成功 0 条」的红字，盖住用户真正该看的东西。
       if (input.isCancelled?.() !== true) {

@@ -1,12 +1,12 @@
-# TidyMark
+# Reshelve
 
 Reorganize your Chrome bookmarks with AI — every change is previewed, confirmed, and undoable.
 
-**[▸ Install from the Chrome Web Store](https://chromewebstore.google.com/detail/tidymark/hlmicephladojlmomimpngjaaaflapma)**
+**[▸ Install from the Chrome Web Store](https://chromewebstore.google.com/detail/reshelve/hlmicephladojlmomimpngjaaaflapma)**
 
 English | [简体中文](README.zh-CN.md)
 
-TidyMark reorganizes your **native Chrome bookmarks**, not some separate system. When it's
+Reshelve reorganizes your **native Chrome bookmarks**, not some separate system. When it's
 done, your bookmarks bar is still your bookmarks bar, and sync across your devices works
 exactly as before.
 
@@ -14,7 +14,7 @@ exactly as before.
 
 - **You choose the scope.** Check the folders you want reorganized. Unchecked folders are
   never read and never modified — no bookmark moves out of them, and none moves in.
-- **TidyMark judges the shape for you, and explains why.** Bookmarks that already look
+- **Reshelve judges the shape for you, and explains why.** Bookmarks that already look
   organized are only filed into the folders you have; a genuine mess gets a full redesign
   of the folder tree. The call comes with its reasoning, and you can override it before
   anything runs.
@@ -25,7 +25,7 @@ exactly as before.
 
 ## Bring your own model
 
-TidyMark has no server. You point it at your own endpoint:
+Reshelve has no server. You point it at your own endpoint:
 
 - The official OpenAI API
 - Any OpenAI-compatible service (DeepSeek, Moonshot, a self-hosted proxy, …)

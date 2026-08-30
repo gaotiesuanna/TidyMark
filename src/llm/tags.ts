@@ -129,7 +129,7 @@ async function runExtraction(
       } catch (error) {
         lastError = error
         // 只进开发者控制台，不必双语。
-        console.error('[TidyMark] 标签抽取失败：', error)
+        console.error('[Reshelve] 标签抽取失败：', error)
         // 取消之后一个新请求都不再发。少了这一句，用户点完取消要眼看着「正在取消」
         // 再等三个请求加 1.5 秒退避才结束，而那三次注定全部失败。
         if (options.isCancelled?.() === true) break

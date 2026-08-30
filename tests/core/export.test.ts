@@ -137,19 +137,19 @@ describe('countScopedBookmarks', () => {
 
 describe('exportFileName', () => {
   it('按格式与本地日期命名', () => {
-    expect(exportFileName('tree', AT)).toBe('tidymark-tree-2026-08-04.json')
-    expect(exportFileName('links', AT)).toBe('tidymark-links-2026-08-04.json')
+    expect(exportFileName('tree', AT)).toBe('reshelve-tree-2026-08-04.json')
+    expect(exportFileName('links', AT)).toBe('reshelve-links-2026-08-04.json')
   })
 
   it('月和日补零', () => {
-    expect(exportFileName('tree', new Date(2026, 0, 9, 0, 0, 0))).toBe('tidymark-tree-2026-01-09.json')
+    expect(exportFileName('tree', new Date(2026, 0, 9, 0, 0, 0))).toBe('reshelve-tree-2026-01-09.json')
   })
 
   it('文件名用本地日期、exportedAt 用 UTC——同一时刻两者故意不同', () => {
     // vitest.config.ts 把测试时区钉死在 Asia/Shanghai（UTC+8）
     // 本地时间 2026-08-04 01:00 对应的 UTC 时间是 2026-08-03 17:00
     const at = new Date(2026, 7, 4, 1, 0, 0)
-    expect(exportFileName('tree', at)).toBe('tidymark-tree-2026-08-04.json')
+    expect(exportFileName('tree', at)).toBe('reshelve-tree-2026-08-04.json')
     const exportedAt = toTreeExport(tree, ['10'], at).exportedAt
     expect(exportedAt).toMatch(/Z$/)
     expect(exportedAt).toContain('2026-08-03')

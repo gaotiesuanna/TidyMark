@@ -5,7 +5,7 @@ import { loadFavicons } from '@/sidepanel/lib/favicons'
 const FALLBACK_BYTES = 'chrome-default-globe'
 
 /** 实现里用来探兜底图标的那个保留域名，测试要认得它才好模拟。 */
-const PROBE_HOST = 'https://tidymark-favicon-probe.invalid/'
+const PROBE_HOST = 'https://reshelve-favicon-probe.invalid/'
 
 let requested: string[]
 

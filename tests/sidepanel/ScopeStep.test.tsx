@@ -139,7 +139,7 @@ describe('ScopeStep 还没配模型时的提示', () => {
 
     // 空断言防身：先证明这一页真渲染出来了，而且下面两种查询在这一页上确实命中得了东西，
     // 否则「查不到」可能只是查错了地方
-    expect(screen.getByText(/勾选你想让 TidyMark 重构的文件夹/)).toBeTruthy()
+    expect(screen.getByText(/勾选你想让 Reshelve 重构的文件夹/)).toBeTruthy()
     expect(screen.getByRole('button', { name: '全部展开' })).toBeTruthy()
 
     expect(screen.queryByText(/挑一个预设/)).toBeNull()
@@ -157,7 +157,7 @@ describe('ScopeStep 还没配模型时的提示', () => {
     })
     render(<ScopeStep />)
     // 空断言防身：先证明这一页真渲染了、这两种查询在这一页上确实命中得了东西
-    expect(screen.getByText(/勾选你想让 TidyMark 重构的文件夹/)).toBeTruthy()
+    expect(screen.getByText(/勾选你想让 Reshelve 重构的文件夹/)).toBeTruthy()
     expect(screen.getByRole('button', { name: '全部展开' })).toBeTruthy()
     // 前提：apiKey 确实还是空的——真填了 Key 的话这条用例守的就不是本机那条路了
     expect(activeLlm(useStore.getState().settings).apiKey).toBe('')

@@ -109,8 +109,8 @@ describe('toHtmlExport 转义', () => {
 
 describe('exportFileName html', () => {
   it('HTML 导出用 .html 后缀，JSON 导出不受影响', () => {
-    expect(exportFileName('html', AT)).toBe('tidymark-html-2026-08-04.html')
-    expect(exportFileName('tree', AT)).toBe('tidymark-tree-2026-08-04.json')
-    expect(exportFileName('links', AT)).toBe('tidymark-links-2026-08-04.json')
+    expect(exportFileName('html', AT)).toBe('reshelve-html-2026-08-04.html')
+    expect(exportFileName('tree', AT)).toBe('reshelve-tree-2026-08-04.json')
+    expect(exportFileName('links', AT)).toBe('reshelve-links-2026-08-04.json')
   })
 })

@@ -94,7 +94,7 @@ describe('ReviewStep', () => {
     await userEvent.click(screen.getByText('导出方案'))
 
     const [filename, payload] = vi.mocked(downloadJson).mock.calls.at(-1)!
-    expect(filename).toMatch(/^tidymark-plan-\d{4}-\d{2}-\d{2}\.json$/)
+    expect(filename).toMatch(/^reshelve-plan-\d{4}-\d{2}-\d{2}\.json$/)
     const body = payload as { settings: Settings; accepted: string[]; plan: OrganizePlan }
     expect(body.accepted).toEqual(['100'])
     expect(body.plan.rows).toHaveLength(2)

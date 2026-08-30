@@ -192,7 +192,7 @@ export interface ScopeFolder {
 }
 
 /**
- * 目录名是否带着 TidyMark 编的号。
+ * 目录名是否带着 Reshelve 编的号。
  * 与 stripNumberPrefix 用同一个模式，保证「判定带号」与「去掉号」永远一致。
  */
 function hasNumberPrefix(title: string): boolean {

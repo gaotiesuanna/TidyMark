@@ -354,7 +354,7 @@ describe('dropFallbackFromCandidates', () => {
     cand('12', ['书签栏', '前端', '其他']),
   ]
 
-  // 上一轮推翻重建留下的「其他」带着建树期给的编号。编号是 TidyMark 自己加的，
+  // 上一轮推翻重建留下的「其他」带着建树期给的编号。编号是 Reshelve 自己加的，
   // 认名字时不剥它，这条修复在真实的第二轮上就一次都触发不了
   it('剥掉编号再认名字：「02 其他」也是那个收容所', () => {
     const kept = dropFallbackFromCandidates(candidates, folders, ['1'], 'zh_CN')

@@ -1,23 +1,23 @@
-# TidyMark
+# Reshelve
 
 用 AI 重新整理你的 Chrome 书签——每一处改动都会先预览、经你确认，并且随时可以撤销。
 
-**[▸ 从 Chrome 应用商店安装](https://chromewebstore.google.com/detail/tidymark/hlmicephladojlmomimpngjaaaflapma)**
+**[▸ 从 Chrome 应用商店安装](https://chromewebstore.google.com/detail/reshelve/hlmicephladojlmomimpngjaaaflapma)**
 
 [English](README.md) | 简体中文
 
-TidyMark 整理的是你**原生的 Chrome 书签**，而不是另起炉灶的一套东西。整理完成后，书签栏还是那个书签栏，跨设备同步也和以前一样正常工作。
+Reshelve 整理的是你**原生的 Chrome 书签**，而不是另起炉灶的一套东西。整理完成后，书签栏还是那个书签栏，跨设备同步也和以前一样正常工作。
 
 ## 说了算的是你，不是 AI
 
 - **范围由你划定。** 勾选你想整理的文件夹。没勾选的文件夹既不会被读取，也不会被改动——不会有书签从里面搬走，也不会有书签搬进去。
-- **这次走哪条路，TidyMark 自己判断，并会讲清楚理由。** 已经整理过的书签只会被归进现有文件夹；确实一团乱麻才会重新设计整棵目录树。判断连同理由都会显示出来，动手之前你可以推翻它。
+- **这次走哪条路，Reshelve 自己判断，并会讲清楚理由。** 已经整理过的书签只会被归进现有文件夹；确实一团乱麻才会重新设计整棵目录树。判断连同理由都会显示出来，动手之前你可以推翻它。
 - **每一次移动都可复核。** 在真正落地之前，所有移动都会列出来：每个书签原本在哪、要去哪、为什么。你可以逐条取消，也可以按置信度批量筛选。
 - **一键撤销。** 结果不满意？把一切恢复原样。
 
 ## 模型自备
 
-TidyMark 没有服务器。你把它指向你自己的接口：
+Reshelve 没有服务器。你把它指向你自己的接口：
 
 - OpenAI 官方 API
 - 任何兼容 OpenAI 的服务（DeepSeek、Moonshot、自建代理……）

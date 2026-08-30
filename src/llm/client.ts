@@ -218,7 +218,7 @@ export function createLlmClient(
         )
       }
       // 只进开发者控制台，不必双语。
-      console.error(`[TidyMark] fetch 失败（耗时 ${elapsed}ms）：`, error)
+      console.error(`[Reshelve] fetch 失败（耗时 ${elapsed}ms）：`, error)
       // 这条消息会经 String(error) 拼进 logBatchFailed / logFoldersFailed 的 detail，
       // 显示在侧栏运行日志里，属于用户可见内容，必须双语。
       throw new LlmError(
@@ -248,7 +248,7 @@ export function createLlmClient(
           const next = MODES[MODES.indexOf(attempt) + 1]
           if (isUnsupportedResponseFormat(response.status, body) && next !== undefined) {
             // 只进开发者控制台，不必双语。
-            console.warn(`[TidyMark] 厂商不支持 ${attempt}，降级为 ${next} 重试`)
+            console.warn(`[Reshelve] 厂商不支持 ${attempt}，降级为 ${next} 重试`)
             // mode 只前进不后退，作为后续请求的起点
             if (MODES.indexOf(next) > MODES.indexOf(mode)) mode = next
             // 别的请求可能已经探到更低的一级，直接从那里接着试

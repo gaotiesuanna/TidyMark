@@ -4,6 +4,9 @@ import type { CachedClassification } from '@/core/types'
 import type { Locale, UiLocale } from '@/core/locale'
 import type { LlmConfig } from '@/llm/client'
 
+// 前缀停在 tidymark 不是漏改：1.1.0 之前扩展叫 TidyMark，这两个键里存着已装用户的
+// 模型端点、API Key 和偏好。改前缀等于换了一把钥匙去开同一个抽屉——读不到旧值，用户
+// 更新完打开侧栏发现要重新配一遍。存储键是数据契约，不是名字的一部分。
 export const SETTINGS_KEY = 'tidymark:settings'
 export const CACHE_KEY = 'tidymark:classify-cache'
 
@@ -137,7 +140,7 @@ export const PRESETS: Array<{ label: Record<Locale, string>; baseUrl: string; mo
  * 被删掉的旧旋钮名单。**一个都不认**——存储里遗留的这些键读都不读，下次保存设置时
  * 自然被覆盖掉。所以这里没有 `LegacySettings` 那样的类型，`loadSettings` 也不去碰它们。
  *
- * 不认的理由是同一条：这些旋钮当年管的事，今天已经由 TidyMark 自己按当次扫描现判。
+ * 不认的理由是同一条：这些旋钮当年管的事，今天已经由 Reshelve 自己按当次扫描现判。
  * 继续认旧值等于把删掉的旋钮偷偷留着——用户在设置页看不到它，行为却还被它牵着走。
  *
  * - `rebuildStructure`：当年管「推翻重建还是就地整理」。现在每次按扫描结果现判

@@ -32,9 +32,9 @@ afterEach(() => {
 
 describe('downloadJson', () => {
   it('以指定文件名触发下载', () => {
-    downloadJson('tidymark-tree-2026-08-04.json', { kind: 'tree' })
+    downloadJson('reshelve-tree-2026-08-04.json', { kind: 'tree' })
     expect(anchor).not.toBeNull()
-    expect(anchor!.download).toBe('tidymark-tree-2026-08-04.json')
+    expect(anchor!.download).toBe('reshelve-tree-2026-08-04.json')
     expect(anchor!.href).toBe('blob:fake-url')
   })
 

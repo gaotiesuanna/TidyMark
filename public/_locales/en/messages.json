@@ -1,6 +1,11 @@
 {
   "extName": {
-    "message": "TidyMark"
+    "message": "Reshelve — AI Bookmark Organizer",
+    "description": "商店 listing 的标题。品牌词 + 品类词：应用店基本只按名字排，名字里不含 bookmark/书签就拿不到搜索流量。窄处显示的是 extShortName。"
+  },
+  "extShortName": {
+    "message": "Reshelve",
+    "description": "manifest short_name，上限 12 字符。Chrome 侧栏顶栏、扩展列表这些窄处用它，否则长名会被截断。"
   },
   "extDescription": {
     "message": "Reorganize your Chrome bookmarks with AI — every change is previewed, confirmed, and undoable"
@@ -55,7 +60,7 @@
     "message": "No browsing history to rank yet."
   },
   "dashHistoryExplain": {
-    "message": "Ranking sites by visits means reading your browsing history. Chrome will now ask for permission to \"read your browsing history.\" TidyMark only counts visits per site, on this computer. If you never press this button it is never requested."
+    "message": "Ranking sites by visits means reading your browsing history. Chrome will now ask for permission to \"read your browsing history.\" Reshelve only counts visits per site, on this computer. If you never press this button it is never requested."
   },
   "dashHistoryAllow": {
     "message": "Allow history access"
@@ -213,13 +218,13 @@
     "message": "No matching bookmarks found"
   },
   "scopeNeedModel": {
-    "message": "TidyMark files your bookmarks with an AI model of your own, and there is not one yet. Pick a preset, paste an API key, and that is the whole setup."
+    "message": "Reshelve files your bookmarks with an AI model of your own, and there is not one yet. Pick a preset, paste an API key, and that is the whole setup."
   },
   "scopeNeedModelAction": {
     "message": "Set up the model"
   },
   "scopeIntro": {
-    "message": "Check the folders you want TidyMark to reorganize."
+    "message": "Check the folders you want Reshelve to reorganize."
   },
   "scopeExpandAll": {
     "message": "Expand all"
@@ -534,7 +539,7 @@
     "message": "The extension was reloaded, so this side panel is stale. Close it and open it again."
   },
   "sendErrNoReceiver": {
-    "message": "Cannot reach the background. Make sure TidyMark is enabled at chrome://extensions, then reopen the side panel."
+    "message": "Cannot reach the background. Make sure Reshelve is enabled at chrome://extensions, then reopen the side panel."
   },
   "sendErrNoResponse": {
     "message": "The background returned nothing — it may have been suspended."
@@ -765,7 +770,7 @@
     "message": "Remove"
   },
   "settingsBaseUrlFull": {
-    "message": "The address only needs to end at /v1 — TidyMark appends /chat/completions itself, so pasting the full endpoint from the docs doubles it up."
+    "message": "The address only needs to end at /v1 — Reshelve appends /chat/completions itself, so pasting the full endpoint from the docs doubles it up."
   },
   "settingsBaseUrlEmpty": {
     "message": "The address cannot be empty."
@@ -797,13 +802,13 @@
     "message": "The provider does not recognize this model name. Look up the name currently in use in its docs."
   },
   "settingsTestFailFormat": {
-    "message": "The endpoint responded, but this model will not answer in the format TidyMark needs. Try another model."
+    "message": "The endpoint responded, but this model will not answer in the format Reshelve needs. Try another model."
   },
   "settingsTestFailNetwork": {
     "message": "The request never got through. Check your proxy or VPN, and whether another extension is blocking it."
   },
   "settingsTestFailPermission": {
-    "message": "TidyMark does not have permission to reach this domain yet. Click Test connection again and allow it."
+    "message": "Reshelve does not have permission to reach this domain yet. Click Test connection again and allow it."
   },
   "settingsTestFailUnknown": {
     "message": "The test did not finish, so there is no verdict on what went wrong. Try again."
@@ -872,7 +877,7 @@
     "message": "No model configured yet"
   },
   "prefsPermissionNotice": {
-    "message": "TidyMark asked for no network permission at install time. Only when analysis starts does it ask the browser for access to the model domain you entered."
+    "message": "Reshelve asked for no network permission at install time. Only when analysis starts does it ask the browser for access to the model domain you entered."
   },
   "structureIntroOne": {
     "message": "The AI designed $folders$ top-level folder to hold $bookmarks$ bookmarks.",
@@ -1262,13 +1267,13 @@
     "message": "Retry"
   },
   "errAnotherWindowBusy": {
-    "message": "Another window's side panel is already running TidyMark. Wait for it to finish, or cancel it there, then try again."
+    "message": "Another window's side panel is already running Reshelve. Wait for it to finish, or cancel it there, then try again."
   },
   "errBackgroundRecycled": {
     "message": "The browser suspended the background and interrupted this run."
   },
   "errHostPermission": {
-    "message": "TidyMark needs permission to reach your model endpoint's domain. Retry and allow the permission."
+    "message": "Reshelve needs permission to reach your model endpoint's domain. Retry and allow the permission."
   },
   "errFileCorrupt": {
     "message": "This file is malformed."
@@ -1292,7 +1297,7 @@
     "message": "This file is not valid JSON."
   },
   "errImportUnsupportedFormat": {
-    "message": "This is not a TidyMark export, or its version is not supported."
+    "message": "This is not a Reshelve export, or its version is not supported."
   },
   "errImportUnknownKind": {
     "message": "Unrecognized export type: $kind$",

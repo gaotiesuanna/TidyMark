@@ -44,7 +44,7 @@ export const MIN_JUDGED_BOOKMARKS = 10
  * 「这个目录名带编号前缀吗」。`stripNumberPrefix` 剥不动就是没带。
  *
  * 整串都是编号的标题（如 `01 `）被 stripNumberPrefix 原样返回，于是这里判成「没带」。
- * 方向是对的：宁可少认一个编号，也不要把手工整理的库误认成 TidyMark 的旧作。
+ * 方向是对的：宁可少认一个编号，也不要把手工整理的库误认成 Reshelve 的旧作。
  */
 function hasNumberPrefix(title: string): boolean {
   return stripNumberPrefix(title) !== title
@@ -74,11 +74,11 @@ export function detectMode(scan: ScanResult, locale: Locale): ModeDecision {
     return { mode: 'rebuild', reason: reasonNoFolders(locale) }
   }
 
-  // 编号前缀是最强也最便宜的信号，几乎必然是上一轮 TidyMark 留下的：命中就直接定性，
+  // 编号前缀是最强也最便宜的信号，几乎必然是上一轮 Reshelve 留下的：命中就直接定性，
   // 不再看别的。反过来「没有编号」什么都不说明——手工整理得很好的库同样没有编号，
   // 只看编号会把他判成一团乱麻，而那正是危险方向（§1）
   //
-  // 分母只取一级目录：TidyMark 按设计只给一级目录编号，二级目录里用户自建、
+  // 分母只取一级目录：Reshelve 按设计只给一级目录编号，二级目录里用户自建、
   // 本轮没收到书签的目录被刻意保持原样、不编号（见 core/plan.ts 的 participates）。
   // 把二级目录也算进分母，等于按用户手建子目录的多寡把这条最强信号成比例稀释掉。
   const numerable = judged.filter((f) => f.depth === 1)

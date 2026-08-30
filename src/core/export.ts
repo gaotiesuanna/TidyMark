@@ -1,7 +1,13 @@
 import type { BookmarkNode } from './ports'
 import { findScopeRoots } from './scan'
 
-/** 导出文件的版本标识，将来的导入功能靠它挡住不认识的版本。 */
+/**
+ * 导出文件的版本标识，导入功能靠它挡住不认识的版本。
+ *
+ * 前缀停在 tidymark 不是漏改：这个字符串**写在用户硬盘上的文件里**。import.ts 是硬相等
+ * 比较，改成 reshelve/v1 就等于宣布所有旧导出文件不再是本扩展的文件，用户导不回自己的
+ * 备份。文件格式标识一旦发出去就归文件所有，跟扩展现在叫什么无关。
+ */
 export const EXPORT_FORMAT = 'tidymark/v1'
 
 /** tree / links 是 tidymark/v1 的 JSON，html 是给别家浏览器导入用的 Netscape 书签文件。 */
@@ -107,5 +113,5 @@ export function localDate(at: Date): string {
 /** 文件名用本地日期——下载下来的应该是用户自己时区的今天，而不是 UTC 的今天。 */
 export function exportFileName(kind: ExportKind, at: Date): string {
   const ext = kind === 'html' ? 'html' : 'json'
-  return `tidymark-${kind}-${localDate(at)}.${ext}`
+  return `reshelve-${kind}-${localDate(at)}.${ext}`
 }

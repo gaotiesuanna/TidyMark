@@ -382,7 +382,7 @@ async function requestDesign(
     return { ok: true, design: { folders, mapping }, duplicateDetail, droppedTitles }
   } catch (error) {
     // 只进开发者控制台，不必双语。
-    console.error('[TidyMark] 目录设计失败：', error)
+    console.error('[Reshelve] 目录设计失败：', error)
     return { ok: false, detail: String(error) }
   }
 }
@@ -649,7 +649,7 @@ export async function nameMergedFolder(
     return name === '' ? null : name
   } catch (error) {
     // 只进开发者控制台，不必双语，与 designFolders 的失败兜底同一套形态。
-    console.error('[TidyMark] 合并目录命名失败：', error)
+    console.error('[Reshelve] 合并目录命名失败：', error)
     options.onLog?.(String(error), 'warn')
     return null
   }
@@ -711,7 +711,7 @@ export async function nameNewTopics(
     )
   } catch (error) {
     // 只进开发者控制台，不必双语，与 nameMergedFolder 的失败兜底同一套形态。
-    console.error('[TidyMark] 新目录命名失败：', error)
+    console.error('[Reshelve] 新目录命名失败：', error)
     options.onLog?.(String(error), 'warn')
   }
 

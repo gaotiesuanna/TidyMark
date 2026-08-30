@@ -5,7 +5,7 @@ import { findScopeRoots } from './scan'
 /**
  * Netscape 书签文件（各家浏览器「导入书签」共同认的那个 HTML 格式）。
  *
- * 与 tidymark/v1 的 JSON 导出并列而不是替代它：JSON 是 TidyMark 自己的往返格式，
+ * 与 tidymark/v1 的 JSON 导出并列而不是替代它：JSON 是 Reshelve 自己的往返格式，
  * 这份 HTML 是给别的浏览器吃的，多带一样东西——favicon，写在 <A> 的 ICON 属性里。
  * 注意 ICON 只有 Firefox 一类导入器会读，Chrome 的导入器读完就丢，
  * Chrome 里书签的图标始终来自它自己的 favicon 库。

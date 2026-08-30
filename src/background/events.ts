@@ -1,8 +1,8 @@
 /** 侧栏与 service worker 之间推送进度事件的长连接名。 */
-export const PROGRESS_PORT = 'tidymark:progress'
+export const PROGRESS_PORT = 'reshelve:progress'
 
 /**
- * 连接名里捎上侧栏的身份：`tidymark:progress#<clientId>`。
+ * 连接名里捎上侧栏的身份：`reshelve:progress#<clientId>`。
  *
  * 走连接名而不是连上之后再发一条自报家门的消息，是因为 SW 在 onConnect 那一刻
  * 就得知道这条通道属于谁——晚一个来回的话，这中间到达的进度事件没有地方可推。

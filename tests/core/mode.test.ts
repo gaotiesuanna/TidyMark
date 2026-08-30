@@ -196,7 +196,7 @@ describe('detectMode', () => {
 describe('detectMode 对真实书签库形状的判断（回归 Recommendation 2）', () => {
   const shapes: Array<{ name: string; scan: () => ScanResult; expected: 'additive' | 'rebuild' }> = [
     {
-      name: 'TidyMark 一层产物：一级目录全带编号，书签栏上另外堆着新书签 → additive',
+      name: 'Reshelve 一层产物：一级目录全带编号，书签栏上另外堆着新书签 → additive',
       scan: () => build(
         Array.from({ length: 4 }, (_, i) =>
           filled(`f${i}`, `${String(i + 1).padStart(2, '0')} 主题${i}`, 4)),
@@ -205,7 +205,7 @@ describe('detectMode 对真实书签库形状的判断（回归 Recommendation 2
       expected: 'additive',
     },
     {
-      name: 'TidyMark 一层产物：一级全带编号，二级是用户自建的无编号目录，35% 散落 → additive（C1 回归）',
+      name: 'Reshelve 一层产物：一级全带编号，二级是用户自建的无编号目录，35% 散落 → additive（C1 回归）',
       scan: () => {
         // 分母若像修复前那样把二级也算进去：4 个一级 + 12 个无编号二级 = 16 个
         // 判断目录，编号比例只有 4/16 = 25%，够不上 0.5，会落到散落比例（约 37%）

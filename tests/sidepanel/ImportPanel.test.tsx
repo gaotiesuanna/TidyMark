@@ -75,12 +75,12 @@ describe('ImportPanel 出错态', () => {
 
 describe('ImportPanel 预览态', () => {
   beforeEach(() => {
-    useStore.getState().readImportFile('tidymark-tree-2026-08-04.json', goodFile)
+    useStore.getState().readImportFile('reshelve-tree-2026-08-04.json', goodFile)
   })
 
   it('显示文件名与统计，条数是拦截后的数字', () => {
     render(<ImportPanel />)
-    expect(screen.getByText('tidymark-tree-2026-08-04.json')).toBeDefined()
+    expect(screen.getByText('reshelve-tree-2026-08-04.json')).toBeDefined()
     // 2 条里有 1 条 javascript: 被拦下
     expect(screen.getByText('1 条书签、1 个文件夹')).toBeDefined()
   })

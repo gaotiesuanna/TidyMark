@@ -1,6 +1,11 @@
 {
   "extName": {
-    "message": "TidyMark"
+    "message": "Reshelve — AI 书签整理",
+    "description": "商店 listing 的标题。品牌词 + 品类词：应用店基本只按名字排，名字里不含 bookmark/书签就拿不到搜索流量。窄处显示的是 extShortName。"
+  },
+  "extShortName": {
+    "message": "Reshelve",
+    "description": "manifest short_name，上限 12 字符。Chrome 侧栏顶栏、扩展列表这些窄处用它，否则长名会被截断。"
   },
   "extDescription": {
     "message": "用 AI 重构 Chrome 原生书签 —— 所有修改可预览、可确认、可撤销"
@@ -55,7 +60,7 @@
     "message": "还没有可统计的浏览记录。"
   },
   "dashHistoryExplain": {
-    "message": "按访问次数排行需要读取浏览记录。Chrome 会问你要不要「读取您的浏览记录」。TidyMark 只用它来按网站计数，数据不出这台电脑。不点这个按钮就永远不会申请。"
+    "message": "按访问次数排行需要读取浏览记录。Chrome 会问你要不要「读取您的浏览记录」。Reshelve 只用它来按网站计数，数据不出这台电脑。不点这个按钮就永远不会申请。"
   },
   "dashHistoryAllow": {
     "message": "允许读取浏览记录"
@@ -219,7 +224,7 @@
     "message": "去配置模型"
   },
   "scopeIntro": {
-    "message": "勾选你想让 TidyMark 重构的文件夹。"
+    "message": "勾选你想让 Reshelve 重构的文件夹。"
   },
   "scopeExpandAll": {
     "message": "全部展开"
@@ -534,7 +539,7 @@
     "message": "扩展已重新加载，这个侧栏面板已失效。请关掉侧栏重新打开。"
   },
   "sendErrNoReceiver": {
-    "message": "连不上后台。请在 chrome://extensions 里确认 TidyMark 已启用，然后重开侧栏。"
+    "message": "连不上后台。请在 chrome://extensions 里确认 Reshelve 已启用，然后重开侧栏。"
   },
   "sendErrNoResponse": {
     "message": "后台没有返回结果，可能已被浏览器回收。"
@@ -765,7 +770,7 @@
     "message": "移除"
   },
   "settingsBaseUrlFull": {
-    "message": "地址只填到 /v1 就够了——TidyMark 自己会接上 /chat/completions，照抄文档给的完整端点会拼成两遍。"
+    "message": "地址只填到 /v1 就够了——Reshelve 自己会接上 /chat/completions，照抄文档给的完整端点会拼成两遍。"
   },
   "settingsBaseUrlEmpty": {
     "message": "地址不能为空。"
@@ -872,7 +877,7 @@
     "message": "还没配置模型"
   },
   "prefsPermissionNotice": {
-    "message": "安装时 TidyMark 一个网络权限都没要。开始分析的那一刻，才会向浏览器申请访问你填的那个模型域名。"
+    "message": "安装时 Reshelve 一个网络权限都没要。开始分析的那一刻，才会向浏览器申请访问你填的那个模型域名。"
   },
   "structureIntroOne": {
     "message": "AI 设计了 $folders$ 个一级目录，将容纳 $bookmarks$ 个书签。",
@@ -1262,7 +1267,7 @@
     "message": "重试"
   },
   "errAnotherWindowBusy": {
-    "message": "另一个窗口的侧栏正在跑 TidyMark。等它跑完，或者去那边取消，然后再试一次。"
+    "message": "另一个窗口的侧栏正在跑 Reshelve。等它跑完，或者去那边取消，然后再试一次。"
   },
   "errBackgroundRecycled": {
     "message": "后台已被浏览器回收，本次操作中断。"
@@ -1292,7 +1297,7 @@
     "message": "这个文件不是有效的 JSON。"
   },
   "errImportUnsupportedFormat": {
-    "message": "这不是 TidyMark 导出的文件，或者版本不支持。"
+    "message": "这不是 Reshelve 导出的文件，或者版本不支持。"
   },
   "errImportUnknownKind": {
     "message": "无法识别的导出类型：$kind$",

@@ -87,7 +87,7 @@ describe('本机 Ollama 动线', () => {
 
     // 第三步：回到选范围页，那条提示该消失了
     const after = render(<ScopeStep />)
-    expect(screen.getByText(/勾选你想让 TidyMark 重构的文件夹/)).toBeTruthy()
+    expect(screen.getByText(/勾选你想让 Reshelve 重构的文件夹/)).toBeTruthy()
     expect(screen.queryByText(/挑一个预设/)).toBeNull()
     expect(screen.queryByRole('button', { name: '去配置模型' })).toBeNull()
     after.unmount()

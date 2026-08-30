@@ -47,10 +47,10 @@ export function Shell({ children, organizeContent }: { children: ReactNode; orga
   return (
     <div className="flex h-screen flex-col bg-white text-neutral-800">
       <header className={settingsOpen ? 'border-b border-index-line' : ''}>
-        {/* Chrome 侧栏顶部已经显示了图标和「TidyMark」，这里再写一遍是重复，还白占一行高度。
+        {/* Chrome 侧栏顶部已经显示了图标和「Reshelve」，这里再写一遍是重复，还白占一行高度。
             但那个标题栏属于浏览器界面、不在本文档里，读屏用户在文档中导航时找不到它，
             所以只是视觉隐藏而非删除——保证这个页面至少还有一个 h1。 */}
-        <h1 className="sr-only">TidyMark</h1>
+        <h1 className="sr-only">Reshelve</h1>
         {/* 模式切换占满这一行、齿轮贴在索引栏右边。不要 justify-between：
             Chrome 顶栏已经是「左身份、右按钮」，再做一遍就是两条叠着的工具栏。
             齿轮仍跟模式同一行——单独占一行的话，清理模式下那行只剩一个 16px 图标。 */}

@@ -70,7 +70,7 @@ describe('ExportPanel', () => {
     expect(downloadJson).toHaveBeenCalledTimes(1)
     // tsconfig 开了 noUncheckedIndexedAccess，下标访问要显式断言非空
     const [filename, data] = vi.mocked(downloadJson).mock.calls[0]!
-    expect(filename).toMatch(/^tidymark-tree-\d{4}-\d{2}-\d{2}\.json$/)
+    expect(filename).toMatch(/^reshelve-tree-\d{4}-\d{2}-\d{2}\.json$/)
     expect(data).toMatchObject({
       format: 'tidymark/v1',
       kind: 'tree',
@@ -90,7 +90,7 @@ describe('ExportPanel', () => {
 
     expect(downloadJson).toHaveBeenCalledTimes(1)
     const [filename, data] = vi.mocked(downloadJson).mock.calls[0]!
-    expect(filename).toMatch(/^tidymark-links-\d{4}-\d{2}-\d{2}\.json$/)
+    expect(filename).toMatch(/^reshelve-links-\d{4}-\d{2}-\d{2}\.json$/)
     expect(data).toMatchObject({
       format: 'tidymark/v1',
       kind: 'links',
@@ -120,7 +120,7 @@ describe('ExportPanel', () => {
 
     await waitFor(() => expect(downloadText).toHaveBeenCalledTimes(1))
     const [filename, text, mime] = vi.mocked(downloadText).mock.calls[0]!
-    expect(filename).toMatch(/^tidymark-html-\d{4}-\d{2}-\d{2}\.html$/)
+    expect(filename).toMatch(/^reshelve-html-\d{4}-\d{2}-\d{2}\.html$/)
     expect(mime).toContain('text/html')
     expect(text).toContain('<!DOCTYPE NETSCAPE-Bookmark-file-1>')
     expect(text).toContain('<DT><A HREF="https://figma.com" ICON="data:image/png;base64,AAAA">Figma</A>')

@@ -283,7 +283,7 @@ describe('一次只放一轮长任务', () => {
 describe('没报身份的老侧栏', () => {
   it('裸连接名与不带 clientId 的消息落在同一个匿名槽里，仍然收得到进度', () => {
     const legacy = fakePort('')
-    legacy.name = 'tidymark:progress'
+    legacy.name = 'reshelve:progress'
     onConnect(legacy)
 
     send({ kind: 'analyze', scopeRootIds: ['1'] } as IncomingMessage)

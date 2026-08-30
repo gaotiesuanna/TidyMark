@@ -21,7 +21,7 @@ const CONCURRENCY = 12
  * 所以先拿一个不可能存在的域名探一次，把兜底图标的内容记下来当指纹排除掉。
  * .invalid 是 RFC 2606 保留的顶级域，永远不会被解析，也就永远不可能有真图标。
  */
-const PROBE_URL = 'https://tidymark-favicon-probe.invalid/'
+const PROBE_URL = 'https://reshelve-favicon-probe.invalid/'
 
 /** 侧栏里直接当 <img src> 用：走同一条本地 _favicon/ 端点，不发外网。 */
 export function faviconSrc(pageUrl: string, size = SIZE): string {

@@ -1,6 +1,9 @@
 import { findScopeRoots, scanTree } from '@/core/scan'
 import type { Ports } from '@/core/ports'
 
+// 前缀停在 tidymark 不是漏改，理由比 settings 那两个还硬：这里存的是「改动前的书签树」，
+// 是一键撤销唯一的依据。用户整理完还没撤销就赶上更新，改了前缀就再也找不回这份快照——
+// 一个主打「所有修改可撤销」的扩展，把撤销弄丢是最糟的一种回归。
 export const SNAPSHOT_KEY = 'tidymark:snapshot'
 
 export interface SnapshotNode {

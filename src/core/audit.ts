@@ -38,7 +38,7 @@ function baseKey(title: string): string {
 /**
  * 重排某个父目录下**本批新建**子目录的编号。
  *
- * 父目录已有的、用户自己的子目录不参与：编号是 TidyMark 给自己建的目录加的，
+ * 父目录已有的、用户自己的子目录不参与：编号是 Reshelve 给自己建的目录加的，
  * 拿它去改用户的目录名等于顺手重命名他没让我们碰的东西。
  */
 function renumberChildren(

@@ -33,7 +33,7 @@ describe('TransferStep', () => {
     expect(screen.getByRole('button', { name: '导出' })).toBeDefined()
     expect(screen.getByRole('button', { name: '导入' })).toBeDefined()
     expect(screen.queryByRole('button', { name: /扫描选中的/ })).toBeNull()
-    expect(screen.queryByText(/勾选你想让 TidyMark 重构的文件夹/)).toBeNull()
+    expect(screen.queryByText(/勾选你想让 Reshelve 重构的文件夹/)).toBeNull()
   })
 
   it('默认展开导出格式', () => {

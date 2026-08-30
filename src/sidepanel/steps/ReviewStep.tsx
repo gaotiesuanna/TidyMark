@@ -149,7 +149,7 @@ export function ReviewStep() {
   function exportPlan(): void {
     const at = new Date()
     const endpoints = settings.endpoints.map(({ apiKey: _apiKey, ...rest }) => rest)
-    downloadJson(`tidymark-plan-${localDate(at)}.json`, {
+    downloadJson(`reshelve-plan-${localDate(at)}.json`, {
       exportedAt: at.toISOString(),
       settings: { ...settings, endpoints },
       accepted: [...accepted],
