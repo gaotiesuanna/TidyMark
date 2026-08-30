@@ -835,6 +835,9 @@
   "prefsModeRebuildSummary": {
     "message": "The whole folder tree is redesigned, and your existing top-level folders are renamed with a number prefix. One click undoes everything."
   },
+  "prefsOptionsTitle": {
+    "message": "Run options"
+  },
   "prefsCleanSummary": {
     "message": "Deletes folders in scope that hold no bookmarks. Merging several folders is an exception: the source folders are always cleaned up regardless of this switch, and undo still restores them."
   },

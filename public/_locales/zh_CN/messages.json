@@ -835,6 +835,9 @@
   "prefsModeRebuildSummary": {
     "message": "会重新设计整棵目录树，你现有的一级文件夹会被改名、加上编号前缀。整理可一键撤销。"
   },
+  "prefsOptionsTitle": {
+    "message": "整理选项"
+  },
   "prefsCleanSummary": {
     "message": "删除范围内不含任何书签的文件夹。合并多个文件夹时例外：源文件夹一律清理，不受本开关约束，撤销同样会还原。"
   },

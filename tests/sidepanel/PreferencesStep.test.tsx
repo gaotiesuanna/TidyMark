@@ -98,10 +98,12 @@ describe('PreferencesStep 清理空文件夹的说明', () => {
   async function openCleanDetail(): Promise<HTMLElement> {
     setup(messyScan)
     render(<PreferencesStep />)
-    const label = screen.getByText('整理后清理空文件夹').closest('label')
-    if (label === null) throw new Error('找不到清理空文件夹那一行')
-    await userEvent.click(within(label).getByRole('button', { name: '说明' }))
-    return within(label).getByText(/删除范围内不含任何书签的文件夹/)
+    // 查这张卡而不是 label：说明已经从 label 里搬出来，成了卡片里勾选行下面的一行
+    // （dl 套在 label 里是无效 HTML，两条边框还会和卡片的行间线叠成双线）。
+    const card = screen.getByTestId('prefs-clean-option')
+    expect(within(card).getByText('整理后清理空文件夹')).toBeTruthy()
+    await userEvent.click(within(card).getByRole('button', { name: '说明' }))
+    return within(card).getByText(/删除范围内不含任何书签的文件夹/)
   }
 
   it('交代合并时源文件夹会被删除，且不受这个开关约束', async () => {
@@ -118,6 +120,22 @@ describe('PreferencesStep 清理空文件夹的说明', () => {
     const exception = body.slice(body.indexOf('合并'))
     expect(exception).toMatch(/删除|清理/)
     expect(exception).toMatch(/撤销/)
+  })
+
+  /**
+   * 清不清空文件夹是一条偏好，跟这轮动哪些目录无关。挂在「当前范围」标题底下时，
+   * 那个标题就在替它说话——说它是范围的一部分。所以它自己占一格。
+   */
+  it('自己占一格，不挂在「当前范围」底下', () => {
+    setup(messyScan)
+    render(<PreferencesStep />)
+    expect(screen.getByText('整理选项')).toBeTruthy()
+    expect(
+      within(screen.getByTestId('preferences-section')).queryByText('整理后清理空文件夹'),
+    ).toBeNull()
+    // 上面那条 queryBy 为 null 单独看是可疑的——它绿着，分不清是真的搬走了还是查错了
+    // 地方。配上这条：东西确实还在页面上，只是不在「当前范围」那一格里。
+    expect(screen.getByTestId('prefs-clean-option').textContent).toMatch('整理后清理空文件夹')
   })
 })
 
