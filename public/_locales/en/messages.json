@@ -127,6 +127,21 @@
   "dashVisitGroupUnnamed": {
     "message": "Similar addresses"
   },
+  "dashWindowLabel": {
+    "message": "Time range"
+  },
+  "dashWindowAll": {
+    "message": "All time"
+  },
+  "dashWindow1y": {
+    "message": "Past year"
+  },
+  "dashWindow6m": {
+    "message": "Past 6 months"
+  },
+  "dashWindow3m": {
+    "message": "Past 3 months"
+  },
   "transferIntro": {
     "message": "Search bookmarks, select folders to export, or import a file someone shared. This does not change your existing folder structure."
   },

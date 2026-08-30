@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { t } from '@/i18n'
 import {
   bookmarkUrls,
@@ -16,6 +16,7 @@ import {
 import type { BookmarkNode } from '@/core/ports'
 import { sanitizeUrl } from '@/core/sanitize'
 import { faviconSrc } from '../lib/favicons'
+import { VISIT_WINDOWS, type VisitWindow } from '@/core/visitWindow'
 import { ensureHistoryPermission, hasHistoryPermission, visitUrls } from '../lib/visits'
 import { BookmarkIcon, ChevronDownIcon, FolderIcon, LinkIcon, TrendingUpIcon } from '../components/icons'
 import { useStore } from '../store'
@@ -47,6 +48,22 @@ const countInput = [
   'focus-visible:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400',
 ].join(' ')
 
+const rangeBase = [
+  'inline-flex h-6 cursor-pointer items-center rounded-full px-2.5',
+  'text-xs leading-caption font-medium',
+  'transition-colors duration-150 motion-reduce:transition-none',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400',
+].join(' ')
+const rangeOn = `${rangeBase} bg-blue-50 text-blue-600`
+const rangeOff = `${rangeBase} text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800`
+
+const WINDOW_LABEL = {
+  all: 'dashWindowAll',
+  '1y': 'dashWindow1y',
+  '6m': 'dashWindow6m',
+  '3m': 'dashWindow3m',
+} as const
+
 /** 域名活跃度那排小圆点的格数。 */
 const METER_SEGMENTS = 7
 
@@ -67,7 +84,12 @@ export function DashboardStep() {
   const topN = clampTopDomainCount(settings.topDomainCount)
   const [metric, setMetric] = useState<Metric>('bookmarked')
   const [visits, setVisits] = useState<VisitState>({ kind: 'idle' })
+  const [range, setRange] = useState<VisitWindow>('all')
   const [draft, setDraft] = useState<string | null>(null)
+  /** 每个时间窗查过一次就留着——限了窗的那几次要逐条问 getVisits，不便宜。 */
+  const cache = useRef(new Map<VisitWindow, WeightedUrl[]>())
+  /** 换窗比上一次查得快时，丢掉迟到的那份结果。 */
+  const latest = useRef(0)
 
   const bookmarked = useMemo(
     () => rankDomains(bookmarkUrls(tree), topN),
@@ -83,8 +105,7 @@ export function DashboardStep() {
       setVisits({ kind: 'need' })
       return
     }
-    const items = await visitUrls()
-    setVisits(items.length === 0 ? { kind: 'empty' } : { kind: 'ready', items })
+    await loadVisits(range)
   }
 
   async function allowHistory() {
@@ -92,12 +113,27 @@ export function DashboardStep() {
       setVisits({ kind: 'denied' })
       return
     }
-    await loadVisits()
+    await loadVisits(range)
   }
 
-  async function loadVisits() {
+  function selectRange(next: VisitWindow) {
+    if (next === range) return
+    setRange(next)
+    void loadVisits(next)
+  }
+
+  async function loadVisits(next: VisitWindow) {
+    const cached = cache.current.get(next)
+    if (cached !== undefined) {
+      setVisits(cached.length === 0 ? { kind: 'empty' } : { kind: 'ready', items: cached })
+      return
+    }
+    latest.current += 1
+    const ticket = latest.current
     setVisits({ kind: 'loading' })
-    const items = await visitUrls()
+    const items = await visitUrls(next)
+    cache.current.set(next, items)
+    if (ticket !== latest.current) return
     setVisits(items.length === 0 ? { kind: 'empty' } : { kind: 'ready', items })
   }
 
@@ -155,6 +191,28 @@ export function DashboardStep() {
           </button>
         </div>
       </header>
+      {/* 没授权、被拒的那几种状态下没有数可换，摆出来只会让人点空。 */}
+      {metric === 'visited'
+        && (visits.kind === 'ready' || visits.kind === 'empty' || visits.kind === 'loading') && (
+        <div
+          role="tablist"
+          aria-label={t('dashWindowLabel')}
+          className="mb-3 flex flex-wrap gap-1"
+        >
+          {VISIT_WINDOWS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              role="tab"
+              aria-selected={range === option}
+              className={range === option ? rangeOn : rangeOff}
+              onClick={() => selectRange(option)}
+            >
+              {t(WINDOW_LABEL[option])}
+            </button>
+          ))}
+        </div>
+      )}
       {metric === 'bookmarked' ? (
         bookmarked.length === 0
           ? <EmptyLine text={t('dashEmptyBookmarks')} />

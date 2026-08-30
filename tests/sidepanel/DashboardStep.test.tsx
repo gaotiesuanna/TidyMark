@@ -14,7 +14,10 @@ const originalHistory = chromeGlobal.chrome.history
 
 const contains = vi.fn(() => Promise.resolve(false))
 const request = vi.fn(() => Promise.resolve(false))
-const search = vi.fn(() => Promise.resolve([] as Array<{ url?: string; title?: string; visitCount?: number }>))
+const search = vi.fn((_query?: { startTime?: number }) =>
+  Promise.resolve([] as Array<{ url?: string; title?: string; visitCount?: number }>))
+const getVisits = vi.fn((_query: { url: string }) =>
+  Promise.resolve([] as Array<{ visitTime?: number }>))
 
 const tree: BookmarkNode[] = [
   { id: '0', title: '', children: [
@@ -32,6 +35,8 @@ beforeEach(() => {
   contains.mockReset()
   request.mockReset()
   search.mockReset()
+  getVisits.mockReset()
+  getVisits.mockResolvedValue([])
   contains.mockResolvedValue(false)
   request.mockResolvedValue(false)
   search.mockResolvedValue([])
@@ -39,7 +44,7 @@ beforeEach(() => {
     getURL: (path: string) => `chrome-extension://fakeid${path}`,
   }
   chromeGlobal.chrome.permissions = { contains, request }
-  chromeGlobal.chrome.history = { search }
+  chromeGlobal.chrome.history = { search, getVisits }
   useStore.setState({
     tree,
     busy: null,
@@ -580,6 +585,60 @@ describe('DashboardStep', () => {
 
     // 域名行一次、夹名一次，页面行不再各来一遍
     expect(screen.getAllByText('墨析 · 小说拆解工作台')).toHaveLength(2)
+  })
+
+  it('时间窗只在「访问」那一格出现', async () => {
+    const user = userEvent.setup()
+    contains.mockResolvedValue(true)
+    render(<DashboardStep />)
+    expect(screen.queryByRole('tablist', { name: t('dashWindowLabel') })).toBeNull()
+
+    await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
+    expect(screen.getByRole('tablist', { name: t('dashWindowLabel') })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: t('dashWindowAll') }).getAttribute('aria-selected'))
+      .toBe('true')
+  })
+
+  it('还没授权浏览记录时不摆时间窗——点了也没数可查', async () => {
+    const user = userEvent.setup()
+    contains.mockResolvedValue(false)
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
+
+    expect(await screen.findByRole('button', { name: t('dashHistoryAllow') })).toBeTruthy()
+    expect(screen.queryByRole('tablist', { name: t('dashWindowLabel') })).toBeNull()
+  })
+
+  it('选了近三个月就按窗内次数重排，切回去用缓存不再查一遍', async () => {
+    const user = userEvent.setup()
+    contains.mockResolvedValue(true)
+    // 旧账：github 历史总数 500，但近三个月只碰过一次；kimi 反过来
+    search.mockResolvedValue([
+      { url: 'https://github.com/a', title: 'A', visitCount: 500 },
+      { url: 'https://kimi.com/b', title: 'B', visitCount: 30 },
+    ])
+    getVisits.mockImplementation((query) =>
+      Promise.resolve(query.url.includes('github')
+        ? [{ visitTime: Date.now() - 86400000 }]
+        : Array.from({ length: 25 }, () => ({ visitTime: Date.now() - 86400000 }))),
+    )
+
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
+    expect(await screen.findByText('github.com')).toBeTruthy()
+
+    await user.click(screen.getByRole('tab', { name: t('dashWindow3m') }))
+    // 近三个月里 kimi 才是常客
+    expect(await screen.findByText('25')).toBeTruthy()
+    expect(screen.getByText('1')).toBeTruthy()
+    expect(screen.queryByText('500')).toBeNull()
+
+    const calls = search.mock.calls.length
+    await user.click(screen.getByRole('tab', { name: t('dashWindowAll') }))
+    expect(await screen.findByText('500')).toBeTruthy()
+    await user.click(screen.getByRole('tab', { name: t('dashWindow3m') }))
+    expect(await screen.findByText('25')).toBeTruthy()
+    expect(search.mock.calls.length).toBe(calls)
   })
 
   it('空的那段没有收起按钮', async () => {
