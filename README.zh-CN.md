@@ -53,7 +53,7 @@ TidyMark 没有服务器。你把它指向你自己的接口：
 ```bash
 npm install
 npm run build     # 先类型检查，再构建到 dist/
-npm test          # 86 个文件、1677 个测试
+npm test          # 1700+ 个单元测试，不联网
 npm run dev       # 带 HMR 的开发服务器
 ```
 
