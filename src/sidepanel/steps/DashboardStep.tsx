@@ -613,9 +613,7 @@ function FolderNode({
         <FolderIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
       )}
       <span className="min-w-0 flex-1 truncate text-sm text-neutral-500" title={node.title}>
-        {grouped
-          ? node.title.trim() || node.pageTitle?.trim() || t('dashVisitGroupUnnamed')
-          : node.title}
+        {grouped ? node.title.trim() || t('dashVisitGroupUnnamed') : node.title}
       </span>
       {grouped && (
         <span className="shrink-0 text-xs leading-caption tabular-nums text-neutral-400">
@@ -646,7 +644,7 @@ function FolderNode({
       )}
       {node.bookmarks.length > 0 && (!expandable || open) && (
         <ul className="mt-1 space-y-1 pl-5">
-          <FolderBookmarks bookmarks={node.bookmarks} />
+          <FolderBookmarks bookmarks={node.bookmarks} folderTitle={node.title} />
         </ul>
       )}
       {expandable && open && (
@@ -656,11 +654,20 @@ function FolderNode({
   )
 }
 
-function FolderBookmarks({ bookmarks }: { bookmarks: DomainFolderNode['bookmarks'] }) {
+function FolderBookmarks({
+  bookmarks,
+  folderTitle,
+}: {
+  bookmarks: DomainFolderNode['bookmarks']
+  /** 所在文件夹的名字。页面标题和它一样时只留地址——夹名已经说过一遍了。 */
+  folderTitle?: string
+}) {
   return (
     <>
       {bookmarks.map((bookmark) => {
         const address = shortAddress(bookmark.url)
+        const title = bookmark.title.trim()
+        const named = title !== '' && title !== folderTitle
         return (
           <li key={bookmark.id} className="flex min-w-0 items-start gap-2">
             <LinkIcon className="mt-0.5 h-3 w-3 shrink-0 text-neutral-300" />
@@ -670,10 +677,17 @@ function FolderBookmarks({ bookmarks }: { bookmarks: DomainFolderNode['bookmarks
               rel="noreferrer"
               className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
             >
-              <span className="block break-words text-sm leading-caption text-neutral-700">
-                {bookmark.title.trim() || address}
-              </span>
-              <span className="mt-0.5 block break-all text-xs leading-caption text-neutral-400">
+              {named && (
+                <span className="block break-words text-sm leading-caption text-neutral-700">
+                  {title}
+                </span>
+              )}
+              <span
+                className={[
+                  'block break-all leading-caption',
+                  named ? 'mt-0.5 text-xs text-neutral-400' : 'text-sm text-neutral-700',
+                ].join(' ')}
+              >
                 {address}
               </span>
             </a>

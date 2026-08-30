@@ -382,11 +382,11 @@ describe('visitFolderTree', () => {
 describe('visitFolderTree 单页目录', () => {
   it('路径段底下只有一个页面、再没别的分支时标成 pageOnly', () => {
     const tree = visitFolderTree([
-      { url: 'https://192.168.5.39/task', title: 'PalClaw', weight: 741 },
-      { url: 'https://192.168.5.39/', title: 'PalClaw', weight: 343 },
-      { url: 'https://192.168.5.39/mailbox', title: 'PalClaw', weight: 1 },
-      { url: 'https://192.168.5.39/mailbox/inbox', title: 'PalClaw', weight: 124 },
-      { url: 'https://192.168.5.39/mailbox/all', title: 'PalClaw', weight: 24 },
+      { url: 'https://192.168.5.39/task', title: '任务', weight: 741 },
+      { url: 'https://192.168.5.39/', title: '首页', weight: 343 },
+      { url: 'https://192.168.5.39/mailbox', title: '信箱', weight: 1 },
+      { url: 'https://192.168.5.39/mailbox/inbox', title: '收件', weight: 124 },
+      { url: 'https://192.168.5.39/mailbox/all', title: '全部', weight: 24 },
     ], '192.168.5.39')
 
     const task = tree.find((node) => node.title === 'task')
@@ -534,10 +534,11 @@ describe('visitSplitTree', () => {
 })
 
 describe('visitFolderTree 同形 ID 段合并', () => {
-  const palclaw = (path: string, weight: number, title = 'PalClaw 7x24 AI专属顾问') =>
+  // 标题跟着路径走：同标题会先被收夹，这一组测的是编号段本身
+  const palclaw = (path: string, weight: number, title = `PalClaw ${path}`) =>
     ({ url: `https://192.168.5.39${path}`, title, weight })
 
-  it('同层三个以上的 ID 段并成一行，次数求和、标题取共有那个', () => {
+  it('同层三个以上的 ID 段并成一行，次数求和', () => {
     const tree = visitFolderTree([
       palclaw('/tasks/019fb349-e6f2-7407-a254-1919171a8d4a', 9),
       palclaw('/tasks/c69350df521240909ec967c712200cfa', 8),
@@ -549,15 +550,14 @@ describe('visitFolderTree 同形 ID 段合并', () => {
       {
         id: 'tasks/*',
         title: 'tasks',
-        pageTitle: 'PalClaw 7x24 AI专属顾问',
         grouped: true,
         count: 24,
         directCount: 3,
         children: [],
         bookmarks: [
-          { id: 'https://192.168.5.39/tasks/019fb349-e6f2-7407-a254-1919171a8d4a', title: 'PalClaw 7x24 AI专属顾问', url: 'https://192.168.5.39/tasks/019fb349-e6f2-7407-a254-1919171a8d4a', weight: 9 },
-          { id: 'https://192.168.5.39/tasks/c69350df521240909ec967c712200cfa', title: 'PalClaw 7x24 AI专属顾问', url: 'https://192.168.5.39/tasks/c69350df521240909ec967c712200cfa', weight: 8 },
-          { id: 'https://192.168.5.39/tasks/bd8c838b055c45dc984b0f28bef6684b', title: 'PalClaw 7x24 AI专属顾问', url: 'https://192.168.5.39/tasks/bd8c838b055c45dc984b0f28bef6684b', weight: 7 },
+          { id: 'https://192.168.5.39/tasks/019fb349-e6f2-7407-a254-1919171a8d4a', title: 'PalClaw /tasks/019fb349-e6f2-7407-a254-1919171a8d4a', url: 'https://192.168.5.39/tasks/019fb349-e6f2-7407-a254-1919171a8d4a', weight: 9 },
+          { id: 'https://192.168.5.39/tasks/c69350df521240909ec967c712200cfa', title: 'PalClaw /tasks/c69350df521240909ec967c712200cfa', url: 'https://192.168.5.39/tasks/c69350df521240909ec967c712200cfa', weight: 8 },
+          { id: 'https://192.168.5.39/tasks/bd8c838b055c45dc984b0f28bef6684b', title: 'PalClaw /tasks/bd8c838b055c45dc984b0f28bef6684b', url: 'https://192.168.5.39/tasks/bd8c838b055c45dc984b0f28bef6684b', weight: 7 },
         ],
       },
     ])
@@ -586,7 +586,7 @@ describe('visitFolderTree 同形 ID 段合并', () => {
     ])
   })
 
-  it('读得懂的路径段不被卷进合并行，哪怕标题一模一样', () => {
+  it('读得懂的路径段不被卷进合并行', () => {
     const tree = visitFolderTree([
       palclaw('/disease-ops/catalog', 118),
       palclaw('/disease-ops/cerebrovascular', 26),
@@ -604,14 +604,13 @@ describe('visitFolderTree 同形 ID 段合并', () => {
 
     // tasks 底下还有 new，合并行没被并进父段，自己一行、没有段名
     const tasks = tree.find((node) => node.title === 'tasks')
-    expect(tasks?.children.map((node) => [node.title, node.pageTitle, node.count, node.grouped]))
-      .toEqual([
-        ['', 'PalClaw 7x24 AI专属顾问', 24, true],
-        ['new', undefined, 5, undefined],
-      ])
+    expect(tasks?.children.map((node) => [node.title, node.count, node.grouped])).toEqual([
+      ['', 24, true],
+      ['new', 5, undefined],
+    ])
   })
 
-  it('标题各不相同时合并行连页面标题也报不出，交给界面拿占位符顶上', () => {
+  it('合并行没有段名，交给界面拿占位符顶上', () => {
     const tree = visitFolderTree([
       palclaw('/tasks/019fb349-e6f2-7407-a254-1919171a8d4a', 9, '任务甲'),
       palclaw('/tasks/c69350df521240909ec967c712200cfa', 8, '任务乙'),
@@ -620,15 +619,15 @@ describe('visitFolderTree 同形 ID 段合并', () => {
     ], '192.168.5.39')
 
     const tasks = tree.find((node) => node.title === 'tasks')
-    expect(tasks?.children.map((node) => [node.title, node.pageTitle, node.grouped]))
-      .toEqual([['', undefined, true], ['new', undefined, undefined]])
+    expect(tasks?.children.map((node) => [node.title, node.grouped]))
+      .toEqual([['', true], ['new', undefined]])
   })
 
   it('一位两位的纯数字段也是编号，够三个就并', () => {
     const tree = visitFolderTree([
-      { url: 'http://localhost/analysis/library/3', title: '墨析', weight: 193 },
-      { url: 'http://localhost/analysis/library/6', title: '墨析', weight: 167 },
-      { url: 'http://localhost/analysis/library/2', title: '墨析', weight: 141 },
+      { url: 'http://localhost/analysis/library/3', title: '第三本', weight: 193 },
+      { url: 'http://localhost/analysis/library/6', title: '第六本', weight: 167 },
+      { url: 'http://localhost/analysis/library/2', title: '第二本', weight: 141 },
     ], 'localhost')
 
     expect(tree.map((node) => [node.id, node.title, node.count, node.directCount])).toEqual([
@@ -638,12 +637,12 @@ describe('visitFolderTree 同形 ID 段合并', () => {
 
   it('底下还有分支的 ID 段照并，子树按段名合起来、次数求和', () => {
     const tree = visitFolderTree([
-      { url: 'http://localhost/library/5', title: '墨析', weight: 300 },
-      { url: 'http://localhost/library/5/read', title: '墨析', weight: 215 },
-      { url: 'http://localhost/library/1', title: '墨析', weight: 154 },
-      { url: 'http://localhost/library/1/read', title: '墨析', weight: 100 },
-      { url: 'http://localhost/library/4', title: '墨析', weight: 10 },
-      { url: 'http://localhost/library/4/read', title: '墨析', weight: 5 },
+      { url: 'http://localhost/library/5', title: '第五本', weight: 300 },
+      { url: 'http://localhost/library/5/read', title: '读第五本', weight: 215 },
+      { url: 'http://localhost/library/1', title: '第一本', weight: 154 },
+      { url: 'http://localhost/library/1/read', title: '读第一本', weight: 100 },
+      { url: 'http://localhost/library/4', title: '第四本', weight: 10 },
+      { url: 'http://localhost/library/4/read', title: '读第四本', weight: 5 },
     ], 'localhost')
 
     expect(tree).toHaveLength(1)
@@ -662,9 +661,9 @@ describe('visitFolderTree 同形 ID 段合并', () => {
 
   it('编号段不被过道折叠拼进子段名里——拼完就不像编号，会躲过聚合', () => {
     const tree = visitFolderTree([
-      { url: 'http://localhost/settings/019fb349-e6f2-7407-a254-1919171a8d4a/edit', title: '墨析', weight: 40 },
-      { url: 'http://localhost/settings/c69350df521240909ec967c712200cfa/edit', title: '墨析', weight: 30 },
-      { url: 'http://localhost/settings/bd8c838b055c45dc984b0f28bef6684b/edit', title: '墨析', weight: 20 },
+      { url: 'http://localhost/settings/019fb349-e6f2-7407-a254-1919171a8d4a/edit', title: '改甲', weight: 40 },
+      { url: 'http://localhost/settings/c69350df521240909ec967c712200cfa/edit', title: '改乙', weight: 30 },
+      { url: 'http://localhost/settings/bd8c838b055c45dc984b0f28bef6684b/edit', title: '改丙', weight: 20 },
     ], 'localhost')
 
     expect(tree).toHaveLength(1)
@@ -676,9 +675,9 @@ describe('visitFolderTree 同形 ID 段合并', () => {
 
   it('父段自己没有页面、底下只剩一个合并行时并成一行，留父段的名字', () => {
     const tree = visitFolderTree([
-      { url: 'http://localhost:5629/works/019fb349-e6f2-7407-a254-1919171a8d4a', title: '墨析', weight: 100 },
-      { url: 'http://localhost:5629/works/c69350df521240909ec967c712200cfa', title: '墨析', weight: 56 },
-      { url: 'http://localhost:5629/works/bd8c838b055c45dc984b0f28bef6684b', title: '墨析', weight: 30 },
+      { url: 'http://localhost:5629/works/019fb349-e6f2-7407-a254-1919171a8d4a', title: '作品甲', weight: 100 },
+      { url: 'http://localhost:5629/works/c69350df521240909ec967c712200cfa', title: '作品乙', weight: 56 },
+      { url: 'http://localhost:5629/works/bd8c838b055c45dc984b0f28bef6684b', title: '作品丙', weight: 30 },
     ], 'localhost:5629')
 
     // 从前是 works 186 一行、合并行 186 又一行，同一个数字印两遍
@@ -689,9 +688,9 @@ describe('visitFolderTree 同形 ID 段合并', () => {
 
   it('再往上还是过道就接成「甲 / 乙」，不把上一层的名字也吃掉', () => {
     const tree = visitFolderTree([
-      { url: 'http://localhost:5629/analysis/library/3', title: '墨析', weight: 193 },
-      { url: 'http://localhost:5629/analysis/library/6', title: '墨析', weight: 167 },
-      { url: 'http://localhost:5629/analysis/library/2', title: '墨析', weight: 141 },
+      { url: 'http://localhost:5629/analysis/library/3', title: '第三本', weight: 193 },
+      { url: 'http://localhost:5629/analysis/library/6', title: '第六本', weight: 167 },
+      { url: 'http://localhost:5629/analysis/library/2', title: '第二本', weight: 141 },
     ], 'localhost:5629')
 
     expect(tree.map((node) => [node.title, node.grouped, node.count])).toEqual([
@@ -701,10 +700,10 @@ describe('visitFolderTree 同形 ID 段合并', () => {
 
   it('父段自己有页面时两行照旧——它们本来就是两个东西', () => {
     const tree = visitFolderTree([
-      { url: 'http://localhost:5629/library', title: '墨析', weight: 502 },
-      { url: 'http://localhost:5629/library/3', title: '墨析', weight: 193 },
-      { url: 'http://localhost:5629/library/6', title: '墨析', weight: 167 },
-      { url: 'http://localhost:5629/library/2', title: '墨析', weight: 141 },
+      { url: 'http://localhost:5629/library', title: '书库', weight: 502 },
+      { url: 'http://localhost:5629/library/3', title: '第三本', weight: 193 },
+      { url: 'http://localhost:5629/library/6', title: '第六本', weight: 167 },
+      { url: 'http://localhost:5629/library/2', title: '第二本', weight: 141 },
     ], 'localhost:5629')
 
     expect(tree.map((node) => [node.title, node.count])).toEqual([['library', 1003]])
@@ -750,8 +749,8 @@ describe('看板按来源聚合，端口算身份', () => {
 
   it('visitFolderTree 只收本端口的页面，两套路由不再叠在一起', () => {
     const tree = visitFolderTree([
-      { url: 'http://localhost:5173/settings', title: '墨析', weight: 151 },
-      { url: 'http://localhost:5173/settings/tasks', title: '墨析', weight: 210 },
+      { url: 'http://localhost:5173/settings', title: '设置', weight: 151 },
+      { url: 'http://localhost:5173/settings/tasks', title: '任务', weight: 210 },
       { url: 'http://localhost:8501/settings/license', title: '授权管理', weight: 4 },
     ], 'localhost:5173')
 
@@ -865,5 +864,80 @@ describe('bookmarkUrls 带上标题', () => {
       { url: 'http://localhost:8501/settings/config', title: '配置管理 – TradingAgents-CN' },
     ])
     expect(rankDomains(bookmarkUrls(tree))[0]?.siteName).toBe('TradingAgents-CN')
+  })
+})
+
+describe('visitFolderTree 同标题并成一个文件夹', () => {
+  const mo = '墨析 · 小说拆解工作台'
+  const p = (path: string, weight: number, title = mo) =>
+    ({ url: `http://localhost:5629${path}`, title, weight })
+
+  it('标题相同的页面收进一个以标题命名的文件夹，路径层级不再出现', () => {
+    const tree = visitFolderTree([
+      p('/analysis/library', 502),
+      p('/settings/tasks', 210),
+      p('/home', 242),
+      p('/', 213),
+    ], 'localhost:5629')
+
+    expect(tree).toHaveLength(1)
+    expect([tree[0]?.title, tree[0]?.grouped, tree[0]?.count, tree[0]?.directCount])
+      .toEqual([mo, true, 1167, 4])
+    expect(tree[0]?.children).toEqual([])
+    // 夹里按访问次数降序，地址原样
+    expect(tree[0]?.bookmarks.map((b) => [b.url, b.weight])).toEqual([
+      ['http://localhost:5629/analysis/library', 502],
+      ['http://localhost:5629/home', 242],
+      ['http://localhost:5629/', 213],
+      ['http://localhost:5629/settings/tasks', 210],
+    ])
+  })
+
+  it('标题各不相同的域名照旧搭路径树', () => {
+    const tree = visitFolderTree([
+      p('/settings/license', 4, '授权管理 – TradingAgents-CN'),
+      p('/settings/config', 2, '配置管理 – TradingAgents-CN'),
+      p('/analysis/single', 13, '研究报告 – TradingAgents-CN'),
+    ], 'localhost:5629')
+
+    expect(tree.map((node) => [node.title, node.count])).toEqual([
+      ['analysis / single', 13],
+      ['settings', 6],
+    ])
+  })
+
+  it('只有一个页面顶着这个标题就不成夹', () => {
+    const tree = visitFolderTree([
+      p('/home', 242),
+      p('/settings', 121, '设置'),
+    ], 'localhost:5629')
+
+    expect(tree.map((node) => [node.title, node.grouped])).toEqual([
+      ['home', undefined],
+      ['settings', undefined],
+    ])
+  })
+
+  it('一部分成夹，其余仍旧搭路径树', () => {
+    const tree = visitFolderTree([
+      p('/home', 242),
+      p('/settings', 121),
+      p('/analysis/single', 13, '研究报告'),
+    ], 'localhost:5629')
+
+    expect(tree.map((node) => [node.title, node.count, node.grouped])).toEqual([
+      [mo, 363, true],
+      ['analysis / single', 13, undefined],
+    ])
+  })
+
+  it('带 query 的同一个地址先合并，不算两个页面', () => {
+    const tree = visitFolderTree([
+      p('/home?tab=a', 40),
+      p('/home', 202),
+      p('/settings', 121),
+    ], 'localhost:5629')
+
+    expect([tree[0]?.directCount, tree[0]?.count]).toEqual([2, 363])
   })
 })

@@ -423,10 +423,10 @@ describe('DashboardStep', () => {
     const user = userEvent.setup()
     contains.mockResolvedValue(true)
     search.mockResolvedValue([
-      { url: 'https://192.168.5.39/tasks/019fb349-e6f2-7407-a254-1919171a8d4a', title: 'PalClaw 7x24', visitCount: 9 },
-      { url: 'https://192.168.5.39/tasks/c69350df521240909ec967c712200cfa', title: 'PalClaw 7x24', visitCount: 8 },
-      { url: 'https://192.168.5.39/tasks/bd8c838b055c45dc984b0f28bef6684b', title: 'PalClaw 7x24', visitCount: 7 },
-      { url: 'https://192.168.5.39/documents', title: 'PalClaw 7x24', visitCount: 190 },
+      { url: 'https://192.168.5.39/tasks/019fb349-e6f2-7407-a254-1919171a8d4a', title: '任务甲', visitCount: 9 },
+      { url: 'https://192.168.5.39/tasks/c69350df521240909ec967c712200cfa', title: '任务乙', visitCount: 8 },
+      { url: 'https://192.168.5.39/tasks/bd8c838b055c45dc984b0f28bef6684b', title: '任务丙', visitCount: 7 },
+      { url: 'https://192.168.5.39/documents', title: '文档', visitCount: 190 },
     ])
 
     render(<DashboardStep />)
@@ -473,8 +473,8 @@ describe('DashboardStep', () => {
     const user = userEvent.setup()
     contains.mockResolvedValue(true)
     search.mockResolvedValue([
-      { url: 'http://localhost:5173/settings', title: '墨析 · 小说拆解工作台', visitCount: 151 },
-      { url: 'http://localhost:5173/settings/tasks', title: '墨析 · 小说拆解工作台', visitCount: 210 },
+      { url: 'http://localhost:5173/settings', title: '设置', visitCount: 151 },
+      { url: 'http://localhost:5173/settings/tasks', title: '任务', visitCount: 210 },
       { url: 'http://localhost:8501/settings/license', title: '授权管理 – TradingAgents-CN', visitCount: 4 },
     ])
 
@@ -521,8 +521,8 @@ describe('DashboardStep', () => {
     const user = userEvent.setup()
     contains.mockResolvedValue(true)
     search.mockResolvedValue([
-      { url: 'http://localhost:5629/analysis/library', title: '墨析', visitCount: 502 },
-      { url: 'http://localhost:5629/analysis/upload', title: '墨析', visitCount: 62 },
+      { url: 'http://localhost:5629/analysis/library', title: '书库', visitCount: 502 },
+      { url: 'http://localhost:5629/analysis/upload', title: '上传', visitCount: 62 },
     ])
 
     render(<DashboardStep />)
@@ -536,6 +536,50 @@ describe('DashboardStep', () => {
 
     await user.click(analysis)
     expect(screen.getByText('localhost:5629/analysis/library')).toBeTruthy()
+  })
+
+  it('同标题的页面收成一夹，默认收起，点开是一串地址', async () => {
+    const user = userEvent.setup()
+    contains.mockResolvedValue(true)
+    search.mockResolvedValue([
+      { url: 'http://localhost:5629/analysis/library', title: '墨析 · 小说拆解工作台', visitCount: 502 },
+      { url: 'http://localhost:5629/settings/tasks', title: '墨析 · 小说拆解工作台', visitCount: 210 },
+      { url: 'http://localhost:5629/home', title: '墨析 · 小说拆解工作台', visitCount: 242 },
+    ])
+
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
+    expect(await screen.findByText('墨析 · 小说拆解工作台')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /localhost:5629/ }))
+
+    // analysis / settings 这些路径层一个都不出现
+    expect(screen.queryByText('analysis')).toBeNull()
+    expect(screen.queryByText('settings')).toBeNull()
+
+    const folder = screen.getByRole('button', { name: new RegExp(t('dashVisitGroupPages', '3')) })
+    expect(folder.getAttribute('aria-expanded')).toBe('false')
+
+    await user.click(folder)
+    expect(screen.getByText('localhost:5629/analysis/library')).toBeTruthy()
+    expect(screen.getByText('localhost:5629/settings/tasks')).toBeTruthy()
+    expect(screen.getByText('localhost:5629/home')).toBeTruthy()
+  })
+
+  it('夹里不把同一个标题再抄一遍，页面行只留地址', async () => {
+    const user = userEvent.setup()
+    contains.mockResolvedValue(true)
+    search.mockResolvedValue([
+      { url: 'http://localhost:5629/home', title: '墨析 · 小说拆解工作台', visitCount: 242 },
+      { url: 'http://localhost:5629/settings', title: '墨析 · 小说拆解工作台', visitCount: 121 },
+    ])
+
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
+    await user.click(await screen.findByRole('button', { name: /localhost:5629/ }))
+    await user.click(screen.getByRole('button', { name: new RegExp(t('dashVisitGroupPages', '2')) }))
+
+    // 域名行一次、夹名一次，页面行不再各来一遍
+    expect(screen.getAllByText('墨析 · 小说拆解工作台')).toHaveLength(2)
   })
 
   it('空的那段没有收起按钮', async () => {
@@ -559,10 +603,10 @@ describe('DashboardStep', () => {
     const user = userEvent.setup()
     contains.mockResolvedValue(true)
     search.mockResolvedValue([
-      { url: 'https://192.168.5.39/task', title: 'PalClaw', visitCount: 741 },
-      { url: 'https://192.168.5.39/', title: 'PalClaw', visitCount: 343 },
-      { url: 'https://192.168.5.39/mailbox', title: 'PalClaw', visitCount: 1 },
-      { url: 'https://192.168.5.39/mailbox/inbox', title: 'PalClaw', visitCount: 124 },
+      { url: 'https://192.168.5.39/task', title: '任务', visitCount: 741 },
+      { url: 'https://192.168.5.39/', title: '首页', visitCount: 343 },
+      { url: 'https://192.168.5.39/mailbox', title: '信箱', visitCount: 1 },
+      { url: 'https://192.168.5.39/mailbox/inbox', title: '收件', visitCount: 124 },
     ])
 
     render(<DashboardStep />)

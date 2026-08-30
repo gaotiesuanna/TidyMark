@@ -141,14 +141,13 @@ export interface DomainFolderNode {
    */
   pageOnly?: boolean
   /**
-   * 这一行是同层的 ID 段并出来的，自己不是路径上真有的一段：点开才露出被并起来的页面。
+   * 这一行是并出来的，不是路径上真有的一段：点开才露出被并起来的页面。
+   * 两种来路——同层的 ID 段并成一行，或者同一个来源里标题相同的页面收成一夹。
    *
    * 刚并出来时 title 是空的——它没有段名可用。父段要是自己没有页面、底下又只剩它一个，
    * 过道折叠会把父段的名字给它(`works`)，那之后它就有段名了，再往上按 `甲 / 乙` 正常接。
    */
   grouped?: true
-  /** 被并起来那批页面共有的标题。没有段名时界面拿它顶上，还是没有就用占位符。 */
-  pageTitle?: string
 }
 
 /**
@@ -299,13 +298,11 @@ function groupIdSiblings(parentId: string, children: DomainFolderNode[]): Domain
   const merged = new Set(ids)
   const id = `${parentId === '/' ? '' : parentId}/*`
   const bookmarks = sortPages(ids.flatMap((child) => child.bookmarks))
-  const titles = new Set(bookmarks.map((bookmark) => bookmark.title.trim()))
   return [
     ...children.filter((child) => !merged.has(child)),
     {
       id,
       title: '',
-      ...(titles.size === 1 ? { pageTitle: [...titles][0]! } : {}),
       grouped: true,
       count: ids.reduce((n, child) => n + child.count, 0),
       directCount: bookmarks.length,
@@ -322,12 +319,77 @@ interface MutableVisitFolder {
   children: Map<string, MutableVisitFolder>
 }
 
+/** 标题相同的页面至少这么多个才收成一夹；一个页面顶着一个标题，那就是它自己。 */
+const MIN_TITLE_PAGES = 2
+
 /**
- * 某域名的访问记录按 URL 路径搭成文件夹树，结构和 domainFolderTree 对齐：
+ * 标题相同的页面收成一夹，夹名就是那个标题。
+ *
+ * 路径能告诉你一个站怎么排路由，可它排得怎么样常常不是你关心的事——同一个应用的四十个页面
+ * 铺成三层目录，你要的其实只是「这个应用我用了多少」。标题一样就说明它们是同一个东西，
+ * 收进一夹、点开是一串地址，比让你一层层点下去有用。
+ *
+ * 收不进夹的(标题空着、或者顶着这个标题的只有它一个)退回去搭路径树。
+ */
+function foldByTitle(pages: DomainFolderNode['bookmarks']): {
+  folders: DomainFolderNode[]
+  rest: DomainFolderNode['bookmarks']
+} {
+  const byTitle = new Map<string, DomainFolderNode['bookmarks']>()
+  const rest: DomainFolderNode['bookmarks'] = []
+  for (const page of pages) {
+    const title = page.title.trim()
+    if (title === '') {
+      rest.push(page)
+      continue
+    }
+    const same = byTitle.get(title)
+    if (same === undefined) byTitle.set(title, [page])
+    else same.push(page)
+  }
+
+  const folders: DomainFolderNode[] = []
+  for (const [title, group] of byTitle) {
+    if (group.length < MIN_TITLE_PAGES) {
+      rest.push(...group)
+      continue
+    }
+    const bookmarks = sortPages(group)
+    folders.push({
+      id: `title:${title}`,
+      title,
+      grouped: true,
+      count: bookmarks.reduce((n, page) => n + (page.weight ?? 1), 0),
+      directCount: bookmarks.length,
+      children: [],
+      bookmarks,
+    })
+  }
+  return { folders, rest }
+}
+
+/**
+ * 某来源的访问记录搭成的树。
+ *
+ * 先按标题收夹(见 foldByTitle)，收不进夹的才按 URL 路径搭树，结构和 domainFolderTree 对齐：
  * 过道折叠、每层 count 降序。count 是访问次数之和。根路径 `/` 落在空标题节点，
  * 界面上不成行，只露出页面。
  */
 export function visitFolderTree(pages: readonly WeightedUrl[], domain: string): DomainFolderNode[] {
+  const mine: DomainFolderNode['bookmarks'] = []
+  for (const page of pages) {
+    const weight = page.weight ?? 1
+    if (weight <= 0) continue
+    const parsed = sanitizeUrl(page.url)
+    if (parsed === null || parsed.host !== domain) continue
+    mine.push({ id: page.url, title: page.title ?? '', url: page.url, weight })
+  }
+  // 先按地址合掉 query 变体，不然同一个页面会在夹里数成两个。
+  const { folders, rest } = foldByTitle(mergeVisitPages(mine))
+  return sortLevel([...folders, ...pathTree(rest, domain)])
+}
+
+function pathTree(pages: readonly WeightedUrl[], domain: string): DomainFolderNode[] {
   const root: MutableVisitFolder = { id: '/', title: '', bookmarks: [], children: new Map() }
 
   for (const page of pages) {
