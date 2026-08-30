@@ -120,8 +120,10 @@ export function Shell({ children, organizeContent }: { children: ReactNode; orga
               <StepIndex items={stepItems()} currentKey={step}>{organizeContent ?? children}</StepIndex>
             ) : children}
             {/* 清理扫描结果属于「重复收藏」那一格，由 CleanupStep 自己画。
-                扫描还没回来时 CleanupStep 是 null，进度仍由这里顶上。 */}
-            {(mode !== 'cleanup' || cleanupScan === null) && (
+                扫描还没回来时 CleanupStep 是 null，进度仍由这里顶上。
+                看板和浏览书签不接这根管子——切过去还挂着「扫描完成：2 组重复」，
+                等于别的页在替清理页说话。 */}
+            {(mode === 'organize' || (mode === 'cleanup' && cleanupScan === null)) && (
               <ProgressPanel
                 busy={busy}
                 progress={progress}

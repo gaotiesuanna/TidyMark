@@ -205,3 +205,31 @@ describe('Shell 模式切换', () => {
     expect(screen.getByRole('button', { name: '返回' })).toBeTruthy()
   })
 })
+
+/**
+ * ProgressPanel 挂在 Shell 里是为了整理流程和「清理扫描还没回来」那一小段。
+ * 扫描已经完成的那句「2 组重复」属于本地清理的「重复收藏」格，切到看板还挂在
+ * 页底，等于看板在替清理页说话。
+ */
+describe('Shell 的进度条按模式各管各的', () => {
+  const cleanupLog = {
+    id: 1,
+    phase: 'cleanup' as const,
+    level: 'info' as const,
+    message: '扫描完成：2 组重复、0 个空文件夹',
+  }
+
+  it('清理扫描完成后的日志不出现在看板', () => {
+    useStore.setState({ mode: 'dashboard', logs: [cleanupLog] })
+    render(<Shell organizeContent={<div>步骤内容</div>}><div>看板内容</div></Shell>)
+    expect(screen.getByText('看板内容')).toBeDefined()
+    expect(screen.queryByText(/2 组重复/)).toBeNull()
+  })
+
+  it('清理扫描完成后的日志不出现在浏览书签', () => {
+    useStore.setState({ mode: 'transfer', logs: [cleanupLog] })
+    render(<Shell organizeContent={<div>步骤内容</div>}><div>浏览内容</div></Shell>)
+    expect(screen.getByText('浏览内容')).toBeDefined()
+    expect(screen.queryByText(/2 组重复/)).toBeNull()
+  })
+})
