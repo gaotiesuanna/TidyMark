@@ -120,6 +120,13 @@
     "message": "Visits: $count$",
     "placeholders": { "count": { "content": "$1" } }
   },
+  "dashVisitGroupPages": {
+    "message": "$count$ pages",
+    "placeholders": { "count": { "content": "$1" } }
+  },
+  "dashVisitGroupUnnamed": {
+    "message": "Similar addresses"
+  },
   "transferIntro": {
     "message": "Search bookmarks, select folders to export, or import a file someone shared. This does not change your existing folder structure."
   },

@@ -562,7 +562,7 @@ function FolderTree({
       ].join(' ')}
     >
       {nodes.map((node) =>
-        node.title === '' || node.pageOnly === true ? (
+        node.grouped !== true && (node.title === '' || node.pageOnly === true) ? (
           <FolderBookmarks key={node.id} bookmarks={node.bookmarks} />
         ) : (
           <FolderNode key={node.id} node={node} domain={domain} depth={depth} />
@@ -581,8 +581,9 @@ function FolderNode({
   domain: string
   depth: number
 }) {
-  const expandable = node.children.length > 0
-  const [open, setOpen] = useState(depth < FOLDER_AUTO_OPEN_DEPTH)
+  const grouped = node.grouped === true
+  const expandable = node.children.length > 0 || grouped
+  const [open, setOpen] = useState(!grouped && depth < FOLDER_AUTO_OPEN_DEPTH)
   const label = (
     <>
       {expandable ? (
@@ -595,10 +596,19 @@ function FolderNode({
       ) : (
         <span aria-hidden="true" className="h-3 w-3 shrink-0" />
       )}
-      <FolderIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+      {grouped ? (
+        <LinkIcon className="h-3.5 w-3.5 shrink-0 text-neutral-300" />
+      ) : (
+        <FolderIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+      )}
       <span className="min-w-0 flex-1 truncate text-sm text-neutral-500" title={node.title}>
-        {node.title}
+        {grouped ? node.title.trim() || t('dashVisitGroupUnnamed') : node.title}
       </span>
+      {grouped && (
+        <span className="shrink-0 text-xs leading-caption tabular-nums text-neutral-400">
+          {t('dashVisitGroupPages', String(node.directCount))}
+        </span>
+      )}
       <span className="shrink-0 text-sm tabular-nums text-neutral-600">{node.count}</span>
     </>
   )

@@ -531,3 +531,103 @@ describe('visitSplitTree', () => {
     expect(split.saved[0]?.title).toBe('Home')
   })
 })
+
+describe('visitFolderTree 同形 ID 段合并', () => {
+  const palclaw = (path: string, weight: number, title = 'PalClaw 7x24 AI专属顾问') =>
+    ({ url: `https://192.168.5.39${path}`, title, weight })
+
+  it('同层三个以上的 ID 段并成一行，次数求和、标题取共有那个', () => {
+    const tree = visitFolderTree([
+      palclaw('/tasks/019fb349-e6f2-7407-a254-1919171a8d4a', 9),
+      palclaw('/tasks/c69350df521240909ec967c712200cfa', 8),
+      palclaw('/tasks/bd8c838b055c45dc984b0f28bef6684b', 7),
+    ], '192.168.5.39')
+
+    // tasks 只剩一个子节点，但那是合并行，不该被过道折叠吞成「tasks / PalClaw…」
+    expect(tree.map((node) => [node.title, node.count])).toEqual([['tasks', 24]])
+    expect(tree[0]?.children).toEqual([
+      {
+        id: 'tasks/*',
+        title: 'PalClaw 7x24 AI专属顾问',
+        grouped: true,
+        count: 24,
+        directCount: 3,
+        children: [],
+        bookmarks: [
+          { id: 'https://192.168.5.39/tasks/019fb349-e6f2-7407-a254-1919171a8d4a', title: 'PalClaw 7x24 AI专属顾问', url: 'https://192.168.5.39/tasks/019fb349-e6f2-7407-a254-1919171a8d4a', weight: 9 },
+          { id: 'https://192.168.5.39/tasks/c69350df521240909ec967c712200cfa', title: 'PalClaw 7x24 AI专属顾问', url: 'https://192.168.5.39/tasks/c69350df521240909ec967c712200cfa', weight: 8 },
+          { id: 'https://192.168.5.39/tasks/bd8c838b055c45dc984b0f28bef6684b', title: 'PalClaw 7x24 AI专属顾问', url: 'https://192.168.5.39/tasks/bd8c838b055c45dc984b0f28bef6684b', weight: 7 },
+        ],
+      },
+    ])
+  })
+
+  it('UUID、长 hex、纯数字混在一起算同一组', () => {
+    const tree = visitFolderTree([
+      palclaw('/tasks/019fb349-e6f2-7407-a254-1919171a8d4a', 9),
+      palclaw('/tasks/c69350df521240909ec967c712200cfa', 8),
+      palclaw('/tasks/100234567', 7),
+    ], '192.168.5.39')
+
+    expect(tree[0]?.children.map((node) => [node.id, node.directCount])).toEqual([['tasks/*', 3]])
+  })
+
+  it('只有两个 ID 段时不合并——那还看得过来', () => {
+    const tree = visitFolderTree([
+      palclaw('/tasks/019fb349-e6f2-7407-a254-1919171a8d4a', 9),
+      palclaw('/tasks/c69350df521240909ec967c712200cfa', 8),
+    ], '192.168.5.39')
+
+    expect(tree[0]?.children.map((node) => node.title)).toEqual([
+      '019fb349-e6f2-7407-a254-1919171a8d4a',
+      'c69350df521240909ec967c712200cfa',
+    ])
+  })
+
+  it('读得懂的路径段不被卷进合并行，哪怕标题一模一样', () => {
+    const tree = visitFolderTree([
+      palclaw('/disease-ops/catalog', 118),
+      palclaw('/disease-ops/cerebrovascular', 26),
+      palclaw('/tasks/019fb349-e6f2-7407-a254-1919171a8d4a', 9),
+      palclaw('/tasks/c69350df521240909ec967c712200cfa', 8),
+      palclaw('/tasks/bd8c838b055c45dc984b0f28bef6684b', 7),
+      palclaw('/tasks/new', 5),
+    ], '192.168.5.39')
+
+    const diseaseOps = tree.find((node) => node.title === 'disease-ops')
+    expect(diseaseOps?.children.map((node) => [node.title, node.count])).toEqual([
+      ['catalog', 118],
+      ['cerebrovascular', 26],
+    ])
+
+    const tasks = tree.find((node) => node.title === 'tasks')
+    expect(tasks?.children.map((node) => [node.title, node.count, node.grouped])).toEqual([
+      ['PalClaw 7x24 AI专属顾问', 24, true],
+      ['new', 5, undefined],
+    ])
+  })
+
+  it('标题各不相同时合并行不写标题，交给界面拿占位符顶上', () => {
+    const tree = visitFolderTree([
+      palclaw('/tasks/019fb349-e6f2-7407-a254-1919171a8d4a', 9, '任务甲'),
+      palclaw('/tasks/c69350df521240909ec967c712200cfa', 8, '任务乙'),
+      palclaw('/tasks/bd8c838b055c45dc984b0f28bef6684b', 7, '任务丙'),
+    ], '192.168.5.39')
+
+    expect(tree[0]?.children.map((node) => [node.title, node.grouped])).toEqual([['', true]])
+  })
+
+  it('顶层的 ID 段一样并成一行', () => {
+    const tree = visitFolderTree([
+      palclaw('/019fb349-e6f2-7407-a254-1919171a8d4a', 9),
+      palclaw('/c69350df521240909ec967c712200cfa', 8),
+      palclaw('/bd8c838b055c45dc984b0f28bef6684b', 7),
+      palclaw('/documents', 190),
+    ], '192.168.5.39')
+
+    expect(tree.map((node) => [node.id, node.count])).toEqual([
+      ['documents', 190],
+      ['/*', 24],
+    ])
+  })
+})
