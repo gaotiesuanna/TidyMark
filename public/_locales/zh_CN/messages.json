@@ -310,7 +310,7 @@
     "placeholders": { "count": { "content": "$1" } }
   },
   "cleanupIntro": {
-    "message": "这些整理不需要模型，也不会发出任何网络请求。"
+    "message": "这些清理都不需要模型。只有「失效链接」一项会发出网络请求，而且要等你启动它之后。"
   },
   "cleanupSectionDuplicates": {
     "message": "重复收藏"

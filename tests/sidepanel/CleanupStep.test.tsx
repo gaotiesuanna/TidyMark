@@ -780,3 +780,31 @@ describe('CleanupStep 清理完成后的出口', () => {
     expect((screen.getByRole('button', { name: '结束清理' }) as HTMLButtonElement).disabled).toBe(false)
   })
 })
+
+/**
+ * 页首那句话摆在三个标签之上，所以它是对三个标签一起说的。
+ *
+ * 「不发网络请求」曾经就写在那里，而「失效链接」这个标签恰恰是靠发网络请求工作的——
+ * 三分之一的内容被它说反了。而且这不是措辞问题：这句话正是用户判断「要不要给它
+ * 访问所有网站的权限」的依据，页首说不联网、点进去要全网权限，是自相矛盾。
+ *
+ * 「不需要模型」则对三个标签都成立（失效链接检查也不调模型），那半句要留着——
+ * 它是这半个扩展在没配接口时也能用的凭据。
+ */
+describe('清理页页首的总述必须对三个标签都成立', () => {
+  it('不承诺「不发网络请求」，因为失效链接检查要发', () => {
+    render(<CleanupStep />)
+    const intro = screen.getByTestId('cleanup-intro').textContent ?? ''
+    expect(intro).not.toMatch(/不会发出任何网络请求|不发出?任何网络请求/)
+  })
+
+  it('保留「不需要模型」，这一条三个标签都成立', () => {
+    render(<CleanupStep />)
+    expect(screen.getByTestId('cleanup-intro').textContent ?? '').toMatch(/不(需要|用)模型/)
+  })
+
+  it('点名失效链接是要联网的那一个，而不是笼统带过', () => {
+    render(<CleanupStep />)
+    expect(screen.getByTestId('cleanup-intro').textContent ?? '').toMatch(/失效链接/)
+  })
+})

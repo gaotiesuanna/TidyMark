@@ -190,7 +190,13 @@ export function CleanupStep() {
   return (
     <div>
       <div className="space-y-4">
-        <p className="text-sm leading-relaxed text-neutral-500">{t('cleanupIntro')}</p>
+        {/* 这句话摆在三个标签之上，所以它对三个标签一起说，措辞就得三个都成立。
+            原文是「不需要模型，也不会发出任何网络请求」——后半句被「失效链接」
+            那个标签直接推翻，而它恰恰是靠发请求工作的。更糟的是，用户正是拿这句
+            判断要不要给「访问所有网站」的权限：页首说不联网、点进去要全网权限。
+            前半句留着（失效链接检查同样不调模型，这是没配接口也能用的凭据），
+            后半句改成点名哪一个要联网——比原来还多给一条信息。 */}
+        <p data-testid="cleanup-intro" className="text-sm leading-relaxed text-neutral-500">{t('cleanupIntro')}</p>
 
         <div role="tablist" aria-label={t('cleanupTabListLabel')} className={subTabGroup}>
           {CLEANUP_TABS.map((each) => (

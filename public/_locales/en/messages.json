@@ -310,7 +310,7 @@
     "placeholders": { "count": { "content": "$1" } }
   },
   "cleanupIntro": {
-    "message": "These cleanups need no model and make no network requests."
+    "message": "None of these cleanups uses a model. Only the dead-link check makes network requests, and only once you start it."
   },
   "cleanupSectionDuplicates": {
     "message": "Duplicate bookmarks"
