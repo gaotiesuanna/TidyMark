@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { applyPlan, PROGRESS_KEY } from '@/engine/apply'
+import { applyPlan } from '@/engine/apply'
 import { loadSnapshot } from '@/engine/snapshot'
 import { undoLast } from '@/engine/undo'
 import { buildPlan } from '@/core/plan'
@@ -174,25 +174,36 @@ describe('applyPlan', () => {
     expect(maxInFlight).toBe(1)
   })
 
-  it('每执行一步就把进度写入存储，供 service worker 休眠后恢复', async () => {
+  /**
+   * 落地不按操作数写存储：写多少次只跟「快照写几遍」有关，跟这次要搬多少条书签无关。
+   *
+   * 这条守的是一个被删掉的东西不要长回来。原先每执行一步就写一次
+   * tidymark:apply-progress，一千条书签就是一千次额外的 storage 写，
+   * 而全代码库没有一处读它、它记的东西也根本续不了做（理由写在 apply.ts 开头）。
+   */
+  it('存储写入次数不随操作数增长', async () => {
     const { ports, storage } = setup()
-    const seen: number[] = []
+    const keys: string[] = []
     const originalSet = storage.set.bind(storage)
     ports.storage = {
       ...storage,
       async set(key, value) {
-        if (key === PROGRESS_KEY) seen.push((value as { executed: number }).executed)
+        keys.push(key)
         return originalSet(key, value)
       },
     }
+
     await applyPlan(ports, makePlan(), new Set(['100', '101']), 'zh_CN')
-    expect(seen).toEqual([0, 1, 2])
+
+    // 开工前一次、收工后一次，两次都是撤销快照；三条操作一次都没多写
+    expect(keys).toEqual(['tidymark:snapshot', 'tidymark:snapshot'])
   })
 
-  it('完成后清除进度记录', async () => {
+  it('落地过程不再留下任何进度检查点', async () => {
     const { ports, storage } = setup()
     await applyPlan(ports, makePlan(), new Set(['100', '101']), 'zh_CN')
-    expect(storage.dump()[PROGRESS_KEY]).toBeUndefined()
+
+    expect(Object.keys(storage.dump())).toEqual(['tidymark:snapshot'])
   })
 
   it('回报进度', async () => {
