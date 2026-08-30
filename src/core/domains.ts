@@ -142,9 +142,13 @@ export interface DomainFolderNode {
   pageOnly?: boolean
   /**
    * 这一行是同层的 ID 段并出来的，自己不是路径上真有的一段：点开才露出被并起来的页面。
-   * title 是这批页面共有的标题，各不相同时留空，由界面拿占位符顶上。
+   *
+   * 刚并出来时 title 是空的——它没有段名可用。父段要是自己没有页面、底下又只剩它一个，
+   * 过道折叠会把父段的名字给它(`works`)，那之后它就有段名了，再往上按 `甲 / 乙` 正常接。
    */
   grouped?: true
+  /** 被并起来那批页面共有的标题。没有段名时界面拿它顶上，还是没有就用占位符。 */
+  pageTitle?: string
 }
 
 /**
@@ -300,7 +304,8 @@ function groupIdSiblings(parentId: string, children: DomainFolderNode[]): Domain
     ...children.filter((child) => !merged.has(child)),
     {
       id,
-      title: titles.size === 1 ? [...titles][0]! : '',
+      title: '',
+      ...(titles.size === 1 ? { pageTitle: [...titles][0]! } : {}),
       grouped: true,
       count: ids.reduce((n, child) => n + child.count, 0),
       directCount: bookmarks.length,
@@ -352,18 +357,12 @@ export function visitFolderTree(pages: readonly WeightedUrl[], domain: string): 
 
   const collapse = (node: DomainFolderNode): DomainFolderNode => {
     const only = node.children.length === 1 ? node.children[0] : undefined
-    const swallowable = only !== undefined && only.grouped !== true
     // 编号段不参与过道折叠：拼成 `019fb349… / edit` 之后它就不像编号了，
     // 会从同层的聚合里漏出去，反倒多留一行读不懂的名字。
-    if (node.directCount === 0 && swallowable && node.title !== '' && !isIdSegment(node.title)) {
-      return {
-        id: only.id,
-        title: `${node.title} / ${only.title}`,
-        count: only.count,
-        directCount: only.directCount,
-        children: only.children,
-        bookmarks: only.bookmarks,
-      }
+    if (node.directCount === 0 && only !== undefined && node.title !== '' && !isIdSegment(node.title)) {
+      // 刚并出来的合并行没有段名，父段的名字直接给它——不然 `works` 和它底下那个合并行
+      // 会顶着同一个数字各占一行。已经有段名的照旧接成 `甲 / 乙`。
+      return { ...only, title: only.title === '' ? node.title : `${node.title} / ${only.title}` }
     }
     return node
   }

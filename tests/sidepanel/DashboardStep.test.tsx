@@ -433,14 +433,13 @@ describe('DashboardStep', () => {
     await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
     expect(await screen.findByText('192.168.5.39')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: /192\.168\.5\.39/ }))
-    await user.click(screen.getByRole('button', { name: /tasks/ }))
 
-    // 三个 ID 一行都不占，合并行报出页面数；documents 这种读得懂的照旧成行
+    // 三个 ID 一行都不占；tasks 自己没有页面，直接顶替合并行成了那一行
     expect(screen.queryByText(/019fb349/)).toBeNull()
     expect(screen.getByText(/documents/)).toBeTruthy()
     expect(screen.getByText(t('dashVisitGroupPages', '3'))).toBeTruthy()
 
-    const group = screen.getByRole('button', { name: new RegExp(t('dashVisitGroupPages', '3')) })
+    const group = screen.getByRole('button', { name: /tasks/ })
     expect(group.getAttribute('aria-expanded')).toBe('false')
 
     await user.click(group)
@@ -457,6 +456,8 @@ describe('DashboardStep', () => {
       { url: 'https://192.168.5.39/tasks/019fb349-e6f2-7407-a254-1919171a8d4a', title: '任务甲', visitCount: 9 },
       { url: 'https://192.168.5.39/tasks/c69350df521240909ec967c712200cfa', title: '任务乙', visitCount: 8 },
       { url: 'https://192.168.5.39/tasks/bd8c838b055c45dc984b0f28bef6684b', title: '任务丙', visitCount: 7 },
+      // 给 tasks 添个兄弟，合并行才不会被父段顶替，才看得到「连名字都报不出」这一步
+      { url: 'https://192.168.5.39/tasks/new', title: '新建', visitCount: 5 },
     ])
 
     render(<DashboardStep />)

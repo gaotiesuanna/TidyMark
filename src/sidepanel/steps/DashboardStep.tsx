@@ -613,7 +613,9 @@ function FolderNode({
         <FolderIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
       )}
       <span className="min-w-0 flex-1 truncate text-sm text-neutral-500" title={node.title}>
-        {grouped ? node.title.trim() || t('dashVisitGroupUnnamed') : node.title}
+        {grouped
+          ? node.title.trim() || node.pageTitle?.trim() || t('dashVisitGroupUnnamed')
+          : node.title}
       </span>
       {grouped && (
         <span className="shrink-0 text-xs leading-caption tabular-nums text-neutral-400">

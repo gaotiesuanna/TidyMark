@@ -544,12 +544,12 @@ describe('visitFolderTree 同形 ID 段合并', () => {
       palclaw('/tasks/bd8c838b055c45dc984b0f28bef6684b', 7),
     ], '192.168.5.39')
 
-    // tasks 只剩一个子节点，但那是合并行，不该被过道折叠吞成「tasks / PalClaw…」
-    expect(tree.map((node) => [node.title, node.count])).toEqual([['tasks', 24]])
-    expect(tree[0]?.children).toEqual([
+    // tasks 自己没有页面、底下只剩这个合并行，两者并成一行，名字留 tasks 的
+    expect(tree).toEqual([
       {
         id: 'tasks/*',
-        title: 'PalClaw 7x24 AI专属顾问',
+        title: 'tasks',
+        pageTitle: 'PalClaw 7x24 AI专属顾问',
         grouped: true,
         count: 24,
         directCount: 3,
@@ -570,7 +570,8 @@ describe('visitFolderTree 同形 ID 段合并', () => {
       palclaw('/tasks/100234567', 7),
     ], '192.168.5.39')
 
-    expect(tree[0]?.children.map((node) => [node.id, node.directCount])).toEqual([['tasks/*', 3]])
+    expect(tree.map((node) => [node.id, node.title, node.directCount]))
+      .toEqual([['tasks/*', 'tasks', 3]])
   })
 
   it('只有两个 ID 段时不合并——那还看得过来', () => {
@@ -601,21 +602,26 @@ describe('visitFolderTree 同形 ID 段合并', () => {
       ['cerebrovascular', 26],
     ])
 
+    // tasks 底下还有 new，合并行没被并进父段，自己一行、没有段名
     const tasks = tree.find((node) => node.title === 'tasks')
-    expect(tasks?.children.map((node) => [node.title, node.count, node.grouped])).toEqual([
-      ['PalClaw 7x24 AI专属顾问', 24, true],
-      ['new', 5, undefined],
-    ])
+    expect(tasks?.children.map((node) => [node.title, node.pageTitle, node.count, node.grouped]))
+      .toEqual([
+        ['', 'PalClaw 7x24 AI专属顾问', 24, true],
+        ['new', undefined, 5, undefined],
+      ])
   })
 
-  it('标题各不相同时合并行不写标题，交给界面拿占位符顶上', () => {
+  it('标题各不相同时合并行连页面标题也报不出，交给界面拿占位符顶上', () => {
     const tree = visitFolderTree([
       palclaw('/tasks/019fb349-e6f2-7407-a254-1919171a8d4a', 9, '任务甲'),
       palclaw('/tasks/c69350df521240909ec967c712200cfa', 8, '任务乙'),
       palclaw('/tasks/bd8c838b055c45dc984b0f28bef6684b', 7, '任务丙'),
+      palclaw('/tasks/new', 5, '新建'),
     ], '192.168.5.39')
 
-    expect(tree[0]?.children.map((node) => [node.title, node.grouped])).toEqual([['', true]])
+    const tasks = tree.find((node) => node.title === 'tasks')
+    expect(tasks?.children.map((node) => [node.title, node.pageTitle, node.grouped]))
+      .toEqual([['', undefined, true], ['new', undefined, undefined]])
   })
 
   it('一位两位的纯数字段也是编号，够三个就并', () => {
@@ -625,8 +631,8 @@ describe('visitFolderTree 同形 ID 段合并', () => {
       { url: 'http://localhost/analysis/library/2', title: '墨析', weight: 141 },
     ], 'localhost')
 
-    expect(tree[0]?.children.map((node) => [node.id, node.count, node.directCount])).toEqual([
-      ['analysis/library/*', 501, 3],
+    expect(tree.map((node) => [node.id, node.title, node.count, node.directCount])).toEqual([
+      ['analysis/library/*', 'analysis / library', 501, 3],
     ])
   })
 
@@ -640,10 +646,10 @@ describe('visitFolderTree 同形 ID 段合并', () => {
       { url: 'http://localhost/library/4/read', title: '墨析', weight: 5 },
     ], 'localhost')
 
-    expect(tree.map((node) => [node.title, node.count])).toEqual([['library', 784]])
-    const group = tree[0]?.children[0]
-    expect([group?.id, group?.grouped, group?.count, group?.directCount]).toEqual([
-      'library/*', true, 784, 3,
+    expect(tree).toHaveLength(1)
+    const group = tree[0]
+    expect([group?.id, group?.title, group?.grouped, group?.count, group?.directCount]).toEqual([
+      'library/*', 'library', true, 784, 3,
     ])
     // 三个 read 并成一个，三条地址原样留在里面——哪条属于哪本小说还看得出来
     expect(group?.children.map((node) => [node.title, node.count])).toEqual([['read', 320]])
@@ -661,10 +667,48 @@ describe('visitFolderTree 同形 ID 段合并', () => {
       { url: 'http://localhost/settings/bd8c838b055c45dc984b0f28bef6684b/edit', title: '墨析', weight: 20 },
     ], 'localhost')
 
-    expect(tree.map((node) => [node.title, node.count])).toEqual([['settings', 90]])
-    const group = tree[0]?.children[0]
-    expect([group?.id, group?.grouped, group?.count]).toEqual(['settings/*', true, 90])
+    expect(tree).toHaveLength(1)
+    const group = tree[0]
+    expect([group?.id, group?.title, group?.grouped, group?.count])
+      .toEqual(['settings/*', 'settings', true, 90])
     expect(group?.children.map((node) => [node.title, node.count])).toEqual([['edit', 90]])
+  })
+
+  it('父段自己没有页面、底下只剩一个合并行时并成一行，留父段的名字', () => {
+    const tree = visitFolderTree([
+      { url: 'http://localhost:5629/works/019fb349-e6f2-7407-a254-1919171a8d4a', title: '墨析', weight: 100 },
+      { url: 'http://localhost:5629/works/c69350df521240909ec967c712200cfa', title: '墨析', weight: 56 },
+      { url: 'http://localhost:5629/works/bd8c838b055c45dc984b0f28bef6684b', title: '墨析', weight: 30 },
+    ], 'localhost:5629')
+
+    // 从前是 works 186 一行、合并行 186 又一行，同一个数字印两遍
+    expect(tree).toHaveLength(1)
+    expect([tree[0]?.title, tree[0]?.grouped, tree[0]?.count, tree[0]?.directCount])
+      .toEqual(['works', true, 186, 3])
+  })
+
+  it('再往上还是过道就接成「甲 / 乙」，不把上一层的名字也吃掉', () => {
+    const tree = visitFolderTree([
+      { url: 'http://localhost:5629/analysis/library/3', title: '墨析', weight: 193 },
+      { url: 'http://localhost:5629/analysis/library/6', title: '墨析', weight: 167 },
+      { url: 'http://localhost:5629/analysis/library/2', title: '墨析', weight: 141 },
+    ], 'localhost:5629')
+
+    expect(tree.map((node) => [node.title, node.grouped, node.count])).toEqual([
+      ['analysis / library', true, 501],
+    ])
+  })
+
+  it('父段自己有页面时两行照旧——它们本来就是两个东西', () => {
+    const tree = visitFolderTree([
+      { url: 'http://localhost:5629/library', title: '墨析', weight: 502 },
+      { url: 'http://localhost:5629/library/3', title: '墨析', weight: 193 },
+      { url: 'http://localhost:5629/library/6', title: '墨析', weight: 167 },
+      { url: 'http://localhost:5629/library/2', title: '墨析', weight: 141 },
+    ], 'localhost:5629')
+
+    expect(tree.map((node) => [node.title, node.count])).toEqual([['library', 1003]])
+    expect(tree[0]?.children.map((node) => [node.grouped, node.count])).toEqual([[true, 501]])
   })
 
   it('顶层的 ID 段一样并成一行', () => {
