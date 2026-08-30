@@ -951,6 +951,9 @@
   "structureNext": {
     "message": "继续 → 查看移动清单"
   },
+  "reviewSectionTitle": {
+    "message": "移动建议"
+  },
   "reviewSummaryOne": {
     "message": "共 $total$ 条移动建议，已选中 $accepted$ 条。未选中的书签保持原位。",
     "placeholders": {

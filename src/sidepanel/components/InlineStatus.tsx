@@ -24,7 +24,7 @@ export function InlineStatus({
   live = 'polite',
 }: InlineStatusProps): React.JSX.Element {
   return (
-    <div className={`flex items-start gap-2 border px-3 py-2 text-sm leading-body ${toneClasses[tone]}`}>
+    <div className={`flex items-start gap-2 rounded-index border px-3 py-2 text-sm leading-body ${toneClasses[tone]}`}>
       <div className="min-w-0 flex-1">
         {title !== undefined && <p className="font-medium">{title}</p>}
         <div className={title !== undefined ? 'mt-0.5' : ''} aria-live={live} aria-atomic="true">{children}</div>

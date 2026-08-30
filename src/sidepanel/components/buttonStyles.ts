@@ -29,6 +29,46 @@ export const secondaryButton = [
   'active:enabled:bg-index-blue-soft',
 ].join(' ')
 
+/**
+ * 安静按钮：无边框无底色，只在悬停时浮出来。
+ *
+ * 给那种「跟旁边几个按钮不是一回事、但也没地方可去」的出口用——描边按钮摆在一起
+ * 就是在说「这几个是同一类」，而它不是。
+ */
+export const ghostButton = [
+  base,
+  'text-index-muted',
+  'hover:enabled:bg-index-blue-soft hover:enabled:text-index-ink',
+  'active:enabled:bg-index-blue-soft',
+].join(' ')
+
+/**
+ * 视图筛选槽：装那种只改「这一页看到多少」、不碰任何数据的开关。
+ *
+ * 长得跟按钮不一样是刻意的——筛选和「全部接受」并排成一样的描边按钮时，
+ * 用户读到的是五个平级的动作，而它们根本不是一个维度的东西。
+ * 与 segmentTrack 同源（同样 32px、同样坐在一条槽里），区别是这里的开关各开各的、
+ * 可以同时按下，所以不用 SegmentedChoice 那套单选语义。
+ */
+export const filterTrack = 'inline-flex items-center gap-0.5 rounded-index border border-index-line bg-index-canvas p-0.5'
+
+/**
+ * 按下态用 aria-pressed 变体，不在调用点拼 `text-index-canvas`：平级工具类的胜负由
+ * 生成顺序决定，而 index 调色板里 canvas 排在 muted/ink 前面，拼上去会被压掉，
+ * 按下的开关变成黑底黑字、字直接看不见。属性选择器多一层特指度，不用靠顺序赌。
+ *
+ * 按下用实心黑而不是 segmentActive 的浅蓝：筛选会把行藏起来，
+ * 「你现在没在看全部」这件事得说得足够响。
+ */
+export const filterToggle = [
+  'inline-flex min-h-8 cursor-pointer items-center justify-center rounded-index px-2.5',
+  'text-xs leading-none font-medium text-index-muted',
+  'transition-colors duration-150 motion-reduce:transition-none',
+  'hover:text-index-ink',
+  'aria-pressed:bg-index-ink aria-pressed:text-index-canvas aria-pressed:hover:bg-zinc-800',
+  focusRing,
+].join(' ')
+
 /** 深色实心按钮，一个分组里只留一个，用来标出该组的主操作。 */
 export const primaryButton = [
   base,

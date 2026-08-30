@@ -951,6 +951,9 @@
   "structureNext": {
     "message": "Continue → move list"
   },
+  "reviewSectionTitle": {
+    "message": "Suggested moves"
+  },
   "reviewSummaryOne": {
     "message": "$total$ suggested move, $accepted$ selected. Unselected bookmarks stay where they are.",
     "placeholders": {

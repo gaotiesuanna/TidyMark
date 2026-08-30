@@ -3,6 +3,7 @@ import {
   buttonSizeMd,
   buttonSizeSm,
   dangerButton,
+  ghostButton,
   primaryButton,
   secondaryButton,
   segmentActive,
@@ -21,6 +22,10 @@ export function PrimaryButton({ className = '', size = 'md', ...props }: ButtonP
 
 export function SecondaryButton({ className = '', size = 'md', ...props }: ButtonProps): React.JSX.Element {
   return <button className={`${secondaryButton} ${sizeClass(size)} ${className}`} {...props} />
+}
+
+export function GhostButton({ className = '', size = 'md', ...props }: ButtonProps): React.JSX.Element {
+  return <button className={`${ghostButton} ${sizeClass(size)} ${className}`} {...props} />
 }
 
 export function DangerButton({ className = '', size = 'md', ...props }: ButtonProps): React.JSX.Element {

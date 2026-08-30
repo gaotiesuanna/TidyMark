@@ -5,10 +5,11 @@ import type { PlanRow, UnchangedRow } from '@/core/types'
 import { plural, t } from '@/i18n'
 import { downloadJson } from '../lib/download'
 import { useStore } from '../store'
+import { ChevronDownIcon, DownloadIcon } from '../components/icons'
 import { IndexSection } from '../components/IndexSection'
 import { InlineStatus } from '../components/InlineStatus'
-import { PrimaryButton, SecondaryButton, StickyActionBar } from '../components/IndexControls'
-import { fieldClass } from '../components/buttonStyles'
+import { GhostButton, PrimaryButton, SecondaryButton, StickyActionBar } from '../components/IndexControls'
+import { fieldClass, filterToggle, filterTrack } from '../components/buttonStyles'
 
 /**
  * 一组：目标目录相同的建议。allRule 决定要不要给组级「全部来自域名规则」标记与默认折叠。
@@ -159,36 +160,41 @@ export function ReviewStep() {
 
   return (
     <div>
-      <p className="mb-4 text-sm leading-body text-index-muted">
+      <p className="mb-3 text-sm leading-body text-index-muted">
         {plural(plan.rows.length, 'reviewSummaryOne', 'reviewSummaryOther', String(plan.rows.length), String(accepted.size))}
       </p>
 
       <div data-testid="review-section">
         <IndexSection
-          title={t('reviewGroupCount', String(plan.rows.length))}
-          count={String(accepted.size)}
+          title={t('reviewSectionTitle')}
+          count={<span className="tabular-nums">{accepted.size} / {plan.rows.length}</span>}
         >
 
-      {(summary.createdFolders > 0 || summary.renamedFolders > 0) && (
-        <p className="text-sm leading-caption text-index-muted">
-          {plural(summary.createdFolders, 'reviewCreateFoldersOne', 'reviewCreateFoldersOther', String(summary.createdFolders))}
-          {summary.renamedFolders > 0 && plural(summary.renamedFolders, 'reviewRenameFoldersOne', 'reviewRenameFoldersOther', String(summary.renamedFolders))}
-          {t('reviewSummaryPeriod')}
-        </p>
-      )}
+      {/* 附带说明——新建/重命名目录、统一书签标题、清空空文件夹——都不是待办，
+          用户对它们做不了任何操作。收进同一块浅底旁注里，比三段各自浮在白底上
+          少两次视线停顿，也和下面那张真正要审的清单拉开了层次。 */}
+      {(summary.createdFolders > 0 || summary.renamedFolders > 0 || summary.renamedBookmarks > 0 || settings.removeEmptyFolders) && (
+        <div className="space-y-1 rounded-index bg-neutral-50 px-3 py-2 text-sm leading-caption text-index-muted">
+          {(summary.createdFolders > 0 || summary.renamedFolders > 0) && (
+            <p>
+              {plural(summary.createdFolders, 'reviewCreateFoldersOne', 'reviewCreateFoldersOther', String(summary.createdFolders))}
+              {summary.renamedFolders > 0 && plural(summary.renamedFolders, 'reviewRenameFoldersOne', 'reviewRenameFoldersOther', String(summary.renamedFolders))}
+              {t('reviewSummaryPeriod')}
+            </p>
+          )}
 
-      {summary.renamedBookmarks > 0 && (
-        <p className="mt-1 text-sm leading-caption text-index-muted">
-          {plural(summary.renamedBookmarks, 'reviewRenameBookmarksOne', 'reviewRenameBookmarksOther', String(summary.renamedBookmarks))}
-        </p>
-      )}
+          {summary.renamedBookmarks > 0 && (
+            <p>
+              {plural(summary.renamedBookmarks, 'reviewRenameBookmarksOne', 'reviewRenameBookmarksOther', String(summary.renamedBookmarks))}
+            </p>
+          )}
 
-      {settings.removeEmptyFolders && (
-        <p className="mt-1 text-sm leading-caption text-index-muted">{t('reviewCleanNote')}</p>
+          {settings.removeEmptyFolders && <p>{t('reviewCleanNote')}</p>}
+        </div>
       )}
 
       {plan.warnings.length > 0 && (
-        <div className="mt-2">
+        <div className="mt-3">
           <InlineStatus tone="warning">
             <ul className="space-y-1">
               {plan.warnings.map((warning) => (
@@ -200,35 +206,38 @@ export function ReviewStep() {
       )}
 
       {plan.rows.length === 0 && (
-        <div className="mt-2">
+        <div className="mt-3">
           <InlineStatus tone="neutral">{t('reviewEmpty')}</InlineStatus>
         </div>
       )}
 
-      <div className="mt-3 flex flex-wrap gap-1 text-sm leading-caption">
+      {/* 两个改勾选的动作 vs 两个只改可见性的筛选：排成一样的按钮就是在说「这四个平级」。
+          动作是描边按钮，筛选是坐在槽里的开关。导出不改方案也不改视图，不跟它们坐一起。 */}
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
         <SecondaryButton onClick={acceptAll}>{t('reviewAcceptAll')}</SecondaryButton>
         <SecondaryButton onClick={rejectAll}>{t('reviewRejectAll')}</SecondaryButton>
-        {/* 两个筛选开关：只管看得见看不见，不碰 accepted，可以叠加 */}
-        <SecondaryButton
-          type="button"
-          aria-pressed={modelOnly}
-          className={modelOnly ? 'border-index-ink bg-index-ink text-index-canvas' : ''}
-          onClick={() => setModelOnly((prev) => !prev)}
-        >
-          {t('reviewFilterModelOnly')}
-        </SecondaryButton>
-        <SecondaryButton
-          type="button"
-          aria-pressed={markedOnly}
-          className={markedOnly ? 'border-index-ink bg-index-ink text-index-canvas' : ''}
-          onClick={() => setMarkedOnly((prev) => !prev)}
-        >
-          {t('reviewFilterMarkedOnly')}
-        </SecondaryButton>
-        {/* 勾选无关的一项，靠 ml-auto 推到另一头，不跟左边几个混成一排 */}
-        <SecondaryButton className="ml-auto" onClick={exportPlan}>
-          {t('reviewExportPlan')}
-        </SecondaryButton>
+      </div>
+
+      {/* 两个筛选开关：只管看得见看不见，不碰 accepted，可以同时按下 */}
+      <div className="mt-2 flex">
+        <div className={filterTrack}>
+          <button
+            type="button"
+            aria-pressed={modelOnly}
+            className={filterToggle}
+            onClick={() => setModelOnly((prev) => !prev)}
+          >
+            {t('reviewFilterModelOnly')}
+          </button>
+          <button
+            type="button"
+            aria-pressed={markedOnly}
+            className={filterToggle}
+            onClick={() => setMarkedOnly((prev) => !prev)}
+          >
+            {t('reviewFilterMarkedOnly')}
+          </button>
+        </div>
       </div>
 
       {/* 两个筛选开关叠加把所有行筛没时不能直接留白——那读起来像「一条建议都没有」，
@@ -237,7 +246,7 @@ export function ReviewStep() {
           没有任何筛选时也成立，这句只在筛选把本来存在的行藏起来时才成立，不能混。
           不把「筛掉了多少」写进来——按钮已经把话说完了，没必要让用户自己做减法。 */}
       {plan.rows.length > 0 && visibleGroups.length === 0 && (
-        <div className="mt-2">
+        <div className="mt-3">
           <InlineStatus
             tone="neutral"
             action={<SecondaryButton
@@ -254,122 +263,143 @@ export function ReviewStep() {
         </div>
       )}
 
-      <div className="mt-3 border-t border-index-line">
-        {visibleGroups.map((group, groupIndex) => {
-          const collapsed = collapsedOverride[group.key] ?? group.allRule
-          return (
-            <div key={group.key}>
-              <button
-                type="button"
-                aria-expanded={!collapsed}
-                className="grid min-h-index-row w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-2 border-b border-index-line px-2 py-2 text-left text-sm leading-caption font-medium text-index-ink hover:bg-index-blue-soft"
-                onClick={() => toggleGroup(group)}
-              >
-                <span className="font-mono text-xs text-neutral-400">{String(groupIndex + 1).padStart(2, '0')}</span>
-                <span className="min-w-0 break-words [overflow-wrap:anywhere]">{group.label}</span>
-                <span className="shrink-0 text-right text-xs text-index-muted">
-                  {t('reviewGroupCount', String(group.rows.length))}
-                  {group.allRule && (
-                    <span className="mt-0.5 block text-2xs text-emerald-700">{t('reviewGroupAllRule')}</span>
-                  )}
-                </span>
-              </button>
+      {/* 整份清单收进一张描边卡片里，组与组之间只留一条分隔线：
+          原来靠每行自带 border-b 拼出来的横线会一路漏到卡片外面，
+          最后一条还正好压在底部操作条上方，看着像多画了一条边。 */}
+      {visibleGroups.length > 0 && (
+        <div className="mt-3 overflow-hidden rounded-index border border-index-line">
+          {visibleGroups.map((group, groupIndex) => {
+            const collapsed = collapsedOverride[group.key] ?? group.allRule
+            return (
+              <div key={group.key} className="border-b border-index-line last:border-b-0">
+                <button
+                  type="button"
+                  aria-expanded={!collapsed}
+                  className="flex min-h-index-row w-full items-center gap-2 px-2.5 py-2 text-left text-sm leading-caption font-medium text-index-ink transition-colors duration-150 hover:bg-index-blue-soft motion-reduce:transition-none"
+                  onClick={() => toggleGroup(group)}
+                >
+                  {/* 折叠态原来只有 aria-expanded，屏幕上没有任何东西说这一行能点开。
+                      箭头转 90° 就够了，不必再加第二种提示。 */}
+                  <ChevronDownIcon
+                    className={`h-3.5 w-3.5 shrink-0 text-index-faint transition-transform duration-150 motion-reduce:transition-none ${collapsed ? '-rotate-90' : ''}`}
+                  />
+                  <span className="w-5 shrink-0 font-mono text-xs tabular-nums text-index-faint">{String(groupIndex + 1).padStart(2, '0')}</span>
+                  <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">{group.label}</span>
+                  <span className="shrink-0 text-right text-xs font-regular text-index-muted">
+                    <span className="tabular-nums">{t('reviewGroupCount', String(group.rows.length))}</span>
+                    {group.allRule && (
+                      <span className="mt-1 block rounded bg-emerald-50 px-1 py-px text-2xs font-medium text-emerald-700">{t('reviewGroupAllRule')}</span>
+                    )}
+                  </span>
+                </button>
 
-              {!collapsed && (
-                <ul className="ml-5 border-l border-index-line pl-2">
-                  {group.rows.map((row, rowIndex) => (
-                    <li key={row.bookmarkId} className="border-b border-index-line px-2 py-2 text-sm leading-caption">
-                      <div className="grid grid-cols-[2rem_minmax(0,1fr)] items-start gap-2">
-                        <span className="font-mono text-xs text-neutral-400">{String(rowIndex + 1).padStart(2, '0')}</span>
-                        <label className="flex flex-1 cursor-pointer items-start gap-2">
+                {/* 展开的成员压一层浅底：不靠缩进也能看出这几行属于上面那个组，
+                    在只有 360px 宽的侧栏里，省下来的缩进正好给标题多断一行的余地。 */}
+                {!collapsed && (
+                  <ul className="border-t border-index-line bg-neutral-50">
+                    {group.rows.map((row, rowIndex) => (
+                      <li
+                        key={row.bookmarkId}
+                        className="grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-x-2 border-b border-index-line px-2.5 py-2.5 text-sm leading-caption last:border-b-0"
+                      >
+                        <span className="pt-px font-mono text-xs tabular-nums text-index-faint">{String(rowIndex + 1).padStart(2, '0')}</span>
+                        <label className="flex min-w-0 cursor-pointer items-start gap-2">
                           <input
                             type="checkbox"
                             aria-label={row.title}
-                            className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                            className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-index-ink"
                             checked={accepted.has(row.bookmarkId)}
                             onChange={() => toggleAccepted(row.bookmarkId)}
                           />
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-start gap-2">
-                              <span className="min-w-0 flex-1 break-words font-medium [overflow-wrap:anywhere]">{row.title}</span>
+                            <div className="flex items-start gap-1.5">
+                              <span className="min-w-0 flex-1 break-words font-medium text-index-ink [overflow-wrap:anywhere]">{row.title}</span>
                               {row.confidence < MARK_CONFIDENCE && (
-                                <span className="shrink-0 rounded bg-amber-100 px-1 text-2xs text-amber-700">{t('reviewMarked')}</span>
+                                <span className="shrink-0 rounded bg-amber-100 px-1 py-px text-2xs font-medium text-amber-700">{t('reviewMarked')}</span>
                               )}
-                              <span className="ml-auto shrink-0 text-neutral-400">{Math.round(row.confidence * 100)}%</span>
+                              <span className="shrink-0 text-xs tabular-nums text-index-faint">{Math.round(row.confidence * 100)}%</span>
                             </div>
                             {/* 目标路径已经是组标题，组内每条只用再交代它原来在哪，不重复目标——
-                                重复的话会跟组标题撞出同一段文字，人扫起来也是噪音。 */}
-                            <div className="mt-1 break-words text-index-muted [overflow-wrap:anywhere]">
+                                重复的话会跟组标题撞出同一段文字，人扫起来也是噪音。
+                                这两行比标题小一号：它们是标题的注脚，同号排下来三行一样重，
+                                一眼扫不出哪句才是这一条的身份。 */}
+                            <div className="mt-1 break-words text-xs leading-caption text-index-muted [overflow-wrap:anywhere]">
                               <span className="line-through">{row.fromPath.join(' / ')}</span>
                             </div>
-                            <div className="mt-0.5 text-neutral-400">{row.reason}</div>
+                            <div className="mt-0.5 text-xs leading-caption text-index-faint">{row.reason}</div>
                             {/* 取消勾选的后果只在「这条是原目录里最后一个留守者」时说——
                                 原目录里还有别的书签不走时它本来就会活下来，那时提示纯属噪音。
                                 跟着上面两行的次要说明文字走，不另起一层视觉。 */}
                             {!accepted.has(row.bookmarkId) && wouldStrandFolder(plan, accepted, row.bookmarkId) && (
-                              <div className="mt-0.5 text-neutral-500">
+                              <div className="mt-0.5 text-xs leading-caption text-index-muted">
                                 {t('reviewStrandNote', row.fromPath.at(-1) ?? '')}
                               </div>
                             )}
                           </div>
                         </label>
-                      </div>
-                      {/* 下拉放在 label 外面：label 已经隐式关联了勾选框，选它内部若再塞一个
-                          <select>，点下拉时那次点击会顺带把勾选框的点击也代发一遍
-                          （label 找的是「第一个可关联控件」，不会因为点的是别的控件就放过）。
-                          拒绝之外的第二条路：不满意这条建议，不必只能弃之不用，
-                          可以当场改投到另一个候选目录——选了即改方案、自动勾上（见 setRowTarget）。 */}
-                      <select
-                        aria-label={t('reviewRetarget', row.title)}
-                        className={`mt-2 ${fieldClass} min-h-0 py-1`}
-                        // 直接用 row.toCategoryId，不拿 toPath 反查候选——反查在推翻模式下
-                        // 部分取消勾选、以及合并模式两种常见状态下都会落空，落空后浏览器会
-                        // 退回第一个 option，下拉就会理直气壮地显示成另一个目录（见 I2）。
-                        value={row.toCategoryId}
-                        onChange={(e) => setRowTarget(row.bookmarkId, e.target.value)}
-                      >
-                        {plan.candidates.map((candidate) => (
-                          <option key={candidate.id} value={candidate.id}>{candidate.path.join(' / ')}</option>
-                        ))}
-                      </select>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )
-        })}
-      </div>
+                        {/* 下拉放在 label 外面：label 已经隐式关联了勾选框，选它内部若再塞一个
+                            <select>，点下拉时那次点击会顺带把勾选框的点击也代发一遍
+                            （label 找的是「第一个可关联控件」，不会因为点的是别的控件就放过）。
+                            拒绝之外的第二条路：不满意这条建议，不必只能弃之不用，
+                            可以当场改投到另一个候选目录——选了即改方案、自动勾上（见 setRowTarget）。
+                            col-start-2 让它左边缘和上面的标题对齐，不去顶编号那一列。 */}
+                        <select
+                          aria-label={t('reviewRetarget', row.title)}
+                          className={`col-start-2 mt-2 ${fieldClass} min-h-0 py-1`}
+                          // 直接用 row.toCategoryId，不拿 toPath 反查候选——反查在推翻模式下
+                          // 部分取消勾选、以及合并模式两种常见状态下都会落空，落空后浏览器会
+                          // 退回第一个 option，下拉就会理直气壮地显示成另一个目录（见 I2）。
+                          value={row.toCategoryId}
+                          onChange={(e) => setRowTarget(row.bookmarkId, e.target.value)}
+                        >
+                          {plan.candidates.map((candidate) => (
+                            <option key={candidate.id} value={candidate.id}>{candidate.path.join(' / ')}</option>
+                          ))}
+                        </select>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* 末尾、默认折叠：这不是待办，用户不需要对它做任何操作，只需要知道整理盖到了多少——
           放前面会挤占真正要审的东西。三种原因分开列，是因为「已经在合适的目录里」是好消息，
           「没找到合适目录」与「这次没能分类」是两种完全不同的问题，不能混在同一条路上。
           这里的书签不带勾选框：给个勾选框会让用户以为能对它们做什么。 */}
       {plan.unchanged.length > 0 && (
-        <div className="mt-3 border-t border-index-line">
+        <div className="mt-3 overflow-hidden rounded-index border border-index-line">
           <button
             type="button"
             aria-expanded={!unchangedCollapsed}
-            className="flex min-h-index-row w-full items-center gap-2 border-b border-index-line px-2 py-2 text-left text-sm leading-caption font-medium text-index-ink hover:bg-index-blue-soft"
+            className="flex min-h-index-row w-full items-center gap-2 px-2.5 py-2 text-left text-sm leading-caption font-medium text-index-muted transition-colors duration-150 hover:bg-index-blue-soft motion-reduce:transition-none"
             onClick={() => setUnchangedCollapsed((prev) => !prev)}
           >
-            <span className="break-words">{t('reviewUnchangedTitle', String(plan.unchanged.length))}</span>
+            <ChevronDownIcon
+              className={`h-3.5 w-3.5 shrink-0 text-index-faint transition-transform duration-150 motion-reduce:transition-none ${unchangedCollapsed ? '-rotate-90' : ''}`}
+            />
+            <span className="min-w-0 flex-1 break-words">{t('reviewUnchangedTitle', String(plan.unchanged.length))}</span>
           </button>
 
           {!unchangedCollapsed && (
-            <div className="space-y-2">
+            <div className="border-t border-index-line bg-neutral-50">
               {UNCHANGED_KINDS.map((kind) => {
                 const rows = plan.unchanged.filter((row) => row.kind === kind)
                 if (rows.length === 0) return null
                 return (
-                  <div key={kind} className="space-y-1">
-                    <p className="px-2 pt-2 text-2xs font-medium text-index-muted">{unchangedKindLabel(kind)}</p>
+                  <div key={kind}>
+                    {/* 原因是这一小段的抬头，不是其中一条：底色加深一档、字更小，
+                        免得跟下面的书签标题看起来是同一层。 */}
+                    <p className="border-b border-index-line bg-neutral-100 px-2.5 py-1 text-2xs font-medium text-index-muted">{unchangedKindLabel(kind)}</p>
                     <ul>
                       {rows.map((row) => (
-                        <li key={row.bookmarkId} className="border-b border-index-line px-2 py-2 text-sm leading-caption">
-                          <div className="break-words font-medium [overflow-wrap:anywhere]">{row.title}</div>
-                          <div className="mt-1 break-words text-index-muted [overflow-wrap:anywhere]">{row.currentPath.join(' / ')}</div>
-                          {row.reason !== '' && <div className="mt-0.5 text-neutral-400">{row.reason}</div>}
+                        <li key={row.bookmarkId} className="border-b border-index-line px-2.5 py-2.5 text-sm leading-caption last:border-b-0">
+                          <div className="break-words font-medium text-index-ink [overflow-wrap:anywhere]">{row.title}</div>
+                          <div className="mt-1 break-words text-xs leading-caption text-index-muted [overflow-wrap:anywhere]">{row.currentPath.join(' / ')}</div>
+                          {row.reason !== '' && <div className="mt-0.5 text-xs leading-caption text-index-faint">{row.reason}</div>}
                         </li>
                       ))}
                     </ul>
@@ -386,7 +416,12 @@ export function ReviewStep() {
 
       <StickyActionBar>
         <div className="flex gap-2">
-          <SecondaryButton onClick={reset}>{t('reviewDiscard')}</SecondaryButton>
+          {/* 只是把这一轮倒出去存档，跟放弃/应用同属「对这份方案做什么」，不是勾选或筛选 */}
+          <GhostButton className="shrink-0" onClick={exportPlan}>
+            <DownloadIcon />
+            {t('reviewExportPlan')}
+          </GhostButton>
+          <SecondaryButton className="shrink-0" onClick={reset}>{t('reviewDiscard')}</SecondaryButton>
           <PrimaryButton
             className="flex-1"
             disabled={accepted.size === 0 || busy !== null}
