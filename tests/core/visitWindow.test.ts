@@ -17,7 +17,7 @@ describe('windowStart', () => {
     expect(windowStart('all', NOW)).toBe(0)
   })
 
-  it('选项从最短排到最长，全部在末尾', () => {
-    expect(VISIT_WINDOWS).toEqual<VisitWindow[]>(['1m', '2m', '3m', '6m', '1y', 'all'])
+  it('全部打头，其余从最短排到最长', () => {
+    expect(VISIT_WINDOWS).toEqual<VisitWindow[]>(['all', '1m', '2m', '3m', '6m', '1y'])
   })
 })

@@ -58,12 +58,12 @@ const rangeOn = `${rangeBase} bg-blue-50 text-blue-600`
 const rangeOff = `${rangeBase} text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800`
 
 const WINDOW_LABEL = {
+  all: 'dashWindowAll',
   '1m': 'dashWindow1m',
   '2m': 'dashWindow2m',
   '3m': 'dashWindow3m',
   '6m': 'dashWindow6m',
   '1y': 'dashWindow1y',
-  all: 'dashWindowAll',
 } as const
 
 /** 域名活跃度那排小圆点的格数。 */

@@ -4,10 +4,10 @@
  * 'all' 是不限，其余各自往回数一段。放在 core 里是因为界面和取数两边都要用同一套口径，
  * 而这一层不许碰浏览器 API。
  */
-export type VisitWindow = '1m' | '2m' | '3m' | '6m' | '1y' | 'all'
+export type VisitWindow = 'all' | '1m' | '2m' | '3m' | '6m' | '1y'
 
-/** 从最短排到最长，「全部」压在末尾：最常问的是「最近这阵子」，它该在手最先够到的地方。 */
-export const VISIT_WINDOWS: readonly VisitWindow[] = ['1m', '2m', '3m', '6m', '1y', 'all']
+/** 「全部」打头——它是默认那档，也是不筛的基线；其余从最短排到最长。 */
+export const VISIT_WINDOWS: readonly VisitWindow[] = ['all', '1m', '2m', '3m', '6m', '1y']
 
 const DAY = 86400000
 
