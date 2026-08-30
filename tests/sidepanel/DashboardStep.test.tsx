@@ -234,6 +234,7 @@ describe('DashboardStep', () => {
 
     await user.click(screen.getByRole('button', { name: /localhost/ }))
     expect(screen.getByText('analysis / library')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /analysis \/ library/ }))
     expect(screen.getByText('Lib')).toBeTruthy()
     // /home 底下没有别的分支，只出页面行，不摆一行叫 home 的目录
     expect(screen.getByText('Home')).toBeTruthy()
@@ -269,6 +270,15 @@ describe('DashboardStep', () => {
     render(<DashboardStep />)
     await user.click(screen.getByRole('button', { name: t('dashDomainExpand', 'github.com') }))
 
+    // 展开来源只露出最外一层，往下每一层都要自己点
+    expect(screen.getByText('Bar')).toBeTruthy()
+    expect(screen.queryByText('A')).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: /Bar/ }))
+    expect(screen.getByText('A')).toBeTruthy()
+    expect(screen.queryByText('A1')).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: /^A(?!1)/ }))
     expect(screen.getByText('A1')).toBeTruthy()
     expect(screen.queryByText('A1X')).toBeNull()
 
@@ -423,6 +433,7 @@ describe('DashboardStep', () => {
     await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
     expect(await screen.findByText('192.168.5.39')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: /192\.168\.5\.39/ }))
+    await user.click(screen.getByRole('button', { name: /tasks/ }))
 
     // 三个 ID 一行都不占，合并行报出页面数；documents 这种读得懂的照旧成行
     expect(screen.queryByText(/019fb349/)).toBeNull()
@@ -452,6 +463,7 @@ describe('DashboardStep', () => {
     await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
     expect(await screen.findByText('192.168.5.39')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: /192\.168\.5\.39/ }))
+    await user.click(screen.getByRole('button', { name: /tasks/ }))
 
     expect(screen.getByText(t('dashVisitGroupUnnamed'))).toBeTruthy()
   })
@@ -471,9 +483,58 @@ describe('DashboardStep', () => {
     expect(screen.getByText('localhost:8501')).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: /localhost:5173/ }))
+    await user.click(screen.getByRole('button', { name: /settings/ }))
     expect(screen.getByText('localhost:5173/settings')).toBeTruthy()
     // 另一个端口的页面不该混进这棵树
     expect(screen.queryByText(/license/)).toBeNull()
+  })
+
+  it('域名行报站点名，地址退到下面一行', async () => {
+    const user = userEvent.setup()
+    contains.mockResolvedValue(true)
+    search.mockResolvedValue([
+      { url: 'http://localhost:5629/home', title: '墨析 · 小说拆解工作台', visitCount: 242 },
+      { url: 'http://localhost:5629/settings', title: '墨析 · 小说拆解工作台', visitCount: 121 },
+    ])
+
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
+    expect(await screen.findByText('墨析 · 小说拆解工作台')).toBeTruthy()
+    expect(screen.getByText('localhost:5629')).toBeTruthy()
+  })
+
+  it('取不到站点名的照旧只显示域名', async () => {
+    const user = userEvent.setup()
+    contains.mockResolvedValue(true)
+    search.mockResolvedValue([
+      { url: 'https://github.com/a', title: 'sst/opencode', visitCount: 20 },
+      { url: 'https://github.com/b', title: 'openai/codex', visitCount: 8 },
+    ])
+
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
+    expect(await screen.findByText('github.com')).toBeTruthy()
+  })
+
+  it('展开来源只展一层，下一层要自己点', async () => {
+    const user = userEvent.setup()
+    contains.mockResolvedValue(true)
+    search.mockResolvedValue([
+      { url: 'http://localhost:5629/analysis/library', title: '墨析', visitCount: 502 },
+      { url: 'http://localhost:5629/analysis/upload', title: '墨析', visitCount: 62 },
+    ])
+
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
+    expect(await screen.findByText('localhost:5629')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /localhost:5629/ }))
+
+    const analysis = screen.getByRole('button', { name: /analysis/ })
+    expect(analysis.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByText(/analysis\/library/)).toBeNull()
+
+    await user.click(analysis)
+    expect(screen.getByText('localhost:5629/analysis/library')).toBeTruthy()
   })
 
   it('空的那段没有收起按钮', async () => {
@@ -510,6 +571,7 @@ describe('DashboardStep', () => {
 
     // 页面本身还在
     expect(screen.getByText('192.168.5.39/task')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /mailbox/ }))
     expect(screen.getByText('192.168.5.39/mailbox/inbox')).toBeTruthy()
     // 但 task、inbox 不再各自占一行目录
     expect(screen.queryByText('task')).toBeNull()

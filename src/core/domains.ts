@@ -7,6 +7,39 @@ export interface WeightedUrl {
   title?: string
 }
 
+/** 标题里用来分隔「本页叫什么」和「这站叫什么」的符号，两侧都留了空白才算。 */
+const TITLE_SEPARATOR = /\s[-–—·|:]\s/
+
+function commonTail(a: string, b: string): string {
+  let i = 0
+  while (i < a.length && i < b.length && a[a.length - 1 - i] === b[b.length - 1 - i]) i += 1
+  return a.slice(a.length - i)
+}
+
+/**
+ * 一批同源页面共同的站点名。取不到就返回 undefined，界面退回显示 host。
+ *
+ * 标题全一样时整条就是名字——`墨析 · 小说拆解工作台` 里的分隔符是它自己名字的一部分，
+ * 从那儿切一刀会把「墨析」切掉。
+ *
+ * 标题各不相同时才切：公共尾巴里第一个分隔符之后的那截才是站名。
+ * 「授权管理 / 配置管理 / 数据导入管理 – TradingAgents-CN」的公共尾巴是
+ * `管理 – TradingAgents-CN`，「管理」是这几页碰巧撞上的字，不是谁的名字，得切掉。
+ * 公共尾巴里根本没有分隔符，那就整段都是撞上的字，一个名字也报不出来。
+ */
+export function siteName(titles: readonly string[]): string | undefined {
+  const named = titles.map((title) => title.trim()).filter((title) => title !== '')
+  // 一个页面证明不了站点叫什么，它的标题就是它自己的标题。要有第二个页面作证。
+  if (named.length < 2) return undefined
+  if (named.every((title) => title === named[0])) return named[0]
+
+  const tail = named.reduce(commonTail)
+  const separator = TITLE_SEPARATOR.exec(tail)
+  if (separator === null) return undefined
+  const name = tail.slice(separator.index + separator[0].length).trim()
+  return name === '' ? undefined : name
+}
+
 export interface DomainRank {
   /**
    * 域名带端口，`localhost:5173` 与 `localhost:8501` 是两行。
@@ -16,6 +49,8 @@ export interface DomainRank {
    * 端口才是它们的身份。默认端口(:80/:443)不写，普通网站看上去和以前一样。
    */
   domain: string
+  /** 这个来源自称什么，见 siteName。取不到就没有，界面退回显示 domain。 */
+  siteName?: string
   count: number
   sampleUrl: string
 }
@@ -43,11 +78,13 @@ const DEFAULT_LIMIT = DEFAULT_TOP_DOMAINS
  */
 export function rankDomains(items: WeightedUrl[], limit = DEFAULT_LIMIT): DomainRank[] {
   const byDomain = new Map<string, DomainRank>()
+  const titles = new Map<string, string[]>()
   for (const item of items) {
     const weight = item.weight ?? 1
     if (weight <= 0) continue
     const parsed = sanitizeUrl(item.url)
     if (parsed === null) continue
+    titles.get(parsed.host)?.push(item.title ?? '') ?? titles.set(parsed.host, [item.title ?? ''])
     const existing = byDomain.get(parsed.host)
     if (existing === undefined) {
       byDomain.set(parsed.host, {
@@ -60,6 +97,10 @@ export function rankDomains(items: WeightedUrl[], limit = DEFAULT_LIMIT): Domain
     }
   }
   return [...byDomain.values()]
+    .map((row) => {
+      const name = siteName(titles.get(row.domain) ?? [])
+      return name === undefined ? row : { ...row, siteName: name }
+    })
     .sort((a, b) => b.count - a.count || a.domain.localeCompare(b.domain))
     .slice(0, limit)
 }
@@ -69,7 +110,8 @@ export function bookmarkUrls(tree: BookmarkNode[]): WeightedUrl[] {
   const out: WeightedUrl[] = []
   const walk = (node: BookmarkNode): void => {
     if (node.url !== undefined) {
-      out.push({ url: node.url })
+      // 标题一并带上：排行榜要靠它认出这个来源自称什么。
+      out.push({ url: node.url, title: node.title })
       return
     }
     for (const child of node.children ?? []) walk(child)

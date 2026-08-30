@@ -308,8 +308,14 @@ function DomainRow({
         {String(rank).padStart(2, '0')}
       </span>
       <DomainIcon domain={row.domain} pageUrl={row.sampleUrl} />
-      <span className="min-w-0 flex-1 truncate text-md text-neutral-700" title={row.domain}>
-        {row.domain}
+      {/* 站点自称的名字排在前面。`localhost:5629` 是给机器看的，人认得的是「墨析」。 */}
+      <span className="flex min-w-0 flex-1 flex-col" title={row.domain}>
+        <span className="truncate text-md text-neutral-700">
+          {row.siteName ?? row.domain}
+        </span>
+        {row.siteName !== undefined && (
+          <span className="truncate text-xs leading-caption text-neutral-400">{row.domain}</span>
+        )}
       </span>
       <span className="flex shrink-0 items-center gap-[3px]" aria-hidden="true">
         {Array.from({ length: METER_SEGMENTS }, (_, i) => (
@@ -532,8 +538,13 @@ function SavedVisitRow({ page }: { page: SavedVisit }) {
   )
 }
 
-/** Folders shallower than this open on their own; deeper ones wait for a click. */
-const FOLDER_AUTO_OPEN_DEPTH = 2
+/**
+ * Folders shallower than this open on their own; deeper ones wait for a click.
+ *
+ * 零，也就是一层都不自动展开。展开一个来源先看见它有哪几块，想看哪块自己点——
+ * 从前默认铺三层，一点开就是几十行路径，等于把「这站我用了多少」这句话埋在细节里。
+ */
+const FOLDER_AUTO_OPEN_DEPTH = 0
 
 function FolderTree({
   nodes,

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   bookmarkUrls,
+  siteName,
   clampTopDomainCount,
   domainFolderTree,
   rankDomains,
@@ -120,8 +121,8 @@ describe('bookmarkUrls', () => {
       ]},
     ]
     expect(bookmarkUrls(tree)).toEqual([
-      { url: 'https://github.com/a' },
-      { url: 'https://example.com/b' },
+      { url: 'https://github.com/a', title: 'a' },
+      { url: 'https://example.com/b', title: 'b' },
     ])
   })
 
@@ -744,5 +745,81 @@ describe('看板按来源聚合，端口算身份', () => {
       .toEqual([['书签栏', 1]])
     expect(domainFolderTree(bookmarks, 'localhost:8501')[0]?.bookmarks.map((b) => b.id))
       .toEqual(['b'])
+  })
+})
+
+describe('siteName', () => {
+  it('同源页面标题全一样时，整条就是站点名', () => {
+    expect(siteName([
+      '墨析 · 小说拆解工作台',
+      '墨析 · 小说拆解工作台',
+      '墨析 · 小说拆解工作台',
+    ])).toBe('墨析 · 小说拆解工作台')
+  })
+
+  it('标题各不相同时取分隔符后的公共尾段', () => {
+    expect(siteName([
+      '授权管理 – TradingAgents-CN',
+      '配置管理 – TradingAgents-CN',
+      '数据导入管理 – TradingAgents-CN',
+    ])).toBe('TradingAgents-CN')
+  })
+
+  it('公共尾巴不落在分隔符上就不算站点名——「管理」不是谁的名字', () => {
+    expect(siteName(['授权管理', '配置管理', '数据导入管理'])).toBeUndefined()
+  })
+
+  it('没有公共部分就没有名字', () => {
+    expect(siteName(['GitHub', 'Stack Overflow'])).toBeUndefined()
+  })
+
+  it('空标题不参与——剩下不足两个就报不出名字', () => {
+    expect(siteName(['', '  ', ''])).toBeUndefined()
+    expect(siteName(['', '墨析 · 小说拆解工作台'])).toBeUndefined()
+    expect(siteName(['', '墨析 · 小说拆解工作台', '墨析 · 小说拆解工作台']))
+      .toBe('墨析 · 小说拆解工作台')
+  })
+
+  it('只有一个页面时不报名字——那是页面标题，不是站点名', () => {
+    expect(siteName(['研究报告 – TradingAgents-CN'])).toBeUndefined()
+  })
+})
+
+describe('rankDomains 的站点名', () => {
+  it('排行榜每一行带上站点名，取不到就不给', () => {
+    expect(rankDomains([
+      { url: 'http://localhost:5629/home', title: '墨析 · 小说拆解工作台' },
+      { url: 'http://localhost:5629/settings', title: '墨析 · 小说拆解工作台' },
+      { url: 'https://github.com/a', title: 'sst/opencode' },
+      { url: 'https://github.com/b', title: 'openai/codex' },
+    ])).toEqual([
+      // 并列时按域名字典序，github.com 在前
+      { domain: 'github.com', count: 2, sampleUrl: 'https://github.com/a' },
+      {
+        domain: 'localhost:5629',
+        siteName: '墨析 · 小说拆解工作台',
+        count: 2,
+        sampleUrl: 'http://localhost:5629/home',
+      },
+    ])
+  })
+})
+
+describe('bookmarkUrls 带上标题', () => {
+  it('书签栏那一侧也能报站点名', () => {
+    const tree: BookmarkNode[] = [
+      { id: '0', title: '', children: [
+        { id: 'bar', title: '书签栏', children: [
+          { id: 'a', title: '授权管理 – TradingAgents-CN', url: 'http://localhost:8501/settings/license' },
+          { id: 'b', title: '配置管理 – TradingAgents-CN', url: 'http://localhost:8501/settings/config' },
+        ]},
+      ]},
+    ]
+
+    expect(bookmarkUrls(tree)).toEqual([
+      { url: 'http://localhost:8501/settings/license', title: '授权管理 – TradingAgents-CN' },
+      { url: 'http://localhost:8501/settings/config', title: '配置管理 – TradingAgents-CN' },
+    ])
+    expect(rankDomains(bookmarkUrls(tree))[0]?.siteName).toBe('TradingAgents-CN')
   })
 })
