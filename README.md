@@ -73,7 +73,7 @@ you're running, or hack on it:
 ```bash
 npm install
 npm run build     # type-check, then build to dist/
-npm test          # 1677 tests across 86 files
+npm test          # 1700+ unit tests, no network
 npm run dev       # dev server with HMR
 ```
 
