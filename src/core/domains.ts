@@ -115,9 +115,6 @@ export function domainFolderTree(
     return parsed !== null && parsed.domain === domain
   }
 
-  const sortLevel = (nodes: DomainFolderNode[]): DomainFolderNode[] =>
-    [...nodes].sort((a, b) => b.count - a.count || a.title.localeCompare(b.title))
-
   const collapse = (node: DomainFolderNode): DomainFolderNode => {
     const only = node.children.length === 1 ? node.children[0] : undefined
     if (node.directCount === 0 && only !== undefined) {
@@ -161,18 +158,73 @@ export function domainFolderTree(
   return forest(tree)
 }
 
+/** 同一层按次数降序，同数按名字，排出来的顺序不随输入顺序漂。 */
+function sortLevel(nodes: DomainFolderNode[]): DomainFolderNode[] {
+  return [...nodes].sort((a, b) => b.count - a.count || a.title.localeCompare(b.title))
+}
+
+/**
+ * 只裹着一个页面的路径段不值得单独成行。标记而不是就地摊平：节点留在 children 里，
+ * 才能继续跟同层的目录一起按次数排序——摊进父节点的 bookmarks 就会被顶到所有目录前面，
+ * 排出一串忽大忽小的数字。
+ */
+function markPageOnly(node: DomainFolderNode): DomainFolderNode {
+  return node.title !== '' && node.children.length === 0 && node.bookmarks.length === 1
+    ? { ...node, pageOnly: true }
+    : node
+}
+
+/** 页面按访问次数降序，同数按地址，两处合并都用它。 */
+function sortPages(pages: DomainFolderNode['bookmarks']): DomainFolderNode['bookmarks'] {
+  return [...pages].sort((a, b) => (b.weight ?? 1) - (a.weight ?? 1) || a.url.localeCompare(b.url))
+}
+
 /** 同层里长得一样的 ID 段至少这么多个才值得并成一行；两三个还看得过来。 */
 const MIN_ID_SIBLINGS = 3
 
-/** UUID、够长的 hex、够长的纯数字——机器编号常见的三种形状。 */
+/**
+ * UUID、够长的 hex、纯数字——机器编号常见的三种形状。
+ *
+ * 数字不设下限：`/library/3` 和 `/tasks/019fb349…` 一样是条记录的编号，位数只说明这站还年轻。
+ * 会不会误伤 `/blog/2024` 这种年份？会，但得同层凑够三个纯数字才折，折完地址还原样躺在里面，
+ * 代价是一次点击；反过来漏掉一位数的编号，代价是刚才那一屏。
+ */
 const ID_SEGMENT_SHAPES = [
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
   /^[0-9a-f]{24,}$/i,
-  /^\d{6,}$/,
+  /^\d+$/,
 ]
 
 function isIdSegment(segment: string): boolean {
   return ID_SEGMENT_SHAPES.some((shape) => shape.test(segment))
+}
+
+/**
+ * 一批 ID 段底下的子树按段名合成一棵：同名的并成一个，次数求和，页面堆在一起。
+ *
+ * 段名合掉了，地址没有——`5/read` 与 `1/read` 并成一行 `read`，两条完整 URL 仍在它的页面里，
+ * 哪条属于哪本还点得出来。所以并子树不丢信息，只是不再为每个编号各铺一层。
+ */
+function mergeSubtrees(parentId: string, nodes: DomainFolderNode[]): DomainFolderNode[] {
+  const byTitle = new Map<string, DomainFolderNode[]>()
+  for (const node of nodes) {
+    const same = byTitle.get(node.title)
+    if (same === undefined) byTitle.set(node.title, [node])
+    else same.push(node)
+  }
+  return sortLevel([...byTitle].map(([title, group]) => {
+    const id = `${parentId}/${title}`
+    if (group.length === 1) return { ...group[0]!, id }
+    const bookmarks = sortPages(group.flatMap((node) => node.bookmarks))
+    return markPageOnly({
+      id,
+      title,
+      count: group.reduce((n, node) => n + node.count, 0),
+      directCount: bookmarks.length,
+      children: mergeSubtrees(id, group.flatMap((node) => node.children)),
+      bookmarks,
+    })
+  }))
 }
 
 /**
@@ -181,28 +233,29 @@ function isIdSegment(segment: string): boolean {
  * 判定不看单独一段长什么样，看同层有没有一批长得一样的：一个 `tasks/abc123` 可能是人起的名字，
  * 四十个 UUID 只可能是机器编的号。够不上 MIN_ID_SIBLINGS 就原样留着，宁可多几行也别吞掉真名字。
  *
- * 只并叶子。底下还有分支的段并进来，子结构会拌成一锅——四十个 `<id>/edit` 挤在一起谁也读不出。
+ * 底下有没有分支不影响并不并——一个编号有没有子页面，是那站怎么排路由的事，跟它是不是编号无关。
+ * 子树交给 mergeSubtrees 按段名合。
+ *
  * 标题不参与判定：SPA 常常整站一个标题，那时它对该并的和不该并的一视同仁，什么也区分不了；
  * 它只用来给并出来的那行起名。
  */
 function groupIdSiblings(parentId: string, children: DomainFolderNode[]): DomainFolderNode[] {
-  const ids = children.filter((child) => child.children.length === 0 && isIdSegment(child.title))
+  const ids = children.filter((child) => isIdSegment(child.title))
   if (ids.length < MIN_ID_SIBLINGS) return children
 
   const merged = new Set(ids)
-  const bookmarks = ids
-    .flatMap((child) => child.bookmarks)
-    .sort((a, b) => (b.weight ?? 1) - (a.weight ?? 1) || a.url.localeCompare(b.url))
+  const id = `${parentId === '/' ? '' : parentId}/*`
+  const bookmarks = sortPages(ids.flatMap((child) => child.bookmarks))
   const titles = new Set(bookmarks.map((bookmark) => bookmark.title.trim()))
   return [
     ...children.filter((child) => !merged.has(child)),
     {
-      id: `${parentId === '/' ? '' : parentId}/*`,
+      id,
       title: titles.size === 1 ? [...titles][0]! : '',
       grouped: true,
       count: ids.reduce((n, child) => n + child.count, 0),
       directCount: bookmarks.length,
-      children: [],
+      children: mergeSubtrees(id, ids.flatMap((child) => child.children)),
       bookmarks,
     },
   ]
@@ -248,9 +301,6 @@ export function visitFolderTree(pages: readonly WeightedUrl[], domain: string): 
     })
   }
 
-  const sortLevel = (nodes: DomainFolderNode[]): DomainFolderNode[] =>
-    [...nodes].sort((a, b) => b.count - a.count || a.title.localeCompare(b.title))
-
   const collapse = (node: DomainFolderNode): DomainFolderNode => {
     const only = node.children.length === 1 ? node.children[0] : undefined
     const swallowable = only !== undefined && only.grouped !== true
@@ -266,16 +316,6 @@ export function visitFolderTree(pages: readonly WeightedUrl[], domain: string): 
     }
     return node
   }
-
-  /**
-   * 只裹着一个页面的路径段不值得单独成行。标记而不是就地摊平：节点留在 children 里，
-   * 才能继续跟同层的目录一起按次数排序——摊进父节点的 bookmarks 就会被顶到所有目录前面，
-   * 排出一串忽大忽小的数字。
-   */
-  const markPageOnly = (node: DomainFolderNode): DomainFolderNode =>
-    node.title !== '' && node.children.length === 0 && node.bookmarks.length === 1
-      ? { ...node, pageOnly: true }
-      : node
 
   function freeze(node: MutableVisitFolder): DomainFolderNode {
     const children = groupIdSiblings(node.id, [...node.children.values()].map(freeze))

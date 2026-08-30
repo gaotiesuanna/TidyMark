@@ -617,6 +617,42 @@ describe('visitFolderTree 同形 ID 段合并', () => {
     expect(tree[0]?.children.map((node) => [node.title, node.grouped])).toEqual([['', true]])
   })
 
+  it('一位两位的纯数字段也是编号，够三个就并', () => {
+    const tree = visitFolderTree([
+      { url: 'http://localhost/analysis/library/3', title: '墨析', weight: 193 },
+      { url: 'http://localhost/analysis/library/6', title: '墨析', weight: 167 },
+      { url: 'http://localhost/analysis/library/2', title: '墨析', weight: 141 },
+    ], 'localhost')
+
+    expect(tree[0]?.children.map((node) => [node.id, node.count, node.directCount])).toEqual([
+      ['analysis/library/*', 501, 3],
+    ])
+  })
+
+  it('底下还有分支的 ID 段照并，子树按段名合起来、次数求和', () => {
+    const tree = visitFolderTree([
+      { url: 'http://localhost/library/5', title: '墨析', weight: 300 },
+      { url: 'http://localhost/library/5/read', title: '墨析', weight: 215 },
+      { url: 'http://localhost/library/1', title: '墨析', weight: 154 },
+      { url: 'http://localhost/library/1/read', title: '墨析', weight: 100 },
+      { url: 'http://localhost/library/4', title: '墨析', weight: 10 },
+      { url: 'http://localhost/library/4/read', title: '墨析', weight: 5 },
+    ], 'localhost')
+
+    expect(tree.map((node) => [node.title, node.count])).toEqual([['library', 784]])
+    const group = tree[0]?.children[0]
+    expect([group?.id, group?.grouped, group?.count, group?.directCount]).toEqual([
+      'library/*', true, 784, 3,
+    ])
+    // 三个 read 并成一个，三条地址原样留在里面——哪条属于哪本小说还看得出来
+    expect(group?.children.map((node) => [node.title, node.count])).toEqual([['read', 320]])
+    expect(group?.children[0]?.bookmarks.map((b) => b.url)).toEqual([
+      'http://localhost/library/5/read',
+      'http://localhost/library/1/read',
+      'http://localhost/library/4/read',
+    ])
+  })
+
   it('顶层的 ID 段一样并成一行', () => {
     const tree = visitFolderTree([
       palclaw('/019fb349-e6f2-7407-a254-1919171a8d4a', 9),
