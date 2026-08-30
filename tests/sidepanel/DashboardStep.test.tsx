@@ -456,6 +456,26 @@ describe('DashboardStep', () => {
     expect(screen.getByText(t('dashVisitGroupUnnamed'))).toBeTruthy()
   })
 
+  it('同一台机器上的两个端口排成两行，行内地址带上端口', async () => {
+    const user = userEvent.setup()
+    contains.mockResolvedValue(true)
+    search.mockResolvedValue([
+      { url: 'http://localhost:5173/settings', title: '墨析 · 小说拆解工作台', visitCount: 151 },
+      { url: 'http://localhost:5173/settings/tasks', title: '墨析 · 小说拆解工作台', visitCount: 210 },
+      { url: 'http://localhost:8501/settings/license', title: '授权管理 – TradingAgents-CN', visitCount: 4 },
+    ])
+
+    render(<DashboardStep />)
+    await user.click(screen.getByRole('tab', { name: t('dashVisited') }))
+    expect(await screen.findByText('localhost:5173')).toBeTruthy()
+    expect(screen.getByText('localhost:8501')).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: /localhost:5173/ }))
+    expect(screen.getByText('localhost:5173/settings')).toBeTruthy()
+    // 另一个端口的页面不该混进这棵树
+    expect(screen.queryByText(/license/)).toBeNull()
+  })
+
   it('空的那段没有收起按钮', async () => {
     const user = userEvent.setup()
     contains.mockResolvedValue(true)

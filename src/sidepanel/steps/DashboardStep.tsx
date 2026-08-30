@@ -678,7 +678,8 @@ function FolderBookmarks({ bookmarks }: { bookmarks: DomainFolderNode['bookmarks
 
 function shortAddress(raw: string): string {
   const parsed = sanitizeUrl(raw)
-  return parsed === null ? raw : `${parsed.domain}${parsed.path === '/' ? '' : parsed.path}`
+  // 带端口。看板已经按端口分卡片了，地址里再不写出来，两张卡片的行看上去就一模一样。
+  return parsed === null ? raw : `${parsed.host}${parsed.path === '/' ? '' : parsed.path}`
 }
 
 function DomainIcon({ domain, pageUrl }: { domain: string; pageUrl: string }) {

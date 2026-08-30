@@ -680,3 +680,69 @@ describe('visitFolderTree 同形 ID 段合并', () => {
     ])
   })
 })
+
+describe('看板按来源聚合，端口算身份', () => {
+  it('rankDomains 把一台机器上的两个端口排成两行', () => {
+    expect(rankDomains([
+      { url: 'http://localhost:5173/settings' },
+      { url: 'http://localhost:5173/settings/tasks' },
+      { url: 'http://localhost:8501/settings/license' },
+    ])).toEqual([
+      { domain: 'localhost:5173', count: 2, sampleUrl: 'http://localhost:5173/settings' },
+      { domain: 'localhost:8501', count: 1, sampleUrl: 'http://localhost:8501/settings/license' },
+    ])
+  })
+
+  it('普通网站没变——默认端口不成为另一个来源', () => {
+    expect(rankDomains([
+      { url: 'https://github.com/a' },
+      { url: 'https://github.com:443/b' },
+      { url: 'https://www.github.com/c' },
+    ])).toEqual([
+      { domain: 'github.com', count: 3, sampleUrl: 'https://github.com/a' },
+    ])
+  })
+
+  it('visitFolderTree 只收本端口的页面，两套路由不再叠在一起', () => {
+    const tree = visitFolderTree([
+      { url: 'http://localhost:5173/settings', title: '墨析', weight: 151 },
+      { url: 'http://localhost:5173/settings/tasks', title: '墨析', weight: 210 },
+      { url: 'http://localhost:8501/settings/license', title: '授权管理', weight: 4 },
+    ], 'localhost:5173')
+
+    expect(tree.map((node) => [node.title, node.count])).toEqual([['settings', 361]])
+    expect(tree[0]?.children.map((node) => node.title)).toEqual(['tasks'])
+  })
+
+  it('visitSplitTree 也按端口分：另一个端口的书签不算这边收藏了', () => {
+    const bookmarks: BookmarkNode[] = [
+      { id: '0', title: '', children: [
+        { id: 'bar', title: '书签栏', children: [
+          { id: 'a', title: '墨析设置', url: 'http://localhost:5173/settings' },
+        ]},
+      ]},
+    ]
+    const split = visitSplitTree([
+      { url: 'http://localhost:8501/settings', title: '授权管理', weight: 4 },
+    ], bookmarks, 'localhost:8501')
+
+    expect(split.saved).toEqual([])
+    expect(split.unsaved.map((node) => [node.title, node.count])).toEqual([['settings', 4]])
+  })
+
+  it('domainFolderTree 按端口挑书签', () => {
+    const bookmarks: BookmarkNode[] = [
+      { id: '0', title: '', children: [
+        { id: 'bar', title: '书签栏', children: [
+          { id: 'a', title: '墨析', url: 'http://localhost:5173/settings' },
+          { id: 'b', title: '授权', url: 'http://localhost:8501/settings' },
+        ]},
+      ]},
+    ]
+
+    expect(domainFolderTree(bookmarks, 'localhost:8501').map((node) => [node.title, node.count]))
+      .toEqual([['书签栏', 1]])
+    expect(domainFolderTree(bookmarks, 'localhost:8501')[0]?.bookmarks.map((b) => b.id))
+      .toEqual(['b'])
+  })
+})

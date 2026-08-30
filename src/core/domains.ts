@@ -8,6 +8,13 @@ export interface WeightedUrl {
 }
 
 export interface DomainRank {
+  /**
+   * 域名带端口，`localhost:5173` 与 `localhost:8501` 是两行。
+   *
+   * 看板不能按纯域名聚合：一台机器上常常跑着好几个项目，它们的 `/settings`、`/analysis`
+   * 各是各的，叠进一棵树就成了两套路由的混合物，谁也读不出哪一段属于谁。
+   * 端口才是它们的身份。默认端口(:80/:443)不写，普通网站看上去和以前一样。
+   */
   domain: string
   count: number
   sampleUrl: string
@@ -41,10 +48,10 @@ export function rankDomains(items: WeightedUrl[], limit = DEFAULT_LIMIT): Domain
     if (weight <= 0) continue
     const parsed = sanitizeUrl(item.url)
     if (parsed === null) continue
-    const existing = byDomain.get(parsed.domain)
+    const existing = byDomain.get(parsed.host)
     if (existing === undefined) {
-      byDomain.set(parsed.domain, {
-        domain: parsed.domain,
+      byDomain.set(parsed.host, {
+        domain: parsed.host,
         count: weight,
         sampleUrl: item.url,
       })
@@ -112,7 +119,7 @@ export function domainFolderTree(
 ): DomainFolderNode[] {
   const matches = (url: string): boolean => {
     const parsed = sanitizeUrl(url)
-    return parsed !== null && parsed.domain === domain
+    return parsed !== null && parsed.host === domain
   }
 
   const collapse = (node: DomainFolderNode): DomainFolderNode => {
@@ -280,7 +287,7 @@ export function visitFolderTree(pages: readonly WeightedUrl[], domain: string): 
     const weight = page.weight ?? 1
     if (weight <= 0) continue
     const parsed = sanitizeUrl(page.url)
-    if (parsed === null || parsed.domain !== domain) continue
+    if (parsed === null || parsed.host !== domain) continue
     const segments = parsed.path === '/' ? [] : parsed.path.split('/').filter((segment) => segment !== '')
     let node = root
     let path = ''
@@ -365,7 +372,7 @@ function mergeVisitPages(pages: DomainFolderNode['bookmarks']): DomainFolderNode
   const byPath = new Map<string, { page: DomainFolderNode['bookmarks'][number]; topWeight: number }>()
   for (const page of pages) {
     const parsed = sanitizeUrl(page.url)
-    const key = parsed === null ? page.url : `${parsed.domain}${parsed.path}`
+    const key = parsed === null ? page.url : `${parsed.host}${parsed.path}`
     const weight = page.weight ?? 1
     const href = visitPageHref(page.url)
     const existing = byPath.get(key)
@@ -426,8 +433,8 @@ export function visitSplitTree(
     const weight = page.weight ?? 1
     if (weight <= 0) continue
     const parsed = sanitizeUrl(page.url)
-    if (parsed === null || parsed.domain !== domain) continue
-    if (index.has(`${parsed.domain}${parsed.path}`)) {
+    if (parsed === null || parsed.host !== domain) continue
+    if (index.has(`${parsed.host}${parsed.path}`)) {
       savedPages.push({ id: page.url, title: page.title ?? '', url: page.url, weight })
     } else {
       unsavedPages.push(page)
@@ -436,7 +443,7 @@ export function visitSplitTree(
 
   const saved = mergeVisitPages(savedPages).map((page) => {
     const parsed = sanitizeUrl(page.url)
-    const entry = parsed === null ? undefined : index.get(`${parsed.domain}${parsed.path}`)
+    const entry = parsed === null ? undefined : index.get(`${parsed.host}${parsed.path}`)
     const bookmarkTitle = (entry?.title ?? '').trim()
     return {
       id: page.id,
@@ -463,8 +470,8 @@ function domainBookmarkIndex(
   const walk = (node: BookmarkNode, path: string[]): void => {
     if (node.url !== undefined) {
       const parsed = sanitizeUrl(node.url)
-      if (parsed === null || parsed.domain !== domain) return
-      const key = `${parsed.domain}${parsed.path}`
+      if (parsed === null || parsed.host !== domain) return
+      const key = `${parsed.host}${parsed.path}`
       if (!index.has(key)) index.set(key, { title: node.title, folderPath: path })
       return
     }
