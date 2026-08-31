@@ -61,14 +61,22 @@ function StaleBookmarkRow({ entry }: { entry: StaleBookmark }) {
       >
         {item.url}
       </a>
+      {/* unknown 桶的桶名就是「没有上次打开时间」——跟左边这句话是同一句英文/中文，
+          原样接在点号后面会念成「没有上次打开时间 · 没有上次打开时间」，读着像复制粘贴
+          漏删了一份。左边这句已经把话说完，右边这半只在其余四个桶（真有一个时间点可报）
+          时才补一句「属于哪一档」，unknown 没有这个信息可补，不接这半句。 */}
       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-neutral-400">
         <span>
           {lastUsedAt === undefined
             ? t('cleanupStaleNoLastUsed')
             : t('cleanupStaleLastVisit', formatDate(lastUsedAt))}
         </span>
-        <span aria-hidden="true">·</span>
-        <span>{t(BUCKET_LABELS[bucket])}</span>
+        {bucket !== 'unknown' && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span>{t(BUCKET_LABELS[bucket])}</span>
+          </>
+        )}
       </div>
       {bucket === 'unknown' && (
         <div className="text-xs leading-snug text-neutral-400">{t('cleanupStaleUnknownHint')}</div>

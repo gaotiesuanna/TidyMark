@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CleanupStep } from '@/sidepanel/steps/CleanupStep'
 import { Shell } from '@/sidepanel/components/Shell'
@@ -321,6 +321,29 @@ describe('CleanupStep 长期未点击书签一节', () => {
     expect(screen.queryByText('/书签栏/目录甲/')).toBeNull()
     expect(screen.getAllByText(/上次打开|无上次打开时间/).length).toBeGreaterThan(0)
     expect(screen.getByText(/上次打开早于/)).toBeDefined()
+  })
+
+  /**
+   * unknown 桶的桶名（cleanupStaleFilterUnknown）跟「没有上次打开时间」那句
+   * （cleanupStaleNoLastUsed）是同一句话——原样接在点号后面会把这句话念两遍，
+   * 读着像复制粘贴漏删了一份。其余四个桶不受影响：那半句报的是「属于哪一档」，
+   * 跟左边的具体日期不是同一句话，两句都该在。
+   */
+  it('未知上次打开时间的那一行不把同一句话说两遍', () => {
+    useStore.setState({
+      staleScan: staleReadyResult,
+      staleState: 'ready',
+      cleanupChecked: new Set(),
+      cleanupStaleMove: new Set(),
+    })
+    render(<CleanupStep />)
+
+    const unknownRow = screen.getByText('没有记录的文章').closest('li')!
+    expect(within(unknownRow).getAllByText('无上次打开时间')).toHaveLength(1)
+
+    const oldRow = screen.getByText('旧文章').closest('li')!
+    expect(within(oldRow).getByText(/上次打开/)).toBeDefined()
+    expect(within(oldRow).getByText('1 年以上')).toBeDefined()
   })
 
   it('默认不勾选长期未点击书签，并允许单独筛选和选择未知时间', async () => {
