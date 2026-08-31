@@ -29,10 +29,10 @@
     "message": "浏览"
   },
   "shellModeDashboard": {
-    "message": "看板"
+    "message": "统计"
   },
   "shellModeDashboardShort": {
-    "message": "看板"
+    "message": "统计"
   },
   "dashTopDomains": {
     "message": "来源域名 Top $count$",
