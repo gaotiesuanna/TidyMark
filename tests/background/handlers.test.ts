@@ -3,7 +3,7 @@ import { handle, deepenBudget } from '@/background/handlers'
 import { createFakeBookmarks, type TreeSpec } from '../fakes/fake-bookmarks'
 import { createFakeStorage } from '../fakes/fake-storage'
 import { DEFAULT_SETTINGS, SETTINGS_KEY, activeLlm, loadCache, saveSettings, type Settings } from '@/storage/settings'
-import { currentLocale, setLocale } from '@/i18n'
+import { currentLocale, setLocale, t } from '@/i18n'
 import { withLlm } from '../fakes/settings'
 import { LlmError, type LlmClient } from '@/llm/client'
 import type { OrganizePlan } from '@/core/types'
@@ -1906,6 +1906,121 @@ describe('analyze 非推翻模式：多个范围根（review I2）', () => {
     expect(res.ok).toBe(true)
     expect(res.plan.operations.filter((o) => o.type === 'create_folder')).toHaveLength(1)
     expect(res.plan.rows).toHaveLength(3)
+  })
+})
+
+/**
+ * `onlyLooseInAdditive`：归入现有模式下只把直接散落在范围根下、没进任何文件夹的
+ * 书签送去分类。默认关——真实事故（issues/39-platform-tags-still-decide.md）里
+ * 186 条 GitHub 书签正是靠「全量重判」才被抓出来的错放，开着这个开关就永远抓不到
+ * 同类问题，是用户要自己权衡的取舍。
+ */
+describe('onlyLooseInAdditive：只处理散落书签', () => {
+  const looseTree = [
+    { id: '0', title: '', children: [
+      { id: '1', title: '书签栏', children: [
+        { id: '10', title: '01 前端', children: [
+          { id: 'inFolder', title: '已在文件夹里', url: 'https://infolder.dev' },
+        ]},
+        { id: 'loose1', title: '散落 1', url: 'https://loose1.dev' },
+        { id: 'loose2', title: '散落 2', url: 'https://loose2.dev' },
+      ]},
+    ]},
+  ]
+
+  /** 把 prompt 里问到的 bookmark_id 原样接回去，全部判进候选表的第一个目录。 */
+  function classifyClient() {
+    const complete = vi.fn(async (prompt: string) => {
+      const ids = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+      return { results: ids.map((id) => ({ bookmark_id: id, target_category_id: '10', confidence: 0.9, reason: 'r' })) }
+    })
+    return { complete }
+  }
+
+  it('开启后只把散落书签送进分类请求，已在文件夹里的书签既不进请求也不出现在方案里', async () => {
+    const fake = createFakeBookmarks(looseTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    const client = classifyClient()
+    const deps = { createClient: () => client, now: () => 1 }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
+      removeEmptyFolders: false,
+      onlyLooseInAdditive: true,
+    })
+
+    const res = await handle(
+      ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps,
+    ) as { ok: boolean; plan: OrganizePlan }
+
+    expect(res.ok).toBe(true)
+    // 只发了一批,而且这一批只问了两条散落书签
+    expect(client.complete).toHaveBeenCalledTimes(1)
+    const prompt = client.complete.mock.calls[0]![0] as string
+    const askedIds = [...prompt.matchAll(/"bookmark_id":\s*"([^"]+)"/g)].map((m) => m[1]!)
+    expect(askedIds.sort()).toEqual(['loose1', 'loose2'])
+
+    // 已在文件夹里的那条不出现在方案的任何地方——这一轮压根没看过它，
+    // 顶着「分类失败」或「未处理」的名义出现在复核页会说一句假话。
+    const allBookmarkIds = [
+      ...res.plan.rows.map((r) => r.bookmarkId),
+      ...res.plan.unchanged.map((u) => u.bookmarkId),
+    ]
+    expect(allBookmarkIds).not.toContain('inFolder')
+    expect(res.plan.rows.map((r) => r.bookmarkId).sort()).toEqual(['loose1', 'loose2'])
+  })
+
+  it('范围内没有散落书签时直接报错，不发起任何模型请求', async () => {
+    const allFiledTree = [
+      { id: '0', title: '', children: [
+        { id: '1', title: '书签栏', children: [
+          { id: '10', title: '01 前端', children: [
+            { id: 'inFolder', title: '已在文件夹里', url: 'https://infolder.dev' },
+          ]},
+        ]},
+      ]},
+    ]
+    const fake = createFakeBookmarks(allFiledTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    const client = classifyClient()
+    const deps = { createClient: () => client, now: () => 1 }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
+      removeEmptyFolders: false,
+      onlyLooseInAdditive: true,
+    })
+
+    const res = await handle(
+      ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'additive' }, deps,
+    ) as { ok: boolean; error?: string }
+
+    expect(res.ok).toBe(false)
+    expect(res.error).toBe(t('errNoLooseBookmarks'))
+    expect(client.complete).not.toHaveBeenCalled()
+  })
+
+  // 防回归：万一将来有人把 onlyLoose 的判断从 `!rebuild && settings...` 手滑改成
+  // 不看 rebuild，这条要能抓住——rebuildTree 里三条书签全在子目录「杂项」下，
+  // 直接散落在范围根下的一条都没有，这个开关如果被误用到推翻模式，
+  // 三条书签会一条都分类不到。
+  it('推翻模式下这个开关不生效——照旧处理范围内全部书签', async () => {
+    const fake = createFakeBookmarks(rebuildTree)
+    const ports = { bookmarks: fake.api, storage: createFakeStorage() }
+    const deps = { createClient: () => ({ complete: modeClient() }), now: () => 1 }
+    await saveSettings(ports, {
+      ...DEFAULT_SETTINGS,
+      ...withLlm({ baseUrl: 'https://x/v1', apiKey: 'sk-x', model: 'm' }),
+      removeEmptyFolders: false,
+      onlyLooseInAdditive: true,
+    })
+
+    const res = await handle(
+      ports, { kind: 'analyze', scopeRootIds: ['1'], modeOverride: 'rebuild' }, deps,
+    ) as { ok: boolean; plan: OrganizePlan }
+
+    expect(res.ok).toBe(true)
+    expect(res.plan.rows.map((r) => r.bookmarkId).sort()).toEqual([...REBUILD_IDS].sort())
   })
 })
 

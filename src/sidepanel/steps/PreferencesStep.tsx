@@ -151,6 +151,25 @@ export function PreferencesStep() {
             {`${t('prefsCleanSummary')} ${t('prefsCleanBody')}`}
           </Detail>
         </div>
+        {/* 只在归入现有模式下有意义——推翻模式本来就要从零设计整棵树，不存在
+            「只处理一部分」这回事。默认关：默认行为是全量重判，这样才抓得出
+            已经在某个文件夹里、但放错了的书签（issues/39-platform-tags-still-decide.md）。 */}
+        {!rebuild && (
+          <div className={choiceList} data-testid="prefs-loose-only-option">
+            <label className={`${choiceRow} hover:bg-index-blue-soft`}>
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5 shrink-0 accent-index-blue"
+                checked={settings.onlyLooseInAdditive}
+                onChange={(e) => void setSettings({ ...settings, onlyLooseInAdditive: e.target.checked })}
+              />
+              <span className="min-w-0 flex-1">{t('prefsLooseOnlyTitle')}</span>
+            </label>
+            <Detail flush label={detailLabel()}>
+              {`${t('prefsLooseOnlySummary')} ${t('prefsLooseOnlyBody')}`}
+            </Detail>
+          </div>
+        )}
       </IndexSection>
 
       <IndexSection title={t('prefsModelLabel')}>

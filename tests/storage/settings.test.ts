@@ -65,6 +65,20 @@ describe('设置存取', () => {
     expect((await loadSettings(ports())).removeEmptyFolders).toBe(true)
   })
 
+  /**
+   * 默认必须是关：开着意味着已经在文件夹里、但待错了的书签这一轮不会被
+   * 重新判断——那是用户要自己权衡的取舍（省钱 vs 纠错），不能替他默认选。
+   */
+  it('默认关闭「只处理散落书签」', async () => {
+    expect((await loadSettings(ports())).onlyLooseInAdditive).toBe(false)
+  })
+
+  it('保存后能读回「只处理散落书签」', async () => {
+    const p = ports()
+    await saveSettings(p, { ...DEFAULT_SETTINGS, onlyLooseInAdditive: true })
+    expect((await loadSettings(p)).onlyLooseInAdditive).toBe(true)
+  })
+
   // 原来验的是这两个旋钮的默认值（MAX_SIBLINGS 与 2）。旋钮删掉后默认值无从谈起，
   // 但「默认设置里不该再冒出这两个键」这件事必须钉住：只要有人手滑把它们写回
   // DEFAULT_SETTINGS，旋钮就会连同默认值一起复活
@@ -395,6 +409,7 @@ describe('endpointKey', () => {
 describe('activeLlm', () => {
   const base = {
     removeEmptyFolders: true, domainGroups: [], rewriteGithubTitles: false,
+    onlyLooseInAdditive: false,
     uiLocale: 'auto' as const,
     topDomainCount: 15,
   }
