@@ -148,8 +148,53 @@ export function appendLog(logs: LogLine[], event: ProgressEvent, id: number): Lo
   return next.length > MAX_LOGS ? next.slice(next.length - MAX_LOGS) : next
 }
 
-/** 与后台的进度长连接，整个侧栏共用一条。 */
+/** 与后台的进度长连接，整个侧栏共用一条。断开时置回 null，由 ensureConnection 重开。 */
 let connection: ProgressConnection | null = null
+
+/**
+ * 连上后台的进度通道。init() 开第一条，之后每次长任务前由 ensureConnection 补。
+ *
+ * 写在模块级、用 useStore.getState()/setState 而不是闭包里的 get/set：
+ * ensureConnection 要在 analyze/apply/undo/import 四个地方调，而它们分散在
+ * create() 的各个 action 里，靠参数一路传下去只会让四个调用点各自多背一份样板。
+ */
+function openConnection(): ProgressConnection | null {
+  return connectProgress({
+    onEvent: (event) => useStore.getState().pushEvent(event),
+    onDisconnect: () => {
+      // 先把死对象扔掉：这条通道之后一个事件都收不到了，留着它
+      // ensureConnection 就会以为还连着（这正是「运行日志只有 1 条」的成因）。
+      connection = null
+      if (useStore.getState().busy === null) return
+      // 按当时的 busyKind 填：这是这条文案唯一的来源，漏了它，端口断而 SW
+      // 未死时用户连「请重试」这四个字都看不到（见 issues/24-retry-affordance.md §2）
+      const kind = useStore.getState().busyKind
+      fail(
+        useStore.setState,
+        t('errBackgroundRecycled'),
+        kind === 'scan' || kind === 'analyze' ? kind : null,
+      )
+    },
+  })
+}
+
+/**
+ * 长任务开跑前保证通道是活的。
+ *
+ * 不在 onDisconnect 里立刻重连：`chrome.runtime.connect` 会把 service worker
+ * 唤醒，而它 30 秒后又会因空闲被回收、又断、又重连——那是一个永不停歇的唤醒循环，
+ * 等于把 MV3 的回收机制整个废掉。改成惰性重连，落点就在这里：紧接着的
+ * `send()` 本来就要唤醒 SW，这一次 connect 是免费搭车。
+ *
+ * 为什么非补不可：MV3 的 SW 空闲 30 秒就被回收，而 startKeepalive 只在长任务
+ * 期间 ping。用户在范围页勾目录树、在偏好页读说明的那几十秒里一条消息都不流动，
+ * SW 必然被回收一次。改造前这条通道断了就永远不回来，之后每一轮分析的进度事件
+ * 都被后台丢弃（sessions.emit 查不到这个 clientId），方案照常返回、日志却是空的。
+ */
+function ensureConnection(): ProgressConnection | null {
+  if (connection === null) connection = openConnection()
+  return connection
+}
 
 /** core 层只产出错误码（保持零浏览器依赖），这里翻成用户可读的文案。 */
 function describeImportError(error: ImportError): string {
@@ -513,16 +558,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   async init() {
-    connection = connectProgress({
-      onEvent: (event) => get().pushEvent(event),
-      onDisconnect: () => {
-        if (get().busy === null) return
-        // 按当时的 busyKind 填：这是这条文案唯一的来源，漏了它，端口断而 SW
-        // 未死时用户连「请重试」这四个字都看不到（见 issues/24-retry-affordance.md §2）
-        const kind = get().busyKind
-        fail(set, t('errBackgroundRecycled'), kind === 'scan' || kind === 'analyze' ? kind : null)
-      },
-    })
+    connection = openConnection()
     set({ busy: t('busyReading'), busyKind: 'init', error: null })
     const treeRes = await send({ kind: 'get_tree' })
     const settingsRes = await send({ kind: 'get_settings' })
@@ -590,7 +626,7 @@ export const useStore = create<State>((set, get) => ({
       logSeq: logSeq + 1,
     })
     // 分析可能跑好几分钟，期间持续 ping，别让后台因空闲被回收
-    const stopKeepalive = startKeepalive(connection)
+    const stopKeepalive = startKeepalive(ensureConnection())
     const res = await send({
       kind: 'analyze',
       scopeRootIds: [...get().checkedIds],
@@ -698,7 +734,7 @@ export const useStore = create<State>((set, get) => ({
     const plan = get().plan
     if (plan === null) return
     set({ busy: t('busyApplying'), busyKind: 'apply', error: null, progress: null, logs: [] })
-    const stopKeepalive = startKeepalive(connection)
+    const stopKeepalive = startKeepalive(ensureConnection())
     // 按实际会落地的目录重排编号，避免出现 01、02、04 这样的空号
     const res = await send({
       kind: 'apply',
@@ -904,7 +940,7 @@ export const useStore = create<State>((set, get) => ({
       deleteFolderIds: [...get().cleanupFolders],
     }
     set({ busy: t('busyApplying'), busyKind: 'cleanup', error: null, progress: null, logs: [] })
-    const stopKeepalive = startKeepalive(connection)
+    const stopKeepalive = startKeepalive(ensureConnection())
     const res = await send({
       kind: 'apply_cleanup',
       input: {
@@ -1032,7 +1068,7 @@ export const useStore = create<State>((set, get) => ({
     })
     // 一千条书签要查一分多钟，期间持续 ping，别让后台因空闲被回收——
     // 与 analyze、apply 用的是同一条 keepalive
-    const stopKeepalive = startKeepalive(connection)
+    const stopKeepalive = startKeepalive(ensureConnection())
     const res = await send({
       kind: 'check_links',
       targets: scan.items.map((item) => ({ bookmarkId: item.id, url: item.url })),

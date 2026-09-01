@@ -91,3 +91,53 @@ describe('classifyByRules 双语', () => {
     expect(classifyByRules(paper, 'en')!.reason).toContain('domain rule')
   })
 })
+
+/**
+ * 平台名（GitHub / GitLab / Notion / StackOverflow）说的是「托管在哪」，
+ * 不是「这是什么」。它不该决定归属，否则一个叫「GitHub」的目录会把库里
+ * 每一条 github.com 书签都吸过去，模型一次都轮不到。
+ */
+describe('平台名不参与归属判定', () => {
+  it('GitHub 仓库只把 owner/repo 交给归属判定，平台名留在 tags 里', () => {
+    const r = classifyByRules(item('https://github.com/facebook/react'), 'zh_CN')!
+    expect(r.tags).toEqual(['GitHub', 'facebook', 'react'])
+    expect(r.placement).toEqual(['facebook', 'react'])
+    expect(r.semantic).toBe(false)
+  })
+
+  it('路径不足两段的 GitHub 链接没有任何可判定的名字', () => {
+    const r = classifyByRules(item('https://github.com'), 'zh_CN')!
+    expect(r.tags).toEqual(['GitHub'])
+    expect(r.placement).toEqual([])
+  })
+
+  it.each([
+    ['https://gitlab.com/a/b', 'GitLab'],
+    ['https://www.notion.so/x', 'Notion'],
+    ['https://stackoverflow.com/questions/1', 'StackOverflow'],
+  ])('%s 的平台名不进 placement', (url, tag) => {
+    const r = classifyByRules(item(url), 'zh_CN')!
+    expect(r.tags).toEqual([tag])
+    expect(r.placement).toEqual([])
+  })
+
+  it.each([
+    ['https://arxiv.org/abs/2301.00001', '论文'],
+    ['https://www.youtube.com/watch', '视频'],
+    ['https://www.figma.com/file/x', '设计'],
+    ['https://docs.python.org/3/', '官方文档'],
+  ])('%s 是语义规则，照旧参与判定', (url, tag) => {
+    const r = classifyByRules(item(url), 'zh_CN')!
+    expect(r.placement).toEqual([tag])
+    expect(r.semantic).toBe(true)
+  })
+
+  it('skill 仓库是语义规则，不受平台名退让影响', () => {
+    const r = classifyByRules(
+      item('https://github.com/op7418/Claude-to-IM-skill', 'Claude-to-IM-skill'),
+      'zh_CN',
+    )!
+    expect(r.placement).toEqual(['技能'])
+    expect(r.semantic).toBe(true)
+  })
+})

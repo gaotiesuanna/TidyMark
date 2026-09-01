@@ -66,16 +66,21 @@ export function buildCandidatesFromFolders(
 }
 
 /**
- * 当规则给出的 tag 与某个候选目录的叶子名归一化后相等时，直接确定归属，
- * 无需调用模型。tags 按从后往前匹配——越靠后的 tag 越具体。
+ * 当规则给出的名字与某个候选目录的叶子名归一化后相等时，直接确定归属，
+ * 无需调用模型。从后往前匹配——越靠后越具体。
+ *
+ * 认的是 `rule.placement` 而不是 `rule.tags`：托管平台名（GitHub / GitLab /
+ * Notion / StackOverflow）在 tags 里、不在 placement 里。它们说的是「托管在哪」，
+ * 不是「这是什么」，不该以 confidence 1 决定一条书签的去处（见 core/rules.ts
+ * 的 placement 注释）。
  */
 export function resolveByRules(
   item: BookmarkItem,
   rule: RuleResult,
   candidates: CategoryCandidate[],
 ): Classification | null {
-  for (let i = rule.tags.length - 1; i >= 0; i--) {
-    const tag = normalizeName(rule.tags[i]!)
+  for (let i = rule.placement.length - 1; i >= 0; i--) {
+    const tag = normalizeName(rule.placement[i]!)
     // 候选目录名可能带「01.2 」这样的编号前缀，比较时先去掉
     const matches = candidates.filter(
       (c) => normalizeName(stripNumberPrefix(c.path[c.path.length - 1]!)) === tag,
