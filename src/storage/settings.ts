@@ -65,6 +65,20 @@ export interface Settings {
   removeEmptyFolders: boolean
   /** 把 GitHub 书签的标题统一成 `repo (owner)`。 */
   rewriteGithubTitles: boolean
+  /**
+   * 归入现有模式下，只把直接散落在范围根下、没进任何文件夹的书签交给模型分类。
+   * 已经在文件夹里的书签——不论放得对不对——这一轮都不会被重新判断。
+   *
+   * 默认关：默认行为是全量重判（见 issues/12-reorganize-idempotency.md 与
+   * issues/13-additive-mode-design.md），这样才抓得出「已经在某个文件夹里、
+   * 但待错了」的书签（issues/39-platform-tags-still-decide.md 那次 186 条
+   * GitHub 书签被平台名错误吸走正是这种情形）。开着这个开关的代价就是放弃这项
+   * 纠错能力，换来只处理散落书签的低成本，这是用户自己要权衡的取舍，不能替他默认选。
+   *
+   * 只在非推翻模式下生效——推翻模式本来就要从零设计整棵树，不存在"只处理一部分"
+   * 这回事，这个字段在那条路上读都不读。
+   */
+  onlyLooseInAdditive: boolean
   /** 界面与产出的语言。'auto' 时跟随浏览器 UI 语言。 */
   uiLocale: UiLocale
   /** 看板域名排行显示前几名。 */
@@ -86,6 +100,7 @@ export const DEFAULT_SETTINGS: Settings = {
   active: { baseUrl: '', model: '' },
   removeEmptyFolders: true,
   rewriteGithubTitles: false,
+  onlyLooseInAdditive: false,
   uiLocale: 'auto',
   topDomainCount: DEFAULT_TOP_DOMAINS,
 }
@@ -184,6 +199,7 @@ export async function loadSettings(ports: Ports): Promise<Settings> {
     active: migrated.active,
     removeEmptyFolders: stored?.removeEmptyFolders ?? DEFAULT_SETTINGS.removeEmptyFolders,
     rewriteGithubTitles: stored?.rewriteGithubTitles ?? DEFAULT_SETTINGS.rewriteGithubTitles,
+    onlyLooseInAdditive: stored?.onlyLooseInAdditive ?? DEFAULT_SETTINGS.onlyLooseInAdditive,
     uiLocale: stored?.uiLocale ?? DEFAULT_SETTINGS.uiLocale,
     topDomainCount: clampTopDomainCount(stored?.topDomainCount ?? DEFAULT_SETTINGS.topDomainCount),
   }

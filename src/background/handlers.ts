@@ -356,9 +356,24 @@ export async function handle(
         if (candidates.length === 0) {
           return { ok: false, error: t('errNoTargetFolders') }
         }
+        // 「散落」= 直接挂在勾中的范围根底下，一层都没进——与 core/mode.ts 的
+        // reasonLoose 同一把尺子。只在非推翻模式下看这个开关：推翻模式本来就要
+        // 从零设计整棵树，不存在「只处理一部分」这回事。
+        const rootIds = new Set(roots.map((r) => r.id))
+        const onlyLoose = !rebuild && settings.onlyLooseInAdditive
+        const toClassify = onlyLoose
+          ? scan.bookmarks.filter((b) => rootIds.has(b.parentId))
+          : scan.bookmarks
+        // 提前拦住、不建缓存连接也不建 client 请求：省的不只是一次没意义的
+        // 「0 条书签的分类」空转，还替用户省下了本可以避免的一次模型调用判断。
+        if (onlyLoose && toClassify.length === 0) {
+          return { ok: false, error: t('errNoLooseBookmarks') }
+        }
         const cache = await loadCache(ports)
-        const toClassify = scan.bookmarks
         log('classify', t('logClassifyStart', String(toClassify.length), String(candidates.length)))
+        if (onlyLoose) {
+          log('classify', t('logClassifyLooseOnly', String(toClassify.length), String(scan.bookmarks.length - toClassify.length)))
+        }
         // 归入现有模式下把范围根直属的「其他」挡在提示词外：它在候选表里就等于给了模型
         // 一个合法的出口，「无合适目录 → 带回 topic → 建新目录」那条链于是永远等不到输入
         // （见 core/audit.ts 的 dropFallbackFromCandidates）。剔的只是分类候选，
@@ -402,7 +417,7 @@ export async function handle(
         // 非推翻模式补上「新主题无处可去」这一块：规则定量、模型只负责起名。
         // 推翻模式不走这里——那条路的候选本来就是刚设计出来的，不存在放不进去。
         if (!rebuild) {
-          const rootIds = new Set(roots.map((r) => r.id))
+          // rootIds 已经在上面为 onlyLoose 那道判断算过一次，这里直接复用同一份。
           const allClusters = clusterHomeless(classifications)
           // 「已聚齐」这道幂等性闸赶在起名之前生效：命名要花一次模型请求，不该为
           // 注定被丢弃的簇破费（见 core/newTopics.ts 的 dropAlreadyGrouped）
@@ -775,7 +790,11 @@ export async function handle(
           createdAt: now(),
           scopeRootIds: request.scopeRootIds,
           rebuildStructure: rebuild,
-          items: scan.bookmarks,
+          // onlyLoose 时这两者不同：跳过的书签这一轮压根没被看过，不该顶着
+          // 「分类失败」的名义出现在复核页——那会说一句假话。用 toClassify
+          // 而不是 scan.bookmarks，跳过的书签就不出现在 plan 的任何一处。
+          // onlyLoose 为 false 时两者是同一个引用，行为不变。
+          items: toClassify,
           candidates,
           classifications,
           newFolders,

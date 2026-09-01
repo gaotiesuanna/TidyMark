@@ -852,6 +852,15 @@
   "prefsCleanBody": {
     "message": "This also covers parents that become empty once their subfolders are cleared. Scope roots are never deleted. Undo restores the folders too."
   },
+  "prefsLooseOnlyTitle": {
+    "message": "Only classify loose bookmarks"
+  },
+  "prefsLooseOnlySummary": {
+    "message": "Only bookmarks sitting directly loose under the scope root, in no folder at all, are sent to the model. Bookmarks already inside a folder are left exactly where they are this round, right or wrong."
+  },
+  "prefsLooseOnlyBody": {
+    "message": "Off (the default) reclassifies every bookmark in scope on every run — that's what catches a bookmark that's already in a folder but filed wrong, at the cost of running classification over everything each time (cached ones aside). Turning this on saves that cost, but a misfiled bookmark won't be corrected automatically anymore — move it by hand, or turn this off for one full pass."
+  },
   "settingsGithubTitle": {
     "message": "Normalize GitHub bookmark titles"
   },
@@ -1284,6 +1293,9 @@
   "errNoTargetFolders": {
     "message": "No usable target folders in the selected scope. Pick a scope that contains subfolders and try again."
   },
+  "errNoLooseBookmarks": {
+    "message": "\"Only classify loose bookmarks\" is on, but nothing in the selected scope sits directly loose, outside every folder. Turn the option off to reclassify everything in scope."
+  },
   "errNoBookmarksBar": {
     "message": "Cannot find the bookmarks bar, so importing is not possible."
   },
@@ -1587,6 +1599,17 @@
         "content": "$1"
       },
       "candidates": {
+        "content": "$2"
+      }
+    }
+  },
+  "logClassifyLooseOnly": {
+    "message": "\"Only classify loose bookmarks\" is on: classifying $loose$ bookmarks that sit directly loose under the scope root; $infolder$ bookmarks already inside a folder are left untouched this round",
+    "placeholders": {
+      "loose": {
+        "content": "$1"
+      },
+      "infolder": {
         "content": "$2"
       }
     }

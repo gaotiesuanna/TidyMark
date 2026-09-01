@@ -139,6 +139,27 @@ describe('PreferencesStep 清理空文件夹的说明', () => {
   })
 })
 
+describe('PreferencesStep 只处理散落书签', () => {
+  it('归入现有模式下渲染，勾选后写回设置', async () => {
+    setup(tidyScan)
+    render(<PreferencesStep />)
+    const card = screen.getByTestId('prefs-loose-only-option')
+    expect(within(card).getByText('只处理散落书签')).toBeTruthy()
+    const checkbox = within(card).getByRole('checkbox') as HTMLInputElement
+    expect(checkbox.checked).toBe(false)
+    await userEvent.click(checkbox)
+    expect(useStore.getState().settings.onlyLooseInAdditive).toBe(true)
+  })
+
+  // 推翻模式本来就要从零设计整棵树，不存在「只处理一部分」这回事——
+  // 这个开关在那条路上没有意义，不该出现，出现了也只会让人误以为它管着什么。
+  it('推翻模式下不渲染', () => {
+    setup(messyScan)
+    render(<PreferencesStep />)
+    expect(screen.queryByTestId('prefs-loose-only-option')).toBeNull()
+  })
+})
+
 describe('PreferencesStep 的模式判断', () => {
   it('判已整理时先讲结论，再讲凭什么这么判', () => {
     setup(tidyScan)
