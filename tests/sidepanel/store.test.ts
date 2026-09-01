@@ -768,3 +768,94 @@ describe('清理模式的勾选', () => {
     expect(state.cleanupChecked.has('1')).toBe(true)
   })
 })
+
+/**
+ * MV3 的 service worker 空闲 30 秒就被回收，而 keepalive 只在长任务期间 ping。
+ * 用户在「选范围」勾目录树、翻「偏好」页的那几十秒里没有任何消息流动，SW 被回收、
+ * 长连接断开——而 onDisconnect 在空闲时是静默返回的。
+ *
+ * 改造前 connectProgress 整个生命周期只在 init() 调一次，于是这条死掉的通道再也
+ * 不会回来：之后每一次分析，方案照常从 sendMessage 返回，进度事件却全被后台丢掉
+ * （sessions.emit 查不到这个 clientId）。用户看到的就是「运行日志 1 条」——只剩
+ * 侧栏自己写的那一行，看起来像模型压根没被调用。
+ */
+describe('长连接断在空闲期时，下一次长任务前重连', () => {
+  const chromeGlobal = globalThis as unknown as { chrome: Record<string, unknown> }
+  const originalRuntime = chromeGlobal.chrome.runtime
+  const originalPermissions = chromeGlobal.chrome.permissions
+
+  beforeEach(() => {
+    chromeGlobal.chrome.permissions = { contains: () => Promise.resolve(true) }
+  })
+  afterEach(() => {
+    chromeGlobal.chrome.runtime = originalRuntime
+    chromeGlobal.chrome.permissions = originalPermissions
+  })
+
+  /** 每次 connect 造一条新通道，各自记着自己的两个回调。 */
+  function stubPorts(): {
+    count: () => number
+    latest: () => { emit: (event: ProgressEvent) => void; disconnect: () => void }
+  } {
+    const ports: { emit: (e: ProgressEvent) => void; disconnect: () => void }[] = []
+    chromeGlobal.chrome.runtime = {
+      connect: () => {
+        let onEvent: ((e: ProgressEvent) => void) | undefined
+        let onGone: (() => void) | undefined
+        ports.push({
+          emit: (event) => onEvent?.(event),
+          disconnect: () => onGone?.(),
+        })
+        return {
+          onMessage: { addListener: (fn: (e: ProgressEvent) => void) => { onEvent = fn } },
+          onDisconnect: { addListener: (fn: () => void) => { onGone = fn } },
+          postMessage: () => {},
+          disconnect: () => {},
+        }
+      },
+    }
+    return { count: () => ports.length, latest: () => ports[ports.length - 1]! }
+  }
+
+  it('空闲期断线后，analyze 会重新连上并收得到进度事件', async () => {
+    const ports = stubPorts()
+    vi.mocked(send).mockImplementation((req) =>
+      Promise.resolve(
+        req.kind === 'analyze'
+          ? { ok: true, kind: 'analyze', plan: makePlan() }
+          : { ok: true, kind: req.kind, tree: [], settings: DEFAULT_SETTINGS, available: false },
+      ) as never,
+    )
+
+    await useStore.getState().init()
+    expect(ports.count()).toBe(1)
+
+    // 用户在范围页停留超过 30 秒，SW 被回收
+    useStore.setState({ busy: null, busyKind: null })
+    ports.latest().disconnect()
+
+    await useStore.getState().analyze()
+
+    // 重连过，而且新通道推来的事件真的进得了日志
+    expect(ports.count()).toBe(2)
+    const before = useStore.getState().logs.length
+    ports.latest().emit({ phase: 'classify', message: '分类批次 1/1 完成' })
+    expect(useStore.getState().logs.length).toBe(before + 1)
+    expect(useStore.getState().logs.at(-1)!.message).toContain('分类批次 1/1 完成')
+  })
+
+  it('通道还活着时不重复连', async () => {
+    const ports = stubPorts()
+    vi.mocked(send).mockImplementation((req) =>
+      Promise.resolve(
+        req.kind === 'analyze'
+          ? { ok: true, kind: 'analyze', plan: makePlan() }
+          : { ok: true, kind: req.kind, tree: [], settings: DEFAULT_SETTINGS, available: false },
+      ) as never,
+    )
+
+    await useStore.getState().init()
+    await useStore.getState().analyze()
+    expect(ports.count()).toBe(1)
+  })
+})
