@@ -828,3 +828,67 @@ describe('分类取消之后立刻收手', () => {
     expect(logs.filter((l) => l.level === 'error')).toHaveLength(0)
   })
 })
+
+/**
+ * 真实事故的复现（用户库：一个叫「17 GitHub」的目录 + 186 条 github.com 书签）。
+ *
+ * 平台名短路模型时，这 186 条一次请求都不会发出去，全部被域名规则按
+ * confidence 1 倒进那个平铺的桶里——连本来好好待在「03 前端」里的仓库
+ * 也会被拔出来。平台名退让之后，它们必须走到模型面前。
+ */
+describe('平台名不再短路模型', () => {
+  const ghCandidates: CategoryCandidate[] = [
+    { id: 'f-gh', path: ['17 GitHub'] },
+    { id: 'f-fe', path: ['03 前端'] },
+  ]
+  const ghItem = (id: string, url: string, parentId: string): BookmarkItem =>
+    ({ id, title: 'T', url, parentId, index: 0, currentPath: [] })
+
+  it('候选里有 GitHub 目录时，github.com 书签仍然要问模型', async () => {
+    const client = clientReturning({
+      results: [{ bookmark_id: '1', target_category_id: 'f-fe', confidence: 0.9, reason: '前端框架' }],
+    })
+    const out = await classify({
+      items: [ghItem('1', 'https://github.com/facebook/react', 'f-fe')],
+      candidates: ghCandidates,
+      client,
+      cache: new Map(),
+    })
+    expect(client.complete).toHaveBeenCalledTimes(1)
+    expect(out[0]!.source).toBe('llm')
+    expect(out[0]!.targetCategoryId).toBe('f-fe')
+  })
+
+  it('repo 名撞上同名目录时照旧由规则直接命中，不花调用', async () => {
+    const client = clientReturning({ results: [] })
+    const out = await classify({
+      items: [ghItem('1', 'https://github.com/facebook/react', 'root')],
+      candidates: [{ id: 'f-react', path: ['react'] }],
+      client,
+      cache: new Map(),
+    })
+    expect(client.complete).not.toHaveBeenCalled()
+    expect(out[0]!.source).toBe('rule')
+    expect(out[0]!.targetCategoryId).toBe('f-react')
+  })
+
+  /**
+   * 平台名规则没有语义主张，缓存里不可能藏着「过期的错误语义」，
+   * 所以它必须照常吃缓存——否则每一轮分析都要为库里每条 GitHub 书签重新付钱。
+   */
+  it('平台名规则不再逼着书签绕开缓存', async () => {
+    const bookmark = ghItem('1', 'https://github.com/facebook/react', 'f-fe')
+    const cached = new Map<string, CachedClassification>([
+      [cacheKey(bookmark, ghCandidates, 'zh_CN', 'm'), {
+        targetPath: ['03 前端'], url: bookmark.url, confidence: 0.9, reason: '缓存命中',
+      }],
+    ])
+    const client = clientReturning({ results: [] })
+    const out = await classify({
+      items: [bookmark], candidates: ghCandidates, client, cache: cached,
+    })
+    expect(client.complete).not.toHaveBeenCalled()
+    expect(out[0]!.targetCategoryId).toBe('f-fe')
+    expect(out[0]!.reason).toBe('缓存命中')
+  })
+})

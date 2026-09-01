@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildCandidatesFromFolders, normalizeName, resolveByRules } from '@/core/map'
+import type { RuleResult } from '@/core/rules'
 import type { BookmarkItem, FolderItem } from '@/core/types'
 
 const folders: FolderItem[] = [
@@ -64,39 +65,52 @@ describe('buildCandidatesFromFolders', () => {
 describe('resolveByRules', () => {
   const candidates = buildCandidatesFromFolders(folders, ['1'])
 
+  /** 只有 placement 参与判定，tags 是给展示与建树用的，两者有意不同。 */
+  const rule = (placement: string[], reason = 'r'): RuleResult =>
+    ({ tags: placement, placement, resourceType: 'paper', reason, semantic: true })
+
   it('规则 tag 与候选叶子名归一化后相等时直接命中', () => {
-    const result = resolveByRules(item(), { tags: ['论文'], resourceType: 'paper', reason: 'r' }, candidates)!
+    const result = resolveByRules(item(), rule(['论文']), candidates)!
     expect(result.targetCategoryId).toBe('12')
     expect(result.source).toBe('rule')
     expect(result.confidence).toBe(1)
   })
 
   it('多个 tag 时优先匹配更靠后的（更具体的）tag', () => {
-    const result = resolveByRules(
-      item(),
-      { tags: ['GitHub 项目', 'react'], resourceType: 'repository', reason: 'r' },
-      candidates,
-    )!
+    const result = resolveByRules(item(), rule(['GitHub 项目', 'react']), candidates)!
     expect(result.targetCategoryId).toBe('10')
   })
+
   it('多个叶子目录匹配同一规则 tag 时不确定归属', () => {
     const duplicateLeaves = [
       { id: '20', title: 'react', parentId: '2', index: 0, path: ['工作'], depth: 1, level: 1 },
       { id: '21', title: 'react', parentId: '3', index: 0, path: ['个人'], depth: 1, level: 1 },
     ]
-    expect(
-      resolveByRules(item(), { tags: ['react'], resourceType: 'repository', reason: 'r' }, duplicateLeaves),
-    ).toBeNull()
+    expect(resolveByRules(item(), rule(['react']), duplicateLeaves)).toBeNull()
   })
 
-
   it('没有任何候选匹配时返回 null，交给 LLM', () => {
-    expect(resolveByRules(item(), { tags: ['视频'], resourceType: 'video', reason: 'r' }, candidates))
-      .toBeNull()
+    expect(resolveByRules(item(), rule(['视频']), candidates)).toBeNull()
   })
 
   it('命中时保留规则给出的原因', () => {
-    const result = resolveByRules(item(), { tags: ['论文'], resourceType: 'paper', reason: '域名规则 arxiv.org' }, candidates)!
+    const result = resolveByRules(item(), rule(['论文'], '域名规则 arxiv.org'), candidates)!
     expect(result.reason).toContain('arxiv.org')
+  })
+
+  /**
+   * 平台名退让的落点：tags 里有「GitHub」、候选里也有个叫 GitHub 的目录，
+   * 但它不在 placement 里，所以判不出归属，这条书签要交给模型。
+   */
+  it('只在 tags 里、不在 placement 里的名字不参与判定', () => {
+    const ghFolders = [{ id: '30', path: ['17 GitHub'] }]
+    const platformOnly: RuleResult = {
+      tags: ['GitHub', 'facebook', 'react'],
+      placement: ['facebook', 'react'],
+      resourceType: 'repository',
+      reason: 'r',
+      semantic: false,
+    }
+    expect(resolveByRules(item(), platformOnly, ghFolders)).toBeNull()
   })
 })

@@ -274,8 +274,13 @@ export async function classifyBookmarks(input: ClassifyInput): Promise<Classific
       resolved.set(item.id, byRule)
       continue
     }
-    // 有硬信号但候选不唯一时，缓存也可能携带同样过期的错误语义，直接走模型。
-    if (rule) {
+    // 有**语义**硬信号但候选不唯一时，缓存也可能携带同样过期的错误语义，直接走模型。
+    //
+    // 只认 rule.semantic，不认「有没有规则」：平台名规则（GitHub / GitLab /
+    // Notion / StackOverflow）对「这条书签讲什么」一个字都没说，缓存里不可能藏着
+    // 它导致的过期语义。让它也绕开缓存，等于每一轮分析都要为库里每条 GitHub 书签
+    // 重新付一次钱——而 GitHub 往往正是一个开发者库里占比最大的那个域名。
+    if (rule?.semantic === true) {
       pending.push(item)
       continue
     }
